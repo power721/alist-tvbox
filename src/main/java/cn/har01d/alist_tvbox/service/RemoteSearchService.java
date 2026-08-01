@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -65,6 +66,7 @@ public class RemoteSearchService {
     private final ShareService shareService;
     private final TvBoxService tvBoxService;
     private final OfflineDownloadService offlineDownloadService;
+    private final SubscriptionSourceService subscriptionSourceService;
     private List<String> panSouDefaultChannels;
     private List<String> panSouBuiltinChannels;
     private String panSouToken;
@@ -85,7 +87,8 @@ public class RemoteSearchService {
                                TelegramChannelRepository telegramChannelRepository,
                                ShareService shareService,
                                TvBoxService tvBoxService,
-                               OfflineDownloadService offlineDownloadService) {
+                               OfflineDownloadService offlineDownloadService,
+                               SubscriptionSourceService subscriptionSourceService) {
         this.appProperties = appProperties;
         this.restTemplate = restTemplateBuilder.build();
         this.objectMapper = objectMapper;
@@ -93,6 +96,7 @@ public class RemoteSearchService {
         this.shareService = shareService;
         this.tvBoxService = tvBoxService;
         this.offlineDownloadService = offlineDownloadService;
+        this.subscriptionSourceService = subscriptionSourceService;
     }
 
     @PostConstruct
@@ -152,7 +156,7 @@ public class RemoteSearchService {
                 .map(TelegramChannel::getUsername)
                 .toList();
 
-        var messages = search(keyword, channels);
+        var messages = search(keyword, channels, "csp_FishPanSou");
         for (var message : messages) {
             list.add(toMovieDetail(message));
         }
@@ -194,7 +198,7 @@ public class RemoteSearchService {
                 .filter(TelegramChannel::isValid)
                 .map(TelegramChannel::getUsername)
                 .toList();
-        List<Message> messages = search(keyword, channels);
+        List<Message> messages = search(keyword, channels, "csp_FishPanSouGroup");
         String cacheId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         groupCache.put(cacheId, messages);
 
@@ -284,8 +288,56 @@ public class RemoteSearchService {
         return tvBoxService.getDetail("", "1$" + path + "/~playlist", title, 0);
     }
 
+    // Per-built-in-source override parsed from the builtin extend JSON
+    // ({"source":..,"filter_include":..,"filter_exclude":..}); null when no siteKey
+    // or no extend configured, so callers fall back to global AppProperties values.
+    private JsonNode pansouSourceConfig(String siteKey) {
+        if (siteKey == null) {
+            return null;
+        }
+        String extend = subscriptionSourceService.getBuiltinExtend(siteKey);
+        if (StringUtils.isBlank(extend)) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(extend);
+            return node.isObject() ? node : null;
+        } catch (Exception e) {
+            log.debug("invalid pansou source extend for {}: {}", siteKey, extend);
+            return null;
+        }
+    }
+
+    private String resolvePanSouSource(JsonNode config) {
+        String override = config == null ? "" : config.path("source").asText("");
+        return StringUtils.isNotBlank(override) ? override : appProperties.getPanSouSource();
+    }
+
+    private List<String> resolvePanSouFilterInclude(JsonNode config) {
+        return resolvePanSouFilter(config, "filter_include", appProperties.getPanSouFilterInclude());
+    }
+
+    private List<String> resolvePanSouFilterExclude(JsonNode config) {
+        return resolvePanSouFilter(config, "filter_exclude", appProperties.getPanSouFilterExclude());
+    }
+
+    // per-field inherit: a non-blank override wins, otherwise fall back to the global value
+    private List<String> resolvePanSouFilter(JsonNode config, String field, List<String> globalValue) {
+        String csv = config == null ? "" : config.path(field).asText("");
+        if (StringUtils.isBlank(csv)) {
+            return globalValue;
+        }
+        return Arrays.stream(csv.split(",")).map(String::trim)
+                .filter(StringUtils::isNotBlank).toList();
+    }
+
     public List<Message> search(String keyword, List<String> channels) {
-        var request = new SearchRequest(keyword, getSearchChannels(channels), appProperties.getPanSouSource());
+        return search(keyword, channels, null);
+    }
+
+    public List<Message> search(String keyword, List<String> channels, String siteKey) {
+        JsonNode sourceConfig = pansouSourceConfig(siteKey);
+        var request = new SearchRequest(keyword, getSearchChannels(channels), resolvePanSouSource(sourceConfig));
         request.setExt(Map.of("referer", "https://dm.xueximeng.com"));
         boolean offlineDownloadEnabled = offlineDownloadService.getConfig().enabled();
         if (StringUtils.isNotBlank(keyword)) {
@@ -301,8 +353,8 @@ public class RemoteSearchService {
             request.setRefresh(true);
         }
         //request.setRes(StringUtils.defaultIfBlank(appProperties.getPanSouRes(), "merge"));
-        List<String> filterInclude = appProperties.getPanSouFilterInclude();
-        List<String> filterExclude = appProperties.getPanSouFilterExclude();
+        List<String> filterInclude = resolvePanSouFilterInclude(sourceConfig);
+        List<String> filterExclude = resolvePanSouFilterExclude(sourceConfig);
         if (!CollectionUtils.isEmpty(filterInclude) || !CollectionUtils.isEmpty(filterExclude)) {
             request.setFilter(new SearchRequest.Filter(
                     CollectionUtils.isEmpty(filterInclude) ? List.of() : filterInclude,

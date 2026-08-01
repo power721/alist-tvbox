@@ -29,7 +29,8 @@ import java.util.Set;
 public class SubscriptionSourceService {
     private static final String BUILTIN_SETTINGS_KEY = "builtin_subscription_sources";
     private static final String SORT_ORDER_MIGRATED_KEY = "subscription_source_sort_order_migrated";
-    private static final Set<String> EXTENDABLE_BUILTINS = Set.of("csp_PianDan");
+    private static final Set<String> EXTENDABLE_BUILTINS =
+            Set.of("csp_PianDan", "csp_FishPanSou", "csp_FishPanSouGroup");
 
     private final AppProperties appProperties;
     private final PluginRepository pluginRepository;
