@@ -55,6 +55,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class RemoteSearchService {
+    private static final String CHECK_STATE_OK = "ok";
     private static final String CHECK_STATE_BAD = "bad";
     private static final String CHECK_STATE_UNCERTAIN = "uncertain";
     private static final Set<String> PAN_SOU_CHECK_TYPES = Set.of(
@@ -433,29 +434,14 @@ public class RemoteSearchService {
 
         Map<String, String> states = new java.util.HashMap<>();
         Map<String, String> summaries = new java.util.HashMap<>();
-        Map<String, List<Message>> groups = checkable.stream()
-                .collect(Collectors.groupingBy(message -> getPanSouCloudType(message.getType())));
-        List<CompletableFuture<ObjectNode>> futures = new ArrayList<>();
-        for (var entry : groups.entrySet()) {
-            String diskType = entry.getKey();
-            final List<Message> all = entry.getValue();
-            futures.add(CompletableFuture.supplyAsync(() -> {
-                long startedAt = System.currentTimeMillis();
-                try {
-                    ObjectNode response = checkPanSouLinks(buildPanSouLinkCheckRequest(diskType, all));
-                    logPanSouLinkCheck(diskType, all.size(), response, startedAt);
-                    return response;
-                } catch (Exception e) {
-                    log.warn("check PanSou search links failed: {}", diskType, e);
-                    return null;
-                }
-            }));
+        long startedAt = System.currentTimeMillis();
+        ObjectNode response = null;
+        try {
+            response = checkPanSouLinks(buildPanSouLinkCheckRequest(checkable));
+        } catch (Exception e) {
+            log.warn("check PanSou search links failed", e);
         }
-        for (CompletableFuture<ObjectNode> future : futures) {
-            ObjectNode response = future.join();
-            if (response == null || !response.has("results") || !response.get("results").isArray()) {
-                continue;
-            }
+        if (response != null && response.has("results") && response.get("results").isArray()) {
             response.get("results").forEach(result -> {
                 if (result.has("url") && result.has("state")) {
                     String url = result.get("url").asText();
@@ -466,6 +452,7 @@ public class RemoteSearchService {
                 }
             });
         }
+        logPanSouLinkCheck(checkable, states, startedAt);
         if (states.isEmpty()) {
             return messages;
         }
@@ -492,28 +479,38 @@ public class RemoteSearchService {
         return "链接有效";
     }
 
-    private ObjectNode buildPanSouLinkCheckRequest(String diskType, List<Message> messages) {
+    private ObjectNode buildPanSouLinkCheckRequest(List<Message> messages) {
         ObjectNode request = objectMapper.createObjectNode();
         ArrayNode items = request.putArray("items");
         for (Message message : messages) {
             items.addObject()
-                    .put("disk_type", diskType)
+                    .put("disk_type", getPanSouCloudType(message.getType()))
                     .put("url", message.getLink());
         }
-        request.put("view_token", "pansou-search-" + diskType + "-" + System.currentTimeMillis());
+        request.put("view_token", "pansou-search-" + System.currentTimeMillis());
         return request;
     }
 
-    private void logPanSouLinkCheck(String diskType, int inputCount, ObjectNode response, long startedAt) {
-        long validCount = 0;
-        if (response != null && response.has("results") && response.get("results").isArray()) {
-            for (var result : response.get("results")) {
-                if (result.has("state") && "ok".equals(result.get("state").asText())) {
-                    validCount++;
-                }
+    private void logPanSouLinkCheck(List<Message> checkable, Map<String, String> states, long startedAt) {
+        Map<String, int[]> stats = new LinkedHashMap<>();
+        int totalValid = 0;
+        for (Message message : checkable) {
+            String type = getPanSouCloudType(message.getType());
+            int[] counts = stats.computeIfAbsent(type, k -> new int[2]);
+            counts[0]++;
+            if (CHECK_STATE_OK.equals(states.get(message.getLink()))) {
+                counts[1]++;
+                totalValid++;
             }
         }
-        log.info("检测{}网盘链接{}条，{}条有效，耗时{}ms", diskType, inputCount, validCount, System.currentTimeMillis() - startedAt);
+        StringBuilder detail = new StringBuilder();
+        for (var entry : stats.entrySet()) {
+            if (detail.length() > 0) {
+                detail.append(", ");
+            }
+            detail.append(entry.getKey()).append(' ').append(entry.getValue()[1]).append('/').append(entry.getValue()[0]);
+        }
+        log.info("检测网盘链接{}条，{}条有效 [{}]，耗时{}ms", checkable.size(), totalValid, detail, System.currentTimeMillis() - startedAt);
     }
 
     private String searchPanSou(String url, SearchRequest request) {
