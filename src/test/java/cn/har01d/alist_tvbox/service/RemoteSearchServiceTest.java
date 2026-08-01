@@ -48,7 +48,8 @@ class RemoteSearchServiceTest {
                 mock(TelegramChannelRepository.class),
                 mock(ShareService.class),
                 mock(TvBoxService.class),
-                offlineDownloadService
+                offlineDownloadService,
+                mock(SubscriptionSourceService.class)
         );
 
         server.expect(once(), requestTo("http://pansou.example/api/health"))
@@ -87,7 +88,7 @@ class RemoteSearchServiceTest {
         RemoteSearchService service = new RemoteSearchService(
                 appProperties, restTemplateBuilder(restTemplate), objectMapper,
                 mock(TelegramChannelRepository.class), mock(ShareService.class),
-                mock(TvBoxService.class), offlineDownloadService);
+                mock(TvBoxService.class), offlineDownloadService, mock(SubscriptionSourceService.class));
 
         server.expect(once(), requestTo("http://pansou.example/api/health"))
                 .andRespond(withSuccess("""
@@ -130,7 +131,8 @@ class RemoteSearchServiceTest {
                 telegramChannelRepository,
                 shareService,
                 tvBoxService,
-                offlineDownloadService
+                offlineDownloadService,
+                mock(SubscriptionSourceService.class)
         );
 
         server.expect(once(), requestTo("http://pansou.example/api/search"))
@@ -168,7 +170,8 @@ class RemoteSearchServiceTest {
                 mock(TelegramChannelRepository.class),
                 mock(ShareService.class),
                 mock(TvBoxService.class),
-                mock(OfflineDownloadService.class)
+                mock(OfflineDownloadService.class),
+                mock(SubscriptionSourceService.class)
         );
 
         server.expect(once(), requestTo("http://pansou.example/api/health"))
@@ -189,7 +192,7 @@ class RemoteSearchServiceTest {
         RemoteSearchService service = new RemoteSearchService(
                 appProperties, restTemplateBuilder(new RestTemplate()), objectMapper,
                 mock(TelegramChannelRepository.class), mock(ShareService.class),
-                mock(TvBoxService.class), mock(OfflineDownloadService.class));
+                mock(TvBoxService.class), mock(OfflineDownloadService.class), mock(SubscriptionSourceService.class));
 
         // Only quark selected -> baidu (unselected) and pikpak (not in supported 9) are NOT checkable.
         List<Message> checkable = service.selectCheckable(List.of(
@@ -207,7 +210,7 @@ class RemoteSearchServiceTest {
         RemoteSearchService service = new RemoteSearchService(
                 appProperties, restTemplateBuilder(new RestTemplate()), objectMapper,
                 mock(TelegramChannelRepository.class), mock(ShareService.class),
-                mock(TvBoxService.class), mock(OfflineDownloadService.class));
+                mock(TvBoxService.class), mock(OfflineDownloadService.class), mock(SubscriptionSourceService.class));
 
         // Unset -> all supported types checkable; pikpak (not supported) still excluded.
         List<Message> checkable = service.selectCheckable(List.of(
@@ -234,7 +237,7 @@ class RemoteSearchServiceTest {
         RemoteSearchService service = new RemoteSearchService(
                 appProperties, restTemplateBuilder(restTemplate), objectMapper,
                 telegramChannelRepository, mock(ShareService.class),
-                mock(TvBoxService.class), offlineDownloadService);
+                mock(TvBoxService.class), offlineDownloadService, mock(SubscriptionSourceService.class));
 
         server.expect(once(), requestTo("http://pansou.example/api/search"))
                 .andRespond(withSuccess("""
@@ -269,6 +272,72 @@ class RemoteSearchServiceTest {
         } finally {
             RequestContextHolder.resetRequestAttributes();
         }
+    }
+
+    @Test
+    void perSourceOverrideWinsOverGlobal() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setPanSouSource("all");
+        OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        SubscriptionSourceService subscriptionSourceService = mock(SubscriptionSourceService.class);
+        when(subscriptionSourceService.getBuiltinExtend("csp_FishPanSou"))
+                .thenReturn("{\"source\":\"tg\",\"filter_include\":\"1080, 4K\",\"filter_exclude\":\"枪版\"}");
+
+        RemoteSearchService service = new RemoteSearchService(
+                appProperties, restTemplateBuilder(restTemplate), objectMapper,
+                mock(TelegramChannelRepository.class), mock(ShareService.class),
+                mock(TvBoxService.class), offlineDownloadService, subscriptionSourceService);
+
+        server.expect(once(), requestTo("http://pansou.example/api/search"))
+                .andExpect(content().json("""
+                        {"kw":"movie","src":"tg","filter":{"include":["1080","4K"],"exclude":["枪版"]}}
+                        """))
+                .andRespond(withSuccess("""
+                        {"code":0,"message":"ok","data":{"total":0,"results":[],"merged_by_type":{}}}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        // 鱼佬盘搜 path: per-source override (source/包含词/排除词) all win over global
+        service.search("movie", List.of(), "csp_FishPanSou");
+
+        server.verify();
+    }
+
+    @Test
+    void perSourceBlankFieldsFallBackToGlobal() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setPanSouSource("all");
+        appProperties.setPanSouFilterInclude(List.of("1080"));
+        appProperties.setPanSouFilterExclude(List.of("枪版"));
+        OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        SubscriptionSourceService subscriptionSourceService = mock(SubscriptionSourceService.class);
+        when(subscriptionSourceService.getBuiltinExtend("csp_FishPanSou"))
+                .thenReturn("{\"source\":\"tg\"}");
+
+        RemoteSearchService service = new RemoteSearchService(
+                appProperties, restTemplateBuilder(restTemplate), objectMapper,
+                mock(TelegramChannelRepository.class), mock(ShareService.class),
+                mock(TvBoxService.class), offlineDownloadService, subscriptionSourceService);
+
+        server.expect(once(), requestTo("http://pansou.example/api/search"))
+                .andExpect(content().json("""
+                        {"kw":"movie","src":"tg","filter":{"include":["1080"],"exclude":["枪版"]}}
+                        """))
+                .andRespond(withSuccess("""
+                        {"code":0,"message":"ok","data":{"total":0,"results":[],"merged_by_type":{}}}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        // only source overridden; 包含词/排除词 inherit global
+        service.search("movie", List.of(), "csp_FishPanSou");
+
+        server.verify();
     }
 
     private static Message message(String type, String link) {
