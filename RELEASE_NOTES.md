@@ -1,5 +1,5 @@
-# Release Notes - 1.36.0
+# Release Notes - 1.37.0
 
 ## 优化
 
-- 优化123免转存
+- 优化多线程代理
