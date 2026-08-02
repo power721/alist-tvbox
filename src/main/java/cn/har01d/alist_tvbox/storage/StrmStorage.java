@@ -14,7 +14,7 @@ import org.apache.commons.lang3.StringUtils;
 @Slf4j
 public class StrmStorage extends Storage {
     private static final ObjectMapper mapper = new ObjectMapper();
-    
+
     public StrmStorage(Share share) {
         super(share, "Strm");
         setWebdavPolicy("native_proxy");
@@ -29,16 +29,17 @@ public class StrmStorage extends Storage {
 
     /**
      * 解析 STRM 配置 JSON
+     *
      * @param configJson 从 Share.cookie 字段读取的配置 JSON 字符串
      */
     private void parseStrmConfig(String configJson) throws Exception {
         if (StringUtils.isBlank(configJson)) {
             throw new IllegalArgumentException("STRM配置不能为空");
         }
-        
+
         // 解析 JSON
         JsonNode config = mapper.readTree(configJson);
-        
+
         // 构建 addition 字段，注意字段名转换：camelCase -> PascalCase
         addAddition("paths", config.get("paths").asText());
         addAddition("siteUrl", config.get("siteUrl").asText());
@@ -51,7 +52,7 @@ public class StrmStorage extends Storage {
         addAddition("SaveStrmToLocal", config.get("saveStrmToLocal").asBoolean(false));
         addAddition("SaveStrmLocalPath", config.get("saveStrmLocalPath").asText(""));
         addAddition("SaveLocalMode", config.get("saveLocalMode").asText("update"));
-        
+
         buildAddition();
     }
 }

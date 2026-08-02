@@ -57,17 +57,6 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column prop="master" label="开启代理？" width="120">
-        <template #default="scope">
-          <el-icon v-if="scope.row.useProxy">
-            <Check/>
-          </el-icon>
-          <el-icon v-else>
-            <Close/>
-          </el-icon>
-        </template>
-      </el-table-column>
-      <el-table-column prop="concurrency" label="线程数" width="110"/>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">详情</el-button>
@@ -114,21 +103,6 @@
             inactive-text="否"
           />
           <span class="hint">主账号用来观看分享。</span>
-        </el-form-item>
-        <el-form-item label="加速代理">
-          <el-switch
-            v-model="form.useProxy"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-          />
-          <span class="hint">服务端多线程加速，网页播放强制开启</span>
-        </el-form-item>
-        <el-form-item label="代理线程数">
-          <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
-        </el-form-item>
-        <el-form-item label="分片大小">
-          <el-input-number :min="64" :max="4096" v-model="form.chunkSize"/>
         </el-form-item>
         <el-form-item label="自动签到">
           <el-switch
@@ -211,21 +185,6 @@
             active-text="开启"
             inactive-text="关闭"
           />
-        </el-form-item>
-        <el-form-item label="加速代理">
-          <el-switch
-            v-model="form.useProxy"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-          />
-          <span class="hint">服务端多线程加速，网页播放强制开启</span>
-        </el-form-item>
-        <el-form-item label="代理线程数">
-          <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
-        </el-form-item>
-        <el-form-item label="分片大小">
-          <el-input-number :min="64" :max="4096" v-model="form.chunkSize"/>
         </el-form-item>
         <el-form-item label="上次签到时间" v-if="form.checkinTime">
           <el-input :model-value="formatTime(form.checkinTime)" readonly/>

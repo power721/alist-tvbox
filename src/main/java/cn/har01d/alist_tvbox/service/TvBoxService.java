@@ -1472,7 +1472,7 @@ public class TvBoxService {
 
         if (url.contains("#proxy=0")) {
             // do nothing
-        } else if (isUseProxy(url) && !shouldSkipBackendProxy(type, driverType)) {
+        } else if (isLocalProxyEnabled(driverType) && !shouldSkipBackendProxy(type, driverType)) {
             url = buildProxyUrl(site, name, path);
             useProxy = true;
             result.put("url", url);

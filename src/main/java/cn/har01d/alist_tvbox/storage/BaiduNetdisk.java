@@ -6,10 +6,10 @@ import org.apache.commons.lang3.StringUtils;
 public class BaiduNetdisk extends Storage {
     public BaiduNetdisk(DriverAccount account) {
         super(account, "BaiduNetdisk");
+        setWebdavPolicy("native_proxy");
         addAddition("cookie", account.getCookie());
         addAddition("refresh_token", account.getToken());
         addAddition("root_folder_path", account.getFolder());
-        addAddition("concurrency", account.getConcurrency());
         addAddition("order_by", "name");
         addAddition("order_direction", "asc");
         if (StringUtils.isBlank(account.getAddition())) {

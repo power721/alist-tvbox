@@ -5,12 +5,12 @@ import cn.har01d.alist_tvbox.entity.DriverAccount;
 public class ThunderBrowser extends Storage {
     public ThunderBrowser(DriverAccount account) {
         super(account, "ThunderBrowser");
+        setWebdavPolicy("native_proxy");
         setCustomCachePolicies("/alist-tvbox-offline:0");
         addAddition("username", account.getUsername());
         addAddition("password", account.getPassword());
         addAddition("safe_password", account.getSafePassword());
         addAddition("root_folder_id", account.getFolder());
-        addAddition("concurrency", account.getConcurrency());
         addAddition("remove_way", "delete");
         buildAddition();
     }

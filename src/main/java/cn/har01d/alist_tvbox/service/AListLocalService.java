@@ -53,6 +53,18 @@ public class AListLocalService {
     private static final String TYPE_STRING = "string";
     private static final int OFFLINE_DOWNLOAD_GROUP = 6;
     private static final int PRIVATE_FLAG = 2;
+    private static final String PROXY_CONFIG_KEY = "proxy_config";
+    // alist-tvbox 网盘类型 -> PowerList 驱动名(storage.driver)，用于把 local_proxy_config 转成 PowerList 全局 proxy_config
+    private static final Map<String, String> PROXY_DRIVER_NAMES = Map.of(
+            "ALI", "AliyundriveOpen",
+            "QUARK", "Quark",
+            "UC", "UC",
+            "PAN115", "115 Cloud",
+            "PAN123", "123Pan",
+            "PAN139", "139Yun",
+            "BAIDU", "BaiduNetdisk",
+            "GUANGYA", "GuangYaPan"
+    );
 
     private final SettingRepository settingRepository;
     private final SiteRepository siteRepository;
@@ -127,6 +139,8 @@ public class AListLocalService {
         setSetting("use_quark_tv", ussQuarkTv, "bool");
         String lazy = settingRepository.findById("ali_lazy_load").map(Setting::getValue).orElse("true");
         setSetting("ali_lazy_load", lazy, "bool");
+        String localProxyConfig = settingRepository.findById("local_proxy_config").map(Setting::getValue).orElse("");
+        updateProxyConfig(localProxyConfig);
     }
 
     public int getInternalPort() {
@@ -202,6 +216,32 @@ public class AListLocalService {
         } else {
             setSetting(key, value, type);
         }
+    }
+
+    public void updateProxyConfig(String localProxyConfigJson) {
+        String json = buildProxyConfigJson(localProxyConfigJson);
+        log.debug("sync proxy_config to AList: {}", json);
+        updateSetting(PROXY_CONFIG_KEY, json, TYPE_STRING);
+    }
+
+    private String buildProxyConfigJson(String localProxyConfigJson) {
+        Map<String, Object> result = new HashMap<>();
+        if (StringUtils.isNotBlank(localProxyConfigJson)) {
+            Map<String, Object> config = Utils.readJson(localProxyConfigJson);
+            if (config != null) {
+                for (Map.Entry<String, Object> entry : config.entrySet()) {
+                    String driver = PROXY_DRIVER_NAMES.get(entry.getKey());
+                    if (driver == null || !(entry.getValue() instanceof Map<?, ?> item)) {
+                        continue;
+                    }
+                    Map<String, Object> out = new HashMap<>();
+                    out.put("concurrency", item.get("concurrency"));
+                    out.put("chunk_size", item.get("chunk_size"));
+                    result.put(driver, out);
+                }
+            }
+        }
+        return Utils.toJsonString(result);
     }
 
     public SettingResponse getSetting(String key) {

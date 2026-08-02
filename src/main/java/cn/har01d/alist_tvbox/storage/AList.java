@@ -1,8 +1,7 @@
 package cn.har01d.alist_tvbox.storage;
 
-import org.apache.commons.lang3.StringUtils;
-
 import cn.har01d.alist_tvbox.entity.Site;
+import org.apache.commons.lang3.StringUtils;
 
 public class AList extends Storage {
     public AList(Site site) {

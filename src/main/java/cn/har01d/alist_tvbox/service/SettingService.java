@@ -574,6 +574,7 @@ public class SettingService {
         }
         if ("local_proxy_config".equals(setting.getName())) {
             appProperties.setLocalProxyConfig(parseLocalProxyConfig(setting.getValue()));
+            aListLocalService.updateProxyConfig(setting.getValue());
         }
         if ("delete_delay_time".equals(setting.getName())) {
             aListLocalService.updateSetting("delete_delay_time", setting.getValue(), "number");

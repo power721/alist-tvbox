@@ -67,17 +67,6 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column prop="master" label="开启代理？" width="120">
-        <template #default="scope">
-          <el-icon v-if="scope.row.useProxy">
-            <Check/>
-          </el-icon>
-          <el-icon v-else>
-            <Close/>
-          </el-icon>
-        </template>
-      </el-table-column>
-      <el-table-column prop="concurrency" label="线程数" width="110"/>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
@@ -224,21 +213,6 @@
         </el-form-item>
         <el-form-item v-if="form.type=='PAN115'" label="请求限速">
           <el-input-number :min="1" :max="4" v-model="form.addition.limit_rate"/>
-        </el-form-item>
-        <el-form-item v-if="supportProxy(form.type)" label="加速代理">
-          <el-switch
-            v-model="form.useProxy"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-          />
-          <span class="hint">服务端多线程加速，网页播放强制开启</span>
-        </el-form-item>
-        <el-form-item v-if="supportProxy(form.type)" label="代理线程数">
-          <el-input-number :min="1" :max="64" v-model="form.concurrency"/>
-        </el-form-item>
-        <el-form-item v-if="supportProxy(form.type)" label="分片大小">
-          <el-input-number :min="64" :max="4096" v-model="form.addition.chunk_size"/>
         </el-form-item>
         <el-form-item label="主账号" v-if="!driverRoundRobin&&form.type!='OPEN115'&&form.type!='QUARK_TV'&&form.type!='UC_TV'">
           <el-switch
@@ -626,17 +600,6 @@ const supportCookie = (type: string) => {
     || type == 'UC_TV'
     || type == 'BAIDU'
     || type == 'CLOUD189'
-}
-
-const supportProxy = (type: string) => {
-  return type == 'PAN115'
-    || type == 'QUARK'
-    || type == 'QUARK_TV'
-    || type == 'UC'
-    || type == 'UC_TV'
-    || type == 'BAIDU'
-    || type == 'PAN139'
-    || type == 'GUANGYA'
 }
 
 const handleAdd = () => {
