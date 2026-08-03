@@ -897,6 +897,7 @@ public class DriverAccountService {
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
         String url = "https://pan.baidu.com/rest/2.0/membership/user/info?method=query&clienttype=0&app_id=250528&web=1&dp-logid=36187900205107340023";
         var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        log.debug("baidu user info: {}", json);
         var info = new AccountInfo();
         info.setName(json.get("user_info").get("username").asText());
         info.setId(String.valueOf(json.get("user_info").get("uk").asLong()));
@@ -922,6 +923,7 @@ public class DriverAccountService {
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
         String url = "https://my.115.com/proapi/3.0/index.php?method=user_info&uid=" + uid;
         var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        log.debug("115 user info: {}", json);
         var info = new AccountInfo();
         info.setName(json.get("data").get("user_name").asText());
         info.setId(uid);
@@ -942,6 +944,7 @@ public class DriverAccountService {
 
         url = "https://pan.quark.cn/account/info?fr=pc&platform=pc";
         json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        log.debug("quark user info: {}", json);
         info.setName(json.get("data").get("nickname").asText());
         return info;
     }
@@ -959,6 +962,7 @@ public class DriverAccountService {
 
         url = "https://drive.uc.cn/account/info?fr=pc&platform=pc";
         json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        log.debug("UC user info: {}", json);
         info.setId(String.valueOf(json.get("data").get("uid").asLong()));
         info.setName(json.get("data").get("nickname").asText());
         return info;
@@ -977,6 +981,7 @@ public class DriverAccountService {
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
         String url = GY_ACCOUNT_API + "/v1/user/me";
         var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        log.debug("GuangYa user info: {}", json);
         var info = new AccountInfo();
         info.setName(json.get("name").asText());
         info.setId(json.get("sub").asText());
@@ -990,6 +995,7 @@ public class DriverAccountService {
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
         String url = "https://cloud.189.cn/api/open/user/getUserInfoForPortal.action?noCache=" + System.currentTimeMillis();
         var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        log.debug("189 user info: {}", json);
         var info = new AccountInfo();
         info.setName(json.get("userExtResp").get("nickName").asText());
         return info;
