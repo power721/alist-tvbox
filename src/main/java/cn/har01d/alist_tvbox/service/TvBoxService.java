@@ -1518,6 +1518,23 @@ public class TvBoxService {
             result.put("header", Map.of("User-Agent", Constants.USER_AGENT));
         }
 
+        // PowerList 多账号分片:把各账号直连 + 各自 header 设到 result.multiUrls,
+        // 供 spider.jar(VideoStreamProxy)客户端多账号分片加速。不改变服务端代理(useProxy)逻辑。
+        if (fsDetail.getMultiSource() != null && !fsDetail.getMultiSource().isEmpty()) {
+            List<Map<String, Object>> multiUrls = new ArrayList<>();
+            for (FsDetail.MultiSource ms : fsDetail.getMultiSource()) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("url", fixHttp(ms.getUrl()));
+                if (ms.getHeader() != null && !ms.getHeader().isEmpty()) {
+                    Map<String, String> header = new HashMap<>();
+                    ms.getHeader().forEach((k, v) -> header.put(k, v == null ? "" : String.join("; ", v)));
+                    item.put("header", header);
+                }
+                multiUrls.add(item);
+            }
+            result.put("multiUrls", multiUrls);
+        }
+
         if (!useProxy) {
             result.put("name", fsDetail.getName());
         }

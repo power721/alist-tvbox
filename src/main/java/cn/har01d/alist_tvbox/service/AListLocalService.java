@@ -137,6 +137,8 @@ public class AListLocalService {
         setSetting("driver_round_robin", roundRobin, "bool");
         String ussQuarkTv = settingRepository.findById("use_quark_tv").map(Setting::getValue).orElse("false");
         setSetting("use_quark_tv", ussQuarkTv, "bool");
+        String quarkMultiAccountProxy = settingRepository.findById("quark_multi_account_proxy").map(Setting::getValue).orElse("false");
+        setSetting("quark_multi_account_proxy", quarkMultiAccountProxy, "bool");
         String lazy = settingRepository.findById("ali_lazy_load").map(Setting::getValue).orElse("true");
         setSetting("ali_lazy_load", lazy, "bool");
         String localProxyConfig = settingRepository.findById("local_proxy_config").map(Setting::getValue).orElse("");

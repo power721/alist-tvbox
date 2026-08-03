@@ -585,6 +585,9 @@ public class SettingService {
         if ("use_quark_tv".equals(setting.getName())) {
             aListLocalService.updateSetting("use_quark_tv", setting.getValue(), "bool");
         }
+        if ("quark_multi_account_proxy".equals(setting.getName())) {
+            aListLocalService.updateSetting("quark_multi_account_proxy", setting.getValue(), "bool");
+        }
         if ("ali_lazy_load".equals(setting.getName())) {
             aListLocalService.updateSetting("ali_lazy_load", setting.getValue(), "bool");
         }
