@@ -42,6 +42,20 @@ public class RemoteSearchController {
         return remoteSearchService.checkPanSouLinks(request);
     }
 
+    // Plugin-facing, token-gated variant. Plugins (spider/filter) run inside the TVBox client
+    // and only hold the subscription vod token — not the X-API-KEY that /api/pansou/check/links
+    // requires. disk_type is optional and inferred from the URL when omitted.
+    @PostMapping("/check-links")
+    public ObjectNode checkLinks(@RequestBody ObjectNode request) {
+        return checkLinks("", request);
+    }
+
+    @PostMapping("/check-links/{token}")
+    public ObjectNode checkLinks(@PathVariable String token, @RequestBody ObjectNode request) {
+        subscriptionService.checkToken(token);
+        return remoteSearchService.checkLinks(request);
+    }
+
     @GetMapping("/pansou")
     public Object pansou(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
         return pansou("", id, t, wd, pg);

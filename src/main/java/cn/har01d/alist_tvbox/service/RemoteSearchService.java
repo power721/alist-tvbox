@@ -35,6 +35,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -60,6 +61,25 @@ public class RemoteSearchService {
     private static final String CHECK_STATE_UNCERTAIN = "uncertain";
     private static final Set<String> PAN_SOU_CHECK_TYPES = Set.of(
             "baidu", "aliyun", "quark", "tianyi", "uc", "mobile", "115", "xunlei", "123");
+
+    // Host fragment -> cloud name, mirrors the ShareService.isValidShareLink domain whitelist.
+    // Used to infer disk_type for plugin requests that only carry a raw share URL.
+    private static final List<String[]> DISK_HOST_MAP = List.of(
+            new String[]{"alipan.com", "aliyun"}, new String[]{"aliyundrive.com", "aliyun"},
+            new String[]{"123pan.com", "123"}, new String[]{"123pan.cn", "123"},
+            new String[]{"123684.com", "123"}, new String[]{"123685.com", "123"}, new String[]{"123865.com", "123"},
+            new String[]{"123912.com", "123"}, new String[]{"123592.com", "123"},
+            new String[]{"123684.cn", "123"}, new String[]{"123685.cn", "123"}, new String[]{"123865.cn", "123"},
+            new String[]{"123912.cn", "123"}, new String[]{"123592.cn", "123"},
+            new String[]{"guangyapan.com", "guangya"},
+            new String[]{"mypikpak.com", "pikpak"},
+            new String[]{"xunlei.com", "xunlei"},
+            new String[]{"quark.cn", "quark"},
+            new String[]{"139.com", "mobile"},
+            new String[]{"uc.cn", "uc"},
+            new String[]{"115.com", "115"}, new String[]{"115cdn.com", "115"}, new String[]{"anxia.com", "115"},
+            new String[]{"189.cn", "tianyi"},
+            new String[]{"baidu.com", "baidu"});
 
     private final AppProperties appProperties;
     private final RestTemplate restTemplate;
@@ -526,8 +546,56 @@ public class RemoteSearchService {
         return restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), String.class).getBody();
     }
 
-    public ObjectNode checkPanSouLinks(ObjectNode request) {
-        // Priority: dedicated 盘检地址 (PanCheck) > TG-Search > PanSou
+    // Plugin-facing entry: fill in disk_type from the share URL when the caller omits it,
+    // then delegate to checkPanSouLinks. Lets filter/spider plugins send just URLs.
+    public ObjectNode checkLinks(ObjectNode request) {
+        if (request != null && request.has("items") && request.get("items").isArray()) {
+            for (JsonNode item : request.get("items")) {
+                if (!item.isObject()) {
+                    continue;
+                }
+                ObjectNode obj = (ObjectNode) item;
+                if (StringUtils.isBlank(obj.path("disk_type").asText(""))) {
+                    String inferred = inferDiskType(obj.path("url").asText(""));
+                    if (StringUtils.isNotBlank(inferred)) {
+                        obj.put("disk_type", inferred);
+                    }
+                }
+            }
+        }
+        return checkPanSouLinks(request);
+    }
+
+    private String inferDiskType(String url) {
+        if (StringUtils.isBlank(url)) {
+            return null;
+        }
+        String lower = url.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("magnet:")) {
+            return "magnet";
+        }
+        if (lower.startsWith("ed2k:")) {
+            return "ed2k";
+        }
+        String host;
+        try {
+            host = new URI(url).getHost();
+        } catch (Exception e) {
+            return null;
+        }
+        if (host == null) {
+            return null;
+        }
+        host = host.toLowerCase(Locale.ROOT);
+        for (String[] entry : DISK_HOST_MAP) {
+            if (host.contains(entry[0])) {
+                return entry[1];
+            }
+        }
+        return null;
+    }
+
+    public ObjectNode checkPanSouLinks(ObjectNode request) {        // Priority: dedicated 盘检地址 (PanCheck) > TG-Search > PanSou
         if (StringUtils.isNotBlank(appProperties.getPanCheckUrl())) {
             return checkViaPanCheck(request);
         }

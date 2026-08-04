@@ -506,6 +506,8 @@ AList别名管理
 |------|------|------|
 | GET | `/api/pansou` | 获取盘搜信息 |
 | POST | `/api/pansou/check/links` | 检测分享链接有效性 |
+| POST | `/check-links` | 检测网盘链接有效性（无token） |
+| POST | `/check-links/{token}` | 检测网盘链接有效性（插件用，带token，disk_type可省略自动推断） |
 | GET | `/pansou` | 盘搜API（无token） |
 | GET | `/pansou/{token}` | 盘搜API（带token） |
 | GET | `/tgsp` | 搜索PG（GET） |
