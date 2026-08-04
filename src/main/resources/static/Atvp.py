@@ -165,6 +165,13 @@ class Spider(HostSpider):
     DETAIL_PREFIX = "atvp_detail:"
     GROUP_PREFIX = "atvp_group:"
     PUSH_PREFIX = "push://"
+    CHECK_LINK_HOSTS = (
+        "alipan.com", "aliyundrive.com", "123pan.com", "123pan.cn",
+        "123684.com", "123685.com", "123865.com", "123912.com", "123592.com",
+        "123684.cn", "123685.cn", "123865.cn", "123912.cn", "123592.cn",
+        "guangyapan.com", "mypikpak.com", "xunlei.com", "quark.cn", "139.com",
+        "uc.cn", "115.com", "115cdn.com", "anxia.com", "189.cn", "baidu.com",
+    )
     _LEADING_XML_DECL_RE = re.compile(r"<\?xml[^>]*\?>", re.I)
     _LEADING_HTML_TRIM_CHARS = "\ufeff" + "".join(chr(index) for index in range(33))
     _public_key_chunks = [
@@ -199,6 +206,10 @@ class Spider(HostSpider):
         source, inner_extend = self._split_ext(self.extend)
         self._backend_api = self._resolve_backend_api(source, payload)
         self._vod_token = self._resolve_vod_token(payload)
+        self.log(
+            "Atvp link check configured: "
+            f"api={self._backend_api or '-'}, token={'yes' if self._vod_token else 'no'}"
+        )
         self._localProxyConfig = payload.get("local_proxy_config") if isinstance(payload, dict) else {}
         package_text = self._load_source(source)
         source_text = package_text if self._is_raw_source(payload) else self._decrypt_secspider_source(package_text)
@@ -684,6 +695,169 @@ class Spider(HostSpider):
                     raise
         return output
 
+    def _check_link_key(self, value):
+        text = str(value or "").strip()
+        if text.startswith(self.PUSH_PREFIX):
+            text = text[len(self.PUSH_PREFIX):].strip()
+        return text
+
+    def _is_checkable_share_url(self, value):
+        text = self._check_link_key(value).lower()
+        if text.startswith("magnet:") or text.startswith("ed2k:"):
+            return True
+        try:
+            host = urlsplit(text).hostname or ""
+        except Exception:
+            return False
+        return any(fragment in host for fragment in self.CHECK_LINK_HOSTS)
+
+    def _request_bad_links(self, candidates, source):
+        items = []
+        seen = set()
+        for value in candidates:
+            candidate = self._check_link_key(value)
+            if candidate and candidate not in seen and self._is_checkable_share_url(candidate):
+                seen.add(candidate)
+                items.append({"url": candidate})
+        if not items:
+            self.log(f"Atvp link check skipped: source={source}, reason=no supported links")
+            return set()
+        if not self._backend_api:
+            self.log(f"Atvp link check skipped: source={source}, reason=backend api is empty")
+            return set()
+
+        try:
+            endpoint = self._build_backend_endpoint("check-links")
+            self.log(
+                f"Atvp link check request: source={source}, count={len(items)}, api={self._backend_api}"
+            )
+            response = self.post(
+                endpoint,
+                json={"items": items},
+                timeout=15,
+            )
+            if getattr(response, "status_code", 0) != 200:
+                self.log(
+                    f"Atvp link check failed: source={source}, status={getattr(response, 'status_code', 0)}"
+                )
+                return set()
+            try:
+                response_payload = response.json()
+            except Exception:
+                response_payload = json.loads(str(getattr(response, "text", "") or ""))
+            bad = {
+                self._check_link_key(entry.get("url"))
+                for entry in response_payload.get("results", [])
+                if isinstance(entry, dict) and entry.get("state") == "bad"
+                and self._check_link_key(entry.get("url"))
+            } if isinstance(response_payload, dict) else set()
+            self.log(
+                f"Atvp link check response: source={source}, count={len(items)}, bad={len(bad)}"
+            )
+            return bad
+        except Exception as exc:
+            self.log(f"Atvp link check failed: {exc}")
+            return set()
+
+    def _check_detail_links(self, result):
+        """Remove only links explicitly reported as bad by the token check API."""
+        if not isinstance(result, dict):
+            return result
+
+        candidates = []
+        vod_list = result.get("list")
+        if not isinstance(vod_list, list):
+            return result
+        for vod in vod_list:
+            if not isinstance(vod, dict):
+                continue
+            for group in str(vod.get("vod_play_url") or "").split("$$$"):
+                for episode in str(group or "").split("#"):
+                    _, _, target = episode.partition("$")
+                    candidate = self._check_link_key(target or episode)
+                    candidates.append(candidate)
+            groups = vod.get("group")
+            if isinstance(groups, list):
+                for folder in groups:
+                    if not isinstance(folder, dict) or not isinstance(folder.get("media"), list):
+                        continue
+                    for media in folder["media"]:
+                        candidate = self._check_link_key(media.get("url") if isinstance(media, dict) else "")
+                        candidates.append(candidate)
+        bad = self._request_bad_links(candidates, "detail")
+        if not bad:
+            return result
+
+        payload = dict(result)
+        filtered_vods = []
+        for original_vod in vod_list:
+            if not isinstance(original_vod, dict):
+                filtered_vods.append(original_vod)
+                continue
+            vod = dict(original_vod)
+            from_groups = str(vod.get("vod_play_from") or "").split("$$$")
+            url_groups = str(vod.get("vod_play_url") or "").split("$$$")
+            kept_urls, kept_from = [], []
+            for index, url_group in enumerate(url_groups):
+                episodes = []
+                for episode in str(url_group or "").split("#"):
+                    _, _, target = episode.partition("$")
+                    if self._check_link_key(target or episode) not in bad:
+                        episodes.append(episode)
+                if episodes:
+                    kept_urls.append("#".join(episodes))
+                    kept_from.append(from_groups[index] if index < len(from_groups) else "")
+            if "vod_play_url" in vod:
+                vod["vod_play_url"] = "$$$".join(kept_urls)
+                if "vod_play_from" in vod:
+                    vod["vod_play_from"] = "$$$".join(kept_from)
+            groups = vod.get("group")
+            if isinstance(groups, list):
+                kept_groups = []
+                for folder in groups:
+                    if not isinstance(folder, dict) or not isinstance(folder.get("media"), list):
+                        kept_groups.append(folder)
+                        continue
+                    updated = dict(folder)
+                    updated["media"] = [
+                        media for media in folder["media"]
+                        if not isinstance(media, dict)
+                        or self._check_link_key(media.get("url")) not in bad
+                    ]
+                    if updated["media"]:
+                        kept_groups.append(updated)
+                vod["group"] = kept_groups
+            filtered_vods.append(vod)
+        payload["list"] = filtered_vods
+        return payload
+
+    def _check_search_links(self, result):
+        if not isinstance(result, dict) or not isinstance(result.get("list"), list):
+            return result
+
+        candidates_by_item = []
+        for item in result["list"]:
+            candidates = []
+            if isinstance(item, dict):
+                for field in ("vod_id", "url", "share_url"):
+                    if item.get(field):
+                        candidates.append(item[field])
+            candidates_by_item.append(candidates)
+
+        bad = self._request_bad_links(
+            (candidate for candidates in candidates_by_item for candidate in candidates),
+            "search",
+        )
+        if not bad:
+            return result
+
+        payload = dict(result)
+        payload["list"] = [
+            item for item, candidates in zip(result["list"], candidates_by_item)
+            if not any(self._check_link_key(candidate) in bad for candidate in candidates)
+        ]
+        return payload
+
     def _require_inner(self):
         if self._inner is None:
             raise RuntimeError("Atvp spider is not initialized")
@@ -769,6 +943,7 @@ class Spider(HostSpider):
         parsed_result = self._merge_cached_detail_result(share_url, parsed_result)
         parsed_result = self._run_filters("parse", parsed_result, {"share_url": share_url})
         parsed_result = self._run_filters("detail", parsed_result, {"share_url": share_url, "source": "parse"})
+        parsed_result = self._check_detail_links(parsed_result)
         self._cache_detail_result(parsed_result)
         self._cache_play_context(parsed_result)
         return parsed_result
@@ -950,6 +1125,7 @@ class Spider(HostSpider):
     def _load_category_detail_vod(self, source_id):
         detail_result = self._require_inner().detailContent([source_id])
         detail_result = self._run_filters("detail", detail_result, {"ids": [source_id], "source": "category"})
+        detail_result = self._check_detail_links(detail_result)
         self._cache_detail_result(detail_result)
         self._cache_play_context(detail_result)
         vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
@@ -1114,6 +1290,7 @@ class Spider(HostSpider):
                 return self._parse(resolved_url)
         result = self._require_inner().detailContent(ids)
         result = self._run_filters("detail", result, {"ids": ids})
+        result = self._check_detail_links(result)
         self._cache_detail_result(result)
         self._cache_play_context(result)
         return result
@@ -1121,6 +1298,7 @@ class Spider(HostSpider):
     def searchContent(self, key, quick, pg="1"):
         print('searchContent', key, quick, pg)
         result = self._require_inner().searchContent(key, quick, int(pg))
+        result = self._check_search_links(result)
         if not self._category_mode_enabled():
             return result
         return self._normalize_category_content(result)

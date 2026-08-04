@@ -32,6 +32,7 @@ public class WebSecurityConfiguration {
                                 "/tv/**",
                                 "/dav/**",
                                 "/parse/**",
+                                "/check-links/**",
                                 "/offline_download/**",
                                 "/ali/access_token",
                                 "/api/local/admin/password",

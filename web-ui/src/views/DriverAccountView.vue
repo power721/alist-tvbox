@@ -164,8 +164,8 @@
         </el-form-item>
         <el-form-item label="认证令牌" v-if="form.type=='BAIDU'">
           <el-input v-model="form.addition.access_token" @change="fixBaiduToken"/>
-          <el-button type="primary" @click="copyLink">获取认证令牌</el-button>
-          <div class="hint">通过认证后复制浏览器链接填入</div>
+<!--          <el-button type="primary" @click="copyLink">获取认证令牌</el-button>-->
+          <div class="hint">不再使用，需要清空</div>
         </el-form-item>
         <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'+86 12345678900':''"/>

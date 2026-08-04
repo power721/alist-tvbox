@@ -88,6 +88,7 @@ import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 public class SubscriptionService {
     private static final String PLUGIN_RUN_MODE = "plugin_run_mode";
     private static final String PLUGIN_RUN_MODE_PYTHON = "python";
+    private static final String ATVP_RUNTIME_REVISION = "link-check-v1";
     private static final String AUTO_UPDATE_PG = "auto_update_pg";
     private static final String AUTO_UPDATE_ZX = "auto_update_zx";
     private static final String AUTO_UPDATE_XS = "auto_update_xs";
@@ -1458,7 +1459,11 @@ public class SubscriptionService {
         if (PluginService.isPythonPluginUrl(plugin.getUrl())) {
             return "csp_PyProxy";
         }
-        return nativePython ? baseUrl + "/Atvp.py" : "csp_PyProxy";
+        return nativePython ? atvpUrl(baseUrl) : "csp_PyProxy";
+    }
+
+    private static String atvpUrl(String baseUrl) {
+        return baseUrl + "/Atvp.py?v=" + ATVP_RUNTIME_REVISION;
     }
 
     static Map<String, Object> buildPluginExtPayload(Plugin plugin,
@@ -1474,11 +1479,14 @@ public class SubscriptionService {
         String extension = rawPython ? ".py" : ".txt";
         String contentUrl = baseUrl + "/plugins/" + contentToken + "/" + plugin.getId() + extension;
         if (rawPython) {
-            map.put("loader", baseUrl + "/Atvp.py");
+            map.put("loader", atvpUrl(baseUrl));
             map.put("source", contentUrl);
             map.put("raw", true);
         } else {
             map.put("source", contentUrl);
+            if (!nativePython) {
+                map.put("loader", atvpUrl(baseUrl));
+            }
         }
         map.put("token", token.isBlank() ? "-" : token);
         map.put("secret", secret);
