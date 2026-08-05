@@ -933,7 +933,13 @@ class Spider(HostSpider):
 
     def _parse(self, share_url):
         api = self._build_backend_endpoint("parse")
-        rsp = self.post(api, json={"url": share_url}, params={"ac": "play"}, timeout=10)
+        share_url = str(share_url or "").strip()
+        cached_vod = self._detail_result_cache.get(share_url)
+        title = str(cached_vod.get("vod_name") or "").strip() if isinstance(cached_vod, dict) else ""
+        request = {"url": share_url}
+        if title:
+            request["title"] = title
+        rsp = self.post(api, json=request, params={"ac": "play"}, timeout=10)
         if rsp.status_code != 200:
             return self.PUSH_PREFIX + share_url
         body = str(rsp.text or "")
@@ -957,14 +963,25 @@ class Spider(HostSpider):
         if not isinstance(vod, dict):
             return
 
-        for url_group in str(vod.get("vod_play_url") or "").split("$$$"):
-            _, _, target = str(url_group or "").partition("$")
+        def remember(target):
+            target = str(target or "").strip()
             if target.startswith(self.PUSH_PREFIX):
-                target = target[len(self.PUSH_PREFIX):]
+                target = target[len(self.PUSH_PREFIX):].strip()
             share_url = self._decode_parse(target)
-            if share_url is None:
+            if share_url is not None:
+                self._detail_result_cache[share_url] = dict(vod)
+
+        for url_group in str(vod.get("vod_play_url") or "").split("$$$"):
+            for episode in str(url_group or "").split("#"):
+                _, _, target = episode.partition("$")
+                remember(target or episode)
+
+        for group in vod.get("group") or []:
+            if not isinstance(group, dict):
                 continue
-            self._detail_result_cache[share_url] = dict(vod)
+            for media in group.get("media") or []:
+                if isinstance(media, dict):
+                    remember(media.get("url"))
 
     def _cache_play_context(self, detail_result):
         vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
