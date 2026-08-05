@@ -447,7 +447,10 @@ public class DoubanService {
                 return alias.getMovie();
             }
 
-            Movie movie = pickBest(movieRepository.getByName(name), year);
+            List<Movie> candidates = movieRepository.getByName(name);
+            log.debug("search local Douban movie: name='{}', year={}, matches={}",
+                    name, year, candidates == null ? 0 : candidates.size());
+            Movie movie = pickBest(candidates, year);
             if (movie != null) {
                 return movie;
             }
@@ -463,7 +466,10 @@ public class DoubanService {
                     return alias.getMovie();
                 }
 
-                movie = pickBest(movieRepository.getByName(name), year);
+                candidates = movieRepository.getByName(name);
+                log.debug("search local Douban movie: name='{}', year={}, matches={}",
+                        name, year, candidates == null ? 0 : candidates.size());
+                movie = pickBest(candidates, year);
                 if (movie != null) {
                     return movie;
                 }
@@ -474,7 +480,10 @@ public class DoubanService {
             // Skip for a bare season token (第一季/Season 1/S01): it is not a title and
             // the LIKE would match every season-N show of that year (wrong title).
             if (year != null && !isSeasonOnly(name)) {
-                return pickBestName(movieRepository.findByYearAndNameContains(year, name, Pageable.ofSize(10)).getContent(), name);
+                List<Movie> matches = movieRepository.findByYearAndNameContains(year, name, Pageable.ofSize(10)).getContent();
+                log.debug("search local Douban movie by year/name: name='{}', year={}, matches={}",
+                        name, year, matches.size());
+                return pickBestName(matches, name);
             }
         } catch (Exception e) {
             log.warn("", e);
