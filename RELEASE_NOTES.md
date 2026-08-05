@@ -1,5 +1,5 @@
-# Release Notes - 1.38.0
+# Release Notes - 1.39.0
 
 ## 新增
 
-- 夸父逐日
+- 插件支持盘检
