@@ -1781,10 +1781,14 @@ public class TvBoxService {
     }
 
     public MovieList getDetail(String ac, String tid, Integer depth) {
-        return getDetail(ac, tid, null, depth);
+        return getDetail(ac, tid, null, null, depth);
     }
 
     public MovieList getDetail(String ac, String tid, String title, Integer depth) {
+        return getDetail(ac, tid, title, null, depth);
+    }
+
+    public MovieList getDetail(String ac, String tid, String title, String keyword, Integer depth) {
         if (tid.contains("%24")) {
             tid = URLDecoder.decode(tid, StandardCharsets.UTF_8);
         }
@@ -1829,7 +1833,7 @@ public class TvBoxService {
         }
         updateShareTime(path);
         if (path.contains(PLAYLIST)) {
-            return getPlaylist(ac, site, path, title, depth);
+            return getPlaylist(ac, site, path, title, keyword, depth);
         }
 
         MovieList result = new MovieList();
@@ -2019,6 +2023,10 @@ public class TvBoxService {
     }
 
     public MovieList getPlaylist(String ac, Site site, String path, String title, Integer depth) {
+        return getPlaylist(ac, site, path, title, null, depth);
+    }
+
+    public MovieList getPlaylist(String ac, Site site, String path, String title, String keyword, Integer depth) {
         log.info("load playlist {}:{} {}", site.getId(), site.getName(), path);
         String newPath = getParent(path);
         if (!tenantService.valid(newPath)) {
@@ -2067,9 +2075,28 @@ public class TvBoxService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());
 
-        if (!setMovieInfo(site, movieDetail, fsDetail.getName(), newPath, true) && StringUtils.isNotBlank(title)) {
+        String preferredName = StringUtils.firstNonBlank(title, keyword, fsDetail.getName());
+        String cleanedPreferredName = TextUtils.cleanMediaTitle(preferredName);
+        if (StringUtils.isNotBlank(cleanedPreferredName)) {
+            preferredName = cleanedPreferredName;
+        }
+
+        boolean matched = false;
+        if (StringUtils.isNotBlank(title)) {
             movieDetail.setVod_name(title);
-            setMovieInfo(site, movieDetail, "", newPath, true);
+            matched = setMovieInfo(site, movieDetail, title, newPath, true);
+        }
+        if (!matched && StringUtils.isNotBlank(keyword)
+                && !StringUtils.equalsIgnoreCase(StringUtils.trim(title), StringUtils.trim(keyword))) {
+            movieDetail.setVod_name(keyword);
+            matched = setMovieInfo(site, movieDetail, keyword, newPath, true);
+        }
+        if (!matched) {
+            movieDetail.setVod_name(fsDetail.getName());
+            matched = setMovieInfo(site, movieDetail, fsDetail.getName(), newPath, true);
+        }
+        if (!matched && (StringUtils.isNotBlank(title) || StringUtils.isNotBlank(keyword))) {
+            movieDetail.setVod_name(preferredName);
         }
 
         FilesList filesList = dfs(site, newPath, ac, "", depth);

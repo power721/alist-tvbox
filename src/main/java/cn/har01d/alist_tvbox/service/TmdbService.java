@@ -557,6 +557,7 @@ public class TmdbService {
 
     public Tmdb getByName(String name) {
         try {
+            name = TextUtils.cleanMediaTitle(name);
             name = TextUtils.fixName(name);
             Tmdb movie = findFirstMovieByName(name);
             if (movie != null) {

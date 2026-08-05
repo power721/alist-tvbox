@@ -52,6 +52,16 @@ class TextUtilsTest {
     }
 
     @Test
+    void cleanMediaTitleKeepsYearAndRemovesQualityAndUpdateStatus() {
+        assertEquals("Alpha", TextUtils.cleanMediaTitle("Alpha"));
+        assertEquals("天才，女友(2026)", TextUtils.cleanMediaTitle("天才，女友(2026) 4K 更新至12集"));
+        assertEquals("天才，女友(2026)", TextUtils.cleanMediaTitle(
+                "天才，女友/天才女友 (2026) 4K 更新至12集【田曦薇/胡一天】"));
+        assertEquals("天才，女友(2026)", TextUtils.cleanMediaTitle(
+                "天才，女友/天才女友 (2026) [WEB-4K] [国语中字] [更至12集]"));
+    }
+
+    @Test
     public void testNumber() {
         String name = TextUtils.fixName("重紫 第10季");
         log.info("{}", name);

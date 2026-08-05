@@ -296,4 +296,101 @@ class TvBoxServiceTest {
         cn.har01d.alist_tvbox.tvbox.MovieDetail md = result.getList().get(0);
         assertThat(md.getVod_name()).isEqualTo("百花杀");
     }
+
+    @Test
+    void getPlaylistTriesSourceTitleThenSearchKeywordBeforeShareFolder() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/detail");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(8080);
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        Site site = new Site();
+        site.setId(1);
+        site.setName("AList");
+        String playlistPath = "/temp/quark@7058d8d58066@/~playlist";
+        String folderPath = "/temp/quark@7058d8d58066@";
+        FsDetail detail = new FsDetail();
+        detail.setName("quark@7058d8d58066@");
+
+        cn.har01d.alist_tvbox.entity.Movie keywordMovie = new cn.har01d.alist_tvbox.entity.Movie();
+        keywordMovie.setId(1);
+        keywordMovie.setName("天才女友");
+        keywordMovie.setYear(2026);
+        java.util.List<String> attemptedNames = new java.util.ArrayList<>();
+
+        when(tenantService.valid(folderPath)).thenReturn(true);
+        when(aListService.getFile(site, folderPath)).thenReturn(detail);
+        when(aListService.listFiles(site, folderPath, 1, 0))
+                .thenReturn(new cn.har01d.alist_tvbox.model.FsResponse());
+        when(proxyService.generatePath(site, playlistPath)).thenReturn(7);
+        when(doubanService.getByName(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.<Integer>nullable(Integer.class)))
+                .thenAnswer(invocation -> {
+                    String name = invocation.getArgument(0);
+                    attemptedNames.add(name);
+                    return "天才女友".equals(name) ? keywordMovie : null;
+                });
+
+        cn.har01d.alist_tvbox.tvbox.MovieList result = tvBoxService.getPlaylist(
+                "detail",
+                site,
+                playlistPath,
+                "天才，女友(2026) 4K 更新至12集",
+                "天才女友",
+                0
+        );
+
+        assertThat(result.getList().getFirst().getVod_name()).isEqualTo("天才女友");
+        assertThat(attemptedNames.getFirst()).isEqualTo("天才，女友(2026) 4K 更新至12集");
+        assertThat(attemptedNames).contains("天才女友");
+        assertThat(attemptedNames).doesNotContain("quark@7058d8d58066@");
+    }
+
+    @Test
+    void getPlaylistKeepsCleanedSourceTitleWhenMetadataIsMissing() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/detail");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(8080);
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        Site site = new Site();
+        site.setId(1);
+        site.setName("AList");
+        String playlistPath = "/temp/T 忝財钕伖/~playlist";
+        String folderPath = "/temp/T 忝財钕伖";
+        FsDetail detail = new FsDetail();
+        detail.setName("T 忝財钕伖");
+        java.util.List<String> attemptedNames = new java.util.ArrayList<>();
+
+        when(tenantService.valid(folderPath)).thenReturn(true);
+        when(aListService.getFile(site, folderPath)).thenReturn(detail);
+        when(aListService.listFiles(site, folderPath, 1, 0))
+                .thenReturn(new cn.har01d.alist_tvbox.model.FsResponse());
+        when(proxyService.generatePath(site, playlistPath)).thenReturn(8);
+        when(doubanService.getByName(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.<Integer>nullable(Integer.class)))
+                .thenAnswer(invocation -> {
+                    attemptedNames.add(invocation.getArgument(0));
+                    return null;
+                });
+
+        cn.har01d.alist_tvbox.tvbox.MovieList result = tvBoxService.getPlaylist(
+                "detail",
+                site,
+                playlistPath,
+                "天才，女友/天才女友 (2026) 4K 更新至12集【田曦薇/胡一天】",
+                "天才，女友",
+                0
+        );
+
+        assertThat(result.getList().getFirst().getVod_name()).isEqualTo("天才，女友(2026)");
+        assertThat(attemptedNames).contains(
+                "天才，女友/天才女友 (2026) 4K 更新至12集【田曦薇/胡一天】",
+                "天才，女友",
+                "T 忝財钕伖");
+    }
 }

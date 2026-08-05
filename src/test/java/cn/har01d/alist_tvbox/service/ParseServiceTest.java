@@ -20,7 +20,7 @@ class ParseServiceTest {
         ParseService service = new ParseService(tvBoxService, offlineDownloadService, shareService);
         service.parse(new ParseRequest("https://pan.quark.cn/s/demo", "测试剧名"), "play");
 
-        verify(tvBoxService).getDetail("play", "1$/temp/quark@demo@/~playlist", "测试剧名");
+        verify(tvBoxService).getDetail("play", "1$/temp/quark@demo@/~playlist", "测试剧名", null, 0);
     }
 
     @Test
@@ -34,6 +34,6 @@ class ParseServiceTest {
         ParseService service = new ParseService(tvBoxService, offlineDownloadService, shareService);
         service.parse(new ParseRequest("https://pan.quark.cn/s/demo"), "play");
 
-        verify(tvBoxService).getDetail("play", "1$/temp/quark@demo@/~playlist", (String) null);
+        verify(tvBoxService).getDetail("play", "1$/temp/quark@demo@/~playlist", null, null, 0);
     }
 }

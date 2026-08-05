@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,6 +52,26 @@ class TmdbServiceTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void getByNameCleansAlternateTitleAndCastSuffix() {
+        TmdbService service = new TmdbService(
+                tmdbRepository,
+                tmdbMetaRepository,
+                metaRepository,
+                settingRepository,
+                siteService,
+                taskService,
+                new RestTemplateBuilder(),
+                new ObjectMapper()
+        );
+        when(tmdbRepository.getByName("天才，女友")).thenReturn(List.of(movie("天才，女友")));
+
+        Tmdb result = service.getByName("天才，女友/天才女友 (2026) 4K 更新至12集【田曦薇/胡一天】");
+
+        assertEquals("天才，女友", result.getName());
+        verify(tmdbRepository).getByName("天才，女友");
+    }
 
     @Test
     void scrapeIndexFileShouldNotLeakSiteIdAcrossConcurrentRuns() throws Exception {

@@ -18,6 +18,11 @@ public class TextUtils {
     private static final Pattern NUMBER4 = Pattern.compile("(\\.?\\d+集全?)");
     private static final Pattern NUMBER5 = Pattern.compile("(\\.[0-9-]+季(\\+番外)?)");
     private static final Pattern NUMBER6 = Pattern.compile("(.更新至\\d+)");
+    private static final Pattern TRAILING_EPISODE_STATUS = Pattern.compile(
+            "\\s*(?:更新至|更至|更新|全)?\\s*\\d+\\s*[集期话](?:全|完结)?\\s*$");
+    private static final Pattern RELEASE_YEAR = Pattern.compile("[（(]((?:19|20)\\d{2})[）)]");
+    private static final Pattern TRAILING_BRACKET_METADATA = Pattern.compile("\\s*【[^】]*】\\s*$");
+    private static final Pattern HAN = Pattern.compile("[\\p{IsHan}]");
     private static final Pattern NAME1 = Pattern.compile("^【(.+)】$");
     private static final Pattern NAME2 = Pattern.compile("^\\w (.+)\\s+\\(\\d{4}\\).*");
     private static final Pattern NAME3 = Pattern.compile("^\\w (.+)\\.\\d{4} .+");
@@ -35,7 +40,8 @@ public class TextUtils {
     private static final Pattern RELEASE_GROUP = Pattern.compile("\\[([^]]+(字幕组|发布组|制作|Subs|Rip))]");
     // 行首装饰性符号：空白、间隔号(U+00B7/U+0387/U+30FB)、不可见变体选择符(U+FE0F/U+FE0E)、
     // ZWJ 以及 emoji/符号区段。Telegram 频道常用 ·✅✅✅ 之类前缀，由 stripLeadingNoise 统一剥离。
-    private static final Pattern LEADING_NOISE = Pattern.compile("^[\\s\\u00B7\\u0387\\u30FB\\uFE0F\\uFE0E\\u200D\\u2600-\\u27BF\\u1F300-\\u1FAFF]+");
+    private static final Pattern LEADING_NOISE = Pattern.compile(
+            "^[\\s\\u00B7\\u0387\\u30FB\\uFE0F\\uFE0E\\u200D\\u2600-\\u27BF\\x{1F300}-\\x{1FAFF}]+");
 
     public static boolean isChineseChar(int c) {
         return c >= 0x4E00 && c <= 0x9FA5;
@@ -141,6 +147,10 @@ public class TextUtils {
 
         // 新增：移除分辨率标签
         newName = RESOLUTION.matcher(newName).replaceAll(" ");
+
+        // Keep the release year available to the caller, but remove episode/update
+        // status from the title body before the generic cleanup below.
+        newName = TRAILING_EPISODE_STATUS.matcher(newName).replaceFirst("");
 
         newName = newName
                 .replaceAll("第\\d+-\\d+集", " ")
@@ -587,6 +597,44 @@ public class TextUtils {
             log.debug("name: {} -> {}", name, newName);
         }
         return newName;
+    }
+
+    public static String cleanMediaTitle(String name) {
+        if (name == null) {
+            return null;
+        }
+        Matcher yearMatcher = RELEASE_YEAR.matcher(name);
+        String year = yearMatcher.find() ? yearMatcher.group(1) : null;
+        String mediaName = stripLeadingNoise(name).trim();
+        Matcher metadataMatcher = TRAILING_BRACKET_METADATA.matcher(mediaName);
+        if (metadataMatcher.find() && metadataMatcher.start() > 0) {
+            mediaName = mediaName.substring(0, metadataMatcher.start()).trim();
+        }
+        int aliasSeparator = firstAliasSeparator(mediaName);
+        if (aliasSeparator > 0) {
+            String primaryTitle = mediaName.substring(0, aliasSeparator).trim();
+            String alternateTitle = mediaName.substring(aliasSeparator + 1).trim();
+            if (HAN.matcher(primaryTitle).find() && HAN.matcher(alternateTitle).find()) {
+                mediaName = primaryTitle;
+            }
+        }
+        String title = collapseCjkSpaces(fixName(mediaName));
+        if (title.isBlank() || year == null) {
+            return title;
+        }
+        return title + "(" + year + ")";
+    }
+
+    private static int firstAliasSeparator(String name) {
+        int slash = name.indexOf('/');
+        int fullWidthSlash = name.indexOf('／');
+        if (slash < 0) {
+            return fullWidthSlash;
+        }
+        if (fullWidthSlash < 0) {
+            return slash;
+        }
+        return Math.min(slash, fullWidthSlash);
     }
 
     // Uploaders often dot-separate CJK characters to evade detection ("百.花.杀").

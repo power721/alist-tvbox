@@ -356,6 +356,10 @@ public class TelegramService {
     }
 
     public MovieList detail(String tid, String ac, String title) {
+        return detail(tid, ac, title, null);
+    }
+
+    public MovieList detail(String tid, String ac, String title, String keyword) {
         if (tid.startsWith("%2Fv%2F")) {
             tid = StringUtils.trimToEmpty(URLDecoder.decode(tid, StandardCharsets.UTF_8));
         }
@@ -386,7 +390,7 @@ public class TelegramService {
             }
         }
 
-        MovieList movieList = tvBoxService.getDetail(ac, "1$" + path + "/~playlist", title);
+        MovieList movieList = tvBoxService.getDetail(ac, "1$" + path + "/~playlist", title, keyword, 0);
         log.debug("{}", movieList);
         return movieList;
     }

@@ -63,7 +63,7 @@ public class TelegramController {
     public Object browse(@PathVariable String token, String id, String t, String ac, String wd, String title, boolean web, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
-            return telegramService.detail(id, ac, title);
+            return telegramService.detail(id, ac, title, wd);
         } else if (StringUtils.isNotBlank(t)) {
             if (t.equals("0")) {
                 return telegramService.searchMovies("", web, 5);
@@ -84,7 +84,7 @@ public class TelegramController {
     public Object browseTgSearch(@PathVariable String token, String id, String t, String ac, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
-            return telegramService.detail(id, ac, title);
+            return telegramService.detail(id, ac, title, wd);
         } else if (StringUtils.isNotBlank(t)) {
             if (t.equals("0")) {
                 return telegramService.searchTgSearchMovies("", pg, 120);
@@ -97,15 +97,15 @@ public class TelegramController {
     }
 
     @GetMapping("/tg-db")
-    public Object db(String id, String t, String ac, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) throws IOException {
-        return db("", id, t, ac, wd, sort, year, genre, region, pg, size);
+    public Object db(String id, String t, String ac, String wd, String title, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) throws IOException {
+        return db("", id, t, ac, wd, title, sort, year, genre, region, pg, size);
     }
 
     @GetMapping("/tg-db/{token}")
-    public Object db(@PathVariable String token, String id, String t, String ac, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) throws IOException {
+    public Object db(@PathVariable String token, String id, String t, String ac, String wd, String title, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) throws IOException {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
-            return telegramService.detail(id, ac, "");
+            return telegramService.detail(id, ac, title, wd);
         } else if (StringUtils.isNotBlank(t)) {
             if (t.equals("0")) {
                 t = "suggestion";

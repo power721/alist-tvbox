@@ -300,14 +300,18 @@ public class RemoteSearchService {
     }
 
     public MovieList detail(String tid) {
+        return detail(tid, null, null);
+    }
+
+    public MovieList detail(String tid, String title, String keyword) {
         var share = new ShareLink();
         share.setLink(tid);
         String path = shareService.add(share);
 
         // backfill the title captured during search; without it getPlaylist falls
         // back to the obfuscated storage folder name and metadata scraping fails.
-        String title = shareTitle.getIfPresent(tid);
-        return tvBoxService.getDetail("", "1$" + path + "/~playlist", title, 0);
+        title = StringUtils.defaultIfBlank(title, shareTitle.getIfPresent(tid));
+        return tvBoxService.getDetail("", "1$" + path + "/~playlist", title, keyword, 0);
     }
 
     // Per-built-in-source override parsed from the builtin extend JSON

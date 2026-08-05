@@ -57,15 +57,15 @@ public class RemoteSearchController {
     }
 
     @GetMapping("/pansou")
-    public Object pansou(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
-        return pansou("", id, t, wd, pg);
+    public Object pansou(String id, String t, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg) {
+        return pansou("", id, t, wd, title, pg);
     }
 
     @GetMapping("/pansou/{token}")
-    public Object pansou(@PathVariable String token, String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
+    public Object pansou(@PathVariable String token, String id, String t, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg) {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
-            return remoteSearchService.detail(id);
+            return remoteSearchService.detail(id, title, wd);
         } else if (StringUtils.isNotBlank(wd)) {
             return remoteSearchService.pansou(wd);
         } else if ("0".equals(t)) {
@@ -75,15 +75,15 @@ public class RemoteSearchController {
     }
 
     @GetMapping("/pansou-group")
-    public Object pansouGroup(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
-        return pansouGroup("", id, t, wd, pg);
+    public Object pansouGroup(String id, String t, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg) {
+        return pansouGroup("", id, t, wd, title, pg);
     }
 
     @GetMapping("/pansou-group/{token}")
-    public Object pansouGroup(@PathVariable String token, String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
+    public Object pansouGroup(@PathVariable String token, String id, String t, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg) {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
-            return remoteSearchService.detail(id);
+            return remoteSearchService.detail(id, title, wd);
         } else if (StringUtils.isNotBlank(wd)) {
             return remoteSearchService.pansouGroup(wd);
         } else if (StringUtils.isNotBlank(t) && !"0".equals(t)) {

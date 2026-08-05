@@ -116,6 +116,18 @@ class DoubanServiceTest {
     }
 
     @Test
+    void getByNameUsesEmbeddedYearAfterCleaningSourceTitle() {
+        Movie old = movie("天才，女友", 2018);
+        Movie current = movie("天才，女友", 2026);
+        when(aliasRepository.findById(anyString())).thenReturn(Optional.empty());
+        when(movieRepository.getByName("天才，女友")).thenReturn(List.of(old, current));
+
+        Movie result = doubanService.getByName("天才，女友(2026) 4K 更新至12集", null);
+
+        assertThat(result).isSameAs(current);
+    }
+
+    @Test
     void isSeasonOnlyDetectsBareSeasonTokens() {
         // Chinese season markers (from fixName transforming S01/S02 -> 第一季/第二季)
         assertThat(DoubanService.isSeasonOnly("第一季")).isTrue();
@@ -139,7 +151,6 @@ class DoubanServiceTest {
     @Test
     void getByNameSkipsBroadMatchForBareSeasonToken() {
         when(aliasRepository.findById(anyString())).thenReturn(Optional.empty());
-        when(movieRepository.getByName("第一季")).thenReturn(List.of());
 
         assertThat(doubanService.getByName("S01", 2026)).isNull();
         // the year-scoped name-contains fallback must never run for a bare season token

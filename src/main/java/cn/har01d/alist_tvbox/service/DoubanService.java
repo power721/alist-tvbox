@@ -434,6 +434,8 @@ public class DoubanService {
                 return alias.getMovie();
             }
 
+            year = year == null ? getYearFromText(name) : year;
+            name = TextUtils.cleanMediaTitle(name);
             name = TextUtils.collapseCjkSpaces(TextUtils.fixName(name));
             if (name.isEmpty()) {
                 return null;
@@ -888,14 +890,15 @@ public class DoubanService {
         return null;
     }
 
-    // extract a release year from the title/path to disambiguate same-name titles;
-    // path takes precedence, then a parenthesized year in the title, then a bare year
+    // Extract a release year to disambiguate same-name titles. An explicit title
+    // belongs to the current search result and therefore takes precedence over the
+    // mounted path, which may be an opaque share token or contain unrelated digits.
     public Integer getYear(String name, String path) {
-        Integer year = getYearFromPath(path);
+        Integer year = getYearFromText(name);
         if (year != null) {
             return year;
         }
-        return getYearFromText(name);
+        return getYearFromPath(path);
     }
 
     static Integer getYearFromText(String text) {
