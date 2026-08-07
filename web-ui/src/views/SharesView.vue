@@ -447,7 +447,7 @@ const shareTypeMeta: Record<string, { label: string; mountPrefix?: string; linkP
   ali: { label: '阿里分享', mountPrefix: '/\uD83C\uDE34我的阿里分享/', linkPrefix: 'https://www.alipan.com/s/', passwordParam: 'password' },
   pikpak: { label: 'PikPak分享', mountPrefix: '/\uD83D\uDD78\uFE0F我的PikPak分享/', linkPrefix: 'https://mypikpak.com/s/', passwordParam: 'pwd' },
   thunder: { label: '迅雷分享', mountPrefix: '/我的迅雷分享/', linkPrefix: 'https://pan.xunlei.com/s/', passwordParam: 'pwd' },
-  '123': { label: '123分享', mountPrefix: '/我的123分享/', linkPrefix: 'https://123pan.cn/s/', passwordParam: 'password' },
+  '123': { label: '123分享', mountPrefix: '/我的123分享/', linkPrefix: 'https://123pan.com/s/', passwordParam: 'password' },
   local: { label: '本地存储' },
   quark: { label: '夸克分享', mountPrefix: '/我的夸克分享/', linkPrefix: 'https://pan.quark.cn/s/', passwordParam: 'password' },
   '139': { label: '移动分享', mountPrefix: '/我的移动分享/', linkPrefix: 'https://caiyun.139.com/m/i?', passwordParam: 'password' },
@@ -677,7 +677,7 @@ const getShareLink = (shareInfo: ShareInfo) => {
 
   let url = meta.linkPrefix + shareInfo.shareId
   if (drive === 'ali') {
-    if (shareInfo.folderId) {
+    if (shareInfo.folderId && shareInfo.folderId != 'root') {
       url = url + '/folder/' + shareInfo.folderId
     }
   }

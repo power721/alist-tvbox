@@ -29,6 +29,7 @@ public class Share {
     @Column(columnDefinition = "TEXT")
     private String cookie;
     private Integer type;
+    private String title;
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean temp;
     private Instant time = Instant.now();

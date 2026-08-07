@@ -50,6 +50,10 @@ public class ParseService {
         share.setLink(tid);
         String path = shareService.add(share);
 
-        return tvBoxService.getDetail(ac, "1$" + path + "/~playlist", title, keyword, 0);
+        // TVBox history re-entry reaches /parse with only the share link (title=null);
+        // recover/persist the real title via Share.title so getPlaylist does not fall back
+        // to the storage folder name.
+        String resolved = shareService.resolveShareTitle(tid, title);
+        return tvBoxService.getDetail(ac, "1$" + path + "/~playlist", resolved, keyword, 0);
     }
 }

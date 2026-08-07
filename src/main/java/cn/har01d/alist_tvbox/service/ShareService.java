@@ -50,6 +50,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -77,11 +79,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1287,6 +1292,80 @@ public class ShareService {
         }
 
         return path;
+    }
+
+    // Short-lived link -> title cache populated at search time (before the Share row
+    // exists) so the very first detail call - which creates the Share - can still recover
+    // the real title and persist it. Shared across all detail entry points (/pansou,
+    // /parse) so a title captured by a search on one path is visible on another.
+    private final Cache<String, String> shareTitleCache = Caffeine.newBuilder().maximumSize(200).expireAfterWrite(Duration.ofHours(2)).build();
+
+    public void cacheShareTitle(String link, String title) {
+        if (StringUtils.isNotBlank(link) && StringUtils.isNotBlank(title)) {
+            shareTitleCache.put(link, title);
+        }
+    }
+
+    // Parse a raw share link into a transient Share (type + normalized shareId) the same
+    // way add() does, but without mounting storage or any network call. Used to key the
+    // title store by the same (type, shareId) that the persisted Share rows use, so the
+    // lookup survives shareId normalization (e.g. baidu URL -> 23-char id).
+    public Share parseShareLink(String link) {
+        if (StringUtils.isBlank(link)) {
+            return null;
+        }
+        Share probe = new Share();
+        probe.setShareId(link);
+        return parseLink(probe) ? probe : null;
+    }
+
+    // Recover the persisted display title for a raw share link, or null if unknown.
+    public String findShareTitle(String link) {
+        Share probe = parseShareLink(link);
+        if (probe == null) {
+            return null;
+        }
+        return shareRepository.findByTypeAndShareId(probe.getType(), probe.getShareId())
+                .map(Share::getTitle)
+                .orElse(null);
+    }
+
+    // Persist the display title for a raw share link's existing Share row (best-effort).
+    // Called when a title is recovered from a transient source (detail param or the
+    // in-memory cache) so that history re-entry after cache expiry/restart can recover it.
+    public void saveShareTitle(String link, String title) {
+        if (StringUtils.isBlank(title)) {
+            return;
+        }
+        try {
+            Share probe = parseShareLink(link);
+            if (probe == null) {
+                return;
+            }
+            shareRepository.findByTypeAndShareId(probe.getType(), probe.getShareId()).ifPresent(share -> {
+                if (!Objects.equals(title, share.getTitle())) {
+                    share.setTitle(title);
+                    shareRepository.save(share);
+                }
+            });
+        } catch (Exception e) {
+            log.warn("saveShareTitle failed for {}: {}", link, e.getMessage());
+        }
+    }
+
+    // Resolve the display title for a raw share link from any detail entry point
+    // (RemoteSearchService.detail via /pansou, ParseService.drive via /parse, ...):
+    // caller param -> in-memory search cache -> persisted Share.title. A known title is
+    // persisted so a later history re-entry (cache expired / restart) recovers it.
+    // Returns null when the title is unknown (caller then falls back to the storage
+    // folder name).
+    public String resolveShareTitle(String link, String title) {
+        String known = StringUtils.defaultIfBlank(title, shareTitleCache.getIfPresent(link));
+        if (StringUtils.isNotBlank(known)) {
+            saveShareTitle(link, known);
+            return known;
+        }
+        return findShareTitle(link);
     }
 
     private boolean isOfflineDownloadLink(String link) {

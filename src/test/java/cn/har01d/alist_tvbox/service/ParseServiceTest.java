@@ -16,6 +16,9 @@ class ParseServiceTest {
         ShareService shareService = mock(ShareService.class);
         when(shareService.add(argThat(share -> "https://pan.quark.cn/s/demo".equals(share.getLink()))))
                 .thenReturn("/temp/quark@demo@");
+        // resolveShareTitle echoes a known title (real impl persists + returns it)
+        when(shareService.resolveShareTitle("https://pan.quark.cn/s/demo", "测试剧名"))
+                .thenReturn("测试剧名");
 
         ParseService service = new ParseService(tvBoxService, offlineDownloadService, shareService);
         service.parse(new ParseRequest("https://pan.quark.cn/s/demo", "测试剧名"), "play");

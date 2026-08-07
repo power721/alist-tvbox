@@ -52,6 +52,7 @@ public class WebSecurityConfiguration {
                                 "/api/settings/install_mode",
                                 "/api/alist/start/status",
                                 "/api/share-link",
+                                "/api/drive/**",
                                 "/api/accounts/logout",
                                 "/api/accounts/principal"
                         ).authenticated()

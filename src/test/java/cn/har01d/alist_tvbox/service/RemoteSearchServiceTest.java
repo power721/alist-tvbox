@@ -149,10 +149,14 @@ class RemoteSearchServiceTest {
 
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
         try {
-            // search captures the real title keyed by share link
+            // search asks ShareService to cache the real title keyed by share link
             service.pansou("肖申克的救赎");
-            // detail must pass that title through so getPlaylist does not fall back to
-            // the obfuscated storage folder name and break metadata scraping
+            verify(shareService).cacheShareTitle(eq("https://pan.quark.cn/s/abc123"), eq("肖申克的救赎"));
+
+            // detail recovers the title via ShareService and passes it through so getPlaylist
+            // does not fall back to the obfuscated storage folder name and break scraping
+            when(shareService.resolveShareTitle(eq("https://pan.quark.cn/s/abc123"), isNull()))
+                    .thenReturn("肖申克的救赎");
             service.detail("https://pan.quark.cn/s/abc123");
 
             verify(tvBoxService).getDetail(eq(""), eq("1$/mock/~playlist"), eq("肖申克的救赎"), isNull(), eq(0));

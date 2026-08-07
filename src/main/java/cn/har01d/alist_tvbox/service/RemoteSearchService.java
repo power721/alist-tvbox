@@ -93,9 +93,6 @@ public class RemoteSearchService {
     private List<String> panSouBuiltinChannels;
     private String panSouToken;
     private String checkedPanSouUrl;
-    // carries the search-result title from search() to detail() so the resolved
-    // storage folder name (often an obfuscated share token) does not overwrite it.
-    private final Cache<String, String> shareTitle = Caffeine.newBuilder().maximumSize(200).expireAfterWrite(Duration.ofHours(2)).build();
     // holds one grouped search result set per short cache id so the folder
     // drill-down can page through it without hitting PanSou again.
     private final Cache<String, List<Message>> groupCache = Caffeine.newBuilder()
@@ -197,7 +194,7 @@ public class RemoteSearchService {
         movieDetail.setVod_id(encodeUrl(message.getLink()));
         movieDetail.setVod_name(message.getName());
         if (StringUtils.isNotBlank(message.getLink()) && StringUtils.isNotBlank(movieDetail.getVod_name())) {
-            shareTitle.put(message.getLink(), movieDetail.getVod_name());
+            shareService.cacheShareTitle(message.getLink(), movieDetail.getVod_name());
         }
         if (StringUtils.isBlank(message.getCover())) {
             movieDetail.setVod_pic(getPic(message.getType()));
@@ -308,10 +305,11 @@ public class RemoteSearchService {
         share.setLink(tid);
         String path = shareService.add(share);
 
-        // backfill the title captured during search; without it getPlaylist falls
-        // back to the obfuscated storage folder name and metadata scraping fails.
-        title = StringUtils.defaultIfBlank(title, shareTitle.getIfPresent(tid));
-        return tvBoxService.getDetail("", "1$" + path + "/~playlist", title, keyword, 0);
+        // Recover the real title so getPlaylist does not fall back to the obfuscated
+        // storage folder name (which also breaks metadata scraping). resolveShareTitle
+        // checks caller param -> shared in-memory search cache -> persisted Share.title.
+        String resolved = shareService.resolveShareTitle(tid, title);
+        return tvBoxService.getDetail("", "1$" + path + "/~playlist", resolved, keyword, 0);
     }
 
     // Per-built-in-source override parsed from the builtin extend JSON
