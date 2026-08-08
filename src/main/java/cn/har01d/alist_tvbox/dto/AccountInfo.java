@@ -12,5 +12,8 @@ public class AccountInfo {
     private String cookie;
     private String token;
     private String vip = "user";
+    private long usedCapacity;
+    private long totalCapacity;
+    private Long expireAt;
     private Map<String, Object> addition = new HashMap<>();
 }

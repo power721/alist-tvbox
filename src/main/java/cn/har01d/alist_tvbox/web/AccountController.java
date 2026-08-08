@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.AccountDto;
+import cn.har01d.alist_tvbox.dto.AccountInfo;
 import cn.har01d.alist_tvbox.dto.CheckinLog;
 import cn.har01d.alist_tvbox.dto.CheckinResult;
 import cn.har01d.alist_tvbox.entity.Account;
@@ -40,6 +41,11 @@ public class AccountController {
     @PostMapping("/api/ali/accounts")
     public Account create(@RequestBody AccountDto account) {
         return accountService.create(account);
+    }
+
+    @PostMapping("/api/ali/accounts/-/info")
+    public AccountInfo getInfo(@RequestBody Account account) {
+        return accountService.getInfo(account);
     }
 
     @PostMapping("/api/ali/accounts/{id}/checkin")

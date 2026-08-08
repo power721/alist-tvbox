@@ -57,8 +57,9 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column fixed="right" label="操作" width="200">
+      <el-table-column fixed="right" label="操作" width="270">
         <template #default="scope">
+          <el-button link type="primary" size="small" @click="showAccountInfo(scope.row)">账号信息</el-button>
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">详情</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
@@ -119,6 +120,20 @@
         <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
       </span>
       </template>
+    </el-dialog>
+
+    <el-dialog v-model="accountInfoVisible" title="阿里云盘账号信息" width="420px">
+      <el-descriptions v-if="accountInfo" :column="1" border>
+        <el-descriptions-item label="用户名">{{ accountInfo.name || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="用户 ID">{{ accountInfo.id || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="会员类型">{{ accountInfo.vip || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="会员过期时间">{{ formatAccountExpireAt(accountInfo.expireAt) }}</el-descriptions-item>
+        <el-descriptions-item label="已用容量">{{ formatCapacity(accountInfo.usedCapacity) }}</el-descriptions-item>
+        <el-descriptions-item label="总容量">{{ formatCapacity(accountInfo.totalCapacity) }}</el-descriptions-item>
+        <el-descriptions-item v-if="accountInfo.addition?.rightsName" label="会员权益">
+          {{ accountInfo.addition.rightsName }}
+        </el-descriptions-item>
+      </el-descriptions>
     </el-dialog>
 
     <el-dialog v-model="dialogVisible" title="删除阿里账号" width="30%">
@@ -269,6 +284,16 @@ import DriverAccountView from "@/views/DriverAccountView.vue";
 const iat = ref([0])
 const exp = ref([0])
 const activities = ref<any[]>([])
+type AliAccountInfo = {
+  id?: string
+  name?: string
+  vip?: string
+  usedCapacity?: number
+  totalCapacity?: number
+  expireAt?: number | null
+  addition?: Record<string, string>
+}
+
 const forceCheckin = ref(false)
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -277,7 +302,9 @@ const code = ref('')
 const tokenUrl = ref('')
 const base64QrCode = ref('')
 const accounts = ref([])
+const accountInfo = ref<AliAccountInfo | null>(null)
 const formVisible = ref(false)
+const accountInfoVisible = ref(false)
 const dialogVisible = ref(false)
 const qrVisible = ref(false)
 const detailVisible = ref(false)
@@ -306,6 +333,38 @@ const form = ref({
 
 const formatTime = (value: string | number) => {
   return new Date(value).toLocaleString('zh-cn')
+}
+
+const formatCapacity = (bytes?: number) => {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) {
+    return '—'
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex++
+  }
+  return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`
+}
+
+const formatAccountExpireAt = (expireAt?: number | null) => {
+  if (!expireAt) {
+    return '—'
+  }
+  const timestamp = expireAt < 100000000000 ? expireAt * 1000 : expireAt
+  return formatTime(timestamp)
+}
+
+const showAccountInfo = (account: any) => {
+  accountInfo.value = null
+  axios.post('/api/ali/accounts/-/info', account).then(({data}) => {
+    accountInfo.value = data
+    accountInfoVisible.value = true
+  }).catch((error) => {
+    ElMessage.error(error?.response?.data?.message || '获取账号信息失败')
+  })
 }
 
 const showDetails = (data: any) => {

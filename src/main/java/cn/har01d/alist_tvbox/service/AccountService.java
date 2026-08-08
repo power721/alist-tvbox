@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.AccountDto;
+import cn.har01d.alist_tvbox.dto.AccountInfo;
 import cn.har01d.alist_tvbox.dto.CheckinLog;
 import cn.har01d.alist_tvbox.dto.CheckinResponse;
 import cn.har01d.alist_tvbox.dto.CheckinResult;
@@ -22,6 +23,7 @@ import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -30,6 +32,7 @@ import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
@@ -79,6 +82,7 @@ import static cn.har01d.alist_tvbox.util.Constants.ZONE_ID;
 public class AccountService {
     public static final ZoneOffset ZONE_OFFSET = ZoneOffset.of("+08:00");
     public static final int IDX = 4600;
+    private static final String ALI_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) aDrive/6.1.0 Chrome/112.0.5615.165 Electron/24.1.3.7 Safari/537.36";
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
     private final AListLocalService aListLocalService;
@@ -439,10 +443,10 @@ public class AccountService {
         Map<String, String> body = new HashMap<>();
         body.put(REFRESH_TOKEN, token);
         body.put("grant_type", REFRESH_TOKEN);
-        log.debug("body: {}", body);
+        log.debug("request Ali access token");
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<Map> response = restTemplate.exchange("https://auth.aliyundrive.com/v2/account/token", HttpMethod.POST, entity, Map.class);
-        log.debug("get Ali token response: {}", response.getBody());
+        log.debug("Ali access token refreshed");
         return response.getBody();
     }
 
@@ -455,12 +459,96 @@ public class AccountService {
         body.put("client_id", settingRepository.findById("open_api_client_id").map(Setting::getValue).orElse(""));
         body.put("client_secret", settingRepository.findById("open_api_client_secret").map(Setting::getValue).orElse(""));
         body.put("grant_type", REFRESH_TOKEN);
-        log.debug("body: {}", body);
+        log.debug("request Ali Open access token");
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
         String url = settingRepository.findById(OPEN_TOKEN_URL).map(Setting::getValue).orElse("https://ycyup.cn/alipan/access_token");
         ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
-        log.debug("get open token response: {}", response.getBody());
+        log.debug("Ali Open access token refreshed");
         return response.getBody();
+    }
+
+    public AccountInfo getInfo(Account requestedAccount) {
+        Account account = requestedAccount.getId() == null ? requestedAccount
+                : accountRepository.findById(requestedAccount.getId()).orElseThrow(NotFoundException::new);
+        String accessToken = account.getAccessToken();
+        if (StringUtils.isNotBlank(account.getRefreshToken())) {
+            Map<Object, Object> tokens = getAliToken(account.getRefreshToken());
+            accessToken = String.valueOf(tokens.get(ACCESS_TOKEN));
+            account.setAccessToken(accessToken);
+            account.setAccessTokenTime(Instant.now());
+            String refreshToken = (String) tokens.get(REFRESH_TOKEN);
+            if (StringUtils.isNotBlank(refreshToken)) {
+                account.setRefreshToken(refreshToken);
+                account.setRefreshTokenTime(Instant.now());
+            }
+            if (account.getId() != null) {
+                accountRepository.save(account);
+            }
+        }
+        if (StringUtils.isBlank(accessToken) || "null".equals(accessToken)) {
+            throw new BadRequestException("阿里云盘 Access Token 为空");
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        headers.set(HttpHeaders.USER_AGENT, ALI_USER_AGENT);
+        headers.set(HttpHeaders.REFERER, Constants.ALIPAN);
+        headers.set("X-Canary", "client=Android,app=adrive,version=v4.3.1");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(), headers);
+
+        ObjectNode user = restTemplate.exchange("https://user.aliyundrive.com/v2/user/get", HttpMethod.POST,
+                entity, ObjectNode.class).getBody();
+        if (user == null) {
+            throw new BadRequestException("阿里云盘账号信息获取失败");
+        }
+
+        var info = new AccountInfo();
+        info.setId(user.path("user_id").asText());
+        info.setName(firstNonBlank(user.path("display_name"), user.path("nick_name"), user.path("user_name"), user.path("phone")));
+        info.setVip(StringUtils.defaultIfBlank(user.path("vip_identity").asText(), "普通用户").toUpperCase());
+        info.setExpireAt(parseAliExpireAt(user.path("expire_at")));
+
+        ObjectNode personal = restTemplate.exchange("https://api.aliyundrive.com/v2/databox/get_personal_info", HttpMethod.POST,
+                entity, ObjectNode.class).getBody();
+        if (personal != null) {
+            JsonNode rights = personal.path("personal_rights_info");
+            if (!rights.isMissingNode()) {
+                String rightsName = rights.path("name").asText("");
+                if (StringUtils.isNotBlank(rightsName)) {
+                    info.getAddition().put("rightsName", rightsName);
+                }
+            }
+            JsonNode space = personal.path("personal_space_info");
+            info.setUsedCapacity(space.path("used_size").asLong(0));
+            info.setTotalCapacity(space.path("total_size").asLong(0));
+        }
+        return info;
+    }
+
+    private static String firstNonBlank(JsonNode... nodes) {
+        for (JsonNode node : nodes) {
+            String value = node == null ? "" : node.asText("").trim();
+            if (StringUtils.isNotBlank(value)) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private static Long parseAliExpireAt(JsonNode value) {
+        if (value == null || value.isNull() || value.isMissingNode()) {
+            return null;
+        }
+        if (value.isNumber()) {
+            long timestamp = value.asLong();
+            return timestamp > 0 ? timestamp : null;
+        }
+        try {
+            return Instant.parse(value.asText()).getEpochSecond();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private void securityHardening() {

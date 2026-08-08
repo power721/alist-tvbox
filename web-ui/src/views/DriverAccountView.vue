@@ -67,8 +67,9 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column fixed="right" label="操作" width="200">
+      <el-table-column fixed="right" label="操作" width="270">
         <template #default="scope">
+          <el-button link type="primary" size="small" @click="showAccountInfo(scope.row)">账号信息</el-button>
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
@@ -351,6 +352,20 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="accountInfoVisible" title="网盘账号信息" width="420px">
+      <el-descriptions v-if="accountInfo" :column="1" border>
+        <el-descriptions-item label="用户名">{{ accountInfo.name || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="用户 ID">{{ accountInfo.id || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="会员类型">{{ accountInfo.vip || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="会员过期时间">{{ formatExpireAt(accountInfo.expireAt) }}</el-descriptions-item>
+        <el-descriptions-item label="已用容量">{{ formatCapacity(accountInfo.usedCapacity) }}</el-descriptions-item>
+        <el-descriptions-item label="总容量">{{ formatCapacity(accountInfo.totalCapacity) }}</el-descriptions-item>
+        <el-descriptions-item v-for="item in accountInfoAdditionItems" :key="item.label" :label="item.label">
+          {{ item.value }}
+        </el-descriptions-item>
+      </el-descriptions>
+    </el-dialog>
+
     <el-dialog v-model="qrModel" :title="qr.auth_url ? '浏览器授权' : '扫码登陆'" width="40%">
       <div v-if="qr.auth_url">
         <p>已在新标签页打开 123 官方授权页面。若未打开，请点击下面的链接：</p>
@@ -434,11 +449,28 @@ type DriverAccountItem = {
   folder: string
 }
 
+type AccountInfo = {
+  id?: string
+  name?: string
+  vip?: string
+  usedCapacity?: number
+  totalCapacity?: number
+  expireAt?: number | null
+  addition?: Record<string, string | number | null>
+}
+
+type AccountInfoAdditionItem = {
+  label: string
+  value: string
+}
+
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const accounts = ref<DriverAccountItem[]>([])
+const accountInfo = ref<AccountInfo | null>(null)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
+const accountInfoVisible = ref(false)
 const configVisible = ref(false)
 const qrModel = ref(false)
 const qr115Model = ref(false)
@@ -811,6 +843,63 @@ const fullPath = (share: any) => {
   } else {
     return '/网盘/' + path
   }
+}
+
+const formatCapacity = (bytes?: number) => {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) {
+    return '—'
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex++
+  }
+  return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`
+}
+
+const formatExpireAt = (expireAt?: number | null) => {
+  if (!expireAt) {
+    return '—'
+  }
+  const timestamp = expireAt < 100000000000 ? expireAt * 1000 : expireAt
+  const date = new Date(timestamp)
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('zh-CN', {hour12: false})
+}
+
+const accountInfoAdditionItems = computed<AccountInfoAdditionItem[]>(() => {
+  const addition = accountInfo.value?.addition
+  if (!addition) {
+    return []
+  }
+  const hasValue = (key: string) => addition[key] != null
+  const capacity = (key: string) => formatCapacity(Number(addition[key]))
+  const traffic = (usedKey: string, totalKey: string) => `${capacity(usedKey)} / ${capacity(totalKey)}`
+  const items: AccountInfoAdditionItem[] = []
+  if (hasValue('permanentCapacity')) items.push({label: '永久容量', value: capacity('permanentCapacity')})
+  if (hasValue('temporaryCapacity')) items.push({label: '临时容量', value: capacity('temporaryCapacity')})
+  if (hasValue('temporaryExpireAt')) items.push({label: '临时容量到期时间', value: formatExpireAt(Number(addition.temporaryExpireAt))})
+  if (hasValue('fileCount')) items.push({label: '文件数量', value: String(addition.fileCount)})
+  if (hasValue('phone')) items.push({label: '绑定手机', value: String(addition.phone)})
+  if (hasValue('highSpeedTrafficTotal')) items.push({label: '高速下载流量（已用/总）', value: traffic('highSpeedTrafficUsed', 'highSpeedTrafficTotal')})
+  if (hasValue('directLinkTrafficTotal')) items.push({label: '直链流量（已用/总）', value: traffic('directLinkTrafficUsed', 'directLinkTrafficTotal')})
+  if (hasValue('shareGuestTrafficTotal')) items.push({label: '免登下载流量（已用/总）', value: traffic('shareGuestTrafficUsed', 'shareGuestTrafficTotal')})
+  return items
+})
+
+const showAccountInfo = (account: DriverAccountItem) => {
+  accountInfo.value = null
+  axios.post('/api/pan/accounts/-/info', account).then(({data}) => {
+    if (!data) {
+      ElMessage.error('未获取到账号信息')
+      return
+    }
+    accountInfo.value = data
+    accountInfoVisible.value = true
+  }).catch((error) => {
+    ElMessage.error(error?.response?.data?.message || '获取账号信息失败')
+  })
 }
 
 const handleEdit = (data: any) => {
