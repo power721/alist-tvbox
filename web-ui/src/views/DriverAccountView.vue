@@ -352,7 +352,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="accountInfoVisible" title="网盘账号信息" width="420px">
+    <el-dialog v-model="accountInfoVisible" title="网盘账号信息" width="450px">
       <el-descriptions v-if="accountInfo" :column="1" border>
         <el-descriptions-item label="用户名">{{ accountInfo.name || '—' }}</el-descriptions-item>
         <el-descriptions-item label="用户 ID">{{ accountInfo.id || '—' }}</el-descriptions-item>

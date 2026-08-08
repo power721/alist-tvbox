@@ -509,6 +509,37 @@ public class AccountService {
         info.setVip(StringUtils.defaultIfBlank(user.path("vip_identity").asText(), "普通用户").toUpperCase());
         info.setExpireAt(parseAliExpireAt(user.path("expire_at")));
 
+        try {
+            ObjectNode vip = restTemplate.exchange("https://api.aliyundrive.com/business/v1.0/users/vip/info",
+                    HttpMethod.POST, entity, ObjectNode.class).getBody();
+            log.debug("Ali VIP info: {}", vip);
+            if (vip != null) {
+                String identity = vip.path("identity").asText();
+                if (StringUtils.isNotBlank(identity)) {
+                    info.setVip(identity.toUpperCase());
+                }
+                JsonNode vipList = vip.path("vipList");
+                JsonNode currentVip = null;
+                String vipCode = vip.path("vipCode").asText();
+                if (vipList.isArray()) {
+                    for (JsonNode item : vipList) {
+                        if (vipCode.equals(item.path("code").asText())) {
+                            currentVip = item;
+                            break;
+                        }
+                    }
+                    if (currentVip == null && !vipList.isEmpty()) {
+                        currentVip = vipList.get(0);
+                    }
+                }
+                if (currentVip != null) {
+                    info.setExpireAt(parseAliExpireAt(currentVip.path("expire")));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Ali VIP info query failed: {}", e.getMessage());
+        }
+
         ObjectNode personal = restTemplate.exchange("https://api.aliyundrive.com/v2/databox/get_personal_info", HttpMethod.POST,
                 entity, ObjectNode.class).getBody();
         if (personal != null) {
