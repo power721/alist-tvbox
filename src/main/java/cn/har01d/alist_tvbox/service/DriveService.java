@@ -76,9 +76,12 @@ public class DriveService {
             rootPath = shareService.add(dto); // mounts temp storage + auto-descends single-folder shares
             site = siteService.getById(1);
         } else if (decoded.contains("$")) {
-            int idx = decoded.indexOf('$');
-            site = resolveSite(decoded.substring(0, idx));
-            rootPath = stripPlaylist(decoded.substring(idx + 1));
+            String[] parts = decoded.split("\\$", 3);
+            site = resolveSite(parts[0]);
+            String pathPart = stripPlaylist(parts.length > 1 ? parts[1] : "");
+            // vodIds like "1$<playurlId>$1" carry a numeric playurl id (not a real alist path);
+            // resolve it back to the real path, mirroring TvBoxService.getDetail.
+            rootPath = pathPart.matches("\\d+") ? proxyService.getPath(Integer.parseInt(pathPart)) : pathPart;
         } else {
             throw new BadRequestException("无法识别的资源: " + source);
         }
@@ -104,6 +107,7 @@ public class DriveService {
         }
         response.setDirectories(directories);
         response.setFiles(files);
+        log.debug("resolve drive response={}", response);
         return response;
     }
 
@@ -128,10 +132,28 @@ public class DriveService {
                 files.add(toVideo(site, dirPath, entry));
             }
         }
+        log.debug("files list response={}", files);
         return files;
     }
 
     private List<FsInfo> listEntries(Site site, String path) {
+        try {
+            return doListEntries(site, path);
+        } catch (BadRequestException e) {
+            // Re-mount expired temp shares, mirroring TvBoxService.getPlaylist's recovery.
+            String message = e.getMessage();
+            if (message != null && message.contains("object not found")
+                    && path.contains("/temp/") && path.contains("@")) {
+                ShareLink share = new ShareLink();
+                share.setLink(shareService.getLinkByPath(path));
+                shareService.add(share);
+                return doListEntries(site, path);
+            }
+            throw e;
+        }
+    }
+
+    private List<FsInfo> doListEntries(Site site, String path) {
         FsResponse response = aListService.listFiles(site, path, 1, 0);
         if (response == null || response.getFiles() == null) {
             return List.of();

@@ -10,6 +10,8 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.live.service.HuyaParseService;
 import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.util.Constants;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +34,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -53,6 +56,10 @@ public class ProxyService {
     private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "BaiduNetdisk", "BaiduShare2",
             "Quark", "UC", "UCTV", "QuarkShare", "UCShare", "115 Cloud", "115 Share", "115 Index", "GuangYaPan", "GuangYaPanShare");
     private final OkHttpClient okHttpClient = new OkHttpClient();
+    private final Cache<String, FsDetail> fileCache = Caffeine.newBuilder()
+            .maximumSize(512)
+            .expireAfterWrite(Duration.ofSeconds(30))
+            .build();
 
     public ProxyService(AppProperties appProperties,
                         PlayUrlRepository playUrlRepository,
@@ -148,7 +155,7 @@ public class ProxyService {
             headers.put("referer", "https://www.huya.com/");
         } else {
             Site site = siteService.getById(playUrl.getSite());
-            FsDetail fsDetail = aListService.getFile(site, path);
+            FsDetail fsDetail = fileCache.get(site.getId() + "|" + path, k -> aListService.getFile(site, path));
             if (fsDetail == null) {
                 throw new BadRequestException("找不到文件 " + path);
             }
