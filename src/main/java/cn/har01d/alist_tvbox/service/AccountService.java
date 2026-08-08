@@ -516,7 +516,7 @@ public class AccountService {
             if (vip != null) {
                 String identity = vip.path("identity").asText();
                 if (StringUtils.isNotBlank(identity)) {
-                    info.setVip(identity.toUpperCase());
+                    info.setVip("member".equalsIgnoreCase(identity) ? "普通用户" : identity.toUpperCase());
                 }
                 JsonNode vipList = vip.path("vipList");
                 JsonNode currentVip = null;
@@ -528,11 +528,12 @@ public class AccountService {
                             break;
                         }
                     }
-                    if (currentVip == null && !vipList.isEmpty()) {
-                        currentVip = vipList.get(0);
-                    }
                 }
                 if (currentVip != null) {
+                    String vipName = currentVip.path("name").asText();
+                    if (StringUtils.isNotBlank(vipName)) {
+                        info.setVip(vipName);
+                    }
                     info.setExpireAt(parseAliExpireAt(currentVip.path("expire")));
                 }
             }
