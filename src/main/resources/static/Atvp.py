@@ -1046,6 +1046,9 @@ class Spider(HostSpider):
         context = resume_context or self._resume_context_cache.get(share_url)
         if context is not None:
             parsed_result = self._apply_resume_context(parsed_result, context)
+        if isinstance(parsed_result, dict):
+            parsed_result = dict(parsed_result)
+            parsed_result["_atvp_backend_parse"] = True
         self._cache_detail_result(parsed_result, keyword)
         self._cache_play_context(parsed_result)
         return parsed_result

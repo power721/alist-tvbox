@@ -107,6 +107,7 @@ class Spider:
         )
         parsed = self.spider.detailContent(["https://pan.example/share"])
         self.assertEqual(parsed["list"][0]["vod_name"], "Parsed")
+        self.assertTrue(parsed["_atvp_backend_parse"])
 
         self.spider.fetch = Mock(
             return_value=Response(
