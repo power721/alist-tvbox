@@ -192,14 +192,25 @@ class PlaybackSyncServiceTest {
     }
 
     @Test
-    void browseAliasKeepsConcreteTvBoxSiteKey() {
+    void telegramAliasKeepsConcreteTvBoxSiteKey() {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
                 UID, "site", "csp_TgWeb", "v1")).thenReturn(List.of());
 
-        service.apply(UID, Map.of("sourceKind", "browse", "sourceKey", "csp_TgWeb",
+        service.apply(UID, Map.of("sourceKind", "telegram", "sourceKey", "csp_TgWeb",
                 "vodId", "v1", "updatedAt", 500), null, null);
 
         assertThat(savedHistory().getSourceKey()).isEqualTo("csp_TgWeb");
+    }
+
+    @Test
+    void xiaoYaBrowseAliasKeepsConcreteTvBoxSiteKey() {
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "site", "csp_XiaoYa", "v1")).thenReturn(List.of());
+
+        service.apply(UID, Map.of("sourceKind", "browse", "sourceKey", "csp_XiaoYa",
+                "vodId", "v1", "updatedAt", 500), null, null);
+
+        assertThat(savedHistory().getSourceKey()).isEqualTo("csp_XiaoYa");
     }
 
     // ── 拉取:游标 ──────────────────────────────────────────────────────────

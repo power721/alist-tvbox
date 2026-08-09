@@ -61,7 +61,9 @@ public class PlaybackSyncService {
     private static final String SCOPE_ITEM = "item";
     private static final String KIND_SITE = "site";
     private static final String KIND_SPIDER_PLUGIN = "spider_plugin";
-    private static final Set<String> BROWSE_SITE_KEYS = Set.of("csp_TgSearch", "csp_TgWeb", "csp_AList");
+    private static final Set<String> TELEGRAM_SITE_KEYS = Set.of(
+            "csp_TgDouBan", "csp_TgSearch", "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup");
+    private static final Set<String> BROWSE_SITE_KEYS = Set.of("csp_AList", "csp_XiaoYa");
 
     private final HistoryRepository historyRepository;
     private final PlaybackTokenRepository tokenRepository;
@@ -632,9 +634,11 @@ public class PlaybackSyncService {
             return null;
         }
         return switch (sourceKind) {
-            case "telegram" -> "csp_TgDouBan";
+            case "telegram" -> sourceKey != null && TELEGRAM_SITE_KEYS.contains(sourceKey)
+                    ? sourceKey : "csp_TgDouBan";
             case "telegram_channel" -> "csp_TgChannel";
-            case "browse" -> BROWSE_SITE_KEYS.contains(sourceKey) ? sourceKey : "csp_AList";
+            case "browse" -> sourceKey != null && BROWSE_SITE_KEYS.contains(sourceKey)
+                    ? sourceKey : "csp_AList";
             case "bilibili" -> "csp_BiliBili";
             case "emby" -> "csp_Emby";
             case "feiniu" -> "csp_FeiNiu";
