@@ -260,6 +260,35 @@ class Spider:
         for call in parse_calls:
             self.assertEqual(call.kwargs["json"]["url"], "https://pan.baidu.com/s/demo")
 
+    def test_resume_id_with_direct_share_calls_backend_parse(self):
+        source = '''
+class Spider:
+    def init(self, extend=""):
+        self.backend_parse = True
+    def detailContent(self, ids):
+        raise AssertionError("direct share resume must not call inner detail")
+'''
+        self.init_inner(source)
+        share_url = "https://123pan.cn/s/cHCOTd-kdmM?pwd=0775"
+        self.spider.post = Mock(return_value=Response(text=json.dumps({"list": [{
+            "vod_id": "1$185600$1",
+            "vod_name": "测试资源",
+            "vod_play_from": "线路 1",
+            "vod_play_url": "第1集$1@185600@0@0",
+        }]})))
+        resume_id = self.spider._encode_resume_id(share_url, 0)
+
+        restored = self.spider.detailContent([resume_id])
+
+        self.assertEqual(restored["list"][0]["vod_id"], resume_id)
+        self.assertEqual(restored["list"][0]["vod_play_url"], "第1集$1@185600@0@0")
+        self.spider.post.assert_called_once_with(
+            "https://atv.example/parse/demo",
+            json={"url": share_url},
+            params={"ac": "play"},
+            timeout=10,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

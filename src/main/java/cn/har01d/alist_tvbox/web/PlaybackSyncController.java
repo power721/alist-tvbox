@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncInput;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackTokenDto;
 import cn.har01d.alist_tvbox.service.PlaybackSyncService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.data.domain.Page;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -61,10 +63,12 @@ public class PlaybackSyncController {
                 Boolean.TRUE.equals(latest));
     }
 
-    /** 诊断接口：使用普通登录会话鉴权，返回当前用户的全部播放同步记录。 */
+    /** 诊断接口：使用普通登录会话鉴权，分页返回当前用户的播放同步记录。 */
     @GetMapping("/api/playback/records")
-    public List<PlaybackSyncInput> records() {
-        return playbackSyncService.listAll(currentUid());
+    public Page<PlaybackSyncInput> records(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int pageSize) {
+        return playbackSyncService.list(currentUid(), page, pageSize);
     }
 
     // ── 令牌管理(session 鉴权,ADMIN|USER) ───────────────────────────────

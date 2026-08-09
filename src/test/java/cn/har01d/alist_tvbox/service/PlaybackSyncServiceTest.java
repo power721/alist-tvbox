@@ -18,6 +18,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -245,6 +249,22 @@ class PlaybackSyncServiceTest {
 
         assertThat(records).hasSize(101);
         assertThat(records).extracting(PlaybackSyncInput::getVodId).contains("v1", "v101");
+    }
+
+    @Test
+    void diagnosticListSupportsPageAndPageSize() {
+        History row = history("abc", "v2", 200);
+        PageRequest pageable = PageRequest.of(1, 25,
+                Sort.by(Sort.Direction.DESC, "updatedAt", "id"));
+        when(historyRepository.findPageByUidAndSourceKindIsNotNull(UID, pageable))
+                .thenReturn(new PageImpl<>(List.of(row), pageable, 26));
+
+        Page<PlaybackSyncInput> records = service.list(UID, 1, 25);
+
+        assertThat(records.getNumber()).isEqualTo(1);
+        assertThat(records.getSize()).isEqualTo(25);
+        assertThat(records.getTotalElements()).isEqualTo(26);
+        assertThat(records.getContent()).extracting(PlaybackSyncInput::getVodId).containsExactly("v2");
     }
 
     @Test

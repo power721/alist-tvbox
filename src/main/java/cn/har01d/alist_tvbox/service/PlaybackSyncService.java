@@ -18,6 +18,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -388,6 +390,17 @@ public class PlaybackSyncService {
                 .stream()
                 .map(this::toInput)
                 .toList();
+    }
+
+    /** 分页返回该用户数据库中的同步记录，页码从 0 开始。 */
+    @Transactional(readOnly = true)
+    public Page<PlaybackSyncInput> list(int uid, int page, int pageSize) {
+        int safePage = Math.max(page, 0);
+        int safePageSize = pageSize > 0 && pageSize <= MAX_LIMIT ? pageSize : DEFAULT_LIMIT;
+        PageRequest pageable = PageRequest.of(safePage, safePageSize,
+                Sort.by(Sort.Direction.DESC, "updatedAt", "id"));
+        return historyRepository.findPageByUidAndSourceKindIsNotNull(uid, pageable)
+                .map(this::toInput);
     }
 
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind, boolean latest) {

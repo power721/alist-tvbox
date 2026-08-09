@@ -1421,6 +1421,9 @@ class Spider(HostSpider):
             raw_id = str(ids[0] or "").strip()
             resume_context = self._decode_resume_id(raw_id)
             if resume_context is not None:
+                direct_share_url = self._decode_parse(resume_context["id"])
+                if direct_share_url is not None:
+                    return self._parse(direct_share_url, resume_context)
                 vod = self._load_category_detail_vod(resume_context["id"])
                 targets = self._resume_targets(vod)
                 playlist_index = resume_context["playlist"]

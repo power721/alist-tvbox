@@ -18,6 +18,8 @@ public interface HistoryRepository extends JpaRepository<History, Integer> {
 
     List<History> findAllByUidAndSourceKindIsNotNull(int uid, Sort sort);
 
+    Page<History> findPageByUidAndSourceKindIsNotNull(int uid, Pageable pageable);
+
     List<History> findAllByUidAndSourceKindAndSourceKeyAndVodId(
             int uid, String sourceKind, String sourceKey, String vodId);
 
