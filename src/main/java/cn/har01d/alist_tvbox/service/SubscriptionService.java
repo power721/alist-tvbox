@@ -1550,6 +1550,7 @@ public class SubscriptionService {
         map.put("secret", secret);
         map.put("playbackSourceKind", "spider_plugin");
         map.put("playbackSourceKey", pluginSiteKey(plugin));
+        map.put("playbackSourceName", plugin.getName());
         map.put("local_proxy_config", rawPython || !nativePython ? localProxyConfig : new HashMap<>());
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             map.put("data", plugin.getExtend());

@@ -203,6 +203,23 @@ class PlaybackSyncServiceTest {
     }
 
     @Test
+    void sameVersionCanRepairMissingPluginSourceName() {
+        String stableId = "ff03a81ea2c940d4838e71fb21cf6651157d";
+        History existing = history(stableId, "星芽@51", 500);
+        existing.setSourceKind("spider_plugin");
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "spider_plugin", stableId, "星芽@51")).thenReturn(List.of(existing));
+
+        service.apply(UID, Map.of("sourceKind", "spider_plugin", "sourceKey", stableId,
+                "sourceName", "短剧优选", "vodId", "星芽@51", "updatedAt", 500), null, null);
+
+        History saved = savedHistory();
+        assertThat(saved).isSameAs(existing);
+        assertThat(saved.getSourceName()).isEqualTo("短剧优选");
+        assertThat(saved.getUpdatedAt()).isEqualTo(500);
+    }
+
+    @Test
     void xiaoYaBrowseAliasKeepsConcreteTvBoxSiteKey() {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
                 UID, "site", "csp_XiaoYa", "v1")).thenReturn(List.of());

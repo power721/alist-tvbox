@@ -180,8 +180,22 @@ public class PlaybackSyncService {
         deleteDuplicateHistories(matches, exist);
         if (exist != null) {
             long existTime = timeOf(exist);
-            if (updatedAt <= existTime) {
+            if (updatedAt < existTime) {
                 log.debug("skip not newer: uid={} vodId={} remote={} local={}", uid, in.getVodId(), updatedAt, existTime);
+                return;
+            }
+            if (updatedAt == existTime) {
+                String sourceName = in.getSourceName() == null ? null : clamp(in.getSourceName(), 255);
+                if (sourceName != null && !sourceName.isBlank() && !sourceName.equals(exist.getSourceName())) {
+                    exist.setSourceName(sourceName);
+                    exist.setChangeSeq(changeSeq);
+                    historyRepository.save(exist);
+                    log.debug("repaired source name: uid={} vodId={} sourceName={}",
+                            uid, in.getVodId(), sourceName);
+                } else {
+                    log.debug("skip not newer: uid={} vodId={} remote={} local={}",
+                            uid, in.getVodId(), updatedAt, existTime);
+                }
                 return;
             }
         }

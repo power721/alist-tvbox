@@ -189,6 +189,7 @@ class SubscriptionServiceTest {
         Plugin plugin = new Plugin();
         plugin.setId(7);
         plugin.setExternalId("stable-plugin-id");
+        plugin.setName("短剧优选");
         plugin.setUrl("https://example.com/demo.py?raw=1");
         plugin.setExtend("{\"site\":\"demo\"}");
         Map<String, Object> localProxyConfig = new HashMap<>();
@@ -208,6 +209,7 @@ class SubscriptionServiceTest {
                 .containsEntry("api", "http://atv")
                 .containsEntry("playbackSourceKind", "spider_plugin")
                 .containsEntry("playbackSourceKey", "stable-plugin-id")
+                .containsEntry("playbackSourceName", "短剧优选")
                 .containsEntry("token", "vod-token")
                 .containsEntry("secret", "secret")
                 .containsEntry("data", "{\"site\":\"demo\"}")
