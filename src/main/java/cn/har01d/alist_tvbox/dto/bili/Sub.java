@@ -8,4 +8,5 @@ public class Sub {
     private String name;
     private String lang;
     private String format;
+    private int flag;
 }
