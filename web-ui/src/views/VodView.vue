@@ -27,8 +27,8 @@
 
         <div style="display: flex; align-items: center; gap: 12px;">
           <el-radio-group v-if="isHistory" v-model="historySource" @change="changeHistorySource">
-            <el-radio-button value="sync">多端同步</el-radio-button>
             <el-radio-button value="web">网页播放</el-radio-button>
+            <el-radio-button value="sync">多端同步</el-radio-button>
           </el-radio-group>
           <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源"
                     style="width: 300px;">
@@ -894,7 +894,7 @@ const deleteVisible = ref(false)
 const settingVisible = ref(false)
 const addVisible = ref(false)
 const isHistory = ref(false)
-const historySource = ref('sync')
+const historySource = ref('web')
 const searching = ref(false)
 const fileSearching = ref(false)
 const searchMode = ref('tg')
