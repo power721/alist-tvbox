@@ -61,11 +61,10 @@ public class PlaybackSyncController {
                 Boolean.TRUE.equals(latest));
     }
 
-    /** 诊断接口：返回令牌所属用户数据库中的全部播放同步记录，不截取最新 100 条。 */
+    /** 诊断接口：使用普通登录会话鉴权，返回当前用户的全部播放同步记录。 */
     @GetMapping("/api/playback/records")
-    public List<PlaybackSyncInput> records(HttpServletRequest request) {
-        int uid = playbackSyncService.resolveUid(token(request));
-        return playbackSyncService.listAll(uid);
+    public List<PlaybackSyncInput> records() {
+        return playbackSyncService.listAll(currentUid());
     }
 
     // ── 令牌管理(session 鉴权,ADMIN|USER) ───────────────────────────────
