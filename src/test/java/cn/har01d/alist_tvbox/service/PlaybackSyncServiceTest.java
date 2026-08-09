@@ -234,6 +234,20 @@ class PlaybackSyncServiceTest {
     }
 
     @Test
+    void diagnosticListReturnsAllStoredRowsWithoutLatest100Limit() {
+        List<History> rows = new ArrayList<>();
+        for (int i = 1; i <= 101; i++) {
+            rows.add(history("abc", "v" + i, i));
+        }
+        when(historyRepository.findAllByUidAndSourceKindIsNotNull(eq(UID), any())).thenReturn(rows);
+
+        List<PlaybackSyncInput> records = service.listAll(UID);
+
+        assertThat(records).hasSize(101);
+        assertThat(records).extracting(PlaybackSyncInput::getVodId).contains("v1", "v101");
+    }
+
+    @Test
     void duplicateSyncIdentityIsCollapsedBeforeUpsert() {
         History older = history("abc", "v1", 100);
         older.setId(10);
@@ -363,6 +377,43 @@ class PlaybackSyncServiceTest {
         PlaybackSyncInput pulled = service.pull(UID, 0, 100, null).getItems().getFirst();
         assertThat(pulled.getSourceName()).isEqualTo("客厅 Emby");
         assertThat(pulled.getEpisode()).isZero();
+    }
+
+    @Test
+    void playbackSelectionContextRoundTrips() {
+        service.apply(UID, Map.ofEntries(
+                Map.entry("sourceKind", "spider_plugin"),
+                Map.entry("sourceKey", "02544b320a6d45de997bc0bd3975d0c060b8"),
+                Map.entry("vodId", "173"),
+                Map.entry("episodeUrl", "1@185535@6@1"),
+                Map.entry("playlistIndex", 0),
+                Map.entry("sourceGroupIndex", 2),
+                Map.entry("sourceIndex", 0),
+                Map.entry("sourceSubgroupIndex", 6),
+                Map.entry("sourceSubgroupName", "07外海风云"),
+                Map.entry("driveDirId", "stable-drive-directory"),
+                Map.entry("updatedAt", 500))
+                , null, null);
+
+        History saved = savedHistory();
+        assertThat(saved.getEpisodeUrl()).isEqualTo("1@185535@6@1");
+        assertThat(saved.getPlaylistIndex()).isZero();
+        assertThat(saved.getSourceGroupIndex()).isEqualTo(2);
+        assertThat(saved.getSourceIndex()).isZero();
+        assertThat(saved.getSourceSubgroupIndex()).isEqualTo(6);
+        assertThat(saved.getSourceSubgroupName()).isEqualTo("07外海风云");
+        assertThat(saved.getDriveDirId()).isEqualTo("stable-drive-directory");
+
+        when(historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(
+                eq(UID), eq(0L), any())).thenReturn(List.of(saved));
+        PlaybackSyncInput pulled = service.pull(UID, 0, 100, null).getItems().getFirst();
+        assertThat(pulled.getEpisodeUrl()).isEqualTo("1@185535@6@1");
+        assertThat(pulled.getPlaylistIndex()).isZero();
+        assertThat(pulled.getSourceGroupIndex()).isEqualTo(2);
+        assertThat(pulled.getSourceIndex()).isZero();
+        assertThat(pulled.getSourceSubgroupIndex()).isEqualTo(6);
+        assertThat(pulled.getSourceSubgroupName()).isEqualTo("07外海风云");
+        assertThat(pulled.getDriveDirId()).isEqualTo("stable-drive-directory");
     }
 
     @Test

@@ -54,4 +54,11 @@ public class History {
     private Long updatedAt;
     private Long changeSeq;
     private String clientKey;
+    private Integer playlistIndex;
+    private Integer sourceGroupIndex;
+    private Integer sourceIndex;
+    private Integer sourceSubgroupIndex;
+    private String sourceSubgroupName;
+    @Column(columnDefinition = "TEXT")
+    private String driveDirId;
 }

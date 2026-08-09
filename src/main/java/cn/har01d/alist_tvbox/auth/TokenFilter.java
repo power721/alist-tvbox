@@ -138,7 +138,8 @@ public class TokenFilter extends OncePerRequestFilter {
 
     // permitAll 的播放同步端点:令牌即鉴权,由 PlaybackSyncController 解析(playback_token ∪ session)
     private static final Set<String> PLAYBACK_SYNC_PATHS = Set.of(
-            "/api/playback/event", "/api/playback/events", "/api/playback/changes");
+            "/api/playback/event", "/api/playback/events", "/api/playback/changes",
+            "/api/playback/records");
 
     private String getToken(HttpServletRequest request) {
         String token = request.getHeader("Authorization");

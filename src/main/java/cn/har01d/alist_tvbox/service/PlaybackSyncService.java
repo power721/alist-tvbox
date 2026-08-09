@@ -216,6 +216,24 @@ public class PlaybackSyncService {
         }
         h.setDuration(in.getDurationMs());
         h.setClientKey(clamp(in.getClientKey(), 64));
+        if (in.getPlaylistIndex() != null) {
+            h.setPlaylistIndex(in.getPlaylistIndex());
+        }
+        if (in.getSourceGroupIndex() != null) {
+            h.setSourceGroupIndex(in.getSourceGroupIndex());
+        }
+        if (in.getSourceIndex() != null) {
+            h.setSourceIndex(in.getSourceIndex());
+        }
+        if (in.getSourceSubgroupIndex() != null) {
+            h.setSourceSubgroupIndex(in.getSourceSubgroupIndex());
+        }
+        if (in.getSourceSubgroupName() != null) {
+            h.setSourceSubgroupName(clamp(in.getSourceSubgroupName(), 255));
+        }
+        if (in.getDriveDirId() != null) {
+            h.setDriveDirId(in.getDriveDirId());
+        }
         h.setUpdatedAt(updatedAt);
         h.setChangeSeq(changeSeq);
         h.setCreateTime(updatedAt);
@@ -360,6 +378,16 @@ public class PlaybackSyncService {
      */
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind) {
         return pull(uid, since, limit, sourceKind, false);
+    }
+
+    /** 返回该用户数据库中的全部同步记录，仅供诊断；不应用同步窗口和分页限制。 */
+    @Transactional(readOnly = true)
+    public List<PlaybackSyncInput> listAll(int uid) {
+        return historyRepository.findAllByUidAndSourceKindIsNotNull(
+                        uid, Sort.by(Sort.Direction.DESC, "updatedAt", "id"))
+                .stream()
+                .map(this::toInput)
+                .toList();
     }
 
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind, boolean latest) {
@@ -606,6 +634,12 @@ public class PlaybackSyncService {
         in.setCompleted(h.getDuration() > 0 && h.getPosition() >= h.getDuration());
         in.setUpdatedAt(timeOf(h));
         in.setClientKey(h.getClientKey());
+        in.setPlaylistIndex(h.getPlaylistIndex());
+        in.setSourceGroupIndex(h.getSourceGroupIndex());
+        in.setSourceIndex(h.getSourceIndex());
+        in.setSourceSubgroupIndex(h.getSourceSubgroupIndex());
+        in.setSourceSubgroupName(h.getSourceSubgroupName());
+        in.setDriveDirId(h.getDriveDirId());
         return in;
     }
 

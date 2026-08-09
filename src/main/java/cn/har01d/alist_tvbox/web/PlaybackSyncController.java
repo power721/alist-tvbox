@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncPage;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncInput;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackTokenDto;
 import cn.har01d.alist_tvbox.service.PlaybackSyncService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,6 +59,13 @@ public class PlaybackSyncController {
         long since = parseLong(sinceHeader != null ? sinceHeader : sinceHeaderLegacy, 0L);
         return playbackSyncService.pull(uid, since, limit == null ? 0 : limit, sourceKind,
                 Boolean.TRUE.equals(latest));
+    }
+
+    /** 诊断接口：返回令牌所属用户数据库中的全部播放同步记录，不截取最新 100 条。 */
+    @GetMapping("/api/playback/records")
+    public List<PlaybackSyncInput> records(HttpServletRequest request) {
+        int uid = playbackSyncService.resolveUid(token(request));
+        return playbackSyncService.listAll(uid);
     }
 
     // ── 令牌管理(session 鉴权,ADMIN|USER) ───────────────────────────────

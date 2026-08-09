@@ -33,6 +33,12 @@ public class PlaybackSyncInput {
     private boolean completed;
     private long updatedAt;
     private String clientKey;
+    private Integer playlistIndex;
+    private Integer sourceGroupIndex;
+    private Integer sourceIndex;
+    private Integer sourceSubgroupIndex;
+    private String sourceSubgroupName;
+    private String driveDirId;
     private String event;
 
     public static PlaybackSyncInput fromMap(Map<String, Object> m) {
@@ -58,6 +64,12 @@ public class PlaybackSyncInput {
         in.updatedAt = lng(m, "updatedAt", "updated_at", "timestamp", "updateTime", "update_time",
                 "createTime", "create_time");
         in.clientKey = str(m, "clientKey", "client_key");
+        in.playlistIndex = intg(m, "playlistIndex", "playlist_index");
+        in.sourceGroupIndex = intg(m, "sourceGroupIndex", "source_group_index");
+        in.sourceIndex = intg(m, "sourceIndex", "source_index");
+        in.sourceSubgroupIndex = intg(m, "sourceSubgroupIndex", "source_subgroup_index");
+        in.sourceSubgroupName = str(m, "sourceSubgroupName", "source_subgroup_name");
+        in.driveDirId = str(m, "driveDirId", "drive_dir_id");
         in.event = str(m, "event");
 
         // FongMi 复合 key: siteKey@@@vodId@@@cid —— 拆出 sourceKey/vodId

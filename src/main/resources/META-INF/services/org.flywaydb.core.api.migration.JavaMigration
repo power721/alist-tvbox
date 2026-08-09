@@ -5,3 +5,4 @@ db.migration.current.V10__PlaybackSync
 db.migration.current.V11__PlaybackChangeSequence
 db.migration.current.V12__WidenPlaybackVodId
 db.migration.current.V13__PlaybackSourceName
+db.migration.current.V14__PlaybackSelectionContext

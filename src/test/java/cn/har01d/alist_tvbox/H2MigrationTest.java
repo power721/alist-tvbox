@@ -90,7 +90,7 @@ class H2MigrationTest {
                     .load();
 
             assertThatCode(flyway::migrate).doesNotThrowAnyException();
-            assertThat(appliedVersions(connection)).contains("10", "11", "12", "13");
+            assertThat(appliedVersions(connection)).contains("10", "11", "12", "13", "14");
             assertThat(queryString(connection,
                     "SELECT CAST(next_val AS VARCHAR) FROM playback_change_sequence WHERE id = 1"))
                     .isEqualTo("0");
@@ -103,6 +103,15 @@ class H2MigrationTest {
                     .doesNotThrowAnyException();
             assertThat(queryString(connection, "SELECT source_kind FROM history WHERE id = 1")).isEqualTo("site");
             assertThat(queryString(connection, "SELECT source_name FROM history WHERE id = 1")).isEqualTo("客厅");
+            assertThatCode(() -> execute(connection,
+                    "UPDATE history SET playlist_index = 0, source_group_index = 1, source_index = 2,"
+                            + " source_subgroup_index = 6, source_subgroup_name = '07外海风云',"
+                            + " drive_dir_id = 'stable-dir' WHERE id = 1"))
+                    .doesNotThrowAnyException();
+            assertThat(queryString(connection, "SELECT source_subgroup_name FROM history WHERE id = 1"))
+                    .isEqualTo("07外海风云");
+            assertThat(queryString(connection, "SELECT drive_dir_id FROM history WHERE id = 1"))
+                    .isEqualTo("stable-dir");
 
             // playback_token 的唯一索引必须真的建在 token 列上
             execute(connection, "INSERT INTO playback_token (id, uid, token, created_time, last_used_at)"
@@ -185,7 +194,7 @@ class H2MigrationTest {
         String url = "jdbc:h2:mem:v10-playback-sync-rerun;DB_CLOSE_DELAY=-1";
         try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
             runFullMigration(url);
-            // 清掉播放同步迁移记录,让 Flyway 在既有 schema 上按顺序重跑 V10–V13
+            // 清掉播放同步迁移记录,让 Flyway 在既有 schema 上按顺序重跑 V10–V14
             execute(connection, "DELETE FROM \"flyway_schema_history\" WHERE CAST(\"version\" AS INTEGER) >= 10");
 
             assertThatCode(() -> runFullMigration(url)).doesNotThrowAnyException();
