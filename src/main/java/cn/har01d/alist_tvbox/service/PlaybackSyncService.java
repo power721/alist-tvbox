@@ -441,6 +441,7 @@ public class PlaybackSyncService {
         return pull(uid, since, limit, sourceKind, null, latest);
     }
 
+    @Transactional(readOnly = true)
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind,
                                  String siteKeyHeader, boolean latest) {
         ensureEnabled();
