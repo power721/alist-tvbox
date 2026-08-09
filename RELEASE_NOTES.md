@@ -1,5 +1,5 @@
-# Release Notes - 1.42.0
+# Release Notes - 1.43.0
 
-## 新增
+## 修复
 
-- 获取网盘账号详情
+- 修复B站
