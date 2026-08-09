@@ -73,6 +73,13 @@ public class PlaybackSyncController {
         return playbackSyncService.list(currentUid(), page, pageSize);
     }
 
+    @GetMapping("/api/playback/records/-/item")
+    public PlaybackSyncInput record(@RequestParam String sourceKind,
+                                    @RequestParam String sourceKey,
+                                    @RequestParam String vodId) {
+        return playbackSyncService.getRecord(currentUid(), sourceKind, sourceKey, vodId);
+    }
+
     /** 管理页面批量删除同步记录；删除会生成墓碑并下发到其他客户端。 */
     @PostMapping("/api/playback/records/-/delete")
     public void deleteRecords(@RequestBody List<PlaybackDeleteInput> records) {

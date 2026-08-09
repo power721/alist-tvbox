@@ -1357,6 +1357,11 @@ const loadShare = (link: string) => {
 
 const load = (row: any) => {
   if (row.sync_record) {
+    if (row.source_kind === 'site' && row.source_key === 'csp_AList') {
+      loadDetail(row.vod_id)
+    } else {
+      ElMessage.warning('该来源暂不支持在网页端直接续播')
+    }
     return
   }
   if (row.type == 1) {
@@ -2087,7 +2092,11 @@ const saveHistory = () => {
     return
   }
   const movie = movies.value[0]
-  axios.post('/api/history?log=false', {
+  const updatedAt = new Date().getTime()
+  const position = Math.round(videoPlayer.value.currentTime * 1000)
+  const duration = Number.isFinite(videoPlayer.value.duration)
+    ? Math.round(videoPlayer.value.duration * 1000) : 0
+  const history = {
     cid: 0,
     key: movie.vod_id,
     vodName: movie.vod_name,
@@ -2095,12 +2104,29 @@ const saveHistory = () => {
     vodRemarks: playItem.value.title,
     episode: currentVideoIndex.value,
     episodeUrl: playItem.value.url,
-    position: Math.round(videoPlayer.value.currentTime * 1000),
+    position,
+    duration,
     opening: Math.round(skipStart.value * 1000),
     ending: Math.round(skipEnd.value * 1000),
     speed: currentSpeed.value,
-    createTime: new Date().getTime()
-  }).then()
+    createTime: updatedAt
+  }
+  axios.post('/api/history?log=false', history).then()
+  axios.post('/api/playback/events', [{
+    sourceKind: 'site',
+    sourceKey: 'csp_AList',
+    sourceName: 'AList',
+    vodId: movie.vod_id,
+    vodName: movie.vod_name,
+    vodPic: movie.vod_pic,
+    episodeName: playItem.value.title,
+    episode: currentVideoIndex.value,
+    episodeUrl: playItem.value.url,
+    positionMs: position,
+    durationMs: duration,
+    speed: currentSpeed.value,
+    updatedAt,
+  }]).catch(() => {})
 }
 
 const getHistory = (id: string) => {
@@ -2114,9 +2140,9 @@ const getHistory = (id: string) => {
   minute2.value = 0
   second2.value = 0
 
-  return axios.get('/history/' + store.token + "?key=" + id).then(({data}) => {
+  const applyHistory = (data: any) => {
     if (data) {
-      if (data.episode > -1) {
+      if (data.episode != null && data.episode > -1) {
         currentVideoIndex.value = data.episode
       } else {
         let path = data.episodeUrl as string
@@ -2148,7 +2174,29 @@ const getHistory = (id: string) => {
       minute2.value = Math.floor(skipEnd.value / 60)
       second2.value = skipEnd.value % 60
     }
-  })
+  }
+  const legacyUrl = '/history/' + store.token + '?key=' + encodeURIComponent(id)
+  return axios.get('/api/playback/records/-/item', {
+    params: {sourceKind: 'site', sourceKey: 'csp_AList', vodId: id}
+  }).then(({data}) => {
+    if (!data) {
+      return axios.get(legacyUrl).then(({data}) => applyHistory(data))
+    }
+    return axios.get(legacyUrl).then(({data: legacy}) => applyHistory({
+      ...legacy,
+      episode: data.episode,
+      episodeUrl: data.episodeUrl,
+      position: data.positionMs,
+      speed: data.speed,
+    }), () => applyHistory({
+      episode: data.episode,
+      episodeUrl: data.episodeUrl,
+      position: data.positionMs,
+      opening: 0,
+      ending: 0,
+      speed: data.speed,
+    }))
+  }, () => axios.get(legacyUrl).then(({data}) => applyHistory(data)))
 }
 
 const loadHistory = () => {

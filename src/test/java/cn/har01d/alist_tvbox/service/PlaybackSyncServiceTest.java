@@ -426,6 +426,38 @@ class PlaybackSyncServiceTest {
     }
 
     @Test
+    void sourceKeyFilterAlsoLimitsSpiderPlugins() {
+        History owned = history("plugin-owned", "owned", 10);
+        owned.setSourceKind("spider_plugin");
+        History unrelated = history("plugin-other", "other", 20);
+        unrelated.setSourceKind("spider_plugin");
+        when(historyRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(
+                eq(UID), eq("spider_plugin"), eq(0L), any()))
+                .thenReturn(List.of(owned, unrelated));
+        when(tombstoneRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(
+                eq(UID), eq("spider_plugin"), eq(0L), any())).thenReturn(List.of());
+
+        PlaybackSyncPage page = service.pull(
+                UID, 0, 100, "spider_plugin", "plugin-owned", false);
+
+        assertThat(page.getItems()).extracting(PlaybackSyncInput::getVodId)
+                .containsExactly("owned");
+        assertThat(page.getNextSince()).isEqualTo("20");
+    }
+
+    @Test
+    void embyIdentityIsSharedWithTvBoxSiteAndCanBeLookedUp() {
+        History existing = history("csp_Emby", "emby-1", 100);
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "site", "csp_Emby", "emby-1")).thenReturn(List.of(existing));
+
+        PlaybackSyncInput record = service.getRecord(UID, "emby", "", "emby-1");
+
+        assertThat(record.getSourceKind()).isEqualTo("site");
+        assertThat(record.getSourceKey()).isEqualTo("csp_Emby");
+    }
+
+    @Test
     void spiderPluginTombstoneUsesStableSourceKeyInsteadOfDisplayName() {
         String stableId = "02544b320a6d45de997bc0bd3975d0c060b8";
         History existing = history(stableId, "v1", 100);

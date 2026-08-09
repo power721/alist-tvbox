@@ -411,6 +411,23 @@ public class PlaybackSyncService {
                 .map(this::toInput);
     }
 
+    /** 按跨端身份返回单条记录，供网页播放器恢复其他设备上报的进度。 */
+    @Transactional(readOnly = true)
+    public PlaybackSyncInput getRecord(int uid, String sourceKind, String sourceKey, String vodId) {
+        PlaybackSyncInput input = new PlaybackSyncInput();
+        input.setSourceKind(sourceKind);
+        input.setSourceKey(sourceKey);
+        input.setVodId(vodId);
+        normalizeSource(input);
+        String normalizedKind = input.getSourceKind() != null ? input.getSourceKind() : KIND_SITE;
+        return historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                        uid, normalizedKind, input.getSourceKey(), vodId)
+                .stream()
+                .max(Comparator.comparingLong(this::timeOf))
+                .map(this::toInput)
+                .orElse(null);
+    }
+
     /** 管理页面按身份删除同步记录并生成墓碑，确保离线客户端不会重新上传。 */
     @Transactional
     public void deleteRecords(int uid, List<PlaybackDeleteInput> records) {
@@ -619,6 +636,7 @@ public class PlaybackSyncService {
             case "telegram_channel" -> "csp_TgChannel";
             case "browse" -> BROWSE_SITE_KEYS.contains(sourceKey) ? sourceKey : "csp_AList";
             case "bilibili" -> "csp_BiliBili";
+            case "emby" -> "csp_Emby";
             case "feiniu" -> "csp_FeiNiu";
             case "jellyfin" -> "csp_Jellyfin";
             default -> null;
@@ -660,13 +678,16 @@ public class PlaybackSyncService {
     }
 
     private boolean selectedForSiteKeys(History history, Set<String> siteKeys) {
-        return siteKeys.isEmpty() || !KIND_SITE.equals(history.getSourceKind())
+        return siteKeys.isEmpty()
+                || (!KIND_SITE.equals(history.getSourceKind())
+                && !KIND_SPIDER_PLUGIN.equals(history.getSourceKind()))
                 || siteKeys.contains(history.getSourceKey());
     }
 
     private boolean selectedForSiteKeys(PlaybackTombstone tombstone, Set<String> siteKeys) {
         return siteKeys.isEmpty() || tombstone.getSourceKind() == null
-                || !KIND_SITE.equals(tombstone.getSourceKind())
+                || (!KIND_SITE.equals(tombstone.getSourceKind())
+                && !KIND_SPIDER_PLUGIN.equals(tombstone.getSourceKind()))
                 || siteKeys.contains(tombstone.getSourceKey());
     }
 
