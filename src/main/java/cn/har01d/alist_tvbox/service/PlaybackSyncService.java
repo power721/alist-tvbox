@@ -438,9 +438,15 @@ public class PlaybackSyncService {
     }
 
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind, boolean latest) {
+        return pull(uid, since, limit, sourceKind, null, latest);
+    }
+
+    public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind,
+                                 String siteKeyHeader, boolean latest) {
         ensureEnabled();
         int cap = limit > 0 && limit <= MAX_LIMIT ? limit : DEFAULT_LIMIT;
         List<String> sourceKinds = sourceKinds(sourceKind);
+        Set<String> siteKeys = new HashSet<>(csvValues(siteKeyHeader));
         Sort sort = Sort.by("changeSeq").ascending();
         List<History> rows;
         if (sourceKinds.isEmpty()) {
@@ -452,7 +458,7 @@ public class PlaybackSyncService {
         }
         List<PlaybackTombstone> tombs = tombstones(uid, since, sourceKinds);
         if (latest && since <= 0) {
-            return latestPage(rows, tombs, cap, since);
+            return latestPage(rows, tombs, cap, since, siteKeys);
         }
 
         PlaybackSyncPage page = new PlaybackSyncPage();
@@ -464,16 +470,27 @@ public class PlaybackSyncService {
             boolean takeHistory = j >= tombs.size()
                     || (i < rows.size() && changeSeqOf(rows.get(i)) <= changeSeqOf(tombs.get(j)));
             long time = takeHistory ? changeSeqOf(rows.get(i)) : changeSeqOf(tombs.get(j));
-            if (sent >= cap && time != highWater) {
+            boolean selected = takeHistory
+                    ? selectedForSiteKeys(rows.get(i), siteKeys)
+                    : selectedForSiteKeys(tombs.get(j), siteKeys);
+            if (selected && sent >= cap && time != highWater) {
                 break;
             }
             if (takeHistory) {
-                page.getItems().add(toInput(rows.get(i++)));
+                History row = rows.get(i++);
+                if (selected) {
+                    page.getItems().add(toInput(row));
+                }
             } else {
-                page.getDeleted().add(toDelete(tombs.get(j++)));
+                PlaybackTombstone tomb = tombs.get(j++);
+                if (selected) {
+                    page.getDeleted().add(toDelete(tomb));
+                }
             }
             highWater = time;
-            sent++;
+            if (selected) {
+                sent++;
+            }
         }
 
         page.setNextSince(String.valueOf(highWater));
@@ -487,7 +504,8 @@ public class PlaybackSyncService {
     }
 
     /** 首次同步只下发按实际播放时间排序的最新记录，并把游标推进到当前变更流水位。 */
-    private PlaybackSyncPage latestPage(List<History> rows, List<PlaybackTombstone> tombs, int cap, long since) {
+    private PlaybackSyncPage latestPage(List<History> rows, List<PlaybackTombstone> tombs, int cap,
+                                        long since, Set<String> siteKeys) {
         long highWater = since;
         for (History row : rows) {
             highWater = Math.max(highWater, changeSeqOf(row));
@@ -501,7 +519,7 @@ public class PlaybackSyncService {
         PlaybackSyncPage page = new PlaybackSyncPage();
         Set<PlaybackIdentity> identities = new HashSet<>();
         for (History row : rows) {
-            if (identities.add(identityOf(row))) {
+            if (selectedForSiteKeys(row, siteKeys) && identities.add(identityOf(row))) {
                 page.getItems().add(toInput(row));
                 if (page.getItems().size() >= cap) {
                     break;
@@ -626,6 +644,10 @@ public class PlaybackSyncService {
     }
 
     private List<String> sourceKinds(String header) {
+        return csvValues(header);
+    }
+
+    private List<String> csvValues(String header) {
         if (header == null || header.isBlank()) {
             return List.of();
         }
@@ -634,6 +656,17 @@ public class PlaybackSyncService {
                 .filter(value -> !value.isBlank())
                 .distinct()
                 .toList();
+    }
+
+    private boolean selectedForSiteKeys(History history, Set<String> siteKeys) {
+        return siteKeys.isEmpty() || !KIND_SITE.equals(history.getSourceKind())
+                || siteKeys.contains(history.getSourceKey());
+    }
+
+    private boolean selectedForSiteKeys(PlaybackTombstone tombstone, Set<String> siteKeys) {
+        return siteKeys.isEmpty() || tombstone.getSourceKind() == null
+                || !KIND_SITE.equals(tombstone.getSourceKind())
+                || siteKeys.contains(tombstone.getSourceKey());
     }
 
     /** 记录的有效时钟:新协议写 updatedAt,历史遗留行只有 createTime。 */

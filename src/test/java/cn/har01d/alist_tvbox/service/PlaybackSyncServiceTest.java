@@ -408,6 +408,24 @@ class PlaybackSyncServiceTest {
     }
 
     @Test
+    void siteKeyFilterSkipsUnownedSitesAndAdvancesCursor() {
+        History owned = history("csp_AList", "owned", 10);
+        History unrelated = history("csp_Other", "other", 20);
+        when(historyRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(
+                eq(UID), eq("site"), eq(0L), any()))
+                .thenReturn(List.of(owned, unrelated));
+        when(tombstoneRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(
+                eq(UID), eq("site"), eq(0L), any())).thenReturn(List.of());
+
+        PlaybackSyncPage page = service.pull(
+                UID, 0, 100, "site", "csp_AList,csp_TgWeb", false);
+
+        assertThat(page.getItems()).extracting(PlaybackSyncInput::getVodId)
+                .containsExactly("owned");
+        assertThat(page.getNextSince()).isEqualTo("20");
+    }
+
+    @Test
     void spiderPluginTombstoneUsesStableSourceKeyInsteadOfDisplayName() {
         String stableId = "02544b320a6d45de997bc0bd3975d0c060b8";
         History existing = history(stableId, "v1", 100);

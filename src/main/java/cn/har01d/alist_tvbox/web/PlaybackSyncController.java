@@ -57,10 +57,11 @@ public class PlaybackSyncController {
                                     @RequestHeader(value = "X-WebHTV-Since", required = false) String sinceHeaderLegacy,
                                     @RequestHeader(value = "X-PlaySync-Limit", required = false) Integer limit,
                                     @RequestHeader(value = "X-PlaySync-Source-Kind", required = false) String sourceKind,
+                                    @RequestHeader(value = "X-PlaySync-Site-Key", required = false) String siteKeys,
                                     @RequestHeader(value = "X-PlaySync-Latest", required = false) Boolean latest) {
         int uid = playbackSyncService.resolveUid(token(request));
         long since = parseLong(sinceHeader != null ? sinceHeader : sinceHeaderLegacy, 0L);
-        return playbackSyncService.pull(uid, since, limit == null ? 0 : limit, sourceKind,
+        return playbackSyncService.pull(uid, since, limit == null ? 0 : limit, sourceKind, siteKeys,
                 Boolean.TRUE.equals(latest));
     }
 
