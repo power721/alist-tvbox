@@ -96,11 +96,13 @@ class PluginServiceTest {
     @Test
     void createShouldStoreRawPythonContentAndClassifyUrlPathWithQuery() {
         String url = "https://example.com/plugins/Demo.PY?raw=1";
-        String content = "class Spider:\n    pass\n";
+        String stableId = "02544b320a6d45de997bc0bd3975d0c060b8";
+        String content = "PLUGIN_ID = \"" + stableId + "\"\nclass Spider:\n    pass\n";
         Plugin plugin = new Plugin();
         plugin.setUrl(url);
 
         when(pluginRepository.findByUrl(url)).thenReturn(Optional.empty());
+        when(pluginRepository.findByExternalId(stableId)).thenReturn(Optional.empty());
         when(restTemplate.getForObject(URI.create(url), String.class)).thenReturn(content);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -108,6 +110,7 @@ class PluginServiceTest {
 
         assertThat(PluginService.isPythonPluginUrl(url)).isTrue();
         assertThat(saved.getName()).isEqualTo("Demo");
+        assertThat(saved.getExternalId()).isEqualTo(stableId);
         assertThat(saved.getContent()).isEqualTo(content);
     }
 

@@ -41,7 +41,10 @@ public class WebSecurityConfiguration {
                                 "/api/alist/status",
                                 "/api/profiles",
                                 "/api/accounts/login",
-                                "/api/sync/validate"
+                                "/api/sync/validate",
+                                "/api/playback/event",
+                                "/api/playback/events",
+                                "/api/playback/changes"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(
@@ -56,7 +59,7 @@ public class WebSecurityConfiguration {
                                 "/api/accounts/logout",
                                 "/api/accounts/principal"
                         ).authenticated()
-                        .requestMatchers("/api/history/**").hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        .requestMatchers("/api/history/**", "/api/playback/tokens/**").hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/users/**", "/api/tenants/**", "/api/files/**", "/api/alist/alias/**")
                         .hasAuthority(Role.ADMIN.name())
                         .requestMatchers("/api/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())

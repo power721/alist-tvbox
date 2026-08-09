@@ -1,0 +1,442 @@
+package cn.har01d.alist_tvbox.service;
+
+import cn.har01d.alist_tvbox.auth.TokenService;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackDeleteInput;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncInput;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncPage;
+import cn.har01d.alist_tvbox.entity.History;
+import cn.har01d.alist_tvbox.entity.HistoryRepository;
+import cn.har01d.alist_tvbox.entity.PlaybackToken;
+import cn.har01d.alist_tvbox.entity.PlaybackTokenRepository;
+import cn.har01d.alist_tvbox.entity.PlaybackChangeSequence;
+import cn.har01d.alist_tvbox.entity.PlaybackChangeSequenceRepository;
+import cn.har01d.alist_tvbox.entity.PlaybackTombstone;
+import cn.har01d.alist_tvbox.entity.PlaybackTombstoneRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * 多端播放记录同步的语义回归:LWW 删除、作用域删除、游标分页、分源过滤。
+ * 这些都是"静默丢数据"型缺陷 —— 接口照常 200,记录却没了或再也发不出来。
+ */
+@ExtendWith(MockitoExtension.class)
+class PlaybackSyncServiceTest {
+    private static final int UID = 1;
+
+    @Mock
+    private HistoryRepository historyRepository;
+    @Mock
+    private PlaybackTokenRepository tokenRepository;
+    @Mock
+    private PlaybackTombstoneRepository tombstoneRepository;
+    @Mock
+    private PlaybackChangeSequenceRepository changeSequenceRepository;
+    @Mock
+    private TokenService tokenService;
+
+    private PlaybackSyncService service;
+
+    @BeforeEach
+    void setUp() {
+        PlaybackChangeSequence sequence = new PlaybackChangeSequence();
+        sequence.setId(1);
+        org.mockito.Mockito.lenient().when(changeSequenceRepository.findByIdForUpdate(1))
+                .thenReturn(java.util.Optional.of(sequence));
+        service = new PlaybackSyncService(
+                historyRepository, tokenRepository, tombstoneRepository, changeSequenceRepository, tokenService);
+    }
+
+    // ── 删除:LWW ───────────────────────────────────────────────────────────
+
+    @Test
+    void staleDeleteKeepsNewerHistory() {
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
+                .thenReturn(List.of(history("abc", "v1", 200)));
+
+        service.delete(UID, deleteInput(Map.of("scope", "item", "sourceKey", "abc", "vodId", "v1", "deletedAt", 100)));
+
+        // 迟到的删除(100)不得抹掉更新的本地记录(200):墓碑挡不住已发生的删除
+        verify(historyRepository, never()).deleteAll(any());
+        assertThat(savedTombstone().getDeletedAt()).isEqualTo(100);
+    }
+
+    @Test
+    void deleteRemovesHistoryNotNewerThanEvent() {
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
+                .thenReturn(List.of(history("abc", "v1", 100)));
+
+        service.delete(UID, deleteInput(Map.of("scope", "item", "sourceKey", "abc", "vodId", "v1", "deletedAt", 200)));
+
+        assertThat(deletedRows()).extracting(History::getVodId).containsExactly("v1");
+    }
+
+    // ── 删除:作用域 ────────────────────────────────────────────────────────
+
+    @Test
+    void siteScopeDeleteWithoutVodIdStillApplies() {
+        when(historyRepository.findByUidAndSourceKindAndSourceKey(UID, "site", "abc"))
+                .thenReturn(List.of(history("abc", "v1", 500), history("abc", "v2", 1500)));
+
+        // site 作用域的删除通常不带 vodId,不能因缺少条目身份就被丢弃
+        service.apply(UID, Map.of("event", "playback.deleted", "scope", "site", "sourceKey", "abc",
+                "deletedAt", 1000), null, null);
+
+        PlaybackTombstone tomb = savedTombstone();
+        assertThat(tomb.getScope()).isEqualTo("site");
+        assertThat(tomb.getSourceKey()).isEqualTo("abc");
+        assertThat(tomb.getVodId()).isNull();
+        assertThat(tomb.getDeletedAt()).isEqualTo(1000);
+        assertThat(deletedRows()).extracting(History::getVodId).containsExactly("v1");
+    }
+
+    @Test
+    void allScopeDeleteWithoutIdentityStillApplies() {
+        when(historyRepository.findAllByUidAndSourceKindIsNotNull(eq(UID), any()))
+                .thenReturn(List.of(history("abc", "v1", 500), history("pan", "v2", 1500)));
+
+        service.apply(UID, Map.of("event", "playback.deleted", "scope", "all", "deletedAt", 1000), null, null);
+
+        PlaybackTombstone tomb = savedTombstone();
+        assertThat(tomb.getScope()).isEqualTo("all");
+        assertThat(tomb.getVodId()).isNull();
+        assertThat(deletedRows()).extracting(History::getVodId).containsExactly("v1");
+    }
+
+    @Test
+    void staleUpsertDoesNotResurrectAfterSiteDelete() {
+        PlaybackTombstone site = new PlaybackTombstone();
+        site.setScope("site");
+        site.setDeletedAt(1000);
+        when(tombstoneRepository.findFirstByUidAndScopeAndSourceKindAndSourceKeyOrderByDeletedAtDesc(
+                UID, "site", "pan", "abc")).thenReturn(site);
+
+        service.apply(UID, Map.of("sourceKind", "pan", "sourceKey", "abc", "vodId", "v1",
+                "positionMs", 10, "updatedAt", 500), null, null);
+
+        verify(historyRepository, never()).save(any());
+    }
+
+    // ── 拉取:游标 ──────────────────────────────────────────────────────────
+
+    @Test
+    void cursorStaysBehindUndeliveredUpdates() {
+        List<History> rows = new ArrayList<>();
+        for (int i = 1; i <= 101; i++) {
+            rows.add(history("abc", "v" + i, i));
+        }
+        when(historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(
+                eq(UID), eq(0L), any())).thenReturn(rows);
+        when(tombstoneRepository.findByUidAndChangeSeqGreaterThan(eq(UID), eq(0L), any()))
+                .thenReturn(List.of(tombstone("abc", "gone", 102)));
+
+        PlaybackSyncPage first = service.pull(UID, 0, 0, null);
+
+        // 101 条更新 + 1 条更新的墓碑:游标不能越过第 101 条,否则它永远发不出去
+        assertThat(first.getItems()).hasSize(100);
+        assertThat(first.getDeleted()).isEmpty();
+        assertThat(first.getNextSince()).isEqualTo("100");
+
+        when(historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(
+                eq(UID), eq(100L), any()))
+                .thenReturn(List.of(rows.get(100)));
+        when(tombstoneRepository.findByUidAndChangeSeqGreaterThan(eq(UID), eq(100L), any()))
+                .thenReturn(List.of(tombstone("abc", "gone", 102)));
+
+        PlaybackSyncPage second = service.pull(UID, 100, 0, null);
+
+        assertThat(second.getItems()).extracting(PlaybackSyncInput::getVodId).containsExactly("v101");
+        assertThat(second.getDeleted()).hasSize(1);
+        assertThat(second.getNextSince()).isEqualTo("102");
+    }
+
+    @Test
+    void initialLatestPullReturnsNewestRecordsAndAdvancesToCurrentWatermark() {
+        List<History> rows = new ArrayList<>();
+        for (int i = 1; i <= 101; i++) {
+            rows.add(history("abc", "v" + i, i));
+        }
+        when(historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(
+                eq(UID), eq(0L), any())).thenReturn(rows);
+
+        PlaybackSyncPage page = service.pull(UID, 0, 100, null, true);
+
+        assertThat(page.getItems()).hasSize(100);
+        assertThat(page.getItems()).extracting(PlaybackSyncInput::getVodId)
+                .contains("v101").doesNotContain("v1");
+        assertThat(page.getNextSince()).isEqualTo("101");
+    }
+
+    @Test
+    void syncHistoryWindowDiscardsRecordsOlderThanLatest100() {
+        List<History> rows = new ArrayList<>();
+        for (int i = 1; i <= 101; i++) {
+            rows.add(history("abc", "v" + i, i));
+        }
+        when(historyRepository.findAllByUidAndSourceKindIsNotNull(eq(UID), any())).thenReturn(rows);
+
+        service.applyAll(UID, List.of());
+
+        verify(historyRepository).deleteAll(argThat(removed -> {
+            var iterator = removed.iterator();
+            return iterator.hasNext()
+                    && "v1".equals(iterator.next().getVodId())
+                    && !iterator.hasNext();
+        }));
+    }
+
+    @Test
+    void duplicateIdentityDoesNotEvictAUniqueRecordFromLatest100() {
+        List<History> rows = new ArrayList<>();
+        for (int i = 1; i <= 100; i++) {
+            rows.add(history("abc", "v" + i, i));
+        }
+        History olderDuplicate = rows.get(99);
+        History duplicate = history("abc", "v100", 101);
+        rows.add(duplicate);
+        when(historyRepository.findAllByUidAndSourceKindIsNotNull(eq(UID), any())).thenReturn(rows);
+
+        service.applyAll(UID, List.of());
+
+        assertThat(deletedRows()).containsExactly(olderDuplicate);
+    }
+
+    @Test
+    void initialLatestPullDoesNotReturnDuplicateIdentities() {
+        History older = history("abc", "v1", 100);
+        History newer = history("abc", "v1", 200);
+        when(historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(
+                eq(UID), eq(0L), any())).thenReturn(List.of(older, newer));
+
+        PlaybackSyncPage page = service.pull(UID, 0, 100, null, true);
+
+        assertThat(page.getItems()).hasSize(1);
+        assertThat(page.getItems().getFirst().getUpdatedAt()).isEqualTo(200);
+    }
+
+    @Test
+    void duplicateSyncIdentityIsCollapsedBeforeUpsert() {
+        History older = history("abc", "v1", 100);
+        older.setId(10);
+        History newer = history("abc", "v1", 200);
+        newer.setId(11);
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "site", "abc", "v1")).thenReturn(List.of(older, newer));
+
+        service.apply(UID, Map.of("sourceKey", "abc", "vodId", "v1", "updatedAt", 300), null, null);
+
+        assertThat(savedHistory().getId()).isEqualTo(11);
+        assertThat(deletedRows()).containsExactly(older);
+    }
+
+    @Test
+    void tiedTimestampsAreDeliveredAsOneGroup() {
+        // 同一时间戳跨越 limit 边界时整组下发:GreaterThan 游标无法在组内断点续传
+        when(historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(
+                eq(UID), eq(0L), any()))
+                .thenReturn(List.of(history("abc", "v1", 10), history("abc", "v2", 20), history("abc", "v3", 20)));
+
+        PlaybackSyncPage page = service.pull(UID, 0, 2, null);
+
+        assertThat(page.getItems()).extracting(PlaybackSyncInput::getVodId).containsExactly("v1", "v2", "v3");
+        assertThat(page.getNextSince()).isEqualTo("20");
+    }
+
+    @Test
+    void lateClientTimestampIsDeliveredByServerSequence() {
+        History late = history("abc", "late", 150);
+        late.setChangeSeq(201L);
+        when(historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(
+                eq(UID), eq(200L), any()))
+                .thenReturn(List.of(late));
+
+        PlaybackSyncPage page = service.pull(UID, 200, 100, null);
+
+        assertThat(page.getItems()).extracting(PlaybackSyncInput::getVodId).containsExactly("late");
+        assertThat(page.getItems().getFirst().getUpdatedAt()).isEqualTo(150);
+        assertThat(page.getNextSince()).isEqualTo("201");
+    }
+
+    // ── 拉取:分源过滤 ──────────────────────────────────────────────────────
+
+    @Test
+    void sourceScopedPullFiltersTombstonesByKind() {
+        when(tombstoneRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(eq(UID), eq("pan"), eq(0L), any()))
+                .thenReturn(List.of(tombstone("pan", "v1", 10)));
+        // all 作用域的墓碑不带 sourceKind,对所有来源生效,必须照发
+        when(tombstoneRepository.findByUidAndSourceKindIsNullAndChangeSeqGreaterThan(eq(UID), eq(0L), any()))
+                .thenReturn(List.of(tombstone(null, null, 20)));
+
+        PlaybackSyncPage page = service.pull(UID, 0, 0, "pan");
+
+        assertThat(page.getDeleted()).extracting(PlaybackDeleteInput::getSourceKind)
+                .containsExactly("pan", null);
+        // 未过滤的全量墓碑查询会把别的来源的删除下发给该客户端
+        verify(tombstoneRepository, never()).findByUidAndChangeSeqGreaterThan(anyInt(), anyLong(), any());
+    }
+
+    @Test
+    void pullAcceptsMultipleSourceKinds() {
+        when(historyRepository.findByUidAndSourceKindInAndChangeSeqGreaterThan(
+                eq(UID), eq(List.of("site", "spider_plugin")), eq(0L), any()))
+                .thenReturn(List.of());
+        when(tombstoneRepository.findByUidAndSourceKindInAndChangeSeqGreaterThan(
+                eq(UID), eq(List.of("site", "spider_plugin")), eq(0L), any()))
+                .thenReturn(List.of());
+
+        service.pull(UID, 0, 100, "site, spider_plugin");
+
+        verify(historyRepository).findByUidAndSourceKindInAndChangeSeqGreaterThan(
+                eq(UID), eq(List.of("site", "spider_plugin")), eq(0L), any());
+        verify(tombstoneRepository).findByUidAndSourceKindInAndChangeSeqGreaterThan(
+                eq(UID), eq(List.of("site", "spider_plugin")), eq(0L), any());
+    }
+
+    @Test
+    void spiderPluginTombstoneUsesStableSourceKeyInsteadOfDisplayName() {
+        String stableId = "02544b320a6d45de997bc0bd3975d0c060b8";
+        History existing = history(stableId, "v1", 100);
+        existing.setSourceKind("spider_plugin");
+        existing.setSourceName("已重命名的木偶");
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "spider_plugin", stableId, "v1")).thenReturn(List.of(existing));
+
+        service.delete(UID, deleteInput(Map.of(
+                "scope", "item", "sourceKind", "spider_plugin", "sourceKey", stableId,
+                "vodId", "v1", "deletedAt", 200)));
+
+        assertThat(savedTombstone().getHistoryKey()).isEqualTo(stableId + "@@@v1@@@0");
+    }
+
+    // ── 列宽 ────────────────────────────────────────────────────────────────
+
+    @Test
+    void longIdentityIsKeptWhileDisplayFieldsAreClamped() {
+        // 网盘源的 vod_id 是 URL 编码的 JSON,数百字符;身份不能截断,否则不同条目会并成一条
+        String vodId = "奇异@" + "%7B%22title%22%3A%22".repeat(30);
+        String longText = "标题".repeat(300);
+
+        service.apply(UID, Map.of("sourceKind", "pan", "sourceKey", "abc", "vodId", vodId,
+                "vodName", longText, "vodFlag", longText, "episodeName", longText,
+                "clientKey", longText, "positionMs", 10, "updatedAt", 500), null, null);
+
+        History saved = savedHistory();
+        assertThat(saved.getVodId()).isEqualTo(vodId);
+        // 展示字段按列宽截断:截断好过整条上报以 22001 失败丢记录
+        assertThat(saved.getVodName()).hasSize(255);
+        assertThat(saved.getVodFlag()).hasSize(255);
+        assertThat(saved.getVodRemarks()).hasSize(255);
+        assertThat(saved.getClientKey()).hasSize(64);
+    }
+
+    @Test
+    void sourceNameAndZeroEpisodeRoundTrip() {
+        service.apply(UID, Map.of("sourceKind", "emby", "sourceKey", "server", "sourceName", "客厅 Emby",
+                "vodId", "v1", "episode", 0, "updatedAt", 500), null, null);
+
+        History saved = savedHistory();
+        assertThat(saved.getSourceName()).isEqualTo("客厅 Emby");
+        assertThat(saved.getEpisode()).isZero();
+
+        when(historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(
+                eq(UID), eq(0L), any()))
+                .thenReturn(List.of(saved));
+        PlaybackSyncInput pulled = service.pull(UID, 0, 100, null).getItems().getFirst();
+        assertThat(pulled.getSourceName()).isEqualTo("客厅 Emby");
+        assertThat(pulled.getEpisode()).isZero();
+    }
+
+    @Test
+    void upsertLocksSequenceBeforeReadingConflictState() {
+        service.apply(UID, Map.of("sourceKind", "pan", "sourceKey", "abc", "vodId", "v1",
+                "updatedAt", 500), null, null);
+
+        var order = inOrder(changeSequenceRepository, tombstoneRepository, historyRepository);
+        order.verify(changeSequenceRepository).findByIdForUpdate(1);
+        order.verify(tombstoneRepository)
+                .findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "pan", "abc", "v1");
+        order.verify(historyRepository)
+                .findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "pan", "abc", "v1");
+    }
+
+    // ── 令牌 ────────────────────────────────────────────────────────────────
+
+    @Test
+    void resolveUidAcceptsPlaybackToken() {
+        PlaybackToken token = new PlaybackToken();
+        token.setUid(7);
+        token.setToken("tk-1");
+        when(tokenRepository.findByToken("tk-1")).thenReturn(java.util.Optional.of(token));
+
+        assertThat(service.resolveUid("tk-1")).isEqualTo(7);
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────
+
+    private History history(String sourceKey, String vodId, long updatedAt) {
+        History h = new History();
+        h.setUid(UID);
+        h.setSourceKind("site");
+        h.setSourceKey(sourceKey);
+        h.setVodId(vodId);
+        h.setUpdatedAt(updatedAt);
+        h.setChangeSeq(updatedAt);
+        h.setCreateTime(updatedAt);
+        return h;
+    }
+
+    private PlaybackTombstone tombstone(String sourceKind, String vodId, long deletedAt) {
+        PlaybackTombstone t = new PlaybackTombstone();
+        t.setUid(UID);
+        t.setScope(vodId == null ? "all" : "item");
+        t.setSourceKind(sourceKind);
+        t.setVodId(vodId);
+        t.setDeletedAt(deletedAt);
+        t.setChangeSeq(deletedAt);
+        return t;
+    }
+
+    private PlaybackDeleteInput deleteInput(Map<String, Object> map) {
+        return PlaybackDeleteInput.fromMap(new LinkedHashMap<>(map));
+    }
+
+    private PlaybackTombstone savedTombstone() {
+        ArgumentCaptor<PlaybackTombstone> captor = ArgumentCaptor.forClass(PlaybackTombstone.class);
+        verify(tombstoneRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    private History savedHistory() {
+        ArgumentCaptor<History> captor = ArgumentCaptor.forClass(History.class);
+        verify(historyRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<History> deletedRows() {
+        ArgumentCaptor<Iterable<History>> captor = ArgumentCaptor.forClass(Iterable.class);
+        verify(historyRepository).deleteAll(captor.capture());
+        List<History> rows = new ArrayList<>();
+        captor.getValue().forEach(rows::add);
+        return rows;
+    }
+}

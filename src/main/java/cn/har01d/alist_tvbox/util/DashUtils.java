@@ -29,6 +29,7 @@ public final class DashUtils {
         clients.add("com.github.tvbox.osc.tk");
         clients.add("com.yek.android.c");
         clients.add("com.mygithub0.tvbox0.osdX");
+        clients.add("com.silent.android.webhtv");
 
         audioIds.put("30251", 192000);
         audioIds.put("30250", 192000);

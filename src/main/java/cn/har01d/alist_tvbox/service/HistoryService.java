@@ -69,39 +69,53 @@ public class HistoryService {
     }
 
     public History get(Integer id) {
-        return historyRepository.findById(id).orElse(null);
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        return historyRepository.findById(id)
+                .filter(history -> history.getUid() == uid && history.getSourceKind() == null)
+                .orElse(null);
     }
 
     public Page<History> list(Pageable pageable) {
         int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
-        return historyRepository.findByUid(uid, pageable);
+        return historyRepository.findByUidAndSourceKindIsNull(uid, pageable);
     }
 
     public List<History> findAll() {
         int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
-        return historyRepository.findAllByUid(uid, Sort.by("createTime").descending());
+        return historyRepository.findAllByUidAndSourceKindIsNull(uid, Sort.by("createTime").descending());
     }
 
     public History findById(String key) {
         int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
-        return historyRepository.findByUidAndKey(uid, key);
+        return newest(historyRepository.findAllByUidAndSourceKindIsNullAndKey(uid, key));
     }
 
     public void saveAll(List<History> histories) {
         for (var history : histories) {
-            var exist = findById(history.getKey());
+            int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+            history.setUid(uid);
+            history.setSourceKind(null);
+            List<History> matches = historyRepository
+                    .findAllByUidAndSourceKindIsNullAndKey(uid, history.getKey());
+            var exist = newest(matches);
             if (exist != null) {
                 history.setId(exist.getId());
             }
+            deleteDuplicates(matches, exist);
         }
         historyRepository.saveAll(histories);
     }
 
     public History save(History history) {
-        var exist = findById(history.getKey());
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        history.setUid(uid);
+        history.setSourceKind(null);
+        List<History> matches = historyRepository.findAllByUidAndSourceKindIsNullAndKey(uid, history.getKey());
+        var exist = newest(matches);
         if (exist != null) {
             history.setId(exist.getId());
         }
+        deleteDuplicates(matches, exist);
         if (history.getVodPic() != null && history.getVodPic().length() >= 255) {
             history.setVodPic(null);
         }
@@ -117,8 +131,6 @@ public class HistoryService {
             }
             history.setEpisodeUrl(url);
         }
-        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
-        history.setUid(uid);
         return historyRepository.save(history);
     }
 
@@ -148,7 +160,9 @@ public class HistoryService {
             history.setCid(0);
             history.setKey(key);
             history.setUid(uid);
-            History exist = historyRepository.findByUidAndKey(uid, key);
+            List<History> matches = historyRepository.findAllByUidAndSourceKindIsNullAndKey(uid, key);
+            History exist = newest(matches);
+            deleteDuplicates(matches, exist);
             if (exist != null) {
                 if (history.getCreateTime() > exist.getCreateTime() || history.getPosition() > exist.getPosition()) {
                     if ("0".equals(mode) || "2".equals(mode)) {
@@ -178,7 +192,7 @@ public class HistoryService {
             deviceRepository.save(device);
         }
 
-        List<History> old = historyRepository.findAll();
+        List<History> old = findAll();
 
         log.warn("pull {} histories", list.size());
         historyRepository.saveAll(list);
@@ -265,7 +279,7 @@ public class HistoryService {
 
     public void delete(String key) {
         int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
-        historyRepository.deleteByUidAndKey(uid, key);
+        historyRepository.deleteByUidAndSourceKindIsNullAndKey(uid, key);
     }
 
     public void deleteAll() {
@@ -283,10 +297,24 @@ public class HistoryService {
     public void deleteById(Integer id) {
         int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
         historyRepository.findById(id).ifPresent(history -> {
-            if (history.getUid() == uid) {
+            if (history.getUid() == uid && history.getSourceKind() == null) {
                 historyRepository.delete(history);
             }
         });
+    }
+
+    private History newest(List<History> rows) {
+        return rows.stream()
+                .max(java.util.Comparator.comparingLong(History::getCreateTime)
+                        .thenComparing(history -> history.getId() == null ? 0 : history.getId()))
+                .orElse(null);
+    }
+
+    private void deleteDuplicates(List<History> rows, History keep) {
+        if (rows.size() <= 1) {
+            return;
+        }
+        historyRepository.deleteAll(rows.stream().filter(history -> history != keep).toList());
     }
 
     private String buildSubUrl() {

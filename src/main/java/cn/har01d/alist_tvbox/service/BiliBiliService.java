@@ -1973,24 +1973,30 @@ public class BiliBiliService {
                 sub.setLang(subtitle.getLan());
                 sub.setFormat("application/x-subrip");
                 sub.setUrl(fixSubtitleUrl(subtitle.getSubtitle_url()));
+                if (subtitle.getLan().startsWith("ai-")) {
+                    sub.setFlag(4);
+                }
                 list.add(sub);
             }
         } catch (Exception e) {
             log.warn("", e);
         }
-        if (!list.isEmpty() && allAi) {
-            Sub sub = new Sub();
-            sub.setName("关闭");
-            sub.setLang("");
-            sub.setFormat("application/x-subrip");
-            sub.setUrl("");
-            list.add(0, sub);
-        }
+//        if (!list.isEmpty() && allAi) {
+//            Sub sub = new Sub();
+//            sub.setName("关闭");
+//            sub.setLang("");
+//            sub.setFormat("application/x-subrip");
+//            sub.setUrl(fixSubtitleUrl(""));
+//            list.add(0, sub);
+//        }
         log.debug("subtitles: {}", list);
         return list;
     }
 
     public String getSubtitle(String url) {
+        if (StringUtils.isBlank(url)) {
+            return "";
+        }
         if (!Utils.isSafeExternalUrl(url)) {
             throw new BadRequestException("Invalid subtitle URL");
         }

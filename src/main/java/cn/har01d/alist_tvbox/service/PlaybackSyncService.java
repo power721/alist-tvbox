@@ -1,0 +1,639 @@
+package cn.har01d.alist_tvbox.service;
+
+import cn.har01d.alist_tvbox.auth.TokenService;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackDeleteInput;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncInput;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncPage;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackTokenDto;
+import cn.har01d.alist_tvbox.entity.History;
+import cn.har01d.alist_tvbox.entity.HistoryRepository;
+import cn.har01d.alist_tvbox.entity.PlaybackChangeSequence;
+import cn.har01d.alist_tvbox.entity.PlaybackChangeSequenceRepository;
+import cn.har01d.alist_tvbox.entity.PlaybackToken;
+import cn.har01d.alist_tvbox.entity.PlaybackTokenRepository;
+import cn.har01d.alist_tvbox.entity.PlaybackTombstone;
+import cn.har01d.alist_tvbox.entity.PlaybackTombstoneRepository;
+import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * 多端播放记录同步核心服务。
+ * <p>
+ * 与 {@link HistoryService} 解耦:本服务**显式接收 uid**(由 controller 从令牌解析),
+ * 不读取 {@code SecurityContextHolder},故可在 {@code permitAll} 的令牌端点安全调用,
+ * 绕开旧 {@code /history/{token}}、{@code /tv/action} 路径的 {@code getDetails()} NPE 隐患。
+ * <p>
+ * 身份 = (uid, sourceKind, sourceKey, vodId);冲突 = updatedAt LWW;删除 = 90 天墓碑。
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PlaybackSyncService {
+    private static final long TOMBSTONE_TTL_MS = 90L * 24 * 60 * 60 * 1000;
+    private static final int DEFAULT_LIMIT = 100;
+    private static final int MAX_LIMIT = 1000;
+    private static final int SYNC_HISTORY_LIMIT = 100;
+    private static final String SCOPE_ALL = "all";
+    private static final String SCOPE_SITE = "site";
+    private static final String SCOPE_ITEM = "item";
+    private static final String KIND_SITE = "site";
+    private static final String KIND_SPIDER_PLUGIN = "spider_plugin";
+
+    private final HistoryRepository historyRepository;
+    private final PlaybackTokenRepository tokenRepository;
+    private final PlaybackTombstoneRepository tombstoneRepository;
+    private final PlaybackChangeSequenceRepository changeSequenceRepository;
+    private final TokenService tokenService;
+
+    private final Cache<String, Boolean> idempotency = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofHours(24))
+            .maximumSize(50_000)
+            .build();
+
+    // ── 令牌解析(双源:playback_token 表 ∪ session) ──────────────────────────
+
+    public int resolveUid(String token) {
+        if (token == null || token.isBlank()) {
+            throw new UserUnauthorizedException("缺少播放同步令牌", 40100);
+        }
+        PlaybackToken pt = tokenRepository.findByToken(token).orElse(null);
+        if (pt != null) {
+            pt.setLastUsedAt(System.currentTimeMillis());
+            tokenRepository.save(pt);
+            return pt.getUid();
+        }
+        try {
+            return tokenService.extractToken(token).getUserId();
+        } catch (Exception e) {
+            throw new UserUnauthorizedException("播放同步令牌无效", 40100, e);
+        }
+    }
+
+    // ── PUSH:upsert / delete ───────────────────────────────────────────────
+
+    @Transactional
+    public void apply(int uid, Map<String, Object> record, String eventId, String dedupeKey) {
+        applyRecord(uid, record, eventId, dedupeKey);
+        trimHistory(uid);
+    }
+
+    @Transactional
+    public void applyAll(int uid, List<Map<String, Object>> records) {
+        if (records != null) {
+            for (Map<String, Object> record : records) {
+                applyRecord(uid, record, null, null);
+            }
+        }
+        trimHistory(uid);
+    }
+
+    private void applyRecord(int uid, Map<String, Object> record, String eventId, String dedupeKey) {
+        if (record == null || record.isEmpty()) {
+            return;
+        }
+        if (isDelete(record)) {
+            delete(uid, PlaybackDeleteInput.fromMap(record));
+            return;
+        }
+        upsert(uid, PlaybackSyncInput.fromMap(record), eventId, dedupeKey);
+    }
+
+    /** 同步数据只保留每个用户按播放时间排序的最新 100 条；窗口外记录直接丢弃。 */
+    private void trimHistory(int uid) {
+        List<History> rows = new ArrayList<>(
+                historyRepository.findAllByUidAndSourceKindIsNotNull(uid, Sort.unsorted()));
+        rows.sort(Comparator.comparingLong(this::timeOf).reversed());
+        Set<PlaybackIdentity> identities = new HashSet<>();
+        List<History> removed = new ArrayList<>();
+        for (History row : rows) {
+            if (!identities.add(identityOf(row)) || identities.size() > SYNC_HISTORY_LIMIT) {
+                removed.add(row);
+            }
+        }
+        if (!removed.isEmpty()) {
+            historyRepository.deleteAll(removed);
+            log.debug("trimmed playback sync history: uid={} removed={}", uid, removed.size());
+        }
+    }
+
+    private void upsert(int uid, PlaybackSyncInput in, String eventId, String dedupeKey) {
+        if (in.getVodId() == null || in.getVodId().isBlank()) {
+            log.debug("skip upsert: missing vodId (uid={})", uid);
+            return;
+        }
+        String sourceKind = in.getSourceKind() != null ? in.getSourceKind() : KIND_SITE;
+        String dedupe = dedupeKey != null && !dedupeKey.isBlank() ? dedupeKey
+                : (eventId != null && !eventId.isBlank() ? eventId : null);
+        if (dedupe != null) {
+            String cacheKey = uid + ":" + dedupe;
+            if (idempotency.getIfPresent(cacheKey) != null) {
+                return;
+            }
+            markIdempotentAfterCommit(cacheKey);
+        }
+
+        long now = System.currentTimeMillis();
+        long updatedAt = in.getUpdatedAt() > 0 ? in.getUpdatedAt() : now;
+        // 序列表既分配游标也充当同步写入的全局互斥锁。必须先加锁再读墓碑/历史:
+        // 否则两个事务都可能先读到“不存在”,随后各建一行;DELETE 与 UPSERT 也可能交错复活旧数据。
+        long changeSeq = nextChangeSeq();
+
+        long deletedAt = tombstoneWatermark(uid, sourceKind, in.getSourceKey(), in.getVodId());
+        if (updatedAt <= deletedAt) {
+            log.debug("skip resurrect (tombstone newer): uid={} vodId={}", uid, in.getVodId());
+            return;
+        }
+
+        List<History> matches = historyRepository
+                .findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, sourceKind, in.getSourceKey(), in.getVodId());
+        History exist = newestHistory(matches);
+        deleteDuplicateHistories(matches, exist);
+        if (exist != null) {
+            long existTime = timeOf(exist);
+            if (updatedAt <= existTime) {
+                log.debug("skip not newer: uid={} vodId={} remote={} local={}", uid, in.getVodId(), updatedAt, existTime);
+                return;
+            }
+        }
+
+        History h = exist != null ? exist : new History();
+        if (exist == null) {
+            h.setUid(uid);
+            h.setSourceKind(sourceKind);
+            h.setSourceKey(in.getSourceKey());
+            h.setVodId(in.getVodId());
+            h.setKey(buildKey(sourceKind, in.getSourceKey(), in.getVodId()));
+        }
+        if (in.getVodName() != null) {
+            h.setVodName(clamp(in.getVodName(), 255));
+        }
+        if (in.getSourceName() != null) {
+            h.setSourceName(clamp(in.getSourceName(), 255));
+        }
+        // 图片是 URL:截断只会得到坏链接,超长干脆不写
+        if (in.getVodPic() != null && in.getVodPic().length() <= 255) {
+            h.setVodPic(in.getVodPic());
+        }
+        if (in.getVodFlag() != null) {
+            h.setVodFlag(clamp(in.getVodFlag(), 255));
+        }
+        if (in.getEpisodeName() != null) {
+            h.setVodRemarks(clamp(in.getEpisodeName(), 255));
+        }
+        if (in.getEpisode() != null) {
+            h.setEpisode(in.getEpisode());
+        }
+        if (in.getEpisodeUrl() != null) {
+            h.setEpisodeUrl(in.getEpisodeUrl());
+        }
+        if (in.getSpeed() > 0) {
+            h.setSpeed(in.getSpeed());
+        }
+        // completed:夹紧到结尾
+        if (in.isCompleted() && in.getDurationMs() > 0) {
+            h.setPosition(in.getDurationMs());
+        } else {
+            h.setPosition(in.getPositionMs());
+        }
+        h.setDuration(in.getDurationMs());
+        h.setClientKey(clamp(in.getClientKey(), 64));
+        h.setUpdatedAt(updatedAt);
+        h.setChangeSeq(changeSeq);
+        h.setCreateTime(updatedAt);
+        historyRepository.save(h);
+    }
+
+    /**
+     * 删除事件。scope 决定作用域,不是所有 scope 都带条目身份:
+     * all 清空该用户全部记录、site 清空某来源、item(默认)按 (kind,key,vodId) 删单条。
+     */
+    @Transactional
+    public void delete(int uid, PlaybackDeleteInput in) {
+        String sourceKind = in.getSourceKind() != null ? in.getSourceKind() : KIND_SITE;
+        long deletedAt = in.getDeletedAt() > 0 ? in.getDeletedAt() : System.currentTimeMillis();
+        String scope = in.getScope() == null ? SCOPE_ITEM : in.getScope().trim().toLowerCase();
+        long changeSeq = nextChangeSeq();
+        switch (scope) {
+            case SCOPE_ALL -> deleteAll(uid, deletedAt, changeSeq);
+            case SCOPE_SITE -> deleteSite(uid, sourceKind, in.getSourceKey(), deletedAt, changeSeq);
+            default -> deleteItem(uid, sourceKind, in, deletedAt, changeSeq);
+        }
+    }
+
+    private void deleteAll(int uid, long deletedAt, long changeSeq) {
+        PlaybackTombstone tomb = tombstoneRepository.findFirstByUidAndScopeOrderByDeletedAtDesc(uid, SCOPE_ALL);
+        if (tomb == null) {
+            tomb = new PlaybackTombstone();
+            tomb.setUid(uid);
+            tomb.setScope(SCOPE_ALL);
+        }
+        saveTombstone(tomb, deletedAt, changeSeq);
+        removeHistory(historyRepository.findAllByUidAndSourceKindIsNotNull(uid, Sort.unsorted()), deletedAt);
+    }
+
+    private void deleteSite(int uid, String sourceKind, String sourceKey, long deletedAt, long changeSeq) {
+        if (sourceKey == null || sourceKey.isBlank()) {
+            log.debug("skip site delete: missing sourceKey (uid={})", uid);
+            return;
+        }
+        PlaybackTombstone tomb = tombstoneRepository
+                .findFirstByUidAndScopeAndSourceKindAndSourceKeyOrderByDeletedAtDesc(uid, SCOPE_SITE, sourceKind, sourceKey);
+        if (tomb == null) {
+            tomb = new PlaybackTombstone();
+            tomb.setUid(uid);
+            tomb.setScope(SCOPE_SITE);
+            tomb.setSourceKind(sourceKind);
+            tomb.setSourceKey(sourceKey);
+        }
+        saveTombstone(tomb, deletedAt, changeSeq);
+        removeHistory(historyRepository.findByUidAndSourceKindAndSourceKey(uid, sourceKind, sourceKey), deletedAt);
+    }
+
+    private void deleteItem(int uid, String sourceKind, PlaybackDeleteInput in, long deletedAt, long changeSeq) {
+        if (in.getVodId() == null || in.getVodId().isBlank()) {
+            log.debug("skip item delete: missing vodId (uid={})", uid);
+            return;
+        }
+        List<History> histories = historyRepository
+                .findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, sourceKind, in.getSourceKey(), in.getVodId());
+        List<PlaybackTombstone> tombstones = tombstoneRepository
+                .findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, sourceKind, in.getSourceKey(), in.getVodId());
+        PlaybackTombstone tomb = newestTombstone(tombstones);
+        if (tomb == null) {
+            tomb = new PlaybackTombstone();
+            tomb.setUid(uid);
+            tomb.setScope(SCOPE_ITEM);
+            tomb.setSourceKind(sourceKind);
+            tomb.setSourceKey(in.getSourceKey());
+            tomb.setVodId(in.getVodId());
+        }
+        String historyKey = portableHistoryKey(sourceKind, in.getSourceKey(), in.getVodId(), in.getHistoryKey());
+        if (historyKey != null) {
+            tomb.setHistoryKey(historyKey);
+        }
+        saveTombstone(tomb, deletedAt, changeSeq);
+        if (tombstones.size() > 1) {
+            PlaybackTombstone keep = tomb;
+            tombstoneRepository.deleteAll(tombstones.stream().filter(row -> row != keep).toList());
+        }
+        removeHistory(histories, deletedAt);
+    }
+
+    private void saveTombstone(PlaybackTombstone tomb, long deletedAt, long changeSeq) {
+        if (deletedAt > tomb.getDeletedAt()) {
+            tomb.setDeletedAt(deletedAt);
+            tomb.setChangeSeq(changeSeq);
+        } else if (tomb.getChangeSeq() == null) {
+            tomb.setChangeSeq(changeSeq);
+        }
+        tomb.setExpireAt(tomb.getDeletedAt() + TOMBSTONE_TTL_MS);
+        tombstoneRepository.save(tomb);
+    }
+
+    /**
+     * LWW:只删不比该删除事件更新的记录。墓碑仅能挡住后续的过期 upsert,
+     * 无法还原已被删掉的行,所以迟到的删除必须在此让位于更新的本地记录。
+     */
+    private void removeHistory(List<History> rows, long deletedAt) {
+        List<History> stale = new ArrayList<>();
+        for (History h : rows) {
+            if (timeOf(h) <= deletedAt) {
+                stale.add(h);
+            } else {
+                log.debug("keep newer history: uid={} vodId={} local={} delete={}",
+                        h.getUid(), h.getVodId(), timeOf(h), deletedAt);
+            }
+        }
+        if (!stale.isEmpty()) {
+            historyRepository.deleteAll(stale);
+        }
+    }
+
+    /** 覆盖某条目的最新删除时间:item ∪ site ∪ all 三种作用域取最大值。 */
+    private long tombstoneWatermark(int uid, String sourceKind, String sourceKey, String vodId) {
+        long watermark = 0;
+        PlaybackTombstone item = newestTombstone(tombstoneRepository
+                .findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, sourceKind, sourceKey, vodId));
+        if (item != null) {
+            watermark = item.getDeletedAt();
+        }
+        if (sourceKey != null) {
+            PlaybackTombstone site = tombstoneRepository
+                    .findFirstByUidAndScopeAndSourceKindAndSourceKeyOrderByDeletedAtDesc(uid, SCOPE_SITE, sourceKind, sourceKey);
+            if (site != null && site.getDeletedAt() > watermark) {
+                watermark = site.getDeletedAt();
+            }
+        }
+        PlaybackTombstone all = tombstoneRepository.findFirstByUidAndScopeOrderByDeletedAtDesc(uid, SCOPE_ALL);
+        if (all != null && all.getDeletedAt() > watermark) {
+            watermark = all.getDeletedAt();
+        }
+        return watermark;
+    }
+
+    // ── PULL:游标增量下发 ─────────────────────────────────────────────────
+
+    /**
+     * 游标增量下发。items 与 tombstones 必须作为**同一条按时间排序的变更流**截断:
+     * 两边各自截断、游标取两边最大值时,较新的墓碑会把未下发的 history 尾巴推过游标,
+     * 而后续查询用的是 GreaterThan,那些记录将被永久跳过。
+     * 同一时间戳的变更整组下发(组内无法用 GreaterThan 断点续传),故允许轻微超出 limit。
+     */
+    public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind) {
+        return pull(uid, since, limit, sourceKind, false);
+    }
+
+    public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind, boolean latest) {
+        int cap = limit > 0 && limit <= MAX_LIMIT ? limit : DEFAULT_LIMIT;
+        List<String> sourceKinds = sourceKinds(sourceKind);
+        Sort sort = Sort.by("changeSeq").ascending();
+        List<History> rows;
+        if (sourceKinds.isEmpty()) {
+            rows = historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(uid, since, sort);
+        } else if (sourceKinds.size() == 1) {
+            rows = historyRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(uid, sourceKinds.getFirst(), since, sort);
+        } else {
+            rows = historyRepository.findByUidAndSourceKindInAndChangeSeqGreaterThan(uid, sourceKinds, since, sort);
+        }
+        List<PlaybackTombstone> tombs = tombstones(uid, since, sourceKinds);
+        if (latest && since <= 0) {
+            return latestPage(rows, tombs, cap, since);
+        }
+
+        PlaybackSyncPage page = new PlaybackSyncPage();
+        long highWater = since;
+        int i = 0;
+        int j = 0;
+        int sent = 0;
+        while (i < rows.size() || j < tombs.size()) {
+            boolean takeHistory = j >= tombs.size()
+                    || (i < rows.size() && changeSeqOf(rows.get(i)) <= changeSeqOf(tombs.get(j)));
+            long time = takeHistory ? changeSeqOf(rows.get(i)) : changeSeqOf(tombs.get(j));
+            if (sent >= cap && time != highWater) {
+                break;
+            }
+            if (takeHistory) {
+                page.getItems().add(toInput(rows.get(i++)));
+            } else {
+                page.getDeleted().add(toDelete(tombs.get(j++)));
+            }
+            highWater = time;
+            sent++;
+        }
+
+        page.setNextSince(String.valueOf(highWater));
+        return page;
+    }
+
+    /** 首次同步只下发按实际播放时间排序的最新记录，并把游标推进到当前变更流水位。 */
+    private PlaybackSyncPage latestPage(List<History> rows, List<PlaybackTombstone> tombs, int cap, long since) {
+        long highWater = since;
+        for (History row : rows) {
+            highWater = Math.max(highWater, changeSeqOf(row));
+        }
+        for (PlaybackTombstone tomb : tombs) {
+            highWater = Math.max(highWater, changeSeqOf(tomb));
+        }
+
+        rows = new ArrayList<>(rows);
+        rows.sort(Comparator.comparingLong(this::timeOf).reversed());
+        PlaybackSyncPage page = new PlaybackSyncPage();
+        Set<PlaybackIdentity> identities = new HashSet<>();
+        for (History row : rows) {
+            if (identities.add(identityOf(row))) {
+                page.getItems().add(toInput(row));
+                if (page.getItems().size() >= cap) {
+                    break;
+                }
+            }
+        }
+        page.setNextSince(String.valueOf(highWater));
+        return page;
+    }
+
+    /** 分源拉取时墓碑同样要按 sourceKind 过滤,否则会把别的来源的删除下发给该客户端。 */
+    private List<PlaybackTombstone> tombstones(int uid, long since, List<String> sourceKinds) {
+        Sort sort = Sort.by("changeSeq").ascending();
+        if (sourceKinds.isEmpty()) {
+            return tombstoneRepository.findByUidAndChangeSeqGreaterThan(uid, since, sort);
+        }
+        List<PlaybackTombstone> list = new ArrayList<>(sourceKinds.size() == 1
+                ? tombstoneRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(
+                        uid, sourceKinds.getFirst(), since, sort)
+                : tombstoneRepository.findByUidAndSourceKindInAndChangeSeqGreaterThan(uid, sourceKinds, since, sort));
+        // all 作用域的墓碑不带 sourceKind,但对所有来源都生效,必须一并下发
+        list.addAll(tombstoneRepository.findByUidAndSourceKindIsNullAndChangeSeqGreaterThan(uid, since, sort));
+        list.sort(Comparator.comparingLong(this::changeSeqOf));
+        return list;
+    }
+
+    // ── 令牌 CRUD(session 用户调用) ────────────────────────────────────────
+
+    public PlaybackTokenDto createToken(int uid, String name) {
+        PlaybackToken t = new PlaybackToken();
+        t.setUid(uid);
+        t.setName(name);
+        t.setToken(UUID.randomUUID().toString().replace("-", ""));
+        long now = System.currentTimeMillis();
+        t.setCreatedTime(now);
+        t.setLastUsedAt(now);
+        return toDto(tokenRepository.save(t), false);
+    }
+
+    public List<PlaybackTokenDto> listTokens(int uid) {
+        return tokenRepository.findByUid(uid).stream().map(t -> toDto(t, true)).toList();
+    }
+
+    @Transactional
+    public void deleteToken(int uid, int id) {
+        tokenRepository.deleteByIdAndUid(id, uid);
+    }
+
+    // ── 墓碑清理 ────────────────────────────────────────────────────────────
+
+    @Transactional
+    @Scheduled(cron = "7 0 6 * * *")
+    public void cleanTombstones() {
+        long now = System.currentTimeMillis();
+        tombstoneRepository.deleteByExpireAtBefore(now);
+        log.info("cleaned playback tombstones expired before {}", now);
+    }
+
+    // ── helpers ─────────────────────────────────────────────────────────────
+
+    private boolean isDelete(Map<String, Object> record) {
+        String event = record.get("event") == null ? null : String.valueOf(record.get("event")).trim();
+        if ("playback.deleted".equals(event)) {
+            return true;
+        }
+        String action = record.get("action") == null ? null : String.valueOf(record.get("action")).trim();
+        if ("delete".equalsIgnoreCase(action)) {
+            return true;
+        }
+        return record.containsKey("deletedAt") || record.containsKey("deleted_at");
+    }
+
+    private String buildKey(String sourceKind, String sourceKey, String vodId) {
+        if (KIND_SITE.equals(sourceKind) && sourceKey != null) {
+            return sourceKey + "@@@" + vodId + "@@@0";
+        }
+        return vodId;
+    }
+
+    private String portableHistoryKey(String sourceKind, String sourceKey, String vodId,
+                                      String suppliedHistoryKey) {
+        if (suppliedHistoryKey != null && !suppliedHistoryKey.isBlank()) {
+            return suppliedHistoryKey;
+        }
+        if ((KIND_SITE.equals(sourceKind) || KIND_SPIDER_PLUGIN.equals(sourceKind))
+                && sourceKey != null && !sourceKey.isBlank()) {
+            return buildKey(KIND_SITE, sourceKey, vodId);
+        }
+        return null;
+    }
+
+    private List<String> sourceKinds(String header) {
+        if (header == null || header.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(header.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    /** 记录的有效时钟:新协议写 updatedAt,历史遗留行只有 createTime。 */
+    private long timeOf(History h) {
+        return h.getUpdatedAt() != null ? h.getUpdatedAt() : h.getCreateTime();
+    }
+
+    private History newestHistory(List<History> rows) {
+        return rows.stream().max(Comparator.comparingLong(this::timeOf)).orElse(null);
+    }
+
+    private PlaybackIdentity identityOf(History history) {
+        return new PlaybackIdentity(history.getSourceKind(), history.getSourceKey(), history.getVodId());
+    }
+
+    private void deleteDuplicateHistories(List<History> rows, History keep) {
+        if (rows.size() > 1) {
+            historyRepository.deleteAll(rows.stream().filter(row -> row != keep).toList());
+        }
+    }
+
+    private PlaybackTombstone newestTombstone(List<PlaybackTombstone> rows) {
+        return rows.stream().max(Comparator.comparingLong(PlaybackTombstone::getDeletedAt)).orElse(null);
+    }
+
+    private record PlaybackIdentity(String sourceKind, String sourceKey, String vodId) {
+    }
+
+    /**
+     * 展示类字段按列宽截断:它们只影响显示,截断远好过整条上报以 22001(Value too long)失败丢记录。
+     * 身份字段(source_key/vod_id)绝不走这里 —— 截断会把不同条目并成同一条,vod_id 已放宽为 TEXT。
+     */
+    private String clamp(String value, int max) {
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max);
+    }
+
+    private long changeSeqOf(History h) {
+        return h.getChangeSeq() != null ? h.getChangeSeq() : timeOf(h);
+    }
+
+    private long changeSeqOf(PlaybackTombstone tombstone) {
+        return tombstone.getChangeSeq() != null ? tombstone.getChangeSeq() : tombstone.getDeletedAt();
+    }
+
+    private long nextChangeSeq() {
+        PlaybackChangeSequence sequence = changeSequenceRepository.findByIdForUpdate(1)
+                .orElseThrow(() -> new IllegalStateException("playback change sequence is not initialized"));
+        long next = sequence.getNextVal() + 1;
+        sequence.setNextVal(next);
+        return next;
+    }
+
+    private void markIdempotentAfterCommit(String cacheKey) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            idempotency.put(cacheKey, Boolean.TRUE);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                idempotency.put(cacheKey, Boolean.TRUE);
+            }
+        });
+    }
+
+    private PlaybackSyncInput toInput(History h) {
+        PlaybackSyncInput in = new PlaybackSyncInput();
+        in.setSourceKind(h.getSourceKind() != null ? h.getSourceKind() : KIND_SITE);
+        in.setSourceKey(h.getSourceKey());
+        in.setSourceName(h.getSourceName());
+        in.setVodId(h.getVodId());
+        in.setVodName(h.getVodName());
+        in.setVodPic(h.getVodPic());
+        in.setVodFlag(h.getVodFlag());
+        in.setEpisodeName(h.getVodRemarks());
+        in.setEpisode(h.getEpisode());
+        in.setEpisodeUrl(h.getEpisodeUrl());
+        in.setPositionMs(h.getPosition());
+        in.setDurationMs(h.getDuration());
+        in.setSpeed(h.getSpeed());
+        in.setCompleted(h.getDuration() > 0 && h.getPosition() >= h.getDuration());
+        in.setUpdatedAt(timeOf(h));
+        in.setClientKey(h.getClientKey());
+        return in;
+    }
+
+    private PlaybackDeleteInput toDelete(PlaybackTombstone t) {
+        PlaybackDeleteInput d = new PlaybackDeleteInput();
+        d.setScope(t.getScope());
+        d.setSourceKind(t.getSourceKind());
+        d.setSourceKey(t.getSourceKey());
+        d.setVodId(t.getVodId());
+        d.setHistoryKey(t.getHistoryKey());
+        d.setDeletedAt(t.getDeletedAt());
+        return d;
+    }
+
+    private PlaybackTokenDto toDto(PlaybackToken t, boolean mask) {
+        PlaybackTokenDto dto = new PlaybackTokenDto();
+        dto.setId(t.getId());
+        dto.setName(t.getName());
+        dto.setToken(mask ? maskToken(t.getToken()) : t.getToken());
+        dto.setCreatedTime(t.getCreatedTime());
+        dto.setLastUsedAt(t.getLastUsedAt());
+        return dto;
+    }
+
+    private String maskToken(String token) {
+        if (token == null || token.length() <= 8) {
+            return "****";
+        }
+        return token.substring(0, 4) + "..." + token.substring(token.length() - 4);
+    }
+}
