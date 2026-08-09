@@ -1441,6 +1441,10 @@ public class SubscriptionService {
 
     /** 用户名订阅归属该用户；普通共享订阅归属管理员。 */
     private String playbackTokenForSubscription(String subscriptionToken) {
+        if (!appProperties.isPlaybackSyncEnabled()) {
+            log.debug("playback sync subscription disabled");
+            return "";
+        }
         var user = StringUtils.isBlank(subscriptionToken) ? null : userService.findByUsername(subscriptionToken);
         if (user == null) {
             user = userService.list().stream()

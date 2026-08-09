@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.auth.TokenService;
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackDeleteInput;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncInput;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncPage;
@@ -13,6 +14,7 @@ import cn.har01d.alist_tvbox.entity.PlaybackToken;
 import cn.har01d.alist_tvbox.entity.PlaybackTokenRepository;
 import cn.har01d.alist_tvbox.entity.PlaybackTombstone;
 import cn.har01d.alist_tvbox.entity.PlaybackTombstoneRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -65,6 +67,7 @@ public class PlaybackSyncService {
     private final PlaybackTombstoneRepository tombstoneRepository;
     private final PlaybackChangeSequenceRepository changeSequenceRepository;
     private final TokenService tokenService;
+    private final AppProperties appProperties;
 
     private final Cache<String, Boolean> idempotency = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofHours(24))
@@ -94,12 +97,14 @@ public class PlaybackSyncService {
 
     @Transactional
     public void apply(int uid, Map<String, Object> record, String eventId, String dedupeKey) {
+        ensureEnabled();
         applyRecord(uid, record, eventId, dedupeKey);
         trimHistory(uid);
     }
 
     @Transactional
     public void applyAll(int uid, List<Map<String, Object>> records) {
+        ensureEnabled();
         if (records != null) {
             for (Map<String, Object> record : records) {
                 applyRecord(uid, record, null, null);
@@ -404,6 +409,7 @@ public class PlaybackSyncService {
     }
 
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind, boolean latest) {
+        ensureEnabled();
         int cap = limit > 0 && limit <= MAX_LIMIT ? limit : DEFAULT_LIMIT;
         List<String> sourceKinds = sourceKinds(sourceKind);
         Sort sort = Sort.by("changeSeq").ascending();
@@ -443,6 +449,12 @@ public class PlaybackSyncService {
 
         page.setNextSince(String.valueOf(highWater));
         return page;
+    }
+
+    private void ensureEnabled() {
+        if (!appProperties.isPlaybackSyncEnabled()) {
+            throw new BadRequestException("播放记录同步已关闭");
+        }
     }
 
     /** 首次同步只下发按实际播放时间排序的最新记录，并把游标推进到当前变更流水位。 */

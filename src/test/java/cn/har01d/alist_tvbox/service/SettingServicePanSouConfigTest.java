@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -103,5 +104,16 @@ class SettingServicePanSouConfigTest {
         assertEquals(3000, appProperties.getPanCheckTimeoutMs());
         service.update(new Setting("pan_check_timeout_ms", ""));
         assertNull(appProperties.getPanCheckTimeoutMs());
+    }
+
+    @Test
+    void playbackSyncSettingUpdatesRuntimeSwitch() {
+        when(settingRepository.save(any(Setting.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.update(new Setting("playback_sync_enabled", "false"));
+        assertFalse(appProperties.isPlaybackSyncEnabled());
+
+        service.update(new Setting("playback_sync_enabled", "true"));
+        assertTrue(appProperties.isPlaybackSyncEnabled());
     }
 }

@@ -22,6 +22,7 @@ interface Channel {
 }
 
 const cover = ref('')
+const playbackSyncEnabled = ref(true)
 const tgChannels = ref('')
 const tgWebChannels = ref('')
 const tgSearch = ref('')
@@ -275,6 +276,12 @@ const updateCover = () => {
   })
 }
 
+const updatePlaybackSync = () => {
+  axios.post('/api/settings', {name: 'playback_sync_enabled', value: playbackSyncEnabled.value + ''}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateDrivers = () => {
   const order = tgDriverOrder.value.map(e => e.id).join(',')
   axios.post('/api/settings', {name: 'tgDriverOrder', value: order}).then()
@@ -491,6 +498,7 @@ onMounted(() => {
       tgDrivers.value = data.tg_drivers.split(',')
     }
     cover.value = data.video_cover
+    playbackSyncEnabled.value = data.playback_sync_enabled !== 'false'
     tgTimeout.value = +data.tg_timeout
   })
 })
@@ -504,6 +512,10 @@ onUnmounted(() => {
   <el-tabs v-model="activeName" class="demo-tabs">
     <el-tab-pane label="基本配置" name="basic">
       <el-form label-width="140">
+        <el-form-item label="播放记录同步">
+          <el-switch v-model="playbackSyncEnabled" @change="updatePlaybackSync"/>
+          <span class="hint">在影视、默影视和 atv-player 之间同步最近的播放记录</span>
+        </el-form-item>
         <el-form-item label="搜索超时时间">
           <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒
         </el-form-item>

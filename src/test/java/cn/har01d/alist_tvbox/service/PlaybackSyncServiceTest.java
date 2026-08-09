@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.auth.TokenService;
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackDeleteInput;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncInput;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncPage;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -59,6 +61,7 @@ class PlaybackSyncServiceTest {
     private TokenService tokenService;
 
     private PlaybackSyncService service;
+    private AppProperties appProperties;
 
     @BeforeEach
     void setUp() {
@@ -66,8 +69,22 @@ class PlaybackSyncServiceTest {
         sequence.setId(1);
         org.mockito.Mockito.lenient().when(changeSequenceRepository.findByIdForUpdate(1))
                 .thenReturn(java.util.Optional.of(sequence));
+        appProperties = new AppProperties();
         service = new PlaybackSyncService(
-                historyRepository, tokenRepository, tombstoneRepository, changeSequenceRepository, tokenService);
+                historyRepository, tokenRepository, tombstoneRepository, changeSequenceRepository, tokenService,
+                appProperties);
+    }
+
+    @Test
+    void disabledSyncRejectsPushAndPullWithoutChangingData() {
+        appProperties.setPlaybackSyncEnabled(false);
+
+        assertThatThrownBy(() -> service.apply(UID, Map.of("vodId", "v1"), null, null))
+                .hasMessage("播放记录同步已关闭");
+        assertThatThrownBy(() -> service.pull(UID, 0, 100, null))
+                .hasMessage("播放记录同步已关闭");
+
+        verify(historyRepository, never()).save(any());
     }
 
     // ── 删除:LWW ───────────────────────────────────────────────────────────
