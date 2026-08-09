@@ -144,6 +144,27 @@ class PlaybackSyncServiceTest {
     }
 
     @Test
+    void managementDeleteCreatesItemTombstoneForOtherClients() {
+        History row = history("plugin-id", "vod-1", 500);
+        row.setSourceKind("spider_plugin");
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "spider_plugin", "plugin-id", "vod-1")).thenReturn(List.of(row));
+
+        PlaybackDeleteInput input = new PlaybackDeleteInput();
+        input.setSourceKind("spider_plugin");
+        input.setSourceKey("plugin-id");
+        input.setVodId("vod-1");
+        service.deleteRecords(UID, List.of(input));
+
+        PlaybackTombstone tombstone = savedTombstone();
+        assertThat(tombstone.getScope()).isEqualTo("item");
+        assertThat(tombstone.getSourceKind()).isEqualTo("spider_plugin");
+        assertThat(tombstone.getSourceKey()).isEqualTo("plugin-id");
+        assertThat(tombstone.getVodId()).isEqualTo("vod-1");
+        assertThat(deletedRows()).containsExactly(row);
+    }
+
+    @Test
     void staleUpsertDoesNotResurrectAfterSiteDelete() {
         PlaybackTombstone site = new PlaybackTombstone();
         site.setScope("site");
@@ -155,6 +176,30 @@ class PlaybackSyncServiceTest {
                 "positionMs", 10, "updatedAt", 500), null, null);
 
         verify(historyRepository, never()).save(any());
+    }
+
+    @Test
+    void atvSourceAliasUsesSameIdentityAsTvBoxSite() {
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "site", "csp_TgDouBan", "v1")).thenReturn(List.of());
+
+        service.apply(UID, Map.of("sourceKind", "telegram", "vodId", "v1", "updatedAt", 500), null, null);
+
+        History saved = savedHistory();
+        assertThat(saved.getSourceKind()).isEqualTo("site");
+        assertThat(saved.getSourceKey()).isEqualTo("csp_TgDouBan");
+        assertThat(saved.getKey()).isEqualTo("csp_TgDouBan@@@v1@@@0");
+    }
+
+    @Test
+    void browseAliasKeepsConcreteTvBoxSiteKey() {
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "site", "csp_TgWeb", "v1")).thenReturn(List.of());
+
+        service.apply(UID, Map.of("sourceKind", "browse", "sourceKey", "csp_TgWeb",
+                "vodId", "v1", "updatedAt", 500), null, null);
+
+        assertThat(savedHistory().getSourceKey()).isEqualTo("csp_TgWeb");
     }
 
     // ── 拉取:游标 ──────────────────────────────────────────────────────────

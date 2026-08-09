@@ -59,7 +59,8 @@ public class WebSecurityConfiguration {
                                 "/api/accounts/logout",
                                 "/api/accounts/principal"
                         ).authenticated()
-                        .requestMatchers("/api/history/**", "/api/playback/tokens/**").hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        .requestMatchers("/api/history/**", "/api/playback/tokens/**", "/api/playback/records", "/api/playback/records/**")
+                        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/users/**", "/api/tenants/**", "/api/files/**", "/api/alist/alias/**")
                         .hasAuthority(Role.ADMIN.name())
                         .requestMatchers("/api/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())

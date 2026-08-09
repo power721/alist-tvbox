@@ -61,6 +61,7 @@ public class PlaybackSyncService {
     private static final String SCOPE_ITEM = "item";
     private static final String KIND_SITE = "site";
     private static final String KIND_SPIDER_PLUGIN = "spider_plugin";
+    private static final Set<String> BROWSE_SITE_KEYS = Set.of("csp_TgSearch", "csp_TgWeb", "csp_AList");
 
     private final HistoryRepository historyRepository;
     private final PlaybackTokenRepository tokenRepository;
@@ -147,6 +148,7 @@ public class PlaybackSyncService {
             log.debug("skip upsert: missing vodId (uid={})", uid);
             return;
         }
+        normalizeSource(in);
         String sourceKind = in.getSourceKind() != null ? in.getSourceKind() : KIND_SITE;
         String dedupe = dedupeKey != null && !dedupeKey.isBlank() ? dedupeKey
                 : (eventId != null && !eventId.isBlank() ? eventId : null);
@@ -253,6 +255,7 @@ public class PlaybackSyncService {
      */
     @Transactional
     public void delete(int uid, PlaybackDeleteInput in) {
+        normalizeSource(in);
         String sourceKind = in.getSourceKind() != null ? in.getSourceKind() : KIND_SITE;
         long deletedAt = in.getDeletedAt() > 0 ? in.getDeletedAt() : System.currentTimeMillis();
         String scope = in.getScope() == null ? SCOPE_ITEM : in.getScope().trim().toLowerCase();
@@ -408,6 +411,32 @@ public class PlaybackSyncService {
                 .map(this::toInput);
     }
 
+    /** 管理页面按身份删除同步记录并生成墓碑，确保离线客户端不会重新上传。 */
+    @Transactional
+    public void deleteRecords(int uid, List<PlaybackDeleteInput> records) {
+        if (records == null) {
+            return;
+        }
+        long deletedAt = System.currentTimeMillis();
+        for (PlaybackDeleteInput record : records) {
+            if (record == null) {
+                continue;
+            }
+            record.setScope(SCOPE_ITEM);
+            record.setDeletedAt(deletedAt);
+            delete(uid, record);
+        }
+    }
+
+    /** 管理页面清空该用户的全部同步记录并生成全局墓碑。 */
+    @Transactional
+    public void deleteAllRecords(int uid) {
+        PlaybackDeleteInput input = new PlaybackDeleteInput();
+        input.setScope(SCOPE_ALL);
+        input.setDeletedAt(System.currentTimeMillis());
+        delete(uid, input);
+    }
+
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind, boolean latest) {
         ensureEnabled();
         int cap = limit > 0 && limit <= MAX_LIMIT ? limit : DEFAULT_LIMIT;
@@ -543,6 +572,38 @@ public class PlaybackSyncService {
             return true;
         }
         return record.containsKey("deletedAt") || record.containsKey("deleted_at");
+    }
+
+    /** atv-player 来源名与 TvBox 站点 key 归并到同一个规范身份。 */
+    private void normalizeSource(PlaybackSyncInput input) {
+        String siteKey = tvBoxSiteKey(input.getSourceKind(), input.getSourceKey());
+        if (siteKey != null) {
+            input.setSourceKind(KIND_SITE);
+            input.setSourceKey(siteKey);
+        }
+    }
+
+    private void normalizeSource(PlaybackDeleteInput input) {
+        String siteKey = tvBoxSiteKey(input.getSourceKind(), input.getSourceKey());
+        if (siteKey != null) {
+            input.setSourceKind(KIND_SITE);
+            input.setSourceKey(siteKey);
+        }
+    }
+
+    private String tvBoxSiteKey(String sourceKind, String sourceKey) {
+        if (sourceKind == null || KIND_SITE.equals(sourceKind) || KIND_SPIDER_PLUGIN.equals(sourceKind)) {
+            return null;
+        }
+        return switch (sourceKind) {
+            case "telegram" -> "csp_TgDouBan";
+            case "telegram_channel" -> "csp_TgChannel";
+            case "browse" -> BROWSE_SITE_KEYS.contains(sourceKey) ? sourceKey : "csp_AList";
+            case "bilibili" -> "csp_BiliBili";
+            case "feiniu" -> "csp_FeiNiu";
+            case "jellyfin" -> "csp_Jellyfin";
+            default -> null;
+        };
     }
 
     private String buildKey(String sourceKind, String sourceKey, String vodId) {

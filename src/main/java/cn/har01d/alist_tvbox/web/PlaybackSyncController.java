@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncPage;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncInput;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackDeleteInput;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackTokenDto;
 import cn.har01d.alist_tvbox.service.PlaybackSyncService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -69,6 +70,18 @@ public class PlaybackSyncController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int pageSize) {
         return playbackSyncService.list(currentUid(), page, pageSize);
+    }
+
+    /** 管理页面批量删除同步记录；删除会生成墓碑并下发到其他客户端。 */
+    @PostMapping("/api/playback/records/-/delete")
+    public void deleteRecords(@RequestBody List<PlaybackDeleteInput> records) {
+        playbackSyncService.deleteRecords(currentUid(), records);
+    }
+
+    /** 管理页面清空当前用户的全部同步记录。 */
+    @DeleteMapping("/api/playback/records")
+    public void deleteAllRecords() {
+        playbackSyncService.deleteAllRecords(currentUid());
     }
 
     // ── 令牌管理(session 鉴权,ADMIN|USER) ───────────────────────────────
