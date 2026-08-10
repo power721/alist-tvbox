@@ -2112,21 +2112,24 @@ const saveHistory = () => {
     createTime: updatedAt
   }
   axios.post('/api/history?log=false', history).then()
-  axios.post('/api/playback/events', [{
-    sourceKind: 'site',
-    sourceKey: 'csp_AList',
-    sourceName: 'AList',
-    vodId: movie.vod_id,
-    vodName: movie.vod_name,
-    vodPic: movie.vod_pic,
-    episodeName: playItem.value.title,
-    episode: currentVideoIndex.value,
-    episodeUrl: playItem.value.url,
-    positionMs: position,
-    durationMs: duration,
-    speed: currentSpeed.value,
-    updatedAt,
-  }]).catch(() => {})
+  // 同步关闭时不上报:避免每个播放 tick 都打一次 /api/playback/events
+  if (playbackSyncEnabled.value) {
+    axios.post('/api/playback/events', [{
+      sourceKind: 'site',
+      sourceKey: 'csp_AList',
+      sourceName: 'AList',
+      vodId: movie.vod_id,
+      vodName: movie.vod_name,
+      vodPic: movie.vod_pic,
+      episodeName: playItem.value.title,
+      episode: currentVideoIndex.value,
+      episodeUrl: playItem.value.url,
+      positionMs: position,
+      durationMs: duration,
+      speed: currentSpeed.value,
+      updatedAt,
+    }]).catch(() => {})
+  }
 }
 
 const getHistory = (id: string) => {
@@ -2424,12 +2427,17 @@ const getRouteVodId = () => {
   return ''
 }
 
+const playbackSyncEnabled = ref(false)
+
 onMounted(async () => {
   if (!store.token) {
     store.token = await axios.get("/api/token").then(({data}) => {
       return data.token ? data.token.split(",")[0] : "-"
     });
   }
+  axios.get('/api/settings').then(({data}) => {
+    playbackSyncEnabled.value = data.playback_sync_enabled === 'true'
+  })
 
   const link = route.query.link
   if (link) {

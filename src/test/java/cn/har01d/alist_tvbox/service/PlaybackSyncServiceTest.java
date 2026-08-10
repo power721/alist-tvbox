@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -82,13 +81,12 @@ class PlaybackSyncServiceTest {
     }
 
     @Test
-    void disabledSyncRejectsPushAndPullWithoutChangingData() {
+    void disabledSyncIsSilentNoOpWithoutChangingData() {
         appProperties.setPlaybackSyncEnabled(false);
 
-        assertThatThrownBy(() -> service.apply(id(UID),Map.of("vodId", "v1"), null, null))
-                .hasMessage("播放记录同步已关闭");
-        assertThatThrownBy(() -> service.pull(UID, 0, 100, null))
-                .hasMessage("播放记录同步已关闭");
+        // 同步关闭时静默接收(PUSH 不报错、PULL 返回空页),客户端继续轮询不刷错误日志
+        service.apply(id(UID), Map.of("vodId", "v1"), null, null);
+        assertThat(service.pull(UID, 0, 100, null).getItems()).isEmpty();
 
         verify(historyRepository, never()).save(any());
     }

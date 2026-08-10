@@ -14,7 +14,6 @@ import cn.har01d.alist_tvbox.entity.PlaybackToken;
 import cn.har01d.alist_tvbox.entity.PlaybackTokenRepository;
 import cn.har01d.alist_tvbox.entity.PlaybackTombstone;
 import cn.har01d.alist_tvbox.entity.PlaybackTombstoneRepository;
-import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -110,14 +109,18 @@ public class PlaybackSyncService {
 
     @Transactional
     public void apply(TokenIdentity id, Map<String, Object> record, String eventId, String dedupeKey) {
-        ensureEnabled();
+        if (!appProperties.isPlaybackSyncEnabled()) {
+            return; // 同步关闭时静默接收:客户端仍按配置轮询,不应报错刷日志
+        }
         applyRecord(id, record, eventId, dedupeKey);
         trimHistory(id.uid(), id.syncScope());
     }
 
     @Transactional
     public void applyAll(TokenIdentity id, List<Map<String, Object>> records) {
-        ensureEnabled();
+        if (!appProperties.isPlaybackSyncEnabled()) {
+            return;
+        }
         if (records != null) {
             for (Map<String, Object> record : records) {
                 applyRecord(id, record, null, null);
@@ -490,7 +493,10 @@ public class PlaybackSyncService {
     @Transactional(readOnly = true)
     public PlaybackSyncPage pull(int uid, String syncScope, long since, int limit, String sourceKind,
                                  String siteKeyHeader, boolean latest) {
-        ensureEnabled();
+        if (!appProperties.isPlaybackSyncEnabled()) {
+            // 同步关闭时返回空页;游标推进到当前水位,避免 webhtv 客户端因 nextSince 不前进而死循环重试
+            return emptySyncPage(currentHighWater(since));
+        }
         int cap = limit > 0 && limit <= MAX_LIMIT ? limit : DEFAULT_LIMIT;
         List<String> sourceKinds = sourceKinds(sourceKind);
         Set<String> siteKeys = new HashSet<>(csvValues(siteKeyHeader));
@@ -544,10 +550,17 @@ public class PlaybackSyncService {
         return page;
     }
 
-    private void ensureEnabled() {
-        if (!appProperties.isPlaybackSyncEnabled()) {
-            throw new BadRequestException("播放记录同步已关闭");
-        }
+    private PlaybackSyncPage emptySyncPage(long highWater) {
+        PlaybackSyncPage page = new PlaybackSyncPage();
+        page.setNextSince(String.valueOf(highWater));
+        return page;
+    }
+
+    /** 当前变更流水位(已分配的最大 change_seq);用作空响应的游标,让客户端游标前进。 */
+    private long currentHighWater(long fallback) {
+        return changeSequenceRepository.findById(1)
+                .map(PlaybackChangeSequence::getNextVal)
+                .orElse(fallback);
     }
 
     /** 首次同步只下发按实际播放时间排序的最新记录，并把游标推进到当前变更流水位。 */

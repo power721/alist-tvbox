@@ -30,7 +30,15 @@ public class LogFilter extends OncePerRequestFilter {
 
     private boolean skip(HttpServletRequest request) {
         String query = request.getQueryString();
-        return query != null && query.contains("log=false");
+        if (query != null && query.contains("log=false")) {
+            return true;
+        }
+        // 客户端高频轮询/上报端点:同步开启时 spider 60s、atv-player 5min 一次,
+        // 网页播放时每个进度 tick 一次;默认不记,避免 INFO 刷屏
+        String uri = request.getRequestURI();
+        return uri.equals("/api/playback/events")
+                || uri.equals("/api/playback/event")
+                || uri.equals("/api/playback/changes");
     }
 
     private String getRemoteAddr(HttpServletRequest req) {

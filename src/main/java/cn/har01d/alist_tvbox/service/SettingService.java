@@ -377,7 +377,8 @@ public class SettingService {
         var authorities = SecurityContextHolder.getContext().getAuthentication().getAuthorities();
         if (!authorities.isEmpty() && authorities.iterator().next().getAuthority().equals(Role.USER.name())) {
             Map<String, String> settings = new HashMap<>();
-            Set<String> keys = Set.of("alist_version", "app_version", "enabled_token", "search_excluded_paths");
+            Set<String> keys = Set.of("alist_version", "app_version", "enabled_token", "search_excluded_paths",
+                    "playback_sync_enabled");
             for (String key : keys) {
                 settings.put(key, map.get(key));
             }
