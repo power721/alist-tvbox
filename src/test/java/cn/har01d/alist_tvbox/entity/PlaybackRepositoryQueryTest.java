@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.parser.Part;
 import org.springframework.data.repository.query.parser.PartTree;
 
@@ -33,6 +34,10 @@ class PlaybackRepositoryQueryTest {
 
     private void assertDerivedQueries(Class<?> repository, Class<?> domain) {
         for (Method method : repository.getDeclaredMethods()) {
+            // @Query 方法是手写 JPQL,不经过派生查询解析,跳过
+            if (method.isAnnotationPresent(Query.class)) {
+                continue;
+            }
             // PartTree 解析失败(属性名不存在等)会抛异常,等价于启动期报错
             PartTree tree = new PartTree(method.getName(), domain);
             int required = 0;

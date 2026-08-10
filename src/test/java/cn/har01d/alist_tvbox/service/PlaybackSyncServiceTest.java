@@ -70,16 +70,22 @@ class PlaybackSyncServiceTest {
         org.mockito.Mockito.lenient().when(changeSequenceRepository.findByIdForUpdate(1))
                 .thenReturn(java.util.Optional.of(sequence));
         appProperties = new AppProperties();
+        appProperties.setPlaybackSyncEnabled(true);
         service = new PlaybackSyncService(
                 historyRepository, tokenRepository, tombstoneRepository, changeSequenceRepository, tokenService,
                 appProperties);
+    }
+
+    /** uid 级身份(syncScope=null):沿用旧行为,所有订阅互通。 */
+    private PlaybackSyncService.TokenIdentity id(int uid) {
+        return new PlaybackSyncService.TokenIdentity(uid, null);
     }
 
     @Test
     void disabledSyncRejectsPushAndPullWithoutChangingData() {
         appProperties.setPlaybackSyncEnabled(false);
 
-        assertThatThrownBy(() -> service.apply(UID, Map.of("vodId", "v1"), null, null))
+        assertThatThrownBy(() -> service.apply(id(UID),Map.of("vodId", "v1"), null, null))
                 .hasMessage("播放记录同步已关闭");
         assertThatThrownBy(() -> service.pull(UID, 0, 100, null))
                 .hasMessage("播放记录同步已关闭");
@@ -94,7 +100,7 @@ class PlaybackSyncServiceTest {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
                 .thenReturn(List.of(history("abc", "v1", 200)));
 
-        service.delete(UID, deleteInput(Map.of("scope", "item", "sourceKey", "abc", "vodId", "v1", "deletedAt", 100)));
+        service.delete(UID, null,deleteInput(Map.of("scope", "item", "sourceKey", "abc", "vodId", "v1", "deletedAt", 100)));
 
         // 迟到的删除(100)不得抹掉更新的本地记录(200):墓碑挡不住已发生的删除
         verify(historyRepository, never()).deleteAll(any());
@@ -106,7 +112,7 @@ class PlaybackSyncServiceTest {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
                 .thenReturn(List.of(history("abc", "v1", 100)));
 
-        service.delete(UID, deleteInput(Map.of("scope", "item", "sourceKey", "abc", "vodId", "v1", "deletedAt", 200)));
+        service.delete(UID, null,deleteInput(Map.of("scope", "item", "sourceKey", "abc", "vodId", "v1", "deletedAt", 200)));
 
         assertThat(deletedRows()).extracting(History::getVodId).containsExactly("v1");
     }
@@ -119,7 +125,7 @@ class PlaybackSyncServiceTest {
                 .thenReturn(List.of(history("abc", "v1", 500), history("abc", "v2", 1500)));
 
         // site 作用域的删除通常不带 vodId,不能因缺少条目身份就被丢弃
-        service.apply(UID, Map.of("event", "playback.deleted", "scope", "site", "sourceKey", "abc",
+        service.apply(id(UID),Map.of("event", "playback.deleted", "scope", "site", "sourceKey", "abc",
                 "deletedAt", 1000), null, null);
 
         PlaybackTombstone tomb = savedTombstone();
@@ -135,7 +141,7 @@ class PlaybackSyncServiceTest {
         when(historyRepository.findAllByUidAndSourceKindIsNotNull(eq(UID), any()))
                 .thenReturn(List.of(history("abc", "v1", 500), history("pan", "v2", 1500)));
 
-        service.apply(UID, Map.of("event", "playback.deleted", "scope", "all", "deletedAt", 1000), null, null);
+        service.apply(id(UID),Map.of("event", "playback.deleted", "scope", "all", "deletedAt", 1000), null, null);
 
         PlaybackTombstone tomb = savedTombstone();
         assertThat(tomb.getScope()).isEqualTo("all");
@@ -172,7 +178,7 @@ class PlaybackSyncServiceTest {
         when(tombstoneRepository.findFirstByUidAndScopeAndSourceKindAndSourceKeyOrderByDeletedAtDesc(
                 UID, "site", "pan", "abc")).thenReturn(site);
 
-        service.apply(UID, Map.of("sourceKind", "pan", "sourceKey", "abc", "vodId", "v1",
+        service.apply(id(UID),Map.of("sourceKind", "pan", "sourceKey", "abc", "vodId", "v1",
                 "positionMs", 10, "updatedAt", 500), null, null);
 
         verify(historyRepository, never()).save(any());
@@ -183,7 +189,7 @@ class PlaybackSyncServiceTest {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
                 UID, "site", "csp_TgDouBan", "v1")).thenReturn(List.of());
 
-        service.apply(UID, Map.of("sourceKind", "telegram", "vodId", "v1", "updatedAt", 500), null, null);
+        service.apply(id(UID),Map.of("sourceKind", "telegram", "vodId", "v1", "updatedAt", 500), null, null);
 
         History saved = savedHistory();
         assertThat(saved.getSourceKind()).isEqualTo("site");
@@ -196,7 +202,7 @@ class PlaybackSyncServiceTest {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
                 UID, "site", "csp_TgWeb", "v1")).thenReturn(List.of());
 
-        service.apply(UID, Map.of("sourceKind", "telegram", "sourceKey", "csp_TgWeb",
+        service.apply(id(UID),Map.of("sourceKind", "telegram", "sourceKey", "csp_TgWeb",
                 "vodId", "v1", "updatedAt", 500), null, null);
 
         assertThat(savedHistory().getSourceKey()).isEqualTo("csp_TgWeb");
@@ -210,7 +216,7 @@ class PlaybackSyncServiceTest {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
                 UID, "spider_plugin", stableId, "星芽@51")).thenReturn(List.of(existing));
 
-        service.apply(UID, Map.of("sourceKind", "spider_plugin", "sourceKey", stableId,
+        service.apply(id(UID),Map.of("sourceKind", "spider_plugin", "sourceKey", stableId,
                 "sourceName", "短剧优选", "vodId", "星芽@51", "updatedAt", 500), null, null);
 
         History saved = savedHistory();
@@ -224,7 +230,7 @@ class PlaybackSyncServiceTest {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
                 UID, "site", "csp_XiaoYa", "v1")).thenReturn(List.of());
 
-        service.apply(UID, Map.of("sourceKind", "browse", "sourceKey", "csp_XiaoYa",
+        service.apply(id(UID),Map.of("sourceKind", "browse", "sourceKey", "csp_XiaoYa",
                 "vodId", "v1", "updatedAt", 500), null, null);
 
         assertThat(savedHistory().getSourceKey()).isEqualTo("csp_XiaoYa");
@@ -288,7 +294,7 @@ class PlaybackSyncServiceTest {
         }
         when(historyRepository.findAllByUidAndSourceKindIsNotNull(eq(UID), any())).thenReturn(rows);
 
-        service.applyAll(UID, List.of());
+        service.applyAll(id(UID),List.of());
 
         verify(historyRepository).deleteAll(argThat(removed -> {
             var iterator = removed.iterator();
@@ -309,7 +315,7 @@ class PlaybackSyncServiceTest {
         rows.add(duplicate);
         when(historyRepository.findAllByUidAndSourceKindIsNotNull(eq(UID), any())).thenReturn(rows);
 
-        service.applyAll(UID, List.of());
+        service.applyAll(id(UID),List.of());
 
         assertThat(deletedRows()).containsExactly(olderDuplicate);
     }
@@ -366,7 +372,7 @@ class PlaybackSyncServiceTest {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
                 UID, "site", "abc", "v1")).thenReturn(List.of(older, newer));
 
-        service.apply(UID, Map.of("sourceKey", "abc", "vodId", "v1", "updatedAt", 300), null, null);
+        service.apply(id(UID),Map.of("sourceKey", "abc", "vodId", "v1", "updatedAt", 300), null, null);
 
         assertThat(savedHistory().getId()).isEqualTo(11);
         assertThat(deletedRows()).containsExactly(older);
@@ -494,7 +500,7 @@ class PlaybackSyncServiceTest {
         when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
                 UID, "spider_plugin", stableId, "v1")).thenReturn(List.of(existing));
 
-        service.delete(UID, deleteInput(Map.of(
+        service.delete(UID, null,deleteInput(Map.of(
                 "scope", "item", "sourceKind", "spider_plugin", "sourceKey", stableId,
                 "vodId", "v1", "deletedAt", 200)));
 
@@ -509,7 +515,7 @@ class PlaybackSyncServiceTest {
         String vodId = "奇异@" + "%7B%22title%22%3A%22".repeat(30);
         String longText = "标题".repeat(300);
 
-        service.apply(UID, Map.of("sourceKind", "pan", "sourceKey", "abc", "vodId", vodId,
+        service.apply(id(UID),Map.of("sourceKind", "pan", "sourceKey", "abc", "vodId", vodId,
                 "vodName", longText, "vodFlag", longText, "episodeName", longText,
                 "clientKey", longText, "positionMs", 10, "updatedAt", 500), null, null);
 
@@ -524,7 +530,7 @@ class PlaybackSyncServiceTest {
 
     @Test
     void sourceNameAndZeroEpisodeRoundTrip() {
-        service.apply(UID, Map.of("sourceKind", "emby", "sourceKey", "server", "sourceName", "客厅 Emby",
+        service.apply(id(UID),Map.of("sourceKind", "emby", "sourceKey", "server", "sourceName", "客厅 Emby",
                 "vodId", "v1", "episode", 0, "updatedAt", 500), null, null);
 
         History saved = savedHistory();
@@ -541,7 +547,7 @@ class PlaybackSyncServiceTest {
 
     @Test
     void playbackSelectionContextRoundTrips() {
-        service.apply(UID, Map.ofEntries(
+        service.apply(id(UID),Map.ofEntries(
                 Map.entry("sourceKind", "spider_plugin"),
                 Map.entry("sourceKey", "02544b320a6d45de997bc0bd3975d0c060b8"),
                 Map.entry("vodId", "173"),
@@ -578,7 +584,7 @@ class PlaybackSyncServiceTest {
 
     @Test
     void upsertLocksSequenceBeforeReadingConflictState() {
-        service.apply(UID, Map.of("sourceKind", "pan", "sourceKey", "abc", "vodId", "v1",
+        service.apply(id(UID),Map.of("sourceKind", "pan", "sourceKey", "abc", "vodId", "v1",
                 "updatedAt", 500), null, null);
 
         var order = inOrder(changeSequenceRepository, tombstoneRepository, historyRepository);
@@ -599,6 +605,36 @@ class PlaybackSyncServiceTest {
         when(tokenRepository.findByToken("tk-1")).thenReturn(java.util.Optional.of(token));
 
         assertThat(service.resolveUid("tk-1")).isEqualTo(7);
+    }
+
+    // ── 分区:不同订阅互不同步 ──────────────────────────────────────────────
+
+    @Test
+    void scopedPullOnlyReturnsSameScopeRecords() {
+        History haroldRow = history("csp_TgDouBan", "v1", 500);
+        haroldRow.setSyncScope("Harold");
+        when(historyRepository.findSyncByCursor(eq(UID), eq("Harold"), eq(0L), any()))
+                .thenReturn(List.of(haroldRow));
+        when(tombstoneRepository.findSyncByCursor(eq(UID), eq("Harold"), eq(0L), any()))
+                .thenReturn(List.of());
+
+        PlaybackSyncPage page = service.pull(UID, "Harold", 0L, 100, null, null, false);
+
+        // Harold 分区的拉取只见本分区记录;web 订阅的进度不会串过来
+        assertThat(page.getItems()).extracting(PlaybackSyncInput::getVodId).containsExactly("v1");
+    }
+
+    @Test
+    void scopedUpsertStampsSyncScopeAndDoesNotMergeAcrossScopes() {
+        // web 分区写同身份记录时,不得命中 Harold 分区的既有行
+        when(historyRepository.findSyncByIdentity(eq(UID), eq("web"), eq("site"), eq("abc"), eq("v1")))
+                .thenReturn(List.of());
+
+        service.apply(new PlaybackSyncService.TokenIdentity(UID, "web"),
+                Map.of("sourceKey", "abc", "vodId", "v1", "updatedAt", 400), null, null);
+
+        History saved = savedHistory();
+        assertThat(saved.getSyncScope()).isEqualTo("web");
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

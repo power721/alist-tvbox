@@ -24,6 +24,8 @@ public class PlaybackTombstone {
 
     @Column(nullable = false)
     private int uid;
+    // sync_scope:删除事件所属订阅分区(空=uid 级/管理端全局);与 scope(删除广度)是两个轴
+    private String syncScope;
     private String scope;
     private String sourceKind;
     private String sourceKey;

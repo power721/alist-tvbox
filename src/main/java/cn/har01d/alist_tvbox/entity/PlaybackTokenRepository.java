@@ -10,5 +10,9 @@ public interface PlaybackTokenRepository extends JpaRepository<PlaybackToken, In
 
     List<PlaybackToken> findByUid(int uid);
 
+    Optional<PlaybackToken> findByUidAndSyncScope(int uid, String syncScope);
+
+    List<PlaybackToken> findByUidAndSyncScopeIsNull(int uid);
+
     void deleteByIdAndUid(Integer id, int uid);
 }

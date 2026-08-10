@@ -144,10 +144,10 @@ V13 为已执行过 V10 的部署补充 `history.source_name`,保证新旧安装
 
 ### 5.1 安卓(全四款):同步 spider jar ★主路径
 
-`com.github.catvod.spider.PlaySync extends Spider`,随 spring.jar 分发为 builtin `csp_PlaySync`。
+> **实现说明(2026-08-10 更正)**:未新增 `csp_PlaySync` 源。同步由 **`Init.java` 发起**——新增 `PlaybackSyncer` 单例 + `Init.startPlaybackSync(server, extend)`,从约 13 个 spider 入口(10 个 `writeCookies` 调用者 + `PyProxy.parseConfig`/`playerContent` + `PianDan.init`)注入,绕开 spider 懒加载时序。理由:单例跨 spider reload 复用、入口更早、不占用一个 builtin 源位。
 
-- **(a) 配置**:`init(ctx, extend)` 解析 `extend` base64 JSON `{ "server":"https://<alist-tvbox>", "token":"<同步令牌>" }`(已定)。缺一不启动。
-- **(b) 调度**:`init` 末尾起 `ScheduledExecutorService`(周期 60s);`destroy()` 取消;辅以 `homeContent()`/`playerContent()` 机会触发。须保证尽早 init(未决)。
+- **(a) 配置**:`startPlaybackSync` 从站点 `extend` base64 JSON 取 `server` + `playbackToken`(缺一不启动),另取 `playbackSourceKind/Key/Name` 与订阅 `configUrl`。`synchronized` 幂等:身份(`server`+`token`+`configUrl`)未变则复用既有 syncer,变更则 `stop()` 旧 syncer 再建新。
+- **(b) 调度**:`PlaybackSyncer.start()` 起 `ScheduledExecutorService`(`scheduleWithFixedDelay` 60s,daemon 线程,`AtomicBoolean busy` 防重叠);`stop()`/`destroy` 取消。靠上述多入口保证尽早启动。
 - **(c) 读源**——框架 `SQLiteDatabase` 直读宿主 `tv.db`(抗混淆/改名):
   ```java
   File dir = Init.appContext.getDatabasePath("_").getParentFile();   // databases/
@@ -188,7 +188,7 @@ Webhook `URL=/api/playback/event` + 远端同步 `URL=/api/playback/changes`,Tok
 5. **网页端**:令牌管理 UI(如需)+ 历史页;前端门 `npm run build`。
 6. **atv-player Tier-B**:`ApiClient.push_playback_events/pull_playback_records` + `report_progress` saver 钩子(节流)+ `PlaybackHistorySyncService`。
 7. **联调(Fish/默 备选通道)**:URL+令牌 实测 PUSH/PULL。
-8. **同步 spider(主路径,jar)**:`PlaySync.java`(SQLiteDatabase 读 + 差量上报 + `/action` 回写 + 快照/游标),随 spring.jar 发布。
+8. **同步 spider(主路径,jar)**:`Init.startPlaybackSync` + `PlaybackSyncer.java`(SQLiteDatabase 读 History/Config + 差量上报 + `/action` 回写 + 快照/游标 + resume ID 往返 playlistIndex),随 spring.jar 发布。从 ~13 个 spider 入口注入而非新增 csp 源。
 9. **(可选)修隐患**:旧 `/history/{token}`、`/tv/action` 补 token→uid 消除 NPE。
 
 ---
@@ -197,7 +197,7 @@ Webhook `URL=/api/playback/event` + 远端同步 `URL=/api/playback/changes`,Tok
 
 > 已定:✅ 配置 = 站点 `extend` JSON;✅ 令牌 = 新建 `playback_token` 表(并兼容 session);✅ 安卓读源 = `SQLiteDatabase` 直读 `tv.db`;✅ 身份泛化 `(uid, source_kind, source_key, vod_id)`。
 
-1. **spider 尽早 init**:设为订阅首页站点 / builtin 预加载 / 接受打开 App 后才上报?
+1. ~~**spider 尽早 init**~~ ✅ 定(2026-08-10):不走新 csp 源;由 `Init.startPlaybackSync` 从 ~13 个 spider 入口(`writeCookies` 调用者 + `PyProxy` + `PianDan`)注入,单例复用、尽早启动。
 2. **tv.db schema 验证**:库文件名 `tv`、`History` 表/列名(`@SerializedName` 字面量)在 fongmi/fish/默/**OK影视(停更闭源混淆)** 是否一致?需真机 dump 确认;否则 OK 降级 `/media`。
 3. **Tier-A↔Tier-B 跨源合并**:同一剧在 atv-player「browse」与 FongMi「某站点」分别产生不同 `source_kind` 记录 → 分行(默认)。是否需要"按 vod_name 跨源聚合展示"?(FongMi 局域网同步正是按 vodName 聚合;可选复用其 `shouldMerge` ±10min 规则。)
 4. **删除回写**:一期仅双向 upsert 是否可接受?删除传播(墓碑→宿主/atv-player 本地删行)放二期?

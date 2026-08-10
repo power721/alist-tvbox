@@ -45,6 +45,7 @@ public class History {
     private Integer uid = 1;
 
     // 多端播放记录同步:规范化身份与冲突时钟(可空;仅新协议路径填充)
+    private String syncScope;
     private String sourceKind;
     private String sourceKey;
     private String sourceName;

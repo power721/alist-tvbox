@@ -29,6 +29,8 @@ public class PlaybackToken {
     private String token;
 
     private String name;
+    // 订阅分区:空=uid 级;非空=vod token 或 token/id(由订阅构建时按模式算定)
+    private String syncScope;
     private long createdTime;
     private long lastUsedAt;
 }

@@ -79,7 +79,11 @@ public class PlaybackSyncService {
 
     // ── 令牌解析(双源:playback_token 表 ∪ session) ──────────────────────────
 
-    public int resolveUid(String token) {
+    /** 令牌解析结果:uid + 订阅分区(空=uid 级,所有订阅互通;非空=按 vod token 分区)。 */
+    public record TokenIdentity(int uid, String syncScope) {
+    }
+
+    public TokenIdentity resolveIdentity(String token) {
         if (token == null || token.isBlank()) {
             throw new UserUnauthorizedException("缺少播放同步令牌", 40100);
         }
@@ -87,50 +91,56 @@ public class PlaybackSyncService {
         if (pt != null) {
             pt.setLastUsedAt(System.currentTimeMillis());
             tokenRepository.save(pt);
-            return pt.getUid();
+            return new TokenIdentity(pt.getUid(), pt.getSyncScope());
         }
         try {
-            return tokenService.extractToken(token).getUserId();
+            // session 令牌(网页/atv-player 未带 vod token 时):无分区归属,按 uid 级处理。
+            // 客户端带上具体 vod token 时走上面的 playback_token 路径,拿到该订阅的分区。
+            return new TokenIdentity(tokenService.extractToken(token).getUserId(), null);
         } catch (Exception e) {
             throw new UserUnauthorizedException("播放同步令牌无效", 40100, e);
         }
     }
 
+    public int resolveUid(String token) {
+        return resolveIdentity(token).uid();
+    }
+
     // ── PUSH:upsert / delete ───────────────────────────────────────────────
 
     @Transactional
-    public void apply(int uid, Map<String, Object> record, String eventId, String dedupeKey) {
+    public void apply(TokenIdentity id, Map<String, Object> record, String eventId, String dedupeKey) {
         ensureEnabled();
-        applyRecord(uid, record, eventId, dedupeKey);
-        trimHistory(uid);
+        applyRecord(id, record, eventId, dedupeKey);
+        trimHistory(id.uid(), id.syncScope());
     }
 
     @Transactional
-    public void applyAll(int uid, List<Map<String, Object>> records) {
+    public void applyAll(TokenIdentity id, List<Map<String, Object>> records) {
         ensureEnabled();
         if (records != null) {
             for (Map<String, Object> record : records) {
-                applyRecord(uid, record, null, null);
+                applyRecord(id, record, null, null);
             }
         }
-        trimHistory(uid);
+        trimHistory(id.uid(), id.syncScope());
     }
 
-    private void applyRecord(int uid, Map<String, Object> record, String eventId, String dedupeKey) {
+    private void applyRecord(TokenIdentity id, Map<String, Object> record, String eventId, String dedupeKey) {
         if (record == null || record.isEmpty()) {
             return;
         }
         if (isDelete(record)) {
-            delete(uid, PlaybackDeleteInput.fromMap(record));
+            delete(id.uid(), id.syncScope(), PlaybackDeleteInput.fromMap(record));
             return;
         }
-        upsert(uid, PlaybackSyncInput.fromMap(record), eventId, dedupeKey);
+        upsert(id.uid(), id.syncScope(), PlaybackSyncInput.fromMap(record), eventId, dedupeKey);
     }
 
-    /** 同步数据只保留每个用户按播放时间排序的最新 100 条；窗口外记录直接丢弃。 */
-    private void trimHistory(int uid) {
+    /** 同步数据每个分区按播放时间排序只保留最新 100 条；窗口外记录直接丢弃。 */
+    private void trimHistory(int uid, String syncScope) {
         List<History> rows = new ArrayList<>(
-                historyRepository.findAllByUidAndSourceKindIsNotNull(uid, Sort.unsorted()));
+                findAllSync(uid, syncScope, Sort.unsorted()));
         rows.sort(Comparator.comparingLong(this::timeOf).reversed());
         Set<PlaybackIdentity> identities = new HashSet<>();
         List<History> removed = new ArrayList<>();
@@ -141,11 +151,11 @@ public class PlaybackSyncService {
         }
         if (!removed.isEmpty()) {
             historyRepository.deleteAll(removed);
-            log.debug("trimmed playback sync history: uid={} removed={}", uid, removed.size());
+            log.debug("trimmed playback sync history: uid={} scope={} removed={}", uid, syncScope, removed.size());
         }
     }
 
-    private void upsert(int uid, PlaybackSyncInput in, String eventId, String dedupeKey) {
+    private void upsert(int uid, String syncScope, PlaybackSyncInput in, String eventId, String dedupeKey) {
         if (in.getVodId() == null || in.getVodId().isBlank()) {
             log.debug("skip upsert: missing vodId (uid={})", uid);
             return;
@@ -155,7 +165,7 @@ public class PlaybackSyncService {
         String dedupe = dedupeKey != null && !dedupeKey.isBlank() ? dedupeKey
                 : (eventId != null && !eventId.isBlank() ? eventId : null);
         if (dedupe != null) {
-            String cacheKey = uid + ":" + dedupe;
+            String cacheKey = uid + ":" + syncScope + ":" + dedupe;
             if (idempotency.getIfPresent(cacheKey) != null) {
                 return;
             }
@@ -168,14 +178,13 @@ public class PlaybackSyncService {
         // 否则两个事务都可能先读到“不存在”,随后各建一行;DELETE 与 UPSERT 也可能交错复活旧数据。
         long changeSeq = nextChangeSeq();
 
-        long deletedAt = tombstoneWatermark(uid, sourceKind, in.getSourceKey(), in.getVodId());
+        long deletedAt = tombstoneWatermark(uid, syncScope, sourceKind, in.getSourceKey(), in.getVodId());
         if (updatedAt <= deletedAt) {
             log.debug("skip resurrect (tombstone newer): uid={} vodId={}", uid, in.getVodId());
             return;
         }
 
-        List<History> matches = historyRepository
-                .findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, sourceKind, in.getSourceKey(), in.getVodId());
+        List<History> matches = findByIdentity(uid, syncScope, sourceKind, in.getSourceKey(), in.getVodId());
         History exist = newestHistory(matches);
         deleteDuplicateHistories(matches, exist);
         if (exist != null) {
@@ -203,6 +212,7 @@ public class PlaybackSyncService {
         History h = exist != null ? exist : new History();
         if (exist == null) {
             h.setUid(uid);
+            h.setSyncScope(syncScope);
             h.setSourceKind(sourceKind);
             h.setSourceKey(in.getSourceKey());
             h.setVodId(in.getVodId());
@@ -270,61 +280,61 @@ public class PlaybackSyncService {
      * all 清空该用户全部记录、site 清空某来源、item(默认)按 (kind,key,vodId) 删单条。
      */
     @Transactional
-    public void delete(int uid, PlaybackDeleteInput in) {
+    public void delete(int uid, String syncScope, PlaybackDeleteInput in) {
         normalizeSource(in);
         String sourceKind = in.getSourceKind() != null ? in.getSourceKind() : KIND_SITE;
         long deletedAt = in.getDeletedAt() > 0 ? in.getDeletedAt() : System.currentTimeMillis();
         String scope = in.getScope() == null ? SCOPE_ITEM : in.getScope().trim().toLowerCase();
         long changeSeq = nextChangeSeq();
         switch (scope) {
-            case SCOPE_ALL -> deleteAll(uid, deletedAt, changeSeq);
-            case SCOPE_SITE -> deleteSite(uid, sourceKind, in.getSourceKey(), deletedAt, changeSeq);
-            default -> deleteItem(uid, sourceKind, in, deletedAt, changeSeq);
+            case SCOPE_ALL -> deleteAll(uid, syncScope, deletedAt, changeSeq);
+            case SCOPE_SITE -> deleteSite(uid, syncScope, sourceKind, in.getSourceKey(), deletedAt, changeSeq);
+            default -> deleteItem(uid, syncScope, sourceKind, in, deletedAt, changeSeq);
         }
     }
 
-    private void deleteAll(int uid, long deletedAt, long changeSeq) {
-        PlaybackTombstone tomb = tombstoneRepository.findFirstByUidAndScopeOrderByDeletedAtDesc(uid, SCOPE_ALL);
+    private void deleteAll(int uid, String syncScope, long deletedAt, long changeSeq) {
+        PlaybackTombstone tomb = findAllTomb(uid, syncScope);
         if (tomb == null) {
             tomb = new PlaybackTombstone();
             tomb.setUid(uid);
+            tomb.setSyncScope(syncScope);
             tomb.setScope(SCOPE_ALL);
         }
         saveTombstone(tomb, deletedAt, changeSeq);
-        removeHistory(historyRepository.findAllByUidAndSourceKindIsNotNull(uid, Sort.unsorted()), deletedAt);
+        removeHistory(findAllSync(uid, syncScope, Sort.unsorted()), deletedAt);
     }
 
-    private void deleteSite(int uid, String sourceKind, String sourceKey, long deletedAt, long changeSeq) {
+    private void deleteSite(int uid, String syncScope, String sourceKind, String sourceKey, long deletedAt, long changeSeq) {
         if (sourceKey == null || sourceKey.isBlank()) {
             log.debug("skip site delete: missing sourceKey (uid={})", uid);
             return;
         }
-        PlaybackTombstone tomb = tombstoneRepository
-                .findFirstByUidAndScopeAndSourceKindAndSourceKeyOrderByDeletedAtDesc(uid, SCOPE_SITE, sourceKind, sourceKey);
+        PlaybackTombstone tomb = findSiteTomb(uid, syncScope, sourceKind, sourceKey);
         if (tomb == null) {
             tomb = new PlaybackTombstone();
             tomb.setUid(uid);
+            tomb.setSyncScope(syncScope);
             tomb.setScope(SCOPE_SITE);
             tomb.setSourceKind(sourceKind);
             tomb.setSourceKey(sourceKey);
         }
         saveTombstone(tomb, deletedAt, changeSeq);
-        removeHistory(historyRepository.findByUidAndSourceKindAndSourceKey(uid, sourceKind, sourceKey), deletedAt);
+        removeHistory(findBySite(uid, syncScope, sourceKind, sourceKey), deletedAt);
     }
 
-    private void deleteItem(int uid, String sourceKind, PlaybackDeleteInput in, long deletedAt, long changeSeq) {
+    private void deleteItem(int uid, String syncScope, String sourceKind, PlaybackDeleteInput in, long deletedAt, long changeSeq) {
         if (in.getVodId() == null || in.getVodId().isBlank()) {
             log.debug("skip item delete: missing vodId (uid={})", uid);
             return;
         }
-        List<History> histories = historyRepository
-                .findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, sourceKind, in.getSourceKey(), in.getVodId());
-        List<PlaybackTombstone> tombstones = tombstoneRepository
-                .findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, sourceKind, in.getSourceKey(), in.getVodId());
+        List<History> histories = findByIdentity(uid, syncScope, sourceKind, in.getSourceKey(), in.getVodId());
+        List<PlaybackTombstone> tombstones = findTombsByIdentity(uid, syncScope, sourceKind, in.getSourceKey(), in.getVodId());
         PlaybackTombstone tomb = newestTombstone(tombstones);
         if (tomb == null) {
             tomb = new PlaybackTombstone();
             tomb.setUid(uid);
+            tomb.setSyncScope(syncScope);
             tomb.setScope(SCOPE_ITEM);
             tomb.setSourceKind(sourceKind);
             tomb.setSourceKey(in.getSourceKey());
@@ -372,22 +382,20 @@ public class PlaybackSyncService {
         }
     }
 
-    /** 覆盖某条目的最新删除时间:item ∪ site ∪ all 三种作用域取最大值。 */
-    private long tombstoneWatermark(int uid, String sourceKind, String sourceKey, String vodId) {
+    /** 覆盖某条目的最新删除时间:item ∪ site ∪ all 三种作用域取最大值(同分区内)。 */
+    private long tombstoneWatermark(int uid, String syncScope, String sourceKind, String sourceKey, String vodId) {
         long watermark = 0;
-        PlaybackTombstone item = newestTombstone(tombstoneRepository
-                .findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, sourceKind, sourceKey, vodId));
+        PlaybackTombstone item = newestTombstone(findTombsByIdentity(uid, syncScope, sourceKind, sourceKey, vodId));
         if (item != null) {
             watermark = item.getDeletedAt();
         }
         if (sourceKey != null) {
-            PlaybackTombstone site = tombstoneRepository
-                    .findFirstByUidAndScopeAndSourceKindAndSourceKeyOrderByDeletedAtDesc(uid, SCOPE_SITE, sourceKind, sourceKey);
+            PlaybackTombstone site = findSiteTomb(uid, syncScope, sourceKind, sourceKey);
             if (site != null && site.getDeletedAt() > watermark) {
                 watermark = site.getDeletedAt();
             }
         }
-        PlaybackTombstone all = tombstoneRepository.findFirstByUidAndScopeOrderByDeletedAtDesc(uid, SCOPE_ALL);
+        PlaybackTombstone all = findAllTomb(uid, syncScope);
         if (all != null && all.getDeletedAt() > watermark) {
             watermark = all.getDeletedAt();
         }
@@ -403,7 +411,7 @@ public class PlaybackSyncService {
      * 同一时间戳的变更整组下发(组内无法用 GreaterThan 断点续传),故允许轻微超出 limit。
      */
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind) {
-        return pull(uid, since, limit, sourceKind, false);
+        return pull(uid, null, since, limit, sourceKind, null, false);
     }
 
     /** 返回该用户数据库中的全部同步记录，仅供诊断；不应用同步窗口和分页限制。 */
@@ -457,7 +465,7 @@ public class PlaybackSyncService {
             }
             record.setScope(SCOPE_ITEM);
             record.setDeletedAt(deletedAt);
-            delete(uid, record);
+            delete(uid, null, record);
         }
     }
 
@@ -467,15 +475,20 @@ public class PlaybackSyncService {
         PlaybackDeleteInput input = new PlaybackDeleteInput();
         input.setScope(SCOPE_ALL);
         input.setDeletedAt(System.currentTimeMillis());
-        delete(uid, input);
+        delete(uid, null, input);
     }
 
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind, boolean latest) {
-        return pull(uid, since, limit, sourceKind, null, latest);
+        return pull(uid, null, since, limit, sourceKind, null, latest);
+    }
+
+    public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind,
+                                 String siteKeyHeader, boolean latest) {
+        return pull(uid, null, since, limit, sourceKind, siteKeyHeader, latest);
     }
 
     @Transactional(readOnly = true)
-    public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind,
+    public PlaybackSyncPage pull(int uid, String syncScope, long since, int limit, String sourceKind,
                                  String siteKeyHeader, boolean latest) {
         ensureEnabled();
         int cap = limit > 0 && limit <= MAX_LIMIT ? limit : DEFAULT_LIMIT;
@@ -484,13 +497,13 @@ public class PlaybackSyncService {
         Sort sort = Sort.by("changeSeq").ascending();
         List<History> rows;
         if (sourceKinds.isEmpty()) {
-            rows = historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(uid, since, sort);
+            rows = findHistoryCursor(uid, syncScope, since, sort);
         } else if (sourceKinds.size() == 1) {
-            rows = historyRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(uid, sourceKinds.getFirst(), since, sort);
+            rows = findHistoryCursorKind(uid, syncScope, sourceKinds.getFirst(), since, sort);
         } else {
-            rows = historyRepository.findByUidAndSourceKindInAndChangeSeqGreaterThan(uid, sourceKinds, since, sort);
+            rows = findHistoryCursorKinds(uid, syncScope, sourceKinds, since, sort);
         }
-        List<PlaybackTombstone> tombs = tombstones(uid, since, sourceKinds);
+        List<PlaybackTombstone> tombs = tombstones(uid, syncScope, since, sourceKinds);
         if (latest && since <= 0) {
             return latestPage(rows, tombs, cap, since, siteKeys);
         }
@@ -565,17 +578,16 @@ public class PlaybackSyncService {
     }
 
     /** 分源拉取时墓碑同样要按 sourceKind 过滤,否则会把别的来源的删除下发给该客户端。 */
-    private List<PlaybackTombstone> tombstones(int uid, long since, List<String> sourceKinds) {
+    private List<PlaybackTombstone> tombstones(int uid, String syncScope, long since, List<String> sourceKinds) {
         Sort sort = Sort.by("changeSeq").ascending();
         if (sourceKinds.isEmpty()) {
-            return tombstoneRepository.findByUidAndChangeSeqGreaterThan(uid, since, sort);
+            return findTombsCursor(uid, syncScope, since, sort);
         }
         List<PlaybackTombstone> list = new ArrayList<>(sourceKinds.size() == 1
-                ? tombstoneRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(
-                        uid, sourceKinds.getFirst(), since, sort)
-                : tombstoneRepository.findByUidAndSourceKindInAndChangeSeqGreaterThan(uid, sourceKinds, since, sort));
+                ? findTombsCursorKind(uid, syncScope, sourceKinds.getFirst(), since, sort)
+                : findTombsCursorKinds(uid, syncScope, sourceKinds, since, sort));
         // all 作用域的墓碑不带 sourceKind,但对所有来源都生效,必须一并下发
-        list.addAll(tombstoneRepository.findByUidAndSourceKindIsNullAndChangeSeqGreaterThan(uid, since, sort));
+        list.addAll(findTombsAllBreadth(uid, syncScope, since, sort));
         list.sort(Comparator.comparingLong(this::changeSeqOf));
         return list;
     }
@@ -730,6 +742,88 @@ public class PlaybackSyncService {
 
     private PlaybackTombstone newestTombstone(List<PlaybackTombstone> rows) {
         return rows.stream().max(Comparator.comparingLong(PlaybackTombstone::getDeletedAt)).orElse(null);
+    }
+
+    // ── 分区查询封装 ─────────────────────────────────────────────────────────
+    // syncScope 为空 = uid 级(旧语义,所有订阅互通):走无分区谓词的查询;
+    // 非空 = 仅该分区:走带 (:scope IS NULL OR sync_scope = :scope) 的 @Query。
+
+    private List<History> findByIdentity(int uid, String syncScope, String kind, String key, String vodId) {
+        return syncScope == null
+                ? historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, kind, key, vodId)
+                : historyRepository.findSyncByIdentity(uid, syncScope, kind, key, vodId);
+    }
+
+    private List<History> findHistoryCursor(int uid, String syncScope, long since, Sort sort) {
+        return syncScope == null
+                ? historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(uid, since, sort)
+                : historyRepository.findSyncByCursor(uid, syncScope, since, sort);
+    }
+
+    private List<History> findHistoryCursorKind(int uid, String syncScope, String kind, long since, Sort sort) {
+        return syncScope == null
+                ? historyRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(uid, kind, since, sort)
+                : historyRepository.findSyncByCursorAndKind(uid, syncScope, kind, since, sort);
+    }
+
+    private List<History> findHistoryCursorKinds(int uid, String syncScope, List<String> kinds, long since, Sort sort) {
+        return syncScope == null
+                ? historyRepository.findByUidAndSourceKindInAndChangeSeqGreaterThan(uid, kinds, since, sort)
+                : historyRepository.findSyncByCursorAndKinds(uid, syncScope, kinds, since, sort);
+    }
+
+    private List<History> findAllSync(int uid, String syncScope, Sort sort) {
+        return syncScope == null
+                ? historyRepository.findAllByUidAndSourceKindIsNotNull(uid, sort)
+                : historyRepository.findSyncAll(uid, syncScope, sort);
+    }
+
+    private List<History> findBySite(int uid, String syncScope, String kind, String key) {
+        return syncScope == null
+                ? historyRepository.findByUidAndSourceKindAndSourceKey(uid, kind, key)
+                : historyRepository.findSyncBySite(uid, syncScope, kind, key);
+    }
+
+    private List<PlaybackTombstone> findTombsByIdentity(int uid, String syncScope, String kind, String key, String vodId) {
+        return syncScope == null
+                ? tombstoneRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(uid, kind, key, vodId)
+                : tombstoneRepository.findSyncByIdentity(uid, syncScope, kind, key, vodId);
+    }
+
+    private PlaybackTombstone findSiteTomb(int uid, String syncScope, String kind, String key) {
+        return syncScope == null
+                ? tombstoneRepository.findFirstByUidAndScopeAndSourceKindAndSourceKeyOrderByDeletedAtDesc(uid, SCOPE_SITE, kind, key)
+                : newestTombstone(tombstoneRepository.findSyncSite(uid, syncScope, SCOPE_SITE, kind, key));
+    }
+
+    private PlaybackTombstone findAllTomb(int uid, String syncScope) {
+        return syncScope == null
+                ? tombstoneRepository.findFirstByUidAndScopeOrderByDeletedAtDesc(uid, SCOPE_ALL)
+                : newestTombstone(tombstoneRepository.findSyncAllScope(uid, syncScope, SCOPE_ALL));
+    }
+
+    private List<PlaybackTombstone> findTombsCursor(int uid, String syncScope, long since, Sort sort) {
+        return syncScope == null
+                ? tombstoneRepository.findByUidAndChangeSeqGreaterThan(uid, since, sort)
+                : tombstoneRepository.findSyncByCursor(uid, syncScope, since, sort);
+    }
+
+    private List<PlaybackTombstone> findTombsCursorKind(int uid, String syncScope, String kind, long since, Sort sort) {
+        return syncScope == null
+                ? tombstoneRepository.findByUidAndSourceKindAndChangeSeqGreaterThan(uid, kind, since, sort)
+                : tombstoneRepository.findSyncByCursorAndKind(uid, syncScope, kind, since, sort);
+    }
+
+    private List<PlaybackTombstone> findTombsCursorKinds(int uid, String syncScope, List<String> kinds, long since, Sort sort) {
+        return syncScope == null
+                ? tombstoneRepository.findByUidAndSourceKindInAndChangeSeqGreaterThan(uid, kinds, since, sort)
+                : tombstoneRepository.findSyncByCursorAndKinds(uid, syncScope, kinds, since, sort);
+    }
+
+    private List<PlaybackTombstone> findTombsAllBreadth(int uid, String syncScope, long since, Sort sort) {
+        return syncScope == null
+                ? tombstoneRepository.findByUidAndSourceKindIsNullAndChangeSeqGreaterThan(uid, since, sort)
+                : tombstoneRepository.findSyncAllBreadth(uid, syncScope, since, sort);
     }
 
     private record PlaybackIdentity(String sourceKind, String sourceKey, String vodId) {

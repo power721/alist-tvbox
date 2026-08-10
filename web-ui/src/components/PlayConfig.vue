@@ -22,7 +22,8 @@ interface Channel {
 }
 
 const cover = ref('')
-const playbackSyncEnabled = ref(true)
+const playbackSyncEnabled = ref(false)
+const playbackSyncScope = ref('token')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
 const tgSearch = ref('')
@@ -282,6 +283,12 @@ const updatePlaybackSync = () => {
   })
 }
 
+const updatePlaybackSyncScope = () => {
+  axios.post('/api/settings', {name: 'playback_sync_scope', value: playbackSyncScope.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateDrivers = () => {
   const order = tgDriverOrder.value.map(e => e.id).join(',')
   axios.post('/api/settings', {name: 'tgDriverOrder', value: order}).then()
@@ -498,7 +505,8 @@ onMounted(() => {
       tgDrivers.value = data.tg_drivers.split(',')
     }
     cover.value = data.video_cover
-    playbackSyncEnabled.value = data.playback_sync_enabled !== 'false'
+    playbackSyncEnabled.value = data.playback_sync_enabled === 'true'
+    playbackSyncScope.value = data.playback_sync_scope || 'token'
     tgTimeout.value = +data.tg_timeout
   })
 })
@@ -515,6 +523,14 @@ onUnmounted(() => {
         <el-form-item label="播放记录同步">
           <el-switch v-model="playbackSyncEnabled" @change="updatePlaybackSync"/>
           <span class="hint">在影视、默影视和 atv-player 之间同步最近的播放记录</span>
+        </el-form-item>
+        <el-form-item label="同步分区" v-if="playbackSyncEnabled">
+          <el-select v-model="playbackSyncScope" @change="updatePlaybackSyncScope" style="width: 200px">
+            <el-option label="按订阅地址(全部互通)" value="uid"/>
+            <el-option label="按 VOD Token" value="token"/>
+            <el-option label="按订阅地址(逐个隔离)" value="subscription"/>
+          </el-select>
+          <span class="hint">仅 VOD Token 相同的订阅互相同步;关闭 VOD Token 时按用户互通</span>
         </el-form-item>
         <el-form-item label="搜索超时时间">
           <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒

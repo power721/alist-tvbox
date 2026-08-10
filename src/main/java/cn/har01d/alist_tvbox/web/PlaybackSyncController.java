@@ -39,14 +39,14 @@ public class PlaybackSyncController {
 
     @PostMapping("/api/playback/event")
     public void event(HttpServletRequest request, @RequestBody Map<String, Object> body) {
-        int uid = playbackSyncService.resolveUid(token(request));
-        playbackSyncService.apply(uid, body, null, idempotencyKey(request));
+        PlaybackSyncService.TokenIdentity id = playbackSyncService.resolveIdentity(token(request));
+        playbackSyncService.apply(id, body, null, idempotencyKey(request));
     }
 
     @PostMapping("/api/playback/events")
     public void events(HttpServletRequest request, @RequestBody List<Map<String, Object>> body) {
-        int uid = playbackSyncService.resolveUid(token(request));
-        playbackSyncService.applyAll(uid, body);
+        PlaybackSyncService.TokenIdentity id = playbackSyncService.resolveIdentity(token(request));
+        playbackSyncService.applyAll(id, body);
     }
 
     // ── PULL(令牌鉴权) ───────────────────────────────────────────────────
@@ -59,9 +59,9 @@ public class PlaybackSyncController {
                                     @RequestHeader(value = "X-PlaySync-Source-Kind", required = false) String sourceKind,
                                     @RequestHeader(value = "X-PlaySync-Site-Key", required = false) String siteKeys,
                                     @RequestHeader(value = "X-PlaySync-Latest", required = false) Boolean latest) {
-        int uid = playbackSyncService.resolveUid(token(request));
+        PlaybackSyncService.TokenIdentity id = playbackSyncService.resolveIdentity(token(request));
         long since = parseLong(sinceHeader != null ? sinceHeader : sinceHeaderLegacy, 0L);
-        return playbackSyncService.pull(uid, since, limit == null ? 0 : limit, sourceKind, siteKeys,
+        return playbackSyncService.pull(id.uid(), id.syncScope(), since, limit == null ? 0 : limit, sourceKind, siteKeys,
                 Boolean.TRUE.equals(latest));
     }
 
