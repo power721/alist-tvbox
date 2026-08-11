@@ -609,6 +609,15 @@ public class SettingService {
         if ("guangya_to_123".equals(setting.getName())) {
             aListLocalService.updateSetting("guangya_to_123", setting.getValue(), "bool");
         }
+        if ("baidu_share_direct".equals(setting.getName())) {
+            aListLocalService.updateSetting("baidu_share_direct", setting.getValue(), "bool");
+        }
+        if ("quark_share_direct".equals(setting.getName())) {
+            aListLocalService.updateSetting("quark_share_direct", setting.getValue(), "bool");
+        }
+        if ("uc_share_direct".equals(setting.getName())) {
+            aListLocalService.updateSetting("uc_share_direct", setting.getValue(), "bool");
+        }
         if ("github_proxy".equals(setting.getName())) {
             try {
                 gitHubProxyService.saveToFile(setting.getValue());

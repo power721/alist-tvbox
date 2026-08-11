@@ -10,7 +10,7 @@
     </div>
     <div v-else class="page-actions" style="margin-bottom: 16px; display: flex; justify-content: flex-end; gap: 12px;">
       <el-button @click="load">刷新</el-button>
-      <el-button @click="openConfig">配置</el-button>
+      <el-button type="primary" @click="openConfig">配置</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
     </div>
 
@@ -251,6 +251,8 @@
     </el-dialog>
 
     <el-dialog v-model="configVisible" title="网盘账号配置" width="60%">
+      <el-tabs>
+        <el-tab-pane label="代理配置">
       <div class="proxy-config-grid">
         <div class="proxy-config-row proxy-config-head">
           <span>类型</span>
@@ -287,53 +289,124 @@
           保存代理配置
         </el-button>
       </div>
-      <el-divider>离线下载</el-divider>
-      <el-form label-width="140">
-        <el-form-item label="开启离线下载">
-          <el-switch
-            v-model="offlineDownloadConfig.enabled"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-          />
+        </el-tab-pane>
+        <el-tab-pane label="免转存直链">
+      <el-form label-width="170">
+        <el-form-item label="开启百度分享免转存">
+          <el-switch v-model="baiduShareDirect" inline-prompt active-text="开启" inactive-text="关闭" @change="updateBaiduShareDirect"/>
+          <span class="hint">DLNA 签名直链为主、失败回退转存;关闭则纯转存(默认关)</span>
         </el-form-item>
-        <el-form-item label="网盘类型">
-          <el-select v-model="offlineDownloadConfig.driverType" :disabled="!offlineDownloadConfig.enabled">
-            <el-option label="115云盘" value="PAN115"/>
-            <el-option label="光鸭云盘" value="GUANGYA"/>
-            <el-option label="迅雷云盘" value="THUNDER"/>
-          </el-select>
+        <el-form-item label="开启夸克分享免转存">
+          <el-switch v-model="quarkShareDirect" inline-prompt active-text="开启" inactive-text="关闭" @change="updateQuarkShareDirect"/>
+          <span class="hint">分享直链兜底;关闭则仅转存/多账号取链(默认开)</span>
         </el-form-item>
-        <el-form-item label="网盘账号">
-          <el-select
-            v-model="offlineDownloadConfig.accountId"
-            clearable
-            :disabled="!offlineDownloadConfig.enabled"
-          >
-            <el-option
-              v-for="item in offlineAccounts"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="当前挂载目录">
-          <el-input :model-value="offlineMountFolder" readonly/>
-        </el-form-item>
-        <el-form-item v-if="offlineQuotaText" label="配额信息">
-          <span>{{ offlineQuotaText }}</span>
+        <el-form-item label="开启UC分享免转存">
+          <el-switch v-model="ucShareDirect" inline-prompt active-text="开启" inactive-text="关闭" @change="updateUcShareDirect"/>
+          <span class="hint">分享直链兜底;关闭则仅转存/多账号取链(默认开)</span>
         </el-form-item>
       </el-form>
-      <div class="config-actions">
-        <el-button
-          type="primary"
-          :loading="savingOfflineDownloadConfig"
-          @click="saveOfflineDownloadConfig"
-        >
-          保存离线下载配置
-        </el-button>
-      </div>
+        </el-tab-pane>
+        <el-tab-pane label="跨网盘秒传">
+      <el-form label-width="170">
+        <el-form-item label="开启阿里秒传115">
+          <el-switch v-model="aliTo115" inline-prompt active-text="开启" inactive-text="关闭" @change="updateAliTo115"/>
+          <span class="hint">按 MD5 秒传到 115,失败回退阿里直链</span>
+        </el-form-item>
+        <el-form-item label="开启阿里秒传123">
+          <el-switch v-model="aliTo123" inline-prompt active-text="开启" inactive-text="关闭" @change="updateAliTo123"/>
+          <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退阿里直链</span>
+        </el-form-item>
+        <el-form-item label="开启115秒传123">
+          <el-switch v-model="pan115To123" inline-prompt active-text="开启" inactive-text="关闭" @change="updatePan115To123"/>
+          <span class="hint">帐号页面添加 123 Open 网盘;按 SHA1 秒传,失败回退 115 直链</span>
+        </el-form-item>
+        <el-form-item label="开启光鸭秒传123">
+          <el-switch v-model="guangyaTo123" inline-prompt active-text="开启" inactive-text="关闭" @change="updateGuangyaTo123"/>
+          <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退光鸭直链</span>
+        </el-form-item>
+        <el-form-item label="开启夸克秒传123">
+          <el-switch v-model="quarkTo123" inline-prompt active-text="开启" inactive-text="关闭" @change="updateQuarkTo123"/>
+          <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退夸克直链</span>
+        </el-form-item>
+        <el-form-item label="开启UC秒传123">
+          <el-switch v-model="ucTo123" inline-prompt active-text="开启" inactive-text="关闭" @change="updateUcTo123"/>
+          <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退 UC 直链</span>
+        </el-form-item>
+      </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="转存策略">
+      <el-form label-width="170">
+        <el-form-item label="网盘帐号负载均衡">
+          <el-switch v-model="driverRoundRobin" inline-prompt active-text="开启" inactive-text="关闭" @change="updateDriverRoundRobin"/>
+          <span class="hint">多账号轮询分摊请求</span>
+        </el-form-item>
+        <el-form-item label="夸克UC分享使用TV帐号">
+          <el-switch v-model="ussQuarkTv" inline-prompt active-text="开启" inactive-text="关闭" @change="updateUssQuarkTv"/>
+          <span class="hint">TV 帐号优先取链</span>
+        </el-form-item>
+        <el-form-item label="夸父逐日">
+          <el-switch v-model="quarkMultiAccountProxy" inline-prompt active-text="开启" inactive-text="关闭" @change="updateQuarkMultiAccountProxy"/>
+          <span class="hint">夸克/UC 分享多账号并行下载</span>
+        </el-form-item>
+        <el-form-item label="网盘文件删除延时">
+          <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>
+          &nbsp;&nbsp;秒
+          <span class="hint">0表示不删除</span>
+          <el-button type="primary" @click="updateDeleteDelayTime">更新</el-button>
+        </el-form-item>
+        <el-form-item label="临时分享过期时间">
+          <el-input-number v-model="tempShareExpiration" min="1"></el-input-number>
+          &nbsp;&nbsp;小时
+          <el-button type="primary" @click="updateTempShareExpiration">更新</el-button>
+        </el-form-item>
+      </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="校验清理">
+      <el-form label-width="170">
+        <el-form-item label="网盘分享延迟校验">
+          <el-switch v-model="aliLazyLoad" inline-prompt active-text="开启" inactive-text="关闭" @change="updateAliLazyLoad"/>
+          <span class="hint">延迟校验分享有效性,重启生效</span>
+        </el-form-item>
+        <el-form-item label="网盘分享校验间隔">
+          <el-input-number v-model="validateSharesInterval" min="1"></el-input-number>
+          &nbsp;&nbsp;小时
+          <el-button type="primary" @click="updateValidateSharesInterval">更新</el-button>
+        </el-form-item>
+        <el-form-item label="自动清理失效资源">
+          <el-switch v-model="cleanInvalidShares" inline-prompt active-text="开启" inactive-text="关闭" @change="updateCleanInvalidShares"/>
+          <span class="hint">定期清理失效分享,重启生效</span>
+        </el-form-item>
+      </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="离线下载">
+          <el-form label-width="140">
+            <el-form-item label="开启离线下载">
+              <el-switch v-model="offlineDownloadConfig.enabled" inline-prompt active-text="开启" inactive-text="关闭"/>
+            </el-form-item>
+            <el-form-item label="网盘类型">
+              <el-select v-model="offlineDownloadConfig.driverType" :disabled="!offlineDownloadConfig.enabled">
+                <el-option label="115云盘" value="PAN115"/>
+                <el-option label="光鸭云盘" value="GUANGYA"/>
+                <el-option label="迅雷云盘" value="THUNDER"/>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="网盘账号">
+              <el-select v-model="offlineDownloadConfig.accountId" clearable :disabled="!offlineDownloadConfig.enabled">
+                <el-option v-for="item in offlineAccounts" :key="item.id" :label="item.name" :value="item.id"/>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="当前挂载目录">
+              <el-input :model-value="offlineMountFolder" readonly/>
+            </el-form-item>
+            <el-form-item v-if="offlineQuotaText" label="配额信息">
+              <span>{{ offlineQuotaText }}</span>
+            </el-form-item>
+          </el-form>
+          <div class="config-actions">
+            <el-button type="primary" :loading="savingOfflineDownloadConfig" @click="saveOfflineDownloadConfig">保存离线下载配置</el-button>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="configVisible = false">取消</el-button>
@@ -538,6 +611,26 @@ const offlineDownloadConfig = ref<OfflineDownloadConfig>({
 const offlineDownloadQuota = ref<OfflineDownloadQuota>(null)
 const savingLocalProxyConfig = ref(false)
 const savingOfflineDownloadConfig = ref(false)
+// 网盘账号配置 · 分享免转存直链(默认:百度关,夸克/UC开)
+const baiduShareDirect = ref(false)
+const quarkShareDirect = ref(true)
+const ucShareDirect = ref(true)
+// 网盘账号配置 · 秒传到 123
+const aliTo115 = ref(false)
+const aliTo123 = ref(false)
+const pan115To123 = ref(false)
+const guangyaTo123 = ref(false)
+const quarkTo123 = ref(false)
+const ucTo123 = ref(false)
+// 网盘账号配置 · 账号·转存策略(driverRoundRobin 已在上方声明)
+const ussQuarkTv = ref(false)
+const quarkMultiAccountProxy = ref(false)
+const deleteDelayTime = ref(900)
+const tempShareExpiration = ref(72)
+// 网盘账号配置 · 分享校验·清理
+const aliLazyLoad = ref(true)
+const validateSharesInterval = ref(4)
+const cleanInvalidShares = ref(false)
 const offlineAccounts = computed(() => accounts.value.filter((item) => item.type === offlineDownloadConfig.value.driverType))
 const offlineMountFolder = computed(() => {
   const account = offlineAccounts.value.find((item) => item.id === offlineDownloadConfig.value.accountId)
@@ -727,7 +820,116 @@ const openConfig = async () => {
   await loadLocalProxyConfig()
   await loadOfflineDownloadConfig()
   await loadOfflineDownloadQuota()
+  await loadDriverPlaySettings()
   configVisible.value = true
+}
+
+// 加载迁入的网盘相关开关(免转存/秒传123/账号转存策略/分享校验清理)
+const loadDriverPlaySettings = async () => {
+  const {data} = await axios.get('/api/settings')
+  baiduShareDirect.value = data.baidu_share_direct === 'true'
+  quarkShareDirect.value = data.quark_share_direct !== 'false'
+  ucShareDirect.value = data.uc_share_direct !== 'false'
+  aliTo115.value = data.ali_to_115 === 'true'
+  aliTo123.value = data.ali_to_123 === 'true'
+  pan115To123.value = data['115_to_123'] === 'true'
+  guangyaTo123.value = data.guangya_to_123 === 'true'
+  quarkTo123.value = data.quark_to_123 === 'true'
+  ucTo123.value = data.uc_to_123 === 'true'
+  driverRoundRobin.value = data.driver_round_robin === 'true'
+  ussQuarkTv.value = data.use_quark_tv === 'true'
+  quarkMultiAccountProxy.value = data.quark_multi_account_proxy === 'true'
+  deleteDelayTime.value = +data.delete_delay_time || 900
+  tempShareExpiration.value = +data.temp_share_expiration || 72
+  aliLazyLoad.value = data.ali_lazy_load !== 'false'
+  validateSharesInterval.value = +data.validateSharesInterval || 4
+  cleanInvalidShares.value = data.clean_invalid_shares === 'true'
+}
+
+const updateBaiduShareDirect = () => {
+  axios.post('/api/settings', {name: 'baidu_share_direct', value: baiduShareDirect.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateQuarkShareDirect = () => {
+  axios.post('/api/settings', {name: 'quark_share_direct', value: quarkShareDirect.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateUcShareDirect = () => {
+  axios.post('/api/settings', {name: 'uc_share_direct', value: ucShareDirect.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateAliTo115 = () => {
+  axios.post('/api/settings', {name: 'ali_to_115', value: aliTo115.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateAliTo123 = () => {
+  axios.post('/api/settings', {name: 'ali_to_123', value: aliTo123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updatePan115To123 = () => {
+  axios.post('/api/settings', {name: '115_to_123', value: pan115To123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateGuangyaTo123 = () => {
+  axios.post('/api/settings', {name: 'guangya_to_123', value: guangyaTo123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateQuarkTo123 = () => {
+  axios.post('/api/settings', {name: 'quark_to_123', value: quarkTo123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateUcTo123 = () => {
+  axios.post('/api/settings', {name: 'uc_to_123', value: ucTo123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateDriverRoundRobin = () => {
+  axios.post('/api/settings', {name: 'driver_round_robin', value: driverRoundRobin.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateUssQuarkTv = () => {
+  axios.post('/api/settings', {name: 'use_quark_tv', value: ussQuarkTv.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateQuarkMultiAccountProxy = () => {
+  axios.post('/api/settings', {name: 'quark_multi_account_proxy', value: quarkMultiAccountProxy.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateDeleteDelayTime = () => {
+  axios.post('/api/settings', {name: 'delete_delay_time', value: deleteDelayTime.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateTempShareExpiration = () => {
+  axios.post('/api/settings', {name: 'temp_share_expiration', value: tempShareExpiration.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateAliLazyLoad = () => {
+  axios.post('/api/settings', {name: 'ali_lazy_load', value: aliLazyLoad.value}).then(() => {
+    ElMessage.success('更新成功，重启生效')
+  })
+}
+const updateValidateSharesInterval = () => {
+  axios.post('/api/settings', {name: 'validateSharesInterval', value: validateSharesInterval.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateCleanInvalidShares = () => {
+  axios.post('/api/settings', {name: 'clean_invalid_shares', value: cleanInvalidShares.value}).then(() => {
+    ElMessage.success('更新成功，重启生效')
+  })
 }
 
 const updateLocalProxyConfig = () => {

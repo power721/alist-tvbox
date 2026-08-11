@@ -176,6 +176,9 @@
     </el-row>
 
     <el-dialog id="adv" v-model="dialogVisible" title="高级设置" width="60%">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px">
+        网盘相关配置(分享免转存、跨网盘秒传、账号·转存策略、分享校验·清理)已移动到「网盘账号」页面的「配置」对话框中。
+      </el-alert>
       <el-form label-width="180px">
         <el-form-item label="开放Token认证URL">
           <el-select v-model="openTokenUrl" class="m-2" placeholder="Select">
@@ -299,140 +302,6 @@
               @change="updateAListDebug"
             />
           </el-form-item>
-          <el-form-item label="夸克UC分享使用TV帐号">
-            <el-switch
-              v-model="ussQuarkTv"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateUssQuarkTv"
-            />
-          </el-form-item>
-          <el-form-item label="夸父逐日">
-            <el-switch
-              v-model="quarkMultiAccountProxy"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateQuarkMultiAccountProxy"
-            />
-          </el-form-item>
-        </div>
-        <div class="el-row">
-          <el-form-item label="网盘分享延迟校验">
-            <el-switch
-              v-model="aliLazyLoad"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateAliLazyLoad"
-            />
-          </el-form-item>
-          <el-form-item label="自动清理失效资源">
-            <el-switch
-              v-model="cleanInvalidShares"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateCleanInvalidShares"
-            />
-          </el-form-item>
-          <el-form-item label="网盘分享校验间隔">
-            <el-input-number v-model="validateSharesInterval" min="1"></el-input-number>
-            &nbsp;&nbsp;小时
-            <span class="hint"></span>
-            <el-button type="primary" @click="updateValidateSharesInterval">更新</el-button>
-          </el-form-item>
-          <el-form-item label="网盘帐号负载均衡">
-            <el-switch
-              v-model="driverRoundRobin"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateDriverRoundRobin"
-            />
-          </el-form-item>
-        </div>
-        <div class="el-row">
-          <el-form-item label="开启阿里快传115">
-            <el-switch
-              v-model="aliTo115"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateAliTo115"
-            />
-            <span class="hint">帐号页面添加115网盘、配置删除码</span>
-          </el-form-item>
-          <el-form-item label="开启阿里秒传123">
-            <el-switch
-              v-model="aliTo123"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateAliTo123"
-            />
-            <span class="hint">帐号页面添加 123 Open 网盘;按 SHA1 秒传,优先于快传115,失败回退</span>
-          </el-form-item>
-        </div>
-        <div class="el-row">
-          <el-form-item label="开启115秒传123">
-            <el-switch
-              v-model="pan115To123"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updatePan115To123"
-            />
-            <span class="hint">帐号页面添加 123 Open 网盘;按 SHA1 秒传,失败回退 115 直链</span>
-          </el-form-item>
-          <el-form-item label="开启光鸭秒传123">
-            <el-switch
-              v-model="guangyaTo123"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateGuangyaTo123"
-            />
-            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退光鸭直链</span>
-          </el-form-item>
-        </div>
-        <div class="el-row">
-          <el-form-item label="开启夸克秒传123">
-            <el-switch
-              v-model="quarkTo123"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateQuarkTo123"
-            />
-            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退夸克直链</span>
-          </el-form-item>
-          <el-form-item label="开启UC秒传123">
-            <el-switch
-              v-model="ucTo123"
-              inline-prompt
-              active-text="开启"
-              inactive-text="关闭"
-              @change="updateUcTo123"
-            />
-            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退 UC 直链</span>
-          </el-form-item>
-        </div>
-        <div class="el-row">
-          <el-form-item label="网盘文件删除延时">
-            <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>
-            &nbsp;&nbsp;秒
-            <span class="hint">0表示不删除</span>
-            <span class="hint"></span>
-            <el-button type="primary" @click="updateDeleteDelayTime">更新</el-button>
-          </el-form-item>
-          <el-form-item label="临时分享过期时间">
-            <el-input-number v-model="tempShareExpiration" min="1"></el-input-number>
-            &nbsp;&nbsp;小时
-            <span class="hint"></span>
-            <el-button type="primary" @click="updateTempShareExpiration">更新</el-button>
-          </el-form-item>
         </div>
         <el-form-item>
           <el-button @click="resetAListToken">重置AList认证Token</el-button>
@@ -539,17 +408,6 @@ const mixSiteSource = ref(false)
 const replaceAliToken = ref(false)
 const debugLog = ref(false)
 const aListDebug = ref(false)
-const aliTo115 = ref(false)
-const aliTo123 = ref(false)
-const pan115To123 = ref(false)
-const quarkTo123 = ref(false)
-const ucTo123 = ref(false)
-const guangyaTo123 = ref(false)
-const driverRoundRobin = ref(false)
-const ussQuarkTv = ref(false)
-const quarkMultiAccountProxy = ref(false)
-const aliLazyLoad = ref(false)
-const cleanInvalidShares = ref(false)
 const enableHttps = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -568,9 +426,6 @@ const indexRemoteVersion = ref('')
 const movieVersion = ref(0)
 const movieRemoteVersion = ref(0)
 const cachedMovieVersion = ref(0)
-const deleteDelayTime = ref(900)
-const tempShareExpiration = ref(72)
-const validateSharesInterval = ref(44)
 const aListStartTime = ref('')
 const openTokenUrl = ref('')
 const dockerAddress = ref('')
@@ -711,24 +566,6 @@ const resetBasicAuth = () => {
   })
 }
 
-const updateDeleteDelayTime = () => {
-  axios.post('/api/settings', {name: 'delete_delay_time', value: deleteDelayTime.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateTempShareExpiration = () => {
-  axios.post('/api/settings', {name: 'temp_share_expiration', value: tempShareExpiration.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateValidateSharesInterval = () => {
-  axios.post('/api/settings', {name: 'validateSharesInterval', value: validateSharesInterval.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
 const updateMixed = () => {
   axios.post('/api/settings', {name: 'mix_site_source', value: mixSiteSource.value}).then(() => {
     ElMessage.success('更新成功')
@@ -755,72 +592,6 @@ const updateDebugLog = () => {
 
 const updateAListDebug = () => {
   axios.post('/api/settings', {name: 'alist_debug', value: aListDebug.value}).then(() => {
-    ElMessage.success('更新成功，重启生效')
-  })
-}
-
-const updateAliTo115 = () => {
-  axios.post('/api/settings', {name: 'ali_to_115', value: aliTo115.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateAliTo123 = () => {
-  axios.post('/api/settings', {name: 'ali_to_123', value: aliTo123.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updatePan115To123 = () => {
-  axios.post('/api/settings', {name: '115_to_123', value: pan115To123.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateQuarkTo123 = () => {
-  axios.post('/api/settings', {name: 'quark_to_123', value: quarkTo123.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateUcTo123 = () => {
-  axios.post('/api/settings', {name: 'uc_to_123', value: ucTo123.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateGuangyaTo123 = () => {
-  axios.post('/api/settings', {name: 'guangya_to_123', value: guangyaTo123.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateDriverRoundRobin = () => {
-  axios.post('/api/settings', {name: 'driver_round_robin', value: driverRoundRobin.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateUssQuarkTv = () => {
-  axios.post('/api/settings', {name: 'use_quark_tv', value: ussQuarkTv.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateQuarkMultiAccountProxy = () => {
-  axios.post('/api/settings', {name: 'quark_multi_account_proxy', value: quarkMultiAccountProxy.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateAliLazyLoad = () => {
-  axios.post('/api/settings', {name: 'ali_lazy_load', value: aliLazyLoad.value}).then(() => {
-    ElMessage.success('更新成功，重启生效')
-  })
-}
-
-const updateCleanInvalidShares = () => {
-  axios.post('/api/settings', {name: 'clean_invalid_shares', value: cleanInvalidShares.value}).then(() => {
     ElMessage.success('更新成功，重启生效')
   })
 }
@@ -941,9 +712,6 @@ onMounted(() => {
     form.value.enabledToken = data.enabled_token === 'true'
     scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
     aListStartTime.value = data.alist_start_time
-    deleteDelayTime.value = +data.delete_delay_time || 900
-    tempShareExpiration.value = +data.temp_share_expiration || 72
-    validateSharesInterval.value = +data.validateSharesInterval || 4
     movieVersion.value = data.movie_version
     indexVersion.value = data.index_version
     dockerVersion.value = data.docker_version
@@ -960,17 +728,6 @@ onMounted(() => {
     enableHttps.value = data.enable_https === 'true'
     debugLog.value = data.debug_log === 'true'
     aListDebug.value = data.alist_debug === 'true'
-    aliTo115.value = data.ali_to_115 === 'true'
-    aliTo123.value = data.ali_to_123 === 'true'
-    pan115To123.value = data['115_to_123'] === 'true'
-    quarkTo123.value = data.quark_to_123 === 'true'
-    ucTo123.value = data.uc_to_123 === 'true'
-    guangyaTo123.value = data.guangya_to_123 === 'true'
-    driverRoundRobin.value = data.driver_round_robin === 'true'
-    ussQuarkTv.value = data.use_quark_tv === 'true'
-    quarkMultiAccountProxy.value = data.quark_multi_account_proxy === 'true'
-    cleanInvalidShares.value = data.clean_invalid_shares === 'true'
-    aliLazyLoad.value = data.ali_lazy_load !== 'false'
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
     apiKey.value = data.api_key
