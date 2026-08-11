@@ -133,6 +133,12 @@ public class AListLocalService {
         setSetting("uc_to_123", ucTo123, "bool");
         String guangyaTo123 = settingRepository.findById("guangya_to_123").map(Setting::getValue).orElse("false");
         setSetting("guangya_to_123", guangyaTo123, "bool");
+        String baiduShareDirect = settingRepository.findById("baidu_share_direct").map(Setting::getValue).orElse("false");
+        setSetting("baidu_share_direct", baiduShareDirect, "bool");
+        String quarkShareDirect = settingRepository.findById("quark_share_direct").map(Setting::getValue).orElse("true");
+        setSetting("quark_share_direct", quarkShareDirect, "bool");
+        String ucShareDirect = settingRepository.findById("uc_share_direct").map(Setting::getValue).orElse("true");
+        setSetting("uc_share_direct", ucShareDirect, "bool");
         String roundRobin = settingRepository.findById("driver_round_robin").map(Setting::getValue).orElse("false");
         setSetting("driver_round_robin", roundRobin, "bool");
         String ussQuarkTv = settingRepository.findById("use_quark_tv").map(Setting::getValue).orElse("false");
