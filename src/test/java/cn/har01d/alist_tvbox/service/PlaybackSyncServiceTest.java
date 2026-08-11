@@ -81,14 +81,15 @@ class PlaybackSyncServiceTest {
     }
 
     @Test
-    void disabledSyncIsSilentNoOpWithoutChangingData() {
+    void disabledSyncPersistsPushButPullReturnsEmpty() {
         appProperties.setPlaybackSyncEnabled(false);
 
-        // 同步关闭时静默接收(PUSH 不报错、PULL 返回空页),客户端继续轮询不刷错误日志
-        service.apply(id(UID), Map.of("vodId", "v1"), null, null);
-        assertThat(service.pull(UID, 0, 100, null).getItems()).isEmpty();
+        // PUSH 始终落库:网页端自身的续看进度不应受跨端同步开关影响
+        service.apply(id(UID), Map.of("sourceKey", "abc", "vodId", "v1"), null, null);
+        verify(historyRepository).save(any());
 
-        verify(historyRepository, never()).save(any());
+        // 跨端分发(PULL)仍受开关门控:关闭时返回空页,客户端继续轮询不刷错误日志
+        assertThat(service.pull(UID, 0, 100, null).getItems()).isEmpty();
     }
 
     // ── 删除:LWW ───────────────────────────────────────────────────────────

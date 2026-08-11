@@ -29,6 +29,8 @@ public class PlaybackSyncInput {
     private String episodeUrl;
     private long positionMs;
     private long durationMs;
+    private long openingMs;
+    private long endingMs;
     private float speed = 1f;
     private boolean completed;
     private long updatedAt;
@@ -64,6 +66,8 @@ public class PlaybackSyncInput {
         in.episodeUrl = str(m, "episodeUrl", "episode_url", "url", "playUrl", "play_url");
         in.positionMs = lng(m, "positionMs", "position_ms", "position", "pos");
         in.durationMs = lng(m, "durationMs", "duration_ms", "duration");
+        in.openingMs = lng(m, "openingMs", "opening_ms", "opening");
+        in.endingMs = lng(m, "endingMs", "ending_ms", "ending");
         in.speed = (float) dbl(m, 1.0, "speed");
         in.completed = bool(m, "completed");
         in.updatedAt = lng(m, "updatedAt", "updated_at", "timestamp", "updateTime", "update_time",

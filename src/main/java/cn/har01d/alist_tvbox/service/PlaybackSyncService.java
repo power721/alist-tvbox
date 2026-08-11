@@ -109,18 +109,14 @@ public class PlaybackSyncService {
 
     @Transactional
     public void apply(TokenIdentity id, Map<String, Object> record, String eventId, String dedupeKey) {
-        if (!appProperties.isPlaybackSyncEnabled()) {
-            return; // 同步关闭时静默接收:客户端仍按配置轮询,不应报错刷日志
-        }
+        // PUSH 始终落库:网页端自身的续看进度不应受跨端同步开关影响。
+        // 跨端分发(PULL)仍由 playbackSyncEnabled 在 pull() 门控;令牌派发由 SubscriptionService 门控。
         applyRecord(id, record, eventId, dedupeKey);
         trimHistory(id.uid(), id.syncScope());
     }
 
     @Transactional
     public void applyAll(TokenIdentity id, List<Map<String, Object>> records) {
-        if (!appProperties.isPlaybackSyncEnabled()) {
-            return;
-        }
         if (records != null) {
             for (Map<String, Object> record : records) {
                 applyRecord(id, record, null, null);
@@ -245,6 +241,13 @@ public class PlaybackSyncService {
         }
         if (in.getSpeed() > 0) {
             h.setSpeed(in.getSpeed());
+        }
+        // 跳过点仅在非零时更新:避免每个播放 tick 用 0 覆盖已设置的片头/片尾
+        if (in.getOpeningMs() > 0) {
+            h.setOpening(in.getOpeningMs());
+        }
+        if (in.getEndingMs() > 0) {
+            h.setEnding(in.getEndingMs());
         }
         // completed:夹紧到结尾
         if (in.isCompleted() && in.getDurationMs() > 0) {
@@ -897,6 +900,8 @@ public class PlaybackSyncService {
         in.setPositionMs(h.getPosition());
         in.setDurationMs(h.getDuration());
         in.setSpeed(h.getSpeed());
+        in.setOpeningMs(h.getOpening());
+        in.setEndingMs(h.getEnding());
         in.setCompleted(h.getDuration() > 0 && h.getPosition() >= h.getDuration());
         in.setUpdatedAt(timeOf(h));
         in.setClientKey(h.getClientKey());

@@ -894,7 +894,7 @@ const deleteVisible = ref(false)
 const settingVisible = ref(false)
 const addVisible = ref(false)
 const isHistory = ref(false)
-const historySource = ref('web')
+const historySource = ref('sync')
 const searching = ref(false)
 const fileSearching = ref(false)
 const searchMode = ref('tg')
@@ -2096,40 +2096,23 @@ const saveHistory = () => {
   const position = Math.round(videoPlayer.value.currentTime * 1000)
   const duration = Number.isFinite(videoPlayer.value.duration)
     ? Math.round(videoPlayer.value.duration * 1000) : 0
-  const history = {
-    cid: 0,
-    key: movie.vod_id,
+  axios.post('/api/playback/events', [{
+    sourceKind: 'site',
+    sourceKey: 'csp_AList',
+    sourceName: 'AList',
+    vodId: movie.vod_id,
     vodName: movie.vod_name,
     vodPic: movie.vod_pic,
-    vodRemarks: playItem.value.title,
+    episodeName: playItem.value.title,
     episode: currentVideoIndex.value,
     episodeUrl: playItem.value.url,
-    position,
-    duration,
-    opening: Math.round(skipStart.value * 1000),
-    ending: Math.round(skipEnd.value * 1000),
+    positionMs: position,
+    durationMs: duration,
+    openingMs: Math.round(skipStart.value * 1000),
+    endingMs: Math.round(skipEnd.value * 1000),
     speed: currentSpeed.value,
-    createTime: updatedAt
-  }
-  axios.post('/api/history?log=false', history).then()
-  // 同步关闭时不上报:避免每个播放 tick 都打一次 /api/playback/events
-  if (playbackSyncEnabled.value) {
-    axios.post('/api/playback/events', [{
-      sourceKind: 'site',
-      sourceKey: 'csp_AList',
-      sourceName: 'AList',
-      vodId: movie.vod_id,
-      vodName: movie.vod_name,
-      vodPic: movie.vod_pic,
-      episodeName: playItem.value.title,
-      episode: currentVideoIndex.value,
-      episodeUrl: playItem.value.url,
-      positionMs: position,
-      durationMs: duration,
-      speed: currentSpeed.value,
-      updatedAt,
-    }]).catch(() => {})
-  }
+    updatedAt,
+  }]).catch(() => {})
 }
 
 const getHistory = (id: string) => {
@@ -2190,13 +2173,15 @@ const getHistory = (id: string) => {
       episode: data.episode,
       episodeUrl: data.episodeUrl,
       position: data.positionMs,
+      opening: data.openingMs > 0 ? data.openingMs : (legacy ? legacy.opening : 0),
+      ending: data.endingMs > 0 ? data.endingMs : (legacy ? legacy.ending : 0),
       speed: data.speed,
     }), () => applyHistory({
       episode: data.episode,
       episodeUrl: data.episodeUrl,
       position: data.positionMs,
-      opening: 0,
-      ending: 0,
+      opening: data.openingMs || 0,
+      ending: data.endingMs || 0,
       speed: data.speed,
     }))
   }, () => axios.get(legacyUrl).then(({data}) => applyHistory(data)))
@@ -2427,18 +2412,12 @@ const getRouteVodId = () => {
   return ''
 }
 
-const playbackSyncEnabled = ref(false)
-
 onMounted(async () => {
   if (!store.token) {
     store.token = await axios.get("/api/token").then(({data}) => {
       return data.token ? data.token.split(",")[0] : "-"
     });
   }
-  axios.get('/api/settings').then(({data}) => {
-    playbackSyncEnabled.value = data.playback_sync_enabled === 'true'
-  })
-
   const link = route.query.link
   if (link) {
     loadShare(link)
