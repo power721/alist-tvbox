@@ -3,14 +3,10 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Device;
 import cn.har01d.alist_tvbox.entity.DeviceRepository;
-import cn.har01d.alist_tvbox.entity.History;
-import cn.har01d.alist_tvbox.service.HistoryService;
 import cn.har01d.alist_tvbox.service.SettingService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -33,22 +29,16 @@ import java.util.Map;
 public class TvBoxController {
     private final TvBoxService tvBoxService;
     private final SubscriptionService subscriptionService;
-    private final HistoryService historyService;
     private final DeviceRepository deviceRepository;
-    private final ObjectMapper objectMapper;
     private final SettingService settingService;
 
     public TvBoxController(TvBoxService tvBoxService,
                            SubscriptionService subscriptionService,
-                           HistoryService historyService,
                            DeviceRepository deviceRepository,
-                           ObjectMapper objectMapper,
                            SettingService settingService) {
         this.tvBoxService = tvBoxService;
         this.subscriptionService = subscriptionService;
-        this.historyService = historyService;
         this.deviceRepository = deviceRepository;
-        this.objectMapper = objectMapper;
         this.settingService = settingService;
     }
 
@@ -131,19 +121,6 @@ public class TvBoxController {
         return tvBoxService.device(request);
     }
 
-    @PostMapping("/tv/action")
-    public void action(@RequestParam("do") String action, String mode, String type, String device, String config, String targets, HttpServletRequest request) throws JsonProcessingException {
-        log.debug("device: {} config: {} history: {}", device, config, targets);
-        if ("sync".equals(action) && "history".equals(type)) {
-            historyService.syncHistory(mode,
-                    device == null ? null : objectMapper.readValue(device, Device.class),
-                    tvBoxService.myDevice(),
-                    config,
-                    objectMapper.readValue(targets, new TypeReference<List<History>>() {
-                    }));
-        }
-    }
-
     @GetMapping("/api/devices")
     @Transactional(timeout = 5)  // 5秒超时保护
     public List<Device> devices() {
@@ -173,15 +150,9 @@ public class TvBoxController {
         return tvBoxService.scanDevices(request);
     }
 
-    @PostMapping("/devices/{token}/{id}/sync")
-    public void sync(@PathVariable String token, @PathVariable Integer id, int mode, HttpServletRequest request) throws JsonProcessingException {
-        subscriptionService.checkToken(token);
-        historyService.sync(id, tvBoxService.myDevice(), mode);
-    }
-
     @PostMapping("/api/devices/{id}/push")
-    public void push(@PathVariable Integer id, String type, String name, String url, HttpServletRequest request) throws JsonProcessingException {
-        historyService.push(id, type, name, url, tvBoxService.myDevice());
+    public void push(@PathVariable Integer id, String type, String name, String url) throws JsonProcessingException {
+        tvBoxService.push(id, type, name, url);
     }
 
     @DeleteMapping("/api/devices/{id}")

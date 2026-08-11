@@ -2,11 +2,9 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.entity.DeviceRepository;
-import cn.har01d.alist_tvbox.service.HistoryService;
 import cn.har01d.alist_tvbox.service.SettingService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,8 +28,6 @@ class TvBoxControllerTest {
     @Mock
     private SubscriptionService subscriptionService;
     @Mock
-    private HistoryService historyService;
-    @Mock
     private DeviceRepository deviceRepository;
     @Mock
     private SettingService settingService;
@@ -43,9 +39,7 @@ class TvBoxControllerTest {
         TvBoxController controller = new TvBoxController(
                 tvBoxService,
                 subscriptionService,
-                historyService,
                 deviceRepository,
-                new ObjectMapper(),
                 settingService
         );
         mockMvc = MockMvcBuilders.standaloneSetup(controller)

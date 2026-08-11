@@ -26,10 +26,6 @@
         </el-breadcrumb>
 
         <div style="display: flex; align-items: center; gap: 12px;">
-          <el-radio-group v-if="isHistory" v-model="historySource" @change="changeHistorySource">
-            <el-radio-button value="web">网页播放</el-radio-button>
-            <el-radio-button value="sync">多端同步</el-radio-button>
-          </el-radio-group>
           <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源"
                     style="width: 300px;">
             <template #append>
@@ -692,9 +688,6 @@
         </el-table-column>
         <el-table-column fixed="right" label="操作" width="200">
           <template #default="scope">
-            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 0)">同步</el-button>
-            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 1)">推送</el-button>
-            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 2)">拉取</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
           </template>
         </el-table-column>
@@ -1032,15 +1025,6 @@ const showScan = () => {
 const loadDevices = () => {
   axios.get('/api/devices').then(({data}) => {
     devices.value = data
-  })
-}
-
-const syncHistory = (id: number, mode: number) => {
-  axios.post(`/devices/${store.token}/${id}/sync?mode=${mode}`).then(() => {
-    ElMessage.success('同步成功')
-    if (isHistory.value) {
-      loadHistory()
-    }
   })
 }
 
@@ -2161,76 +2145,38 @@ const getHistory = (id: string) => {
       second2.value = skipEnd.value % 60
     }
   }
-  const legacyUrl = '/history/' + store.token + '?key=' + encodeURIComponent(id)
   return axios.get('/api/playback/records/-/item', {
     params: {sourceKind: 'site', sourceKey: 'csp_AList', vodId: id}
-  }).then(({data}) => {
-    if (!data) {
-      return axios.get(legacyUrl).then(({data}) => applyHistory(data))
-    }
-    return axios.get(legacyUrl).then(({data: legacy}) => applyHistory({
-      ...legacy,
-      episode: data.episode,
-      episodeUrl: data.episodeUrl,
-      position: data.positionMs,
-      opening: data.openingMs > 0 ? data.openingMs : (legacy ? legacy.opening : 0),
-      ending: data.endingMs > 0 ? data.endingMs : (legacy ? legacy.ending : 0),
-      speed: data.speed,
-    }), () => applyHistory({
-      episode: data.episode,
-      episodeUrl: data.episodeUrl,
-      position: data.positionMs,
-      opening: data.openingMs || 0,
-      ending: data.endingMs || 0,
-      speed: data.speed,
-    }))
-  }, () => axios.get(legacyUrl).then(({data}) => applyHistory(data)))
+  }).then(({data}) => applyHistory(data && {
+    episode: data.episode,
+    episodeUrl: data.episodeUrl,
+    position: data.positionMs,
+    opening: data.openingMs,
+    ending: data.endingMs,
+    speed: data.speed,
+  }))
 }
 
 const loadHistory = () => {
-  const url = historySource.value === 'sync'
-    ? '/api/playback/records?page=' + (page.value - 1) + '&pageSize=' + size.value
-    : '/api/history?sort=createTime,desc&page=' + (page.value - 1) + '&size=' + size.value
-  axios.get(url).then(({data}) => {
+  axios.get('/api/playback/records?page=' + (page.value - 1) + '&pageSize=' + size.value).then(({data}) => {
     total.value = data.totalElements
-    files.value = data.content.map(e => {
-      if (historySource.value === 'sync') {
-        return {
-          vod_id: e.vodId,
-          vod_name: e.vodName,
-          vod_pic: e.vodPic,
-          vod_remarks: e.episodeName,
-          index: (e.episode ?? -1) + 1,
-          progress: formatTime(e.positionMs / 1000) + (e.durationMs > 0 ? ' / ' + formatTime(e.durationMs / 1000) : ''),
-          vod_tag: 'file',
-          vod_time: formatDate(e.updatedAt),
-          source_label: e.sourceName || e.sourceKey || e.sourceKind,
-          source_kind: e.sourceKind,
-          source_key: e.sourceKey,
-          sync_record: true,
-        }
-      }
-      return {
-        id: e.id,
-        vod_id: e.key,
-        vod_name: e.vodName,
-        vod_pic: e.vodPic,
-        vod_remarks: e.vodRemarks,
-        index: e.episode + 1,
-        progress: formatTime(e.position / 1000),
-        vod_tag: 'file',
-        vod_time: formatDate(e.createTime)
-      }
-    })
+    files.value = data.content.map(e => ({
+      vod_id: e.vodId,
+      vod_name: e.vodName,
+      vod_pic: e.vodPic,
+      vod_remarks: e.episodeName,
+      index: (e.episode ?? -1) + 1,
+      progress: formatTime(e.positionMs / 1000) + (e.durationMs > 0 ? ' / ' + formatTime(e.durationMs / 1000) : ''),
+      vod_tag: 'file',
+      vod_time: formatDate(e.updatedAt),
+      source_label: e.sourceName || e.sourceKey || e.sourceKind,
+      source_kind: e.sourceKind,
+      source_key: e.sourceKey,
+      sync_record: true,
+    }))
     isHistory.value = true
     paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
   })
-}
-
-const changeHistorySource = () => {
-  page.value = 1
-  selected.value = []
-  loadHistory()
 }
 
 const playbackDeleteInput = (record: any) => ({
@@ -2240,42 +2186,21 @@ const playbackDeleteInput = (record: any) => ({
 })
 
 const deleteHistory = () => {
-  if (batch.value) {
-    if (clean.value) {
-      clearHistory()
-    } else if (historySource.value === 'sync') {
-      axios.post('/api/playback/records/-/delete', selected.value.map(playbackDeleteInput)).then(() => {
-        deleteVisible.value = false
-        loadHistory()
-      })
-    } else {
-      axios.post('/api/history/-/delete', selected.value.map(s => s.id)).then(() => {
-        deleteVisible.value = false
-        loadHistory()
-      })
-    }
-  } else if (historySource.value === 'sync') {
-    axios.post('/api/playback/records/-/delete', [playbackDeleteInput(history.value)]).then(() => {
-      deleteVisible.value = false
-      loadHistory()
-    })
-  } else {
-    axios.delete('/api/history/' + history.value.id).then(() => {
-      deleteVisible.value = false
-      loadHistory()
-    })
+  if (batch.value && clean.value) {
+    clearHistory()
+    return
   }
+  const targets = batch.value
+    ? selected.value.map(playbackDeleteInput)
+    : [playbackDeleteInput(history.value)]
+  axios.post('/api/playback/records/-/delete', targets).then(() => {
+    deleteVisible.value = false
+    loadHistory()
+  })
 }
 
 const clearHistory = () => {
-  if (historySource.value === 'sync') {
-    axios.delete('/api/playback/records').then(() => {
-      deleteVisible.value = false
-      loadHistory()
-    })
-    return
-  }
-  axios.delete('/history/' + store.token).then(() => {
+  axios.delete('/api/playback/records').then(() => {
     deleteVisible.value = false
     loadHistory()
   })

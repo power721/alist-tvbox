@@ -41,9 +41,8 @@ import java.util.UUID;
 /**
  * 多端播放记录同步核心服务。
  * <p>
- * 与 {@link HistoryService} 解耦:本服务**显式接收 uid**(由 controller 从令牌解析),
- * 不读取 {@code SecurityContextHolder},故可在 {@code permitAll} 的令牌端点安全调用,
- * 绕开旧 {@code /history/{token}}、{@code /tv/action} 路径的 {@code getDetails()} NPE 隐患。
+ * 本服务**显式接收 uid**(由 controller 从令牌解析),不读取 {@code SecurityContextHolder},
+ * 故可在 {@code permitAll} 的令牌端点安全调用。
  * <p>
  * 身份 = (uid, sourceKind, sourceKey, vodId);冲突 = updatedAt LWW;删除 = 90 天墓碑。
  */

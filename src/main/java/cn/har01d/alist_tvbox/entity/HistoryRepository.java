@@ -10,14 +10,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface HistoryRepository extends JpaRepository<History, Integer> {
-    List<History> findAllByUidAndSourceKindIsNullAndKey(int uid, String key);
-
-    void deleteByUidAndSourceKindIsNullAndKey(int uid, String key);
-
-    Page<History> findByUidAndSourceKindIsNull(int uid, Pageable pageable);
-
-    List<History> findAllByUidAndSourceKindIsNull(int uid, Sort sort);
-
     List<History> findAllByUidAndSourceKindIsNotNull(int uid, Sort sort);
 
     Page<History> findPageByUidAndSourceKindIsNotNull(int uid, Pageable pageable);

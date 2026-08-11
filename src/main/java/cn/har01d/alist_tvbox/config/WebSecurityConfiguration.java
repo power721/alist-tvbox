@@ -51,7 +51,6 @@ public class WebSecurityConfiguration {
                         .requestMatchers(
                                 "/api/token",
                                 "/api/settings",
-                                "/api/history",
                                 "/api/telegram/search",
                                 "/api/settings/install_mode",
                                 "/api/alist/start/status",
@@ -60,7 +59,7 @@ public class WebSecurityConfiguration {
                                 "/api/accounts/logout",
                                 "/api/accounts/principal"
                         ).authenticated()
-                        .requestMatchers("/api/history/**", "/api/playback/tokens/**", "/api/playback/records", "/api/playback/records/**")
+                        .requestMatchers("/api/playback/tokens/**", "/api/playback/records", "/api/playback/records/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/users/**", "/api/tenants/**", "/api/files/**", "/api/alist/alias/**")
                         .hasAuthority(Role.ADMIN.name())

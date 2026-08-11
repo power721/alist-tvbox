@@ -7,3 +7,4 @@ db.migration.current.V12__WidenPlaybackVodId
 db.migration.current.V13__PlaybackSourceName
 db.migration.current.V14__PlaybackSelectionContext
 db.migration.current.V15__PlaybackSyncScope
+db.migration.current.V16__MigrateLegacyHistory
