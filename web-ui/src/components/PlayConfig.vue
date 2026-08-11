@@ -526,7 +526,7 @@ onUnmounted(() => {
         </el-form-item>
         <el-form-item label="同步分区" v-if="playbackSyncEnabled">
           <el-select v-model="playbackSyncScope" @change="updatePlaybackSyncScope" style="width: 200px">
-            <el-option label="按订阅地址(全部互通)" value="uid"/>
+            <el-option label="全局互通" value="uid"/>
             <el-option label="按 VOD Token" value="token"/>
             <el-option label="按订阅地址(逐个隔离)" value="subscription"/>
           </el-select>
