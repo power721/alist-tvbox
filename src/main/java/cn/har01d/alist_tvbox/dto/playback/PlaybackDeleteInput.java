@@ -17,6 +17,11 @@ public class PlaybackDeleteInput {
     private String historyKey;
     private long deletedAt;
 
+    /** webhtv 客户端按 siteKey 读取来源标识;序列化时随 sourceKey 一并输出,兼容 Fish/默影视。 */
+    public String getSiteKey() {
+        return sourceKey;
+    }
+
     public static PlaybackDeleteInput fromMap(Map<String, Object> m) {
         PlaybackDeleteInput d = new PlaybackDeleteInput();
         if (m == null) {

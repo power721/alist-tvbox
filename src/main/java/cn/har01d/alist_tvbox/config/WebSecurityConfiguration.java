@@ -44,7 +44,8 @@ public class WebSecurityConfiguration {
                                 "/api/sync/validate",
                                 "/api/playback/event",
                                 "/api/playback/events",
-                                "/api/playback/changes"
+                                "/api/playback/changes",
+                                "/api/playback/sync"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(

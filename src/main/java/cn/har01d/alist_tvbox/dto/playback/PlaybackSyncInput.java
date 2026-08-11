@@ -41,6 +41,11 @@ public class PlaybackSyncInput {
     private String driveDirId;
     private String event;
 
+    /** webhtv 客户端按 siteKey 读取来源标识;序列化时随 sourceKey 一并输出,兼容 Fish/默影视。 */
+    public String getSiteKey() {
+        return sourceKey;
+    }
+
     public static PlaybackSyncInput fromMap(Map<String, Object> m) {
         PlaybackSyncInput in = new PlaybackSyncInput();
         if (m == null) {
@@ -48,7 +53,7 @@ public class PlaybackSyncInput {
         }
         in.sourceKind = str(m, "sourceKind", "source_kind");
         in.sourceKey = str(m, "sourceKey", "source_key", "siteKey", "site_key", "site", "interfaceKey");
-        in.sourceName = str(m, "sourceName", "source_name");
+        in.sourceName = str(m, "sourceName", "source_name", "siteName", "site_name", "configName", "config_name");
         in.vodId = str(m, "vodId", "vod_id", "videoId", "itemId");
         in.vodName = str(m, "vodName", "vod_name", "name", "title");
         in.vodPic = str(m, "vodPic", "vod_pic", "pic", "poster", "artwork");

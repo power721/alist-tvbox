@@ -65,6 +65,33 @@ public class PlaybackSyncController {
                 Boolean.TRUE.equals(latest));
     }
 
+    // ── Fish/默影视 webhtv.playback.v1 兼容入口(与同步开关无关) ──────────────
+    // 客户端在「Webhook 上报」与「远端同步」填同一地址 /api/playback/sync,用方法区分:
+    // POST=上报(等同 /event),GET=拉取(等同 /changes,字段按 webhtv 兼容映射)。
+    // 即使「播放记录同步」开关关闭,这两个入口仍可读写——开关只控制 spider 订阅注入。
+
+    @PostMapping("/api/playback/sync")
+    public void syncPush(HttpServletRequest request, @RequestBody Map<String, Object> body) {
+        PlaybackSyncService.TokenIdentity id = playbackSyncService.resolveIdentity(token(request));
+        playbackSyncService.apply(id, body, null, idempotencyKey(request));
+    }
+
+    @GetMapping("/api/playback/sync")
+    public PlaybackSyncPage syncPull(HttpServletRequest request,
+                                     @RequestHeader(value = "X-WebHTV-Since", required = false) String sinceHeader,
+                                     @RequestHeader(value = "X-PlaySync-Since", required = false) String sinceHeaderAlt,
+                                     @RequestHeader(value = "X-WebHTV-Limit", required = false) Integer limitHeader,
+                                     @RequestHeader(value = "X-PlaySync-Limit", required = false) Integer limitHeaderAlt) {
+        PlaybackSyncService.TokenIdentity id = playbackSyncService.resolveIdentity(token(request));
+        long since = parseLong(sinceHeader != null ? sinceHeader : sinceHeaderAlt, 0L);
+        int limit = limitHeader != null ? limitHeader : (limitHeaderAlt != null ? limitHeaderAlt : 0);
+        PlaybackSyncPage page = playbackSyncService.pull(id.uid(), id.syncScope(), since, limit, null, null, false);
+        // webhtv 客户端逐条校验拉取的 upsert(siteKey/vodId/vodName/episodeName/positionMs>0/durationMs>0),
+        // 任一不达标即判失败且不推进游标 → 死循环。服务端先行剔除,保证游标正常前进。
+        page.getItems().removeIf(item -> !webhtvValid(item));
+        return page;
+    }
+
     /** 诊断接口：使用普通登录会话鉴权，分页返回当前用户的播放同步记录。 */
     @GetMapping("/api/playback/records")
     public Page<PlaybackSyncInput> records(
@@ -163,5 +190,16 @@ public class PlaybackSyncController {
         } catch (Exception e) {
             return def;
         }
+    }
+
+    /** webhtv 客户端对拉取 upsert 的必填/取值校验:不达标的记录在 /sync 响应中剔除,避免客户端死循环。 */
+    private static boolean webhtvValid(PlaybackSyncInput item) {
+        return item != null
+                && item.getSourceKey() != null && !item.getSourceKey().isBlank()
+                && item.getVodId() != null && !item.getVodId().isBlank()
+                && item.getVodName() != null && !item.getVodName().isBlank()
+                && item.getEpisodeName() != null && !item.getEpisodeName().isBlank()
+                && item.getPositionMs() > 0
+                && item.getDurationMs() > 0;
     }
 }

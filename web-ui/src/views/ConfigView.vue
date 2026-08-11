@@ -77,36 +77,6 @@
             </el-form-item>
           </el-form>
         </el-card>
-
-        <el-card class="box-card">
-          <el-form label-width="100px">
-            <el-form-item label="同步令牌">
-              <div v-if="playbackTokens.length === 0" class="hint">
-                暂无令牌。生成后填入 Fish/默影视(Webhook/远端同步)或同步爬虫的 Token 配置。
-              </div>
-              <el-table v-else :data="playbackTokens" size="small" border style="width: 100%">
-                <el-table-column prop="name" label="名称" min-width="120"/>
-                <el-table-column prop="token" label="令牌" min-width="160"/>
-                <el-table-column label="最近使用" min-width="160">
-                  <template #default="{ row }">{{ row.lastUsedAt ? formatTime(row.lastUsedAt) : '—' }}</template>
-                </el-table-column>
-                <el-table-column label="操作" width="80">
-                  <template #default="{ row }">
-                    <el-button size="small" type="danger" link @click="deletePlaybackToken(row)">删除</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-form-item>
-            <el-form-item label="新令牌">
-              <el-input v-model="newPlaybackTokenName" placeholder="名称(可选)" style="width: 200px"/>
-              <el-button type="primary" @click="createPlaybackToken">生成</el-button>
-            </el-form-item>
-            <el-form-item v-if="createdPlaybackToken" label="已生成">
-              <el-input v-model="createdPlaybackToken" readonly type="password" show-password style="width: 320px"/>
-              <span class="hint">仅显示一次,请立即复制保存。</span>
-            </el-form-item>
-          </el-form>
-        </el-card>
       </el-col>
 
       <el-col :xs="23" :sm="23" :md="23" :lg="11" :xl="11">
@@ -386,7 +356,7 @@
 
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
-import {ElMessage, ElMessageBox} from "element-plus";
+import {ElMessage} from "element-plus";
 import axios from "axios";
 import {onUnmounted} from "@vue/runtime-core";
 import {store} from "@/services/store";
@@ -480,33 +450,6 @@ const form = ref({
   token: '',
   enabledToken: true
 })
-
-const playbackTokens = ref<any[]>([])
-const newPlaybackTokenName = ref('')
-const createdPlaybackToken = ref('')
-
-const loadPlaybackTokens = () => {
-  axios.get('/api/playback/tokens').then(({data}) => {
-    playbackTokens.value = data
-  }).catch(() => {})
-}
-
-const createPlaybackToken = () => {
-  axios.post('/api/playback/tokens', {name: newPlaybackTokenName.value}).then(({data}) => {
-    createdPlaybackToken.value = data.token
-    newPlaybackTokenName.value = ''
-    ElMessage.success('令牌已生成,请立即复制')
-    loadPlaybackTokens()
-  }).catch(() => {})
-}
-
-const deletePlaybackToken = (row: any) => {
-  ElMessageBox.confirm(`删除令牌「${row.name || row.token}」?该令牌的客户端将无法同步。`, '提示', {type: 'warning'}).then(() => {
-    axios.delete(`/api/playback/tokens/${row.id}`).then(() => {
-      loadPlaybackTokens()
-    }).catch(() => {})
-  }).catch(() => {})
-}
 
 const formatTime = (value: string | number) => {
   return new Date(value).toLocaleString('zh-cn')
@@ -764,7 +707,6 @@ onMounted(() => {
     basicAuthUser.value = data.username
     basicAuthPass.value = data.password
   }).catch(() => {})
-  loadPlaybackTokens()
   axios.get('/api/settings').then(({data}) => {
     form.value.token = data.token
     form.value.enabledToken = data.enabled_token === 'true'
