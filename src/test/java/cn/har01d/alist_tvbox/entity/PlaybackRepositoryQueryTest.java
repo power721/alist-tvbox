@@ -74,6 +74,33 @@ class PlaybackRepositoryQueryTest {
         assertThat(domainType(PlaybackTombstoneRepository.class)).isEqualTo(PlaybackTombstone.class);
     }
 
+    /**
+     * 管理端/网页删除的墓碑落在 uid 全局分区(sync_scope IS NULL)。scoped 客户端若看不见这些墓碑,
+     * 删除对其不可见、记录被下次 PUSH 复活——故每个 scoped 墓碑 @Query 都必须含 {@code t.syncScope IS NULL}。
+     * mock 仓库不解析 JPQL,这类谓词回归只能在查询字符串层面守住。
+     */
+    @Test
+    void scopedTombstoneQueriesIncludeUidGlobalRows() {
+        List<String> violations = new ArrayList<>();
+        int scopedCount = 0;
+        for (Method method : PlaybackTombstoneRepository.class.getDeclaredMethods()) {
+            Query query = method.getAnnotation(Query.class);
+            if (query == null || !method.getName().startsWith("findSync")) {
+                continue;
+            }
+            scopedCount++;
+            if (!query.value().contains("t.syncScope IS NULL")) {
+                violations.add(method.getName());
+            }
+        }
+        assertThat(scopedCount)
+                .as("必须扫到 scoped 墓碑查询,否则本断言空跑")
+                .isGreaterThanOrEqualTo(7);
+        assertThat(violations)
+                .as("scoped 墓碑查询必须含 `t.syncScope IS NULL`,uid 全局删除才能下达 scoped 客户端")
+                .isEmpty();
+    }
+
     private Class<?> domainType(Class<?> repository) {
         for (Type type : repository.getGenericInterfaces()) {
             if (type instanceof ParameterizedType parameterized) {

@@ -166,6 +166,8 @@ class PlaybackSyncServiceTest {
         assertThat(tombstone.getSourceKind()).isEqualTo("spider_plugin");
         assertThat(tombstone.getSourceKey()).isEqualTo("plugin-id");
         assertThat(tombstone.getVodId()).isEqualTo("vod-1");
+        // 管理端删除走 uid 级:墓碑必须落在 uid 全局分区,scoped 客户端才拉得到
+        assertThat(tombstone.getSyncScope()).isNull();
         assertThat(deletedRows()).containsExactly(row);
     }
 
@@ -634,6 +636,62 @@ class PlaybackSyncServiceTest {
 
         History saved = savedHistory();
         assertThat(saved.getSyncScope()).isEqualTo("web");
+    }
+
+    // ── 分区:uid 全局墓碑须下达 scoped 客户端 ──────────────────────────────
+
+    @Test
+    void scopedPullDeliversUidGlobalTombstone() {
+        // scoped 客户端(Harold)拉取时,uid 全局墓碑必须一并下发——否则管理端删除对其不可见
+        PlaybackTombstone uidGlobal = tombstone("site", "v1", 50);
+        uidGlobal.setSourceKey("abc");
+        when(historyRepository.findSyncByCursor(eq(UID), eq("Harold"), eq(0L), any()))
+                .thenReturn(List.of());
+        when(tombstoneRepository.findSyncByCursor(eq(UID), eq("Harold"), eq(0L), any()))
+                .thenReturn(List.of(uidGlobal));
+
+        PlaybackSyncPage page = service.pull(UID, "Harold", 0L, 100, null, null, false);
+
+        assertThat(page.getDeleted()).hasSize(1);
+        assertThat(page.getDeleted().getFirst().getSourceKey()).isEqualTo("abc");
+    }
+
+    @Test
+    void scopedUpsertBlockedByUidGlobalTombstone() {
+        // scoped 客户端(Harold)的 PUSH 必须被 uid 全局墓碑挡住,否则管理端删除后记录被复活(原缺陷)
+        PlaybackTombstone uidGlobal = new PlaybackTombstone();
+        uidGlobal.setScope("item");
+        uidGlobal.setDeletedAt(1000L);
+        when(tombstoneRepository.findSyncByIdentity(eq(UID), eq("Harold"), eq("site"), eq("abc"), eq("v1")))
+                .thenReturn(List.of(uidGlobal));
+
+        service.apply(new PlaybackSyncService.TokenIdentity(UID, "Harold"),
+                Map.of("sourceKey", "abc", "vodId", "v1", "positionMs", 10, "updatedAt", 500), null, null);
+
+        verify(historyRepository, never()).save(any());
+    }
+
+    @Test
+    void managementClearAllDemotesScopedTombstoneToUidGlobal() {
+        // 既有 scoped 'all' 墓碑(Harold 分区):管理端“清空全部”复用它时必须降级回 uid 全局分区,
+        // 否则只有 Harold 客户端收到删除,其他 scoped 客户端的记录会被下次 PUSH 复活
+        PlaybackTombstone scopedAll = new PlaybackTombstone();
+        scopedAll.setScope("all");
+        scopedAll.setSyncScope("Harold");
+        scopedAll.setDeletedAt(100L);
+        when(tombstoneRepository.findFirstByUidAndScopeOrderByDeletedAtDesc(UID, "all"))
+                .thenReturn(scopedAll);
+        when(historyRepository.findAllByUidAndSourceKindIsNotNull(eq(UID), any()))
+                .thenReturn(List.of());
+
+        service.deleteAllRecords(UID);
+
+        PlaybackTombstone saved = savedTombstone();
+        assertThat(saved.getSyncScope())
+                .as("管理端清空全部必须落到 uid 全局分区")
+                .isNull();
+        assertThat(saved.getScope()).isEqualTo("all");
+        assertThat(saved.getDeletedAt()).isGreaterThan(100L);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

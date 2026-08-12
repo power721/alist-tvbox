@@ -306,6 +306,7 @@ public class PlaybackSyncService {
             tomb.setSyncScope(syncScope);
             tomb.setScope(SCOPE_ALL);
         }
+        forceUidGlobalScope(tomb, syncScope);
         saveTombstone(tomb, deletedAt, changeSeq);
         removeHistory(findAllSync(uid, syncScope, Sort.unsorted()), deletedAt);
     }
@@ -324,6 +325,7 @@ public class PlaybackSyncService {
             tomb.setSourceKind(sourceKind);
             tomb.setSourceKey(sourceKey);
         }
+        forceUidGlobalScope(tomb, syncScope);
         saveTombstone(tomb, deletedAt, changeSeq);
         removeHistory(findBySite(uid, syncScope, sourceKind, sourceKey), deletedAt);
     }
@@ -345,6 +347,7 @@ public class PlaybackSyncService {
             tomb.setSourceKey(in.getSourceKey());
             tomb.setVodId(in.getVodId());
         }
+        forceUidGlobalScope(tomb, syncScope);
         String historyKey = portableHistoryKey(sourceKind, in.getSourceKey(), in.getVodId(), in.getHistoryKey());
         if (historyKey != null) {
             tomb.setHistoryKey(historyKey);
@@ -366,6 +369,17 @@ public class PlaybackSyncService {
         }
         tomb.setExpireAt(tomb.getDeletedAt() + TOMBSTONE_TTL_MS);
         tombstoneRepository.save(tomb);
+    }
+
+    /**
+     * uid 级删除(management/网页,syncScope=null)复用到一个 scoped 墓碑时,必须把它降级回 uid 全局分区
+     * (sync_scope=NULL),否则该删除只对原分区可见,其他 scoped 客户端收不到 → 记录被下次 PUSH 复活。
+     * scoped 调用不动墓碑既有分区,避免把全局墓碑“俘获”进某个分区。
+     */
+    private void forceUidGlobalScope(PlaybackTombstone tomb, String syncScope) {
+        if (syncScope == null) {
+            tomb.setSyncScope(null);
+        }
     }
 
     /**
@@ -760,8 +774,9 @@ public class PlaybackSyncService {
     }
 
     // ── 分区查询封装 ─────────────────────────────────────────────────────────
-    // syncScope 为空 = uid 级(旧语义,所有订阅互通):走无分区谓词的查询;
-    // 非空 = 仅该分区:走带 (:scope IS NULL OR sync_scope = :scope) 的 @Query。
+    // syncScope 为空 = uid 级(旧语义,所有订阅互通):走无分区谓词的派生查询,跨所有分区。
+    // 非空 = 该分区:history 仅本分区(进度不串台);tombstone 还含 uid 全局墓碑
+    //      (管理端/网页删除须下达 scoped 客户端,谓词见 PlaybackTombstoneRepository 的 scoped @Query)。
 
     private List<History> findByIdentity(int uid, String syncScope, String kind, String key, String vodId) {
         return syncScope == null
