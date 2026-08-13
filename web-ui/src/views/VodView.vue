@@ -852,6 +852,12 @@ const playlist = ref<PlayItem[]>([])
 const playItem = ref<PlayItem>({})
 const editing = ref<PlayItem>({})
 const currentVideoIndex = ref(0)
+// 当前播放存/查进度用的身份:续播自同步记录时=原身份(sourceKey/vodId=网盘链接),
+// 否则=csp_AList 浏览身份(用 movie.vod_id)。由 loadDetail 入参写入,getHistory/saveHistory 读取。
+// 网盘续播时 movie.vod_id 是挂载后的 id,与原记录 vodId 不一致,必须用原 vodId 才能命中/更新原记录。
+const playSourceKey = ref('csp_AList')
+const playSourceName = ref('AList')
+const playVodIdOverride = ref<string | null>(null)
 const currentImageIndex = ref(0)
 const duration = ref(0)
 const currentTime = ref(0)
@@ -1352,7 +1358,7 @@ const loadShare = (link: string) => {
 const load = (row: any) => {
   if (row.sync_record) {
     if (row.source_kind === 'site' && WEB_PLAYABLE_SOURCE_KEYS.has(row.source_key)) {
-      loadDetail(row.vod_id, 'web', row.source_key)
+      loadDetail(row.vod_id, 'web', row.source_key, row.source_label || row.source_key, true)
     } else {
       ElMessage.warning('该来源暂不支持在网页端直接续播')
     }
@@ -1480,7 +1486,10 @@ const extractPaths = (id: string) => {
   return '1$' + encodeURIComponent(path) + '$1'
 }
 
-const loadDetail = (id: string, ac: string = 'web', sourceKey: string = 'csp_AList') => {
+const loadDetail = (id: string, ac: string = 'web', sourceKey: string = 'csp_AList', sourceName: string = 'AList', syncResume = false) => {
+  playSourceKey.value = sourceKey
+  playSourceName.value = sourceName
+  playVodIdOverride.value = syncResume ? id : null
   loading.value = true
   axios.get('/vod/' + store.token + '?ac=' + ac + '&ids=' + id).then(({data}) => {
     if (isHistory.value) {
@@ -1524,7 +1533,7 @@ const loadDetail = (id: string, ac: string = 'web', sourceKey: string = 'csp_ALi
       }
     }
     playFrom.value = movies.value[0].vod_play_from.split("$$$");
-    getHistory(movies.value[0].vod_id, sourceKey).then(() => {
+    getHistory(playVodIdOverride.value || movies.value[0].vod_id, sourceKey).then(() => {
       getPlayUrl()
       loading.value = false
       dialogVisible.value = true
@@ -2092,9 +2101,9 @@ const saveHistory = () => {
     ? Math.round(videoPlayer.value.duration * 1000) : 0
   axios.post('/api/playback/events', [{
     sourceKind: 'site',
-    sourceKey: 'csp_AList',
-    sourceName: 'AList',
-    vodId: movie.vod_id,
+    sourceKey: playSourceKey.value,
+    sourceName: playSourceName.value,
+    vodId: playVodIdOverride.value || movie.vod_id,
     vodName: movie.vod_name,
     vodPic: movie.vod_pic,
     episodeName: playItem.value.title,
