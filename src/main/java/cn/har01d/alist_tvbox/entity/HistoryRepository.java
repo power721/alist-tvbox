@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.entity;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -13,6 +14,9 @@ public interface HistoryRepository extends JpaRepository<History, Integer> {
     List<History> findAllByUidAndSourceKindIsNotNull(int uid, Sort sort);
 
     Page<History> findPageByUidAndSourceKindIsNotNull(int uid, Pageable pageable);
+
+    /** 「网页播放」筛选:仅返回 sourceKey 命中可播放白名单的记录。 */
+    Page<History> findPageByUidAndSourceKeyIn(int uid, Collection<String> sourceKeys, Pageable pageable);
 
     List<History> findAllByUidAndSourceKindAndSourceKeyAndVodId(
             int uid, String sourceKind, String sourceKey, String vodId);

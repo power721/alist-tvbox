@@ -26,6 +26,10 @@
         </el-breadcrumb>
 
         <div style="display: flex; align-items: center; gap: 12px;">
+          <el-radio-group v-if="isHistory" v-model="historySource" @change="changeHistorySource">
+            <el-radio-button value="web">网页播放</el-radio-button>
+            <el-radio-button value="sync">多端同步</el-radio-button>
+          </el-radio-group>
           <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源"
                     style="width: 300px;">
             <template #append>
@@ -888,6 +892,12 @@ const settingVisible = ref(false)
 const addVisible = ref(false)
 const isHistory = ref(false)
 const historySource = ref('sync')
+// 网页端可直接续播的来源(须与后端 PlaybackSyncService.WEB_PLAYABLE_SITE_KEYS 保持一致)
+const WEB_PLAYABLE_SOURCE_KEYS = new Set([
+  'csp_AList', 'csp_XiaoYa',
+  'csp_TgChannel', 'csp_TgDouBan', 'csp_TgSearch', 'csp_TgWeb', 'csp_FishPanSou', 'csp_FishPanSouGroup',
+  'TvBox',
+])
 const searching = ref(false)
 const fileSearching = ref(false)
 const searchMode = ref('tg')
@@ -1341,8 +1351,8 @@ const loadShare = (link: string) => {
 
 const load = (row: any) => {
   if (row.sync_record) {
-    if (row.source_kind === 'site' && row.source_key === 'csp_AList') {
-      loadDetail(row.vod_id)
+    if (row.source_kind === 'site' && WEB_PLAYABLE_SOURCE_KEYS.has(row.source_key)) {
+      loadDetail(row.vod_id, 'web', row.source_key)
     } else {
       ElMessage.warning('该来源暂不支持在网页端直接续播')
     }
@@ -1470,7 +1480,7 @@ const extractPaths = (id: string) => {
   return '1$' + encodeURIComponent(path) + '$1'
 }
 
-const loadDetail = (id: string, ac: string = 'web') => {
+const loadDetail = (id: string, ac: string = 'web', sourceKey: string = 'csp_AList') => {
   loading.value = true
   axios.get('/vod/' + store.token + '?ac=' + ac + '&ids=' + id).then(({data}) => {
     if (isHistory.value) {
@@ -1514,7 +1524,7 @@ const loadDetail = (id: string, ac: string = 'web') => {
       }
     }
     playFrom.value = movies.value[0].vod_play_from.split("$$$");
-    getHistory(movies.value[0].vod_id).then(() => {
+    getHistory(movies.value[0].vod_id, sourceKey).then(() => {
       getPlayUrl()
       loading.value = false
       dialogVisible.value = true
@@ -2099,7 +2109,7 @@ const saveHistory = () => {
   }]).catch(() => {})
 }
 
-const getHistory = (id: string) => {
+const getHistory = (id: string, sourceKey: string = 'csp_AList') => {
   currentVideoIndex.value = 0
   currentTime.value = 0
   currentSpeed.value = 1
@@ -2146,7 +2156,7 @@ const getHistory = (id: string) => {
     }
   }
   return axios.get('/api/playback/records/-/item', {
-    params: {sourceKind: 'site', sourceKey: 'csp_AList', vodId: id}
+    params: {sourceKind: 'site', sourceKey: sourceKey, vodId: id}
   }).then(({data}) => applyHistory(data && {
     episode: data.episode,
     episodeUrl: data.episodeUrl,
@@ -2158,7 +2168,9 @@ const getHistory = (id: string) => {
 }
 
 const loadHistory = () => {
-  axios.get('/api/playback/records?page=' + (page.value - 1) + '&pageSize=' + size.value).then(({data}) => {
+  const url = '/api/playback/records?page=' + (page.value - 1) + '&pageSize=' + size.value
+    + (historySource.value === 'web' ? '&webPlayable=true' : '')
+  axios.get(url).then(({data}) => {
     total.value = data.totalElements
     files.value = data.content.map(e => ({
       vod_id: e.vodId,
@@ -2177,6 +2189,12 @@ const loadHistory = () => {
     isHistory.value = true
     paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
   })
+}
+
+const changeHistorySource = () => {
+  page.value = 1
+  selected.value = []
+  loadHistory()
 }
 
 const playbackDeleteInput = (record: any) => ({

@@ -25,6 +25,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -362,6 +363,23 @@ class PlaybackSyncServiceTest {
         assertThat(records.getSize()).isEqualTo(25);
         assertThat(records.getTotalElements()).isEqualTo(26);
         assertThat(records.getContent()).extracting(PlaybackSyncInput::getVodId).containsExactly("v2");
+    }
+
+    @Test
+    void webPlayableListFiltersByWebPlayableSourceKeys() {
+        History row = history("csp_TgDouBan", "v9", 300);
+        PageRequest pageable = PageRequest.of(0, 100,
+                Sort.by(Sort.Direction.DESC, "updatedAt", "id"));
+        ArgumentCaptor<Collection<String>> keys = ArgumentCaptor.forClass(Collection.class);
+        when(historyRepository.findPageByUidAndSourceKeyIn(eq(UID), keys.capture(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(row), pageable, 1));
+
+        Page<PlaybackSyncInput> records = service.list(UID, 0, 100, true);
+
+        assertThat(records.getContent()).extracting(PlaybackSyncInput::getVodId).containsExactly("v9");
+        assertThat(keys.getValue())
+                .contains("TvBox", "csp_TgChannel", "csp_AList", "csp_XiaoYa", "csp_TgDouBan")
+                .doesNotContain("csp_BiliBili", "csp_Emby");
     }
 
     @Test

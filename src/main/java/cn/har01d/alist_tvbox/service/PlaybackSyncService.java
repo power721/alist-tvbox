@@ -62,6 +62,15 @@ public class PlaybackSyncService {
     private static final Set<String> TELEGRAM_SITE_KEYS = Set.of(
             "csp_TgDouBan", "csp_TgSearch", "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup");
     private static final Set<String> BROWSE_SITE_KEYS = Set.of("csp_AList", "csp_XiaoYa");
+    // 网页端可直接播放的站点 key:电报系 + 浏览系 + atv-player(TvBox)/电报频道。供「网页播放」筛选。
+    private static final Set<String> WEB_PLAYABLE_SITE_KEYS;
+    static {
+        Set<String> keys = new HashSet<>(TELEGRAM_SITE_KEYS);
+        keys.addAll(BROWSE_SITE_KEYS);
+        keys.add("TvBox");
+        keys.add("csp_TgChannel");
+        WEB_PLAYABLE_SITE_KEYS = Set.copyOf(keys);
+    }
 
     private final HistoryRepository historyRepository;
     private final PlaybackTokenRepository tokenRepository;
@@ -446,12 +455,24 @@ public class PlaybackSyncService {
     /** 分页返回该用户数据库中的同步记录，页码从 0 开始。 */
     @Transactional(readOnly = true)
     public Page<PlaybackSyncInput> list(int uid, int page, int pageSize) {
+        return list(uid, page, pageSize, false);
+    }
+
+    /**
+     * 分页返回该用户数据库中的同步记录，页码从 0 开始。
+     *
+     * @param webPlayable true = 仅返回网页端可播放的来源(「网页播放」tab);false = 全部(「多端同步」tab)
+     */
+    @Transactional(readOnly = true)
+    public Page<PlaybackSyncInput> list(int uid, int page, int pageSize, boolean webPlayable) {
         int safePage = Math.max(page, 0);
         int safePageSize = pageSize > 0 && pageSize <= MAX_LIMIT ? pageSize : DEFAULT_LIMIT;
         PageRequest pageable = PageRequest.of(safePage, safePageSize,
                 Sort.by(Sort.Direction.DESC, "updatedAt", "id"));
-        return historyRepository.findPageByUidAndSourceKindIsNotNull(uid, pageable)
-                .map(this::toInput);
+        Page<History> rows = webPlayable
+                ? historyRepository.findPageByUidAndSourceKeyIn(uid, WEB_PLAYABLE_SITE_KEYS, pageable)
+                : historyRepository.findPageByUidAndSourceKindIsNotNull(uid, pageable);
+        return rows.map(this::toInput);
     }
 
     /** 按跨端身份返回单条记录，供网页播放器恢复其他设备上报的进度。 */

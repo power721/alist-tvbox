@@ -1791,6 +1791,15 @@ public class TvBoxService {
     }
 
     public MovieList getDetail(String ac, String tid, String title, String keyword, Integer depth) {
+        if (tid.startsWith("http://") || tid.startsWith("https://")) {
+            // 网盘分享链接(TVBox 历史记录 / 多端播放同步回放):挂载后建播放列表,
+            // 由记录里的 episode 索引驱动续播。同 ParseService.drive / RemoteSearchService.detail。
+            ShareLink share = new ShareLink();
+            share.setLink(tid);
+            String path = shareService.add(share);
+            String resolved = shareService.resolveShareTitle(tid, title);
+            return getDetail(ac, "1$" + path + "/~playlist", resolved, keyword, depth);
+        }
         if (tid.contains("%24")) {
             tid = URLDecoder.decode(tid, StandardCharsets.UTF_8);
         }

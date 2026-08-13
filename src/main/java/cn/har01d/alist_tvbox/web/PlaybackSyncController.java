@@ -96,8 +96,9 @@ public class PlaybackSyncController {
     @GetMapping("/api/playback/records")
     public Page<PlaybackSyncInput> records(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "100") int pageSize) {
-        return playbackSyncService.list(currentUid(), page, pageSize);
+            @RequestParam(defaultValue = "100") int pageSize,
+            @RequestParam(required = false) Boolean webPlayable) {
+        return playbackSyncService.list(currentUid(), page, pageSize, Boolean.TRUE.equals(webPlayable));
     }
 
     @GetMapping("/api/playback/records/-/item")
