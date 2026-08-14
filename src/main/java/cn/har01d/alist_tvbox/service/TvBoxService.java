@@ -41,6 +41,8 @@ import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.servlet.http.HttpServletRequest;
@@ -1789,6 +1791,15 @@ public class TvBoxService {
     }
 
     public MovieList getDetail(String ac, String tid, String title, String keyword, Integer depth) {
+        if (tid.startsWith("http://") || tid.startsWith("https://")) {
+            // 网盘分享链接(TVBox 历史记录 / 多端播放同步回放):挂载后建播放列表,
+            // 由记录里的 episode 索引驱动续播。同 ParseService.drive / RemoteSearchService.detail。
+            ShareLink share = new ShareLink();
+            share.setLink(tid);
+            String path = shareService.add(share);
+            String resolved = shareService.resolveShareTitle(tid, title);
+            return getDetail(ac, "1$" + path + "/~playlist", resolved, keyword, depth);
+        }
         if (tid.contains("%24")) {
             tid = URLDecoder.decode(tid, StandardCharsets.UTF_8);
         }
@@ -2880,6 +2891,22 @@ public class TvBoxService {
             throw new BadRequestException("无法访问设备", e);
         }
         return null;
+    }
+
+    /** 推送媒体(type=push)或订阅配置(type=setting)到影视设备的 /action;纯设备控制,不涉及播放历史同步。 */
+    public void push(Integer id, String type, String name, String url) throws JsonProcessingException {
+        Device device = deviceRepository.findById(id).orElseThrow();
+        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("do", type);
+        if ("push".equals(type)) {
+            formData.add("url", url);
+        } else {
+            formData.add("name", name);
+            formData.add("text", url);
+        }
+        log.debug("push: {}", formData);
+        String json = restTemplate.postForObject(device.getIp() + "/action", formData, String.class);
+        log.info(json);
     }
 
     private String buildTvUrl() {

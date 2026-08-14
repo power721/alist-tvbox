@@ -170,16 +170,18 @@ public class DriveService {
         video.setSize(entry.getSize());
         video.setDuration(entry.getDuration());
         video.setTime(entry.getModified());
-        video.setUrl(buildProxyUrl(site, fullPath, entry.getName()));
+        int playUrlId = proxyService.generateProxyUrl(site, fullPath);
+        video.setPlayId(site.getId() + "@" + playUrlId);
+        video.setUrl(buildProxyUrl(site, playUrlId, entry.getName()));
         return video;
     }
 
     /** Same shape as {@code TvBoxService.buildProxyUrl}, but bakes the first subscription token
      *  (or {@code -}) since {@code /api} requests carry no path token for {@code getCurrentToken()}. */
-    private String buildProxyUrl(Site site, String path, String name) {
+    private String buildProxyUrl(Site site, int playUrlId, String name) {
         String suffix = StringUtils.endsWithIgnoreCase(name, ".iso") ? ".iso" : "";
         String proxyPath = "/p/" + subscriptionService.getFirstToken() + "/"
-                + site.getId() + "@" + proxyService.generateProxyUrl(site, path) + suffix;
+                + site.getId() + "@" + playUrlId + suffix;
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http")
                 .replacePath(proxyPath)

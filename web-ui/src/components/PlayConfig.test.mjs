@@ -4,6 +4,16 @@ import { readFileSync } from 'node:fs'
 
 const componentSource = readFileSync(new URL('./PlayConfig.vue', import.meta.url), 'utf8')
 
+test('play config exposes playback sync switch disabled by default with scope selector', () => {
+  assert.equal(componentSource.includes(`const playbackSyncEnabled = ref(false)`), true)
+  assert.equal(componentSource.includes(`const playbackSyncScope = ref('token')`), true)
+  assert.equal(componentSource.includes(`name: 'playback_sync_enabled'`), true)
+  assert.equal(componentSource.includes(`data.playback_sync_enabled === 'true'`), true)
+  assert.equal(componentSource.includes(`label="播放记录同步"`), true)
+  assert.equal(componentSource.includes(`name: 'playback_sync_scope'`), true)
+  assert.equal(componentSource.includes(`label="同步分区"`), true)
+})
+
 test('play config channel management gates drag sorting by mobile browser detection', () => {
   assert.equal(componentSource.includes(`import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";`), true)
   assert.equal(componentSource.includes('v-if="channelDragEnabled"'), true)

@@ -102,6 +102,10 @@ public class SettingService {
         appProperties.setEnableHttps(settingRepository.findById("enable_https").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setCleanInvalidShares(settingRepository.findById("clean_invalid_shares").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setEnabledToken(settingRepository.findById(Constants.ENABLED_TOKEN).map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setPlaybackSyncEnabled(settingRepository.findById("playback_sync_enabled")
+                .map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setPlaybackSyncScope(settingRepository.findById("playback_sync_scope")
+                .map(Setting::getValue).filter(StringUtils::isNotBlank).orElse("token"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
@@ -373,7 +377,8 @@ public class SettingService {
         var authorities = SecurityContextHolder.getContext().getAuthentication().getAuthorities();
         if (!authorities.isEmpty() && authorities.iterator().next().getAuthority().equals(Role.USER.name())) {
             Map<String, String> settings = new HashMap<>();
-            Set<String> keys = Set.of("alist_version", "app_version", "enabled_token", "search_excluded_paths");
+            Set<String> keys = Set.of("alist_version", "app_version", "enabled_token", "search_excluded_paths",
+                    "playback_sync_enabled");
             for (String key : keys) {
                 settings.put(key, map.get(key));
             }
@@ -451,6 +456,12 @@ public class SettingService {
         }
         if ("clean_invalid_shares".equals(setting.getName())) {
             appProperties.setCleanInvalidShares("true".equals(setting.getValue()));
+        }
+        if ("playback_sync_enabled".equals(setting.getName())) {
+            appProperties.setPlaybackSyncEnabled("true".equals(setting.getValue()));
+        }
+        if ("playback_sync_scope".equals(setting.getName())) {
+            appProperties.setPlaybackSyncScope(StringUtils.isBlank(setting.getValue()) ? "token" : setting.getValue());
         }
         if ("temp_share_expiration".equals(setting.getName())) {
             appProperties.setTempShareExpiration(Integer.parseInt(setting.getValue()));

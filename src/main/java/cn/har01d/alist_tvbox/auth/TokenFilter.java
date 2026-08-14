@@ -96,8 +96,17 @@ public class TokenFilter extends OncePerRequestFilter {
 
             String token = getToken(request);
             if (StringUtils.isNotBlank(token)) {
-                Authentication authentication = buildAuthentication(token);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                try {
+                    Authentication authentication = buildAuthentication(token);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                } catch (UserUnauthorizedException e) {
+                    // 播放同步端点自带令牌鉴权:Authorization 里可能是播放令牌(或 Bearer 形式),
+                    // 不是会话令牌。此处不能提前 401,交给控制器按播放令牌解析。
+                    if (!PLAYBACK_SYNC_PATHS.contains(uri)) {
+                        throw e;
+                    }
+                    log.debug("非会话令牌,交由播放同步端点解析: {}", uri);
+                }
             }
             filterChain.doFilter(request, response);
         } catch (UserUnauthorizedException e) {
@@ -126,6 +135,10 @@ public class TokenFilter extends OncePerRequestFilter {
             "/api/settings/export", "/api/settings/export-json",
             "/api/export-shares", "/api/logs/download", "/api/index-files/download",
             "/api/static-files/download");
+
+    // permitAll 的播放同步端点:令牌即鉴权,由 PlaybackSyncController 解析(playback_token ∪ session)
+    private static final Set<String> PLAYBACK_SYNC_PATHS = Set.of(
+            "/api/playback/event", "/api/playback/events", "/api/playback/changes");
 
     private String getToken(HttpServletRequest request) {
         String token = request.getHeader("Authorization");

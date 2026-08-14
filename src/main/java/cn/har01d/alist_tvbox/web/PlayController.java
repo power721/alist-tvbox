@@ -73,7 +73,7 @@ public class PlayController {
         // com.github.tvbox.osc.bh  宝盒
         // com.github.tvbox.osc.tk  takagen99
         // com.qingsong.yingmi      影迷
-        log.debug("get play url - site: {}  path: {}  id: {}  bvid: {}  type: {}", site, path, id, bvid, type);
+        log.debug("get play url - site: {}  path: {}  id: {}  bvid: {}  type: {}  client: {}", site, path, id, bvid, type, client);
 
         if (StringUtils.isNotBlank(bvid)) {
             return biliBiliService.getPlayUrl(bvid, dash, client);

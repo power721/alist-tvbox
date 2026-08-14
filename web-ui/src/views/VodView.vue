@@ -26,6 +26,10 @@
         </el-breadcrumb>
 
         <div style="display: flex; align-items: center; gap: 12px;">
+          <el-radio-group v-if="isHistory" v-model="historySource" @change="changeHistorySource">
+            <el-radio-button value="web">网页播放</el-radio-button>
+            <el-radio-button value="sync">多端同步</el-radio-button>
+          </el-radio-group>
           <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源"
                     style="width: 300px;">
             <template #append>
@@ -126,6 +130,7 @@
               </template>
             </el-table-column>
             <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
+            <el-table-column prop="source_label" label="来源" width="160" v-if="isHistory&&historySource==='sync'"/>
             <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
             <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
             <el-table-column width="90" v-if="isHistory">
@@ -210,6 +215,7 @@
               </template>
             </el-table-column>
             <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
+            <el-table-column prop="source_label" label="来源" width="160" v-if="isHistory&&historySource==='sync'"/>
             <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
             <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
             <el-table-column width="90" v-if="isHistory">
@@ -649,8 +655,9 @@
       </div>
       <div v-else>
         <p>是否删除播放记录 - {{ history.vod_name }}</p>
-        <p>{{ history.path }}</p>
+        <p>{{ history.sync_record ? history.source_label : history.path }}</p>
       </div>
+      <p v-if="historySource==='sync'" class="hint">删除会同步到影视、默影视和 atv-player，离线设备联网后也会删除。</p>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="deleteVisible = false">取消</el-button>
@@ -685,9 +692,6 @@
         </el-table-column>
         <el-table-column fixed="right" label="操作" width="200">
           <template #default="scope">
-            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 0)">同步</el-button>
-            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 1)">推送</el-button>
-            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 2)">拉取</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
           </template>
         </el-table-column>
@@ -848,6 +852,12 @@ const playlist = ref<PlayItem[]>([])
 const playItem = ref<PlayItem>({})
 const editing = ref<PlayItem>({})
 const currentVideoIndex = ref(0)
+// 当前播放存/查进度用的身份:续播自同步记录时=原身份(sourceKey/vodId=网盘链接),
+// 否则=csp_AList 浏览身份(用 movie.vod_id)。由 loadDetail 入参写入,getHistory/saveHistory 读取。
+// 网盘续播时 movie.vod_id 是挂载后的 id,与原记录 vodId 不一致,必须用原 vodId 才能命中/更新原记录。
+const playSourceKey = ref('csp_AList')
+const playSourceName = ref('AList')
+const playVodIdOverride = ref<string | null>(null)
 const currentImageIndex = ref(0)
 const duration = ref(0)
 const currentTime = ref(0)
@@ -887,6 +897,13 @@ const deleteVisible = ref(false)
 const settingVisible = ref(false)
 const addVisible = ref(false)
 const isHistory = ref(false)
+const historySource = ref('sync')
+// 网页端可直接续播的来源(须与后端 PlaybackSyncService.WEB_PLAYABLE_SITE_KEYS 保持一致)
+const WEB_PLAYABLE_SOURCE_KEYS = new Set([
+  'csp_AList', 'csp_XiaoYa',
+  'csp_TgChannel', 'csp_TgDouBan', 'csp_TgSearch', 'csp_TgWeb', 'csp_FishPanSou', 'csp_FishPanSouGroup',
+  'TvBox',
+])
 const searching = ref(false)
 const fileSearching = ref(false)
 const searchMode = ref('tg')
@@ -1024,15 +1041,6 @@ const showScan = () => {
 const loadDevices = () => {
   axios.get('/api/devices').then(({data}) => {
     devices.value = data
-  })
-}
-
-const syncHistory = (id: number, mode: number) => {
-  axios.post(`/devices/${store.token}/${id}/sync?mode=${mode}`).then(() => {
-    ElMessage.success('同步成功')
-    if (isHistory.value) {
-      loadHistory()
-    }
   })
 }
 
@@ -1348,6 +1356,14 @@ const loadShare = (link: string) => {
 }
 
 const load = (row: any) => {
+  if (row.sync_record) {
+    if (row.source_kind === 'site' && WEB_PLAYABLE_SOURCE_KEYS.has(row.source_key)) {
+      loadDetail(row.vod_id, 'web', row.source_key, row.source_label || row.source_key, true)
+    } else {
+      ElMessage.warning('该来源暂不支持在网页端直接续播')
+    }
+    return
+  }
   if (row.type == 1) {
     loadFolder(row.path)
   } else {
@@ -1470,7 +1486,10 @@ const extractPaths = (id: string) => {
   return '1$' + encodeURIComponent(path) + '$1'
 }
 
-const loadDetail = (id: string, ac: string = 'web') => {
+const loadDetail = (id: string, ac: string = 'web', sourceKey: string = 'csp_AList', sourceName: string = 'AList', syncResume = false) => {
+  playSourceKey.value = sourceKey
+  playSourceName.value = sourceName
+  playVodIdOverride.value = syncResume ? id : null
   loading.value = true
   axios.get('/vod/' + store.token + '?ac=' + ac + '&ids=' + id).then(({data}) => {
     if (isHistory.value) {
@@ -1514,7 +1533,7 @@ const loadDetail = (id: string, ac: string = 'web') => {
       }
     }
     playFrom.value = movies.value[0].vod_play_from.split("$$$");
-    getHistory(movies.value[0].vod_id).then(() => {
+    getHistory(playVodIdOverride.value || movies.value[0].vod_id, sourceKey).then(() => {
       getPlayUrl()
       loading.value = false
       dialogVisible.value = true
@@ -2076,23 +2095,30 @@ const saveHistory = () => {
     return
   }
   const movie = movies.value[0]
-  axios.post('/api/history?log=false', {
-    cid: 0,
-    key: movie.vod_id,
+  const updatedAt = new Date().getTime()
+  const position = Math.round(videoPlayer.value.currentTime * 1000)
+  const duration = Number.isFinite(videoPlayer.value.duration)
+    ? Math.round(videoPlayer.value.duration * 1000) : 0
+  axios.post('/api/playback/events', [{
+    sourceKind: 'site',
+    sourceKey: playSourceKey.value,
+    sourceName: playSourceName.value,
+    vodId: playVodIdOverride.value || movie.vod_id,
     vodName: movie.vod_name,
     vodPic: movie.vod_pic,
-    vodRemarks: playItem.value.title,
+    episodeName: playItem.value.title,
     episode: currentVideoIndex.value,
     episodeUrl: playItem.value.url,
-    position: Math.round(videoPlayer.value.currentTime * 1000),
-    opening: Math.round(skipStart.value * 1000),
-    ending: Math.round(skipEnd.value * 1000),
+    positionMs: position,
+    durationMs: duration,
+    openingMs: Math.round(skipStart.value * 1000),
+    endingMs: Math.round(skipEnd.value * 1000),
     speed: currentSpeed.value,
-    createTime: new Date().getTime()
-  }).then()
+    updatedAt,
+  }]).catch(() => {})
 }
 
-const getHistory = (id: string) => {
+const getHistory = (id: string, sourceKey: string = 'csp_AList') => {
   currentVideoIndex.value = 0
   currentTime.value = 0
   currentSpeed.value = 1
@@ -2103,9 +2129,9 @@ const getHistory = (id: string) => {
   minute2.value = 0
   second2.value = 0
 
-  return axios.get('/history/' + store.token + "?key=" + id).then(({data}) => {
+  const applyHistory = (data: any) => {
     if (data) {
-      if (data.episode > -1) {
+      if (data.episode != null && data.episode > -1) {
         currentVideoIndex.value = data.episode
       } else {
         let path = data.episodeUrl as string
@@ -2137,50 +2163,71 @@ const getHistory = (id: string) => {
       minute2.value = Math.floor(skipEnd.value / 60)
       second2.value = skipEnd.value % 60
     }
-  })
+  }
+  return axios.get('/api/playback/records/-/item', {
+    params: {sourceKind: 'site', sourceKey: sourceKey, vodId: id}
+  }).then(({data}) => applyHistory(data && {
+    episode: data.episode,
+    episodeUrl: data.episodeUrl,
+    position: data.positionMs,
+    opening: data.openingMs,
+    ending: data.endingMs,
+    speed: data.speed,
+  }))
 }
 
 const loadHistory = () => {
-  axios.get('/api/history?sort=createTime,desc&page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
+  const url = '/api/playback/records?page=' + (page.value - 1) + '&pageSize=' + size.value
+    + (historySource.value === 'web' ? '&webPlayable=true' : '')
+  axios.get(url).then(({data}) => {
     total.value = data.totalElements
-    files.value = data.content.sort((a, b) => b.t - a.t).map(e => {
-      return {
-        id: e.id,
-        vod_id: e.key,
-        vod_name: e.vodName,
-        vod_pic: e.vodPic,
-        vod_remarks: e.vodRemarks,
-        index: e.episode + 1,
-        progress: formatTime(e.position / 1000),
-        vod_tag: 'file',
-        vod_time: formatDate(e.createTime)
-      }
-    })
+    files.value = data.content.map(e => ({
+      vod_id: e.vodId,
+      vod_name: e.vodName,
+      vod_pic: e.vodPic,
+      vod_remarks: e.episodeName,
+      index: (e.episode ?? -1) + 1,
+      progress: formatTime(e.positionMs / 1000) + (e.durationMs > 0 ? ' / ' + formatTime(e.durationMs / 1000) : ''),
+      vod_tag: 'file',
+      vod_time: formatDate(e.updatedAt),
+      source_label: e.sourceName || e.sourceKey || e.sourceKind,
+      source_kind: e.sourceKind,
+      source_key: e.sourceKey,
+      sync_record: true,
+    }))
     isHistory.value = true
     paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
   })
 }
 
+const changeHistorySource = () => {
+  page.value = 1
+  selected.value = []
+  loadHistory()
+}
+
+const playbackDeleteInput = (record: any) => ({
+  sourceKind: record.source_kind,
+  sourceKey: record.source_key,
+  vodId: record.vod_id,
+})
+
 const deleteHistory = () => {
-  if (batch.value) {
-    if (clean.value) {
-      clearHistory()
-    } else {
-      axios.post('/api/history/-/delete', selected.value.map(s => s.id)).then(() => {
-        deleteVisible.value = false
-        loadHistory()
-      })
-    }
-  } else {
-    axios.delete('/api/history/' + history.value.id).then(() => {
-      deleteVisible.value = false
-      loadHistory()
-    })
+  if (batch.value && clean.value) {
+    clearHistory()
+    return
   }
+  const targets = batch.value
+    ? selected.value.map(playbackDeleteInput)
+    : [playbackDeleteInput(history.value)]
+  axios.post('/api/playback/records/-/delete', targets).then(() => {
+    deleteVisible.value = false
+    loadHistory()
+  })
 }
 
 const clearHistory = () => {
-  axios.delete('/history/' + store.token).then(() => {
+  axios.delete('/api/playback/records').then(() => {
     deleteVisible.value = false
     loadHistory()
   })
@@ -2323,7 +2370,6 @@ onMounted(async () => {
       return data.token ? data.token.split(",")[0] : "-"
     });
   }
-
   const link = route.query.link
   if (link) {
     loadShare(link)

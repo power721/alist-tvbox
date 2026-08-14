@@ -129,6 +129,42 @@ class TokenFilterTest {
         org.mockito.Mockito.verifyNoInteractions(chain);
     }
 
+    /**
+     * 播放同步端点自带令牌鉴权:Authorization 里可能是播放令牌(常见为 Bearer 形式)而非会话令牌。
+     * 过滤器若在此提前 401,控制器根本没机会去 playback_token 表解析,标准 Bearer 客户端全被挡在门外。
+     */
+    @Test
+    void playbackSyncEndpointShouldPassBearerTokenToController() throws Exception {
+        when(tokenService.extractToken(org.mockito.ArgumentMatchers.anyString()))
+                .thenThrow(new cn.har01d.alist_tvbox.exception.UserUnauthorizedException("Token失效", 40100));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/api/playback/event");
+        request.addHeader("Authorization", "Bearer playback-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        var chain = mock(jakarta.servlet.FilterChain.class);
+
+        tokenFilter.doFilter(request, response, chain);
+
+        assertEquals(200, response.getStatus());
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    void otherEndpointsStillRejectInvalidToken() throws Exception {
+        when(tokenService.extractToken(org.mockito.ArgumentMatchers.anyString()))
+                .thenThrow(new cn.har01d.alist_tvbox.exception.UserUnauthorizedException("Token失效", 40100));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/api/history");
+        request.addHeader("Authorization", "bad-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        var chain = mock(jakarta.servlet.FilterChain.class);
+
+        tokenFilter.doFilter(request, response, chain);
+
+        assertEquals(401, response.getStatus());
+        org.mockito.Mockito.verifyNoInteractions(chain);
+    }
+
     private String basic(String username, String password) {
         String credentials = username + ":" + password;
         return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));

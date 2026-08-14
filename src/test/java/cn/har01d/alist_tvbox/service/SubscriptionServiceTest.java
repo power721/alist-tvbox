@@ -144,7 +144,9 @@ class SubscriptionServiceTest {
         c.put("parses", new ArrayList<>(List.of(parse("虾米"))));
 
         Plugin plugin = new Plugin();
+        plugin.setId(1);
         plugin.setName("我的插件");
+        plugin.setExternalId("stable-plugin-id");
 
         List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
                 new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "🟢 AList", null),
@@ -159,7 +161,8 @@ class SubscriptionServiceTest {
         assertThat(sites).anySatisfy(s -> assertThat(s).containsEntry("key", "csp_Bili").containsEntry("origin", "upstream"));
         assertThat(sites).anySatisfy(s -> assertThat(s).containsEntry("key", "csp_AList").containsEntry("origin", "builtin"));
         assertThat(sites).anySatisfy(s -> assertThat(s).containsEntry("key", "push_agent").containsEntry("origin", "builtin"));
-        assertThat(sites).anySatisfy(s -> assertThat(s).containsEntry("key", "我的插件").containsEntry("origin", "plugin"));
+        assertThat(sites).anySatisfy(s -> assertThat(s).containsEntry("key", "stable-plugin-id")
+                .containsEntry("name", "我的插件").containsEntry("origin", "plugin"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> parses = (List<Map<String, Object>>) catalog.get("parses");
@@ -167,9 +170,26 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    void pluginSiteKeyDoesNotChangeWhenDisplayNameChanges() {
+        Plugin plugin = new Plugin();
+        plugin.setId(7);
+        plugin.setExternalId("02544b320a6d45de997bc0bd3975d0c060b8");
+        plugin.setName("木偶[盘]");
+
+        assertThat(SubscriptionService.pluginSiteKey(plugin))
+                .isEqualTo("02544b320a6d45de997bc0bd3975d0c060b8");
+
+        plugin.setName("重命名后的木偶");
+        assertThat(SubscriptionService.pluginSiteKey(plugin))
+                .isEqualTo("02544b320a6d45de997bc0bd3975d0c060b8");
+    }
+
+    @Test
     void rawPythonPluginShouldUsePyProxyLoaderAndLocalProxyInEveryRunMode() {
         Plugin plugin = new Plugin();
         plugin.setId(7);
+        plugin.setExternalId("stable-plugin-id");
+        plugin.setName("短剧优选");
         plugin.setUrl("https://example.com/demo.py?raw=1");
         plugin.setExtend("{\"site\":\"demo\"}");
         Map<String, Object> localProxyConfig = new HashMap<>();
@@ -187,6 +207,9 @@ class SubscriptionServiceTest {
                 .containsEntry("source", "http://atv/plugins/web/7.py")
                 .containsEntry("raw", true)
                 .containsEntry("api", "http://atv")
+                .containsEntry("playbackSourceKind", "spider_plugin")
+                .containsEntry("playbackSourceKey", "stable-plugin-id")
+                .containsEntry("playbackSourceName", "短剧优选")
                 .containsEntry("token", "vod-token")
                 .containsEntry("secret", "secret")
                 .containsEntry("data", "{\"site\":\"demo\"}")

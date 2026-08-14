@@ -7,6 +7,8 @@ import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.PlaybackToken;
+import cn.har01d.alist_tvbox.entity.PlaybackTokenRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.EmbyRepository;
 import cn.har01d.alist_tvbox.entity.FeiniuRepository;
@@ -92,6 +94,7 @@ public class SubscriptionService {
     private static final String AUTO_UPDATE_PG = "auto_update_pg";
     private static final String AUTO_UPDATE_ZX = "auto_update_zx";
     private static final String AUTO_UPDATE_XS = "auto_update_xs";
+    private static final String SYSTEM_PLAYBACK_TOKEN_NAME = "系统订阅同步";
 
     private final Environment environment;
     private final AppProperties appProperties;
@@ -115,6 +118,7 @@ public class SubscriptionService {
     private final UserService userService;
     private final FileDownloader fileDownloader;
     private final SubscriptionSourceService subscriptionSourceService;
+    private final PlaybackTokenRepository playbackTokenRepository;
 
     private final OkHttpClient okHttpClient = new OkHttpClient();
     private final ThreadLocal<String> currentToken = new ThreadLocal<>();
@@ -142,7 +146,8 @@ public class SubscriptionService {
                                TenantService tenantService,
                                UserService userService,
                                FileDownloader fileDownloader,
-                               SubscriptionSourceService subscriptionSourceService) {
+                               SubscriptionSourceService subscriptionSourceService,
+                               PlaybackTokenRepository playbackTokenRepository) {
         this.environment = environment;
         this.appProperties = appProperties;
         this.restTemplate = builder
@@ -168,6 +173,7 @@ public class SubscriptionService {
         this.userService = userService;
         this.fileDownloader = fileDownloader;
         this.subscriptionSourceService = subscriptionSourceService;
+        this.playbackTokenRepository = playbackTokenRepository;
     }
 
     @PostConstruct
@@ -665,11 +671,17 @@ public class SubscriptionService {
         String apiUrl = subscription.getUrl();
         String override = subscription.getOverride();
         String sort = subscription.getSort();
+        String configUrl = readHostAddress("/sub" + (StringUtils.isNotBlank(token) ? "/" + token : "") + "/" + id);
 
-        return subscription(token, apiUrl, override, sort);
+        return subscription(token, id, apiUrl, override, sort, configUrl);
     }
 
     public Map<String, Object> subscription(String token, String apiUrl, String override, String sort) {
+        return subscription(token, "", apiUrl, override, sort, "");
+    }
+
+    private Map<String, Object> subscription(String token, String subscriptionId, String apiUrl, String override, String sort,
+                                             String configUrl) {
         if (apiUrl == null) {
             apiUrl = "";
         }
@@ -695,7 +707,7 @@ public class SubscriptionService {
             config = overrideConfig(config, override);
         }
 
-        int order = addSite(token, config);
+        int order = addSite(token, subscriptionId, config, configUrl);
 
         if (StringUtils.isNotBlank(override)) {
             fixSiteOrder(config, order);
@@ -1313,16 +1325,18 @@ public class SubscriptionService {
         return UUID.randomUUID().toString().replace("-", "");
     }
 
-    private int addSite(String token, Map<String, Object> config) {
+    private int addSite(String token, String subscriptionId, Map<String, Object> config, String configUrl) {
         int id = 0;
         int order = 1000;
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         String uid = generateUid();
+        String playbackToken = playbackTokenForSubscription(token, subscriptionId);
         String secret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         for (SubscriptionSourceService.SubscriptionSourceRef source : subscriptionSourceService.findEnabledSources()) {
             try {
                 if (source.builtin()) {
-                    Map<String, Object> site = buildSite(token, secret, uid, source.siteKey(), source.name());
+                    Map<String, Object> site = buildSite(token, secret, uid, source.siteKey(), source.name(),
+                            playbackToken, configUrl);
                     site.put("order", order);
                     // key transformation for csp_Push (needed before override lookup)
                     if ("csp_Push".equals(source.siteKey())) {
@@ -1341,7 +1355,8 @@ public class SubscriptionService {
                     sites.add(id++, site);
                     log.debug("add builtin source {}: {}", source.siteKey(), site);
                 } else if (source.plugin() != null) {
-                    Map<String, Object> site = buildPluginSite(source.plugin(), token, secret);
+                    Map<String, Object> site = buildPluginSite(source.plugin(), token, secret,
+                            playbackToken, configUrl);
                     site.put("order", order);
                     String overrideKey = (String) site.get("key");
                     applySiteOverride(overrideKey, site, sites);
@@ -1424,7 +1439,73 @@ public class SubscriptionService {
                 .orElse(false);
     }
 
-    private Map<String, Object> buildSite(String token, String secret, String uid, String key, String name) throws IOException {
+    /** 用户名订阅归属该用户；普通共享订阅归属管理员。syncScope 按订阅分区模式算定。 */
+    private String playbackTokenForSubscription(String subscriptionToken, String subscriptionId) {
+        if (!appProperties.isPlaybackSyncEnabled()) {
+            log.debug("playback sync subscription disabled");
+            return "";
+        }
+        var user = StringUtils.isBlank(subscriptionToken) ? null : userService.findByUsername(subscriptionToken);
+        if (user == null) {
+            user = userService.list().stream()
+                    .filter(candidate -> candidate.getRole() == Role.ADMIN)
+                    .min(Comparator.comparingInt(candidate -> candidate.getId() == null ? Integer.MAX_VALUE : candidate.getId()))
+                    .orElse(null);
+        }
+        if (user == null || user.getId() == null) {
+            return "";
+        }
+        String syncScope = computeSyncScope(subscriptionToken, subscriptionId);
+        String playbackToken = playbackTokenForUid(user.getId(), syncScope);
+        log.debug("playback sync subscription: ownerUid={}, syncScope={}, tokenConfigured={}",
+                user.getId(), syncScope, StringUtils.isNotBlank(playbackToken));
+        return playbackToken;
+    }
+
+    /**
+     * 按 playback_sync_scope 模式算订阅分区。vod token 机制关闭(token 空/"-")或 uid 模式 → null(uid 级,
+     * 所有订阅互通);token 模式 → vod token;subscription 模式 → vod token/id。
+     */
+    private String computeSyncScope(String subscriptionToken, String subscriptionId) {
+        if (subscriptionToken == null || subscriptionToken.isBlank() || "-".equals(subscriptionToken)) {
+            return null;
+        }
+        String mode = appProperties.getPlaybackSyncScope();
+        return switch (mode) {
+            case "subscription" -> subscriptionId != null && !subscriptionId.isBlank()
+                    ? subscriptionToken + "/" + subscriptionId
+                    : subscriptionToken;
+            case "uid" -> null;
+            default -> subscriptionToken;
+        };
+    }
+
+    /** 该用户(uid)在指定分区的播放同步令牌；首次生成订阅时按 (uid, syncScope) 创建，后续复用。 */
+    private synchronized String playbackTokenForUid(Integer uid, String syncScope) {
+        if (uid == null) {
+            return "";
+        }
+        PlaybackToken existing = syncScope == null
+                ? playbackTokenRepository.findByUidAndSyncScopeIsNull(uid).stream().findFirst().orElse(null)
+                : playbackTokenRepository.findByUidAndSyncScope(uid, syncScope).orElse(null);
+        if (existing != null) {
+            return existing.getToken();
+        }
+        PlaybackToken created = new PlaybackToken();
+        created.setUid(uid);
+        created.setSyncScope(syncScope);
+        created.setName(SYSTEM_PLAYBACK_TOKEN_NAME);
+        created.setToken(UUID.randomUUID().toString().replace("-", ""));
+        long now = System.currentTimeMillis();
+        created.setCreatedTime(now);
+        created.setLastUsedAt(now);
+        playbackTokenRepository.save(created);
+        log.info("created system playback sync token for uid={}, syncScope={}", uid, syncScope);
+        return created.getToken();
+    }
+
+    private Map<String, Object> buildSite(String token, String secret, String uid, String key, String name,
+                                          String playbackToken, String configUrl) throws IOException {
         String url = readHostAddress("");
         Map<String, Object> site = new HashMap<>();
         site.put("key", key);
@@ -1436,6 +1517,8 @@ public class SubscriptionService {
         map.put("token", token.isBlank() ? "-" : token);
         map.put("secret", secret);
         map.put("uid", uid);
+        map.put("playbackToken", playbackToken);
+        map.put("playbackConfigUrl", configUrl);
         map.put("local_proxy_config", readLocalProxyConfig());
         String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
@@ -1490,6 +1573,9 @@ public class SubscriptionService {
         }
         map.put("token", token.isBlank() ? "-" : token);
         map.put("secret", secret);
+        map.put("playbackSourceKind", "spider_plugin");
+        map.put("playbackSourceKey", pluginSiteKey(plugin));
+        map.put("playbackSourceName", plugin.getName());
         map.put("local_proxy_config", rawPython || !nativePython ? localProxyConfig : new HashMap<>());
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             map.put("data", plugin.getExtend());
@@ -1497,7 +1583,8 @@ public class SubscriptionService {
         return map;
     }
 
-    private Map<String, Object> buildPluginSite(Plugin plugin, String token, String secret) throws JsonProcessingException {
+    private Map<String, Object> buildPluginSite(Plugin plugin, String token, String secret,
+                                                String playbackToken, String configUrl) throws JsonProcessingException {
         Map<String, Object> site = new HashMap<>();
         site.put("filterable", 1);
         site.put("quickSearch", 1);
@@ -1507,7 +1594,7 @@ public class SubscriptionService {
         boolean nativePython = isNativePythonPluginRunMode();
         site.put("api", selectPluginApi(plugin, nativePython, url));
         site.put("type", 3);
-        site.put("key", plugin.getName());
+        site.put("key", pluginSiteKey(plugin));
         site.put("searchable", 1);
         String jar = url + "/spring.jar";
         site.put("jar", jar);
@@ -1525,6 +1612,8 @@ public class SubscriptionService {
                 nativePython,
                 readLocalProxyConfig()
         );
+        map.put("playbackToken", playbackToken);
+        map.put("playbackConfigUrl", configUrl);
         // 每个插件站点只下发与自己作用域匹配的过滤器
         List<Map<String, Object>> filters = buildPluginFilters(plugin);
         if (!filters.isEmpty()) {
@@ -1915,7 +2004,7 @@ public class SubscriptionService {
                 key = "csp_Push".equals(source.siteKey()) ? "push_agent" : source.siteKey();
                 origin = "builtin";
             } else if (source.plugin() != null) {
-                key = source.plugin().getName();
+                key = pluginSiteKey(source.plugin());
                 origin = "plugin";
             } else {
                 continue;
@@ -1970,6 +2059,14 @@ public class SubscriptionService {
         result.put("sites", allSites);
         result.put("parses", parses);
         return result;
+    }
+
+    /** 插件显示名允许重命名；订阅站点 key 必须使用跨设备稳定的 manifest id。 */
+    static String pluginSiteKey(Plugin plugin) {
+        if (StringUtils.isNotBlank(plugin.getExternalId())) {
+            return plugin.getExternalId();
+        }
+        return "plugin-" + plugin.getId();
     }
 
     public Map<String, Object> getGlobalConfig() {

@@ -9,6 +9,8 @@ public class Video {
     private String name;
     private String title;
     private String path;
+    /** Stable short playback identity: siteId@playUrlId. */
+    private String playId;
     private String time;
     private String url;
     private Long size;

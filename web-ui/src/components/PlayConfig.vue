@@ -3,7 +3,8 @@
 import {VueDraggable} from "vue-draggable-plus";
 import {onMounted, onUnmounted, ref} from "vue";
 import axios from "axios";
-import {ElMessage} from "element-plus";
+import clipBorad from "vue-clipboard3";
+import {ElMessage, ElMessageBox} from "element-plus";
 import Sortable from "sortablejs";
 import {Check, Close} from "@element-plus/icons-vue";
 import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";
@@ -22,6 +23,11 @@ interface Channel {
 }
 
 const cover = ref('')
+const playbackSyncEnabled = ref(false)
+const playbackSyncScope = ref('token')
+const playbackTokens = ref<any[]>([])
+const newPlaybackTokenName = ref('')
+const createdPlaybackToken = ref('')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
 const tgSearch = ref('')
@@ -275,6 +281,55 @@ const updateCover = () => {
   })
 }
 
+const updatePlaybackSync = () => {
+  axios.post('/api/settings', {name: 'playback_sync_enabled', value: playbackSyncEnabled.value + ''}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePlaybackSyncScope = () => {
+  axios.post('/api/settings', {name: 'playback_sync_scope', value: playbackSyncScope.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const loadPlaybackTokens = () => {
+  return axios.get('/api/playback/tokens').then(({data}) => {
+    playbackTokens.value = data
+  }).catch(() => {})
+}
+
+const createPlaybackToken = () => {
+  axios.post('/api/playback/tokens', {name: newPlaybackTokenName.value}).then(({data}) => {
+    createdPlaybackToken.value = data.token
+    newPlaybackTokenName.value = ''
+    ElMessage.success('令牌已生成,请立即复制')
+    loadPlaybackTokens()
+  }).catch(() => {})
+}
+
+const deletePlaybackToken = (row: any) => {
+  ElMessageBox.confirm(`删除令牌「${row.name || row.token}」?该令牌的客户端将无法同步。`, '提示', {type: 'warning'}).then(() => {
+    axios.delete(`/api/playback/tokens/${row.id}`).then(() => {
+      loadPlaybackTokens()
+    }).catch(() => {})
+  }).catch(() => {})
+}
+
+const formatTime = (value: string | number) => {
+  return new Date(value).toLocaleString('zh-cn')
+}
+
+const {toClipboard} = clipBorad()
+
+const copyToken = (text: string) => {
+  toClipboard(text).then(() => {
+    ElMessage.success('已复制')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
+}
+
 const updateDrivers = () => {
   const order = tgDriverOrder.value.map(e => e.id).join(',')
   axios.post('/api/settings', {name: 'tgDriverOrder', value: order}).then()
@@ -458,6 +513,7 @@ onMounted(() => {
   loadChannels().then(() => {
     rowDrop()
   })
+  loadPlaybackTokens()
   axios.get('/api/settings').then(({data}) => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
@@ -491,6 +547,8 @@ onMounted(() => {
       tgDrivers.value = data.tg_drivers.split(',')
     }
     cover.value = data.video_cover
+    playbackSyncEnabled.value = data.playback_sync_enabled === 'true'
+    playbackSyncScope.value = data.playback_sync_scope || 'token'
     tgTimeout.value = +data.tg_timeout
   })
 })
@@ -581,6 +639,52 @@ onUnmounted(() => {
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateCover">更新</el-button>
+        </el-form-item>
+      </el-form>
+    </el-tab-pane>
+    <el-tab-pane label="同步配置" name="playback">
+      <el-form label-width="140">
+        <el-form-item label="播放记录同步">
+          <el-switch v-model="playbackSyncEnabled" @change="updatePlaybackSync"/>
+          <span class="hint">在影视、默影视和 atv-player 之间同步最近的播放记录</span>
+        </el-form-item>
+        <el-form-item label="同步分区" v-if="playbackSyncEnabled">
+          <el-select v-model="playbackSyncScope" @change="updatePlaybackSyncScope" style="width: 200px">
+            <el-option label="全局互通" value="uid"/>
+            <el-option label="按 VOD Token" value="token"/>
+            <el-option label="按订阅地址(逐个隔离)" value="subscription"/>
+          </el-select>
+          <span class="hint">仅 VOD Token 相同的订阅互相同步;关闭 VOD Token 时按用户互通</span>
+        </el-form-item>
+        <el-form-item label="同步令牌">
+          <div v-if="playbackTokens.length === 0" class="hint">
+            暂无令牌。生成后填入 Fish/默影视(Webhook/远端同步)或同步爬虫的 Token 配置。
+          </div>
+          <el-table v-else :data="playbackTokens" size="small" border class="no-hover" style="width: 100%">
+            <el-table-column prop="name" label="名称" min-width="120"/>
+            <el-table-column prop="token" label="令牌" min-width="240">
+              <template #default="{ row }">
+                <span class="token-text">{{ row.token }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="最近使用" min-width="160">
+              <template #default="{ row }">{{ row.lastUsedAt ? formatTime(row.lastUsedAt) : '—' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="80">
+              <template #default="{ row }">
+                <el-button size="small" type="danger" link @click="deletePlaybackToken(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-form-item>
+        <el-form-item label="新令牌">
+          <el-input v-model="newPlaybackTokenName" placeholder="名称(可选)" style="width: 200px"/>
+          <el-button type="primary" @click="createPlaybackToken">生成</el-button>
+        </el-form-item>
+        <el-form-item v-if="createdPlaybackToken" label="已生成">
+          <el-input v-model="createdPlaybackToken" readonly type="password" show-password style="width: 320px"/>
+          <el-button type="primary" link @click="copyToken(createdPlaybackToken)">复制</el-button>
+          <span class="hint">仅显示一次,请立即复制保存。</span>
         </el-form-item>
       </el-form>
     </el-tab-pane>
@@ -800,5 +904,13 @@ onUnmounted(() => {
 
 .order-text {
   cursor: default;
+}
+
+.token-text {
+  word-break: break-all;
+}
+
+::v-deep .no-hover.el-table--enable-row-hover .el-table__body tr:hover > td {
+  background-color: transparent;
 }
 </style>

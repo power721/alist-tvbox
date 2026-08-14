@@ -40,6 +40,8 @@ import lombok.extern.slf4j.Slf4j;
 public class PluginService {
     private static final String PLUGIN_INDEX_FILE = "spiders_v2.json";
     private static final Pattern PLUGIN_ID = Pattern.compile("(?m)^\\s*//@id:([^\\s]+)\\s*$");
+    private static final Pattern PYTHON_PLUGIN_ID = Pattern.compile(
+            "(?m)^\\s*PLUGIN_ID\\s*=\\s*['\"]([^'\"]+)['\"]\\s*(?:#.*)?$");
     private static final Pattern PLUGIN_VERSION = Pattern.compile("(?m)^\\s*//@version:(\\d+)\\s*$");
     private static final Pattern PLUGIN_NAME = Pattern.compile("(?m)^\\s*//@name:(.+)\\s*$");
     // spider 插件配置结构声明：脚本顶层 PLUGIN_CONFIG_SCHEMA = { ... }；解析逻辑见 ConfigSchemaParser。
@@ -634,10 +636,11 @@ public class PluginService {
             return null;
         }
         Matcher matcher = PLUGIN_ID.matcher(body);
-        if (!matcher.find()) {
-            return null;
+        if (matcher.find()) {
+            return StringUtils.trimToNull(matcher.group(1));
         }
-        return StringUtils.trimToNull(matcher.group(1));
+        matcher = PYTHON_PLUGIN_ID.matcher(body);
+        return matcher.find() ? StringUtils.trimToNull(matcher.group(1)) : null;
     }
 
     private String extractPluginName(String body) {

@@ -1986,7 +1986,7 @@ public class BiliBiliService {
 //            sub.setName("关闭");
 //            sub.setLang("");
 //            sub.setFormat("application/x-subrip");
-//            sub.setUrl("");
+//            sub.setUrl(fixSubtitleUrl(""));
 //            list.add(0, sub);
 //        }
         log.debug("subtitles: {}", list);
@@ -1994,6 +1994,9 @@ public class BiliBiliService {
     }
 
     public String getSubtitle(String url) {
+        if (StringUtils.isBlank(url)) {
+            return "";
+        }
         if (!Utils.isSafeExternalUrl(url)) {
             throw new BadRequestException("Invalid subtitle URL");
         }

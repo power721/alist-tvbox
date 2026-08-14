@@ -1,3 +1,10 @@
 db.migration.current.V2__Normalize_reserved_columns
 db.migration.current.V3__Fix_null_sort_order
 db.migration.current.V8__Normalize_enum_columns
+db.migration.current.V10__PlaybackSync
+db.migration.current.V11__PlaybackChangeSequence
+db.migration.current.V12__WidenPlaybackVodId
+db.migration.current.V13__PlaybackSourceName
+db.migration.current.V14__PlaybackSelectionContext
+db.migration.current.V15__PlaybackSyncScope
+db.migration.current.V16__MigrateLegacyHistory

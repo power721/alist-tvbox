@@ -25,6 +25,9 @@ public class AppProperties {
     private boolean enableHttps;
     private boolean cleanInvalidShares;
     private boolean enabledToken;
+    private boolean playbackSyncEnabled = false;
+    // 同步分区粒度:uid(不分桶)/ token(按 vod token)/ subscription(按 vod token/id)
+    private String playbackSyncScope = "token";
     private int pageSize = 100;
     private int maxSearchResult = 60;
     private String secretKey;

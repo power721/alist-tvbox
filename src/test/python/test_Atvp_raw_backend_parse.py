@@ -107,6 +107,7 @@ class Spider:
         )
         parsed = self.spider.detailContent(["https://pan.example/share"])
         self.assertEqual(parsed["list"][0]["vod_name"], "Parsed")
+        self.assertTrue(parsed["_atvp_backend_parse"])
 
         self.spider.fetch = Mock(
             return_value=Response(
@@ -209,6 +210,82 @@ class Spider:
         self.spider.post.assert_called_once_with(
             "https://atv.example/parse/demo",
             json={"url": share_url, "title": "源标题", "keyword": "搜索关键词"},
+            params={"ac": "play"},
+            timeout=10,
+        )
+
+    def test_resume_id_reopens_original_vod_and_selected_drive(self):
+        source = '''
+class Spider:
+    def init(self, extend=""):
+        self.backend_parse = True
+    def detailContent(self, ids):
+        return {"list": [{
+            "vod_id": ids[0],
+            "vod_name": "凡人修仙传",
+            "vod_play_from": "百度$$$夸克$$$UC",
+            "vod_play_url": "百度$https://pan.baidu.com/s/demo$$$夸克$https://pan.quark.cn/s/demo$$$UC$https://drive.uc.cn/s/demo"
+        }]}
+'''
+        self.init_inner(source)
+        routes = "$$$".join(f"{index:02d}线路" for index in range(1, 11))
+        urls = "$$$".join(
+            f"S01E{index}$1@{185400 + index}@{index - 1}@0"
+            for index in range(1, 11)
+        )
+        self.spider.post = Mock(return_value=Response(text=json.dumps({"list": [{
+            "vod_id": "1$185562$1",
+            "vod_name": "凡人修仙传",
+            "vod_play_from": routes,
+            "vod_play_url": urls,
+        }]})))
+
+        resources = self.spider.categoryContent("atvp_detail:173", "1", True, {})
+        self.assertEqual([item["vod_name"] for item in resources["list"]], ["百度", "夸克", "UC"])
+
+        parsed = self.spider.detailContent([resources["list"][0]["vod_id"]])
+        resume_id = parsed["list"][0]["vod_id"]
+        self.assertTrue(resume_id.startswith(self.spider.RESUME_PREFIX))
+        self.assertEqual(self.spider._decode_resume_id(resume_id), {"id": "173", "playlist": 0})
+
+        restored = self.spider.detailContent([resume_id])
+        self.assertEqual(restored["list"][0]["vod_id"], resume_id)
+        self.assertEqual(restored["list"][0]["vod_play_from"].split("$$$"), [
+            f"{index:02d}线路" for index in range(1, 11)
+        ])
+        parse_calls = [
+            call for call in self.spider.post.call_args_list
+            if call.args[0] == "https://atv.example/parse/demo"
+        ]
+        self.assertEqual(len(parse_calls), 2)
+        for call in parse_calls:
+            self.assertEqual(call.kwargs["json"]["url"], "https://pan.baidu.com/s/demo")
+
+    def test_resume_id_with_direct_share_calls_backend_parse(self):
+        source = '''
+class Spider:
+    def init(self, extend=""):
+        self.backend_parse = True
+    def detailContent(self, ids):
+        raise AssertionError("direct share resume must not call inner detail")
+'''
+        self.init_inner(source)
+        share_url = "https://123pan.cn/s/cHCOTd-kdmM?pwd=0775"
+        self.spider.post = Mock(return_value=Response(text=json.dumps({"list": [{
+            "vod_id": "1$185600$1",
+            "vod_name": "测试资源",
+            "vod_play_from": "线路 1",
+            "vod_play_url": "第1集$1@185600@0@0",
+        }]})))
+        resume_id = self.spider._encode_resume_id(share_url, 0)
+
+        restored = self.spider.detailContent([resume_id])
+
+        self.assertEqual(restored["list"][0]["vod_id"], resume_id)
+        self.assertEqual(restored["list"][0]["vod_play_url"], "第1集$1@185600@0@0")
+        self.spider.post.assert_called_once_with(
+            "https://atv.example/parse/demo",
+            json={"url": share_url},
             params={"ac": "play"},
             timeout=10,
         )

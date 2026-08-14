@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.ShareLink;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.entity.DeviceRepository;
@@ -27,6 +29,12 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -108,6 +116,25 @@ class TvBoxServiceTest {
     @AfterEach
     void clearRequestContext() {
         org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+    }
+
+    @Test
+    void getDetailRoutesHttpShareLinkToMountedPlaylist() {
+        // 播放同步回放:ids 为网盘分享链接 → 挂载后转成 "1$<path>/~playlist" 走 getPlaylist。
+        // 用 spy 桩掉递归的 getDetail,隔离 dfs/aListService,只验证路由与挂载。
+        TvBoxService spied = spy(tvBoxService);
+        String link = "https://pan.baidu.com/s/abc?pwd=HAO8";
+        String mounted = "/temp/BaiduShare2@abc@HAO8/folder";
+        when(shareService.add(argThat((ShareLink s) -> link.equals(s.getLink())))).thenReturn(mounted);
+        when(shareService.resolveShareTitle(eq(link), isNull())).thenReturn("马背上的银行");
+        MovieList expected = new MovieList();
+        doReturn(expected).when(spied).getDetail(eq("web"), eq("1$" + mounted + "/~playlist"),
+                eq("马背上的银行"), isNull(), eq(0));
+
+        MovieList result = spied.getDetail("web", link, null, null, 0);
+
+        assertThat(result).isSameAs(expected);
+        verify(shareService).add(argThat((ShareLink s) -> link.equals(s.getLink())));
     }
 
     @Test

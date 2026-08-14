@@ -10,18 +10,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/subtitles")
 public class SubtitleController {
-
     private final BiliBiliService biliBiliService;
 
     public SubtitleController(BiliBiliService biliBiliService) {
-
         this.biliBiliService = biliBiliService;
     }
 
     @GetMapping(value = "", produces = "text/plain")
-    public String getImage(String url) {
+    public String getSubtitle(String url) {
         log.debug("get subtitle by url: {}", url);
         return biliBiliService.getSubtitle(url);
     }
-
 }
