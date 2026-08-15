@@ -33,6 +33,11 @@
         <el-collapse v-if="siteGroups.length" v-model="expandedGroups">
           <el-collapse-item v-for="group in siteGroups" :key="group.key" :name="group.key">
             <template #title>{{ group.label }}（{{ group.rows.length }}）</template>
+            <div v-if="state.filterMode !== 'none'" style="margin-bottom: 8px">
+              <el-button size="small" @click="setGroupAll(group.rows, true)">全选</el-button>
+              <el-button size="small" @click="setGroupAll(group.rows, false)">全不选</el-button>
+              <el-button size="small" @click="invertGroup(group.rows)">反选</el-button>
+            </div>
             <el-table :data="group.rows" border style="width: 100%">
               <el-table-column :label="filterCheckboxLabel" width="60" v-if="state.filterMode !== 'none'">
                 <template #default="scope">
@@ -94,6 +99,11 @@
             <p>解析类型: 0=嗅探, 1=Json, 2=Json扩展, 3=聚合, 4=超级解析。</p>
           </template>
         </el-alert>
+        <div v-if="parseRows.length" style="margin-bottom: 8px">
+          <el-button @click="setUpstreamParses(true)">全选</el-button>
+          <el-button @click="setUpstreamParses(false)">全不选</el-button>
+          <el-button @click="invertUpstreamParses()">反选</el-button>
+        </div>
         <el-table v-if="parseRows.length" :data="parseRows" border style="width: 100%">
           <el-table-column label="启用" width="60">
             <template #default="scope">
@@ -692,6 +702,23 @@ const siteGroups = computed(() =>
     (g) => g.rows.length
   )
 )
+
+function setGroupAll(rows: any[], value: boolean) {
+  rows.forEach((r) => (r.enabled = value))
+}
+function invertGroup(rows: any[]) {
+  rows.forEach((r) => (r.enabled = !r.enabled))
+}
+function setUpstreamParses(value: boolean) {
+  parseRows.value.forEach((r) => {
+    if (!r.isCustom) r.enabled = value
+  })
+}
+function invertUpstreamParses() {
+  parseRows.value.forEach((r) => {
+    if (!r.isCustom) r.enabled = !r.enabled
+  })
+}
 
 const siteForm = reactive<any>({})
 const siteAdvancedForm = reactive<any>({})
