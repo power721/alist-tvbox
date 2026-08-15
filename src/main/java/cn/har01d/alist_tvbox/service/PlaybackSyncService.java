@@ -902,7 +902,7 @@ public class PlaybackSyncService {
     private long nextChangeSeq() {
         PlaybackChangeSequence sequence = changeSequenceRepository.findByIdForUpdate(1)
                 .orElseThrow(() -> new IllegalStateException("playback change sequence is not initialized"));
-        long next = sequence.getNextVal() + 1;
+        long next = Math.max(sequence.getNextVal() + 1, System.currentTimeMillis());
         sequence.setNextVal(next);
         return next;
     }

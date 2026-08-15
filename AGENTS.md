@@ -139,6 +139,7 @@ npm run lint
     - Main.java scans configured packages (dto/entity/model/domain/storage/etc)
     - Individual classes can be added to `CUSTOM_REFLECTION_CLASSES` list
 - Flyway Java migration file must add to src/main/resources/META-INF/services/org.flywaydb.core.api.migration.JavaMigration
+- Flyway Java migration must ALSO be registered in src/main/java/cn/har01d/alist_tvbox/config/NativeFlywayMigrationConfig.java (native image cannot classpath-scan Java migrations)
 
 ---
 
