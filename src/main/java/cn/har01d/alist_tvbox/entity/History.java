@@ -62,4 +62,9 @@ public class History {
     private String sourceSubgroupName;
     @Column(columnDefinition = "TEXT")
     private String driveDirId;
+    // 网盘播放内容的跨端规范标识:分享身份(盘类型@分享ID@提取码)+ 资源内相对路径(含文件名),
+    // 由服务端从网盘播放 id 的 proxyId 解析生成,不随会话/列表顺序漂移
+    private String driveShareKey;
+    @Column(columnDefinition = "TEXT")
+    private String drivePath;
 }

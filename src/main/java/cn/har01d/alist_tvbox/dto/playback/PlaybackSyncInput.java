@@ -41,6 +41,8 @@ public class PlaybackSyncInput {
     private Integer sourceSubgroupIndex;
     private String sourceSubgroupName;
     private String driveDirId;
+    private String driveShareKey;
+    private String drivePath;
     private String event;
 
     /** webhtv 客户端按 siteKey 读取来源标识;序列化时随 sourceKey 一并输出,兼容 Fish/默影视。 */
@@ -79,6 +81,8 @@ public class PlaybackSyncInput {
         in.sourceSubgroupIndex = intg(m, "sourceSubgroupIndex", "source_subgroup_index");
         in.sourceSubgroupName = str(m, "sourceSubgroupName", "source_subgroup_name");
         in.driveDirId = str(m, "driveDirId", "drive_dir_id");
+        in.driveShareKey = str(m, "driveShareKey", "drive_share_key");
+        in.drivePath = str(m, "drivePath", "drive_path");
         in.event = str(m, "event");
 
         // FongMi 复合 key: siteKey@@@vodId@@@cid —— 拆出 sourceKey/vodId

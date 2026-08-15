@@ -203,7 +203,7 @@ class SubscriptionServiceTest {
         assertThat(SubscriptionService.selectPluginApi(plugin, false, "http://atv"))
                 .isEqualTo("csp_PyProxy");
         assertThat(payload)
-                .containsEntry("loader", "http://atv/Atvp.py?v=link-check-v1")
+                .containsEntry("loader", "http://atv/Atvp.py?v=resume-group-v1")
                 .containsEntry("source", "http://atv/plugins/web/7.py")
                 .containsEntry("raw", true)
                 .containsEntry("api", "http://atv")
@@ -229,7 +229,7 @@ class SubscriptionServiceTest {
                 plugin, "http://atv", "web", "", "secret", true, localProxyConfig);
 
         assertThat(SubscriptionService.selectPluginApi(plugin, true, "http://atv"))
-                .isEqualTo("http://atv/Atvp.py?v=link-check-v1");
+                .isEqualTo("http://atv/Atvp.py?v=resume-group-v1");
         assertThat(SubscriptionService.selectPluginApi(plugin, false, "http://atv"))
                 .isEqualTo("csp_PyProxy");
         assertThat(payload)
@@ -242,7 +242,7 @@ class SubscriptionServiceTest {
         Map<String, Object> javaPayload = SubscriptionService.buildPluginExtPayload(
                 plugin, "http://atv", "web", "", "secret", false, localProxyConfig);
         assertThat(javaPayload)
-                .containsEntry("loader", "http://atv/Atvp.py?v=link-check-v1")
+                .containsEntry("loader", "http://atv/Atvp.py?v=resume-group-v1")
                 .containsEntry("local_proxy_config", localProxyConfig);
     }
 

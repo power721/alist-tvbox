@@ -59,6 +59,8 @@ class PlaybackSyncServiceTest {
     private PlaybackChangeSequenceRepository changeSequenceRepository;
     @Mock
     private TokenService tokenService;
+    @Mock
+    private ProxyService proxyService;
 
     private PlaybackSyncService service;
     private AppProperties appProperties;
@@ -73,7 +75,7 @@ class PlaybackSyncServiceTest {
         appProperties.setPlaybackSyncEnabled(true);
         service = new PlaybackSyncService(
                 historyRepository, tokenRepository, tombstoneRepository, changeSequenceRepository, tokenService,
-                appProperties);
+                appProperties, proxyService);
     }
 
     /** uid 级身份(syncScope=null):沿用旧行为,所有订阅互通。 */
@@ -599,6 +601,170 @@ class PlaybackSyncServiceTest {
         assertThat(pulled.getSourceSubgroupIndex()).isEqualTo(6);
         assertThat(pulled.getSourceSubgroupName()).isEqualTo("07外海风云");
         assertThat(pulled.getDriveDirId()).isEqualTo("stable-drive-directory");
+    }
+
+    private History spiderHistory(String episodeUrl, long updatedAt) {
+        History h = new History();
+        h.setUid(UID);
+        h.setSourceKind("spider_plugin");
+        h.setSourceKey("bbb01514f3d54e27bb48a80f50f2e39d5db0");
+        h.setVodId("gy_tv_58kD");
+        h.setEpisodeUrl(episodeUrl);
+        h.setSourceGroupIndex(1);
+        h.setSourceIndex(1);
+        h.setDriveDirId("L-quark-S02");
+        h.setUpdatedAt(updatedAt);
+        h.setCreateTime(updatedAt);
+        h.setChangeSeq(updatedAt);
+        return h;
+    }
+
+    @Test
+    void crossClientPushWithNewEpisodeUrlDropsStaleNavigationFields() {
+        // atv-player 写入的记录带导航坐标(夸克 S02E03);安卓端续播上报的是另一个资源
+        History atv = spiderHistory("1@188323@1@2", 500);
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "spider_plugin", "bbb01514f3d54e27bb48a80f50f2e39d5db0", "gy_tv_58kD"))
+                .thenReturn(List.of(atv));
+
+        service.apply(id(UID), Map.ofEntries(
+                Map.entry("sourceKind", "spider_plugin"),
+                Map.entry("sourceKey", "bbb01514f3d54e27bb48a80f50f2e39d5db0"),
+                Map.entry("vodId", "gy_tv_58kD"),
+                Map.entry("episodeUrl", "1@188076@0@2"),
+                Map.entry("sourceSubgroupIndex", 0),
+                Map.entry("sourceSubgroupName", "1"),
+                Map.entry("updatedAt", 600)), null, null);
+
+        // 不得把"夸克S02的坐标 + 百度S01的内容"拼进同一条记录
+        History merged = savedHistory();
+        assertThat(merged.getEpisodeUrl()).isEqualTo("1@188076@0@2");
+        assertThat(merged.getSourceGroupIndex()).isNull();
+        assertThat(merged.getSourceIndex()).isNull();
+        assertThat(merged.getDriveDirId()).isNull();
+        assertThat(merged.getSourceSubgroupIndex()).isZero();
+        assertThat(merged.getSourceSubgroupName()).isEqualTo("1");
+    }
+
+    @Test
+    void sameEpisodeReplayKeepsNavigationFields() {
+        // 同一文件重播(episodeUrl 不变):坐标仍然有效,必须保留
+        History atv = spiderHistory("1@188323@1@2", 500);
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "spider_plugin", "bbb01514f3d54e27bb48a80f50f2e39d5db0", "gy_tv_58kD"))
+                .thenReturn(List.of(atv));
+
+        service.apply(id(UID), Map.of(
+                "sourceKind", "spider_plugin",
+                "sourceKey", "bbb01514f3d54e27bb48a80f50f2e39d5db0",
+                "vodId", "gy_tv_58kD",
+                "episodeUrl", "1@188323@1@2",
+                "positionMs", 900000,
+                "updatedAt", 600), null, null);
+
+        History merged = savedHistory();
+        assertThat(merged.getEpisodeUrl()).isEqualTo("1@188323@1@2");
+        assertThat(merged.getSourceGroupIndex()).isEqualTo(1);
+        assertThat(merged.getSourceIndex()).isEqualTo(1);
+        assertThat(merged.getDriveDirId()).isEqualTo("L-quark-S02");
+    }
+
+    @Test
+    void drivePlayIdIsCanonicalizedToShareKeyAndRelativePath() {
+        when(proxyService.getPath(188323)).thenReturn(
+                "/我的夸克分享/temp/quark@2b3682416f78@/C 菜鸟老警S01~S06【1080P】/S02【2019】/S02E03.mp4");
+
+        service.apply(id(UID), Map.of(
+                "sourceKind", "spider_plugin",
+                "sourceKey", "bbb01514f3d54e27bb48a80f50f2e39d5db0",
+                "vodId", "gy_tv_58kD",
+                "episodeUrl", "1@188323@1@2",
+                "updatedAt", 500), null, null);
+
+        History saved = savedHistory();
+        assertThat(saved.getDriveShareKey()).isEqualTo("quark@2b3682416f78@");
+        assertThat(saved.getDrivePath())
+                .isEqualTo("/C 菜鸟老警S01~S06【1080P】/S02【2019】/S02E03.mp4");
+
+        when(historyRepository.findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(eq(UID), eq(0L), any()))
+                .thenReturn(List.of(saved));
+        PlaybackSyncInput pulled = service.pull(UID, 0, 100, null).getItems().getFirst();
+        assertThat(pulled.getDriveShareKey()).isEqualTo("quark@2b3682416f78@");
+        assertThat(pulled.getDrivePath())
+                .isEqualTo("/C 菜鸟老警S01~S06【1080P】/S02【2019】/S02E03.mp4");
+    }
+
+    @Test
+    void sameFileWithDifferentProxyIdKeepsNavigationFields() {
+        // 同一文件重新解析会产生新 proxyId,episodeUrl 字符串不同但规范路径相同
+        History atv = spiderHistory("1@188323@1@2", 500);
+        atv.setDriveShareKey("baidu@1fFDWZTTtXy8aTPjKJ2F0uA@f1z9");
+        atv.setDrivePath("/C 菜鸟老警 全8季 1080P/S02/S02E03.mp4");
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "spider_plugin", "bbb01514f3d54e27bb48a80f50f2e39d5db0", "gy_tv_58kD"))
+                .thenReturn(List.of(atv));
+        when(proxyService.getPath(188076)).thenReturn(
+                "/我的百度分享/temp/baidu@1fFDWZTTtXy8aTPjKJ2F0uA@f1z9/C 菜鸟老警 全8季 1080P/S02/S02E03.mp4");
+
+        service.apply(id(UID), Map.of(
+                "sourceKind", "spider_plugin",
+                "sourceKey", "bbb01514f3d54e27bb48a80f50f2e39d5db0",
+                "vodId", "gy_tv_58kD",
+                "episodeUrl", "1@188076@1@2",
+                "positionMs", 900000,
+                "updatedAt", 600), null, null);
+
+        History merged = savedHistory();
+        assertThat(merged.getEpisodeUrl()).isEqualTo("1@188076@1@2");
+        assertThat(merged.getSourceGroupIndex()).isEqualTo(1);
+        assertThat(merged.getSourceIndex()).isEqualTo(1);
+        assertThat(merged.getDriveDirId()).isEqualTo("L-quark-S02");
+        assertThat(merged.getDriveShareKey()).isEqualTo("baidu@1fFDWZTTtXy8aTPjKJ2F0uA@f1z9");
+        assertThat(merged.getDrivePath()).isEqualTo("/C 菜鸟老警 全8季 1080P/S02/S02E03.mp4");
+    }
+
+    @Test
+    void staleRowIsBackfilledAndComparedByCanonicalPath() {
+        // 旧行没有规范路径(升级前的存量数据):按其 episodeUrl 惰性回填后再比较
+        History atv = spiderHistory("1@188323@1@2", 500);
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(
+                UID, "spider_plugin", "bbb01514f3d54e27bb48a80f50f2e39d5db0", "gy_tv_58kD"))
+                .thenReturn(List.of(atv));
+        when(proxyService.getPath(188323)).thenReturn(
+                "/我的夸克分享/temp/quark@2b3682416f78@/C 菜鸟老警S01~S06/S02/S02E03.mp4");
+        when(proxyService.getPath(188076)).thenReturn(
+                "/我的百度分享/temp/baidu@1fFDWZTTtXy8aTPjKJ2F0uA@f1z9/C 菜鸟老警/S01/S01E03.mp4");
+
+        service.apply(id(UID), Map.ofEntries(
+                Map.entry("sourceKind", "spider_plugin"),
+                Map.entry("sourceKey", "bbb01514f3d54e27bb48a80f50f2e39d5db0"),
+                Map.entry("vodId", "gy_tv_58kD"),
+                Map.entry("episodeUrl", "1@188076@0@2"),
+                Map.entry("sourceSubgroupIndex", 0),
+                Map.entry("sourceSubgroupName", "1"),
+                Map.entry("updatedAt", 600)), null, null);
+
+        History merged = savedHistory();
+        assertThat(merged.getSourceGroupIndex()).isNull();
+        assertThat(merged.getSourceIndex()).isNull();
+        assertThat(merged.getDriveDirId()).isNull();
+        assertThat(merged.getDriveShareKey()).isEqualTo("baidu@1fFDWZTTtXy8aTPjKJ2F0uA@f1z9");
+        assertThat(merged.getDrivePath()).isEqualTo("/C 菜鸟老警/S01/S01E03.mp4");
+    }
+
+    @Test
+    void nonDriveEpisodeUrlIsNotCanonicalized() {
+        service.apply(id(UID), Map.of(
+                "sourceKind", "site",
+                "sourceKey", "csp_AList",
+                "vodId", "v1",
+                "episodeUrl", "https://example.com/video.mp4",
+                "updatedAt", 500), null, null);
+
+        History saved = savedHistory();
+        assertThat(saved.getDriveShareKey()).isNull();
+        assertThat(saved.getDrivePath()).isNull();
+        verify(proxyService, never()).getPath(anyInt());
     }
 
     @Test

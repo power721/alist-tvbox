@@ -11,6 +11,7 @@ import db.migration.current.V14__PlaybackSelectionContext;
 import db.migration.current.V15__PlaybackSyncScope;
 import db.migration.current.V16__MigrateLegacyHistory;
 import db.migration.current.V17__FixChangeSequenceWatermark;
+import db.migration.current.V18__PlaybackDrivePath;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -52,7 +53,8 @@ public class NativeFlywayMigrationConfig {
                     new V14__PlaybackSelectionContext(),
                     new V15__PlaybackSyncScope(),
                     new V16__MigrateLegacyHistory(),
-                    new V17__FixChangeSequenceWatermark());
+                    new V17__FixChangeSequenceWatermark(),
+                    new V18__PlaybackDrivePath());
         };
     }
 }

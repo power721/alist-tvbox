@@ -35,6 +35,8 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -78,10 +80,17 @@ public class PlaybackSyncService {
     private final PlaybackChangeSequenceRepository changeSequenceRepository;
     private final TokenService tokenService;
     private final AppProperties appProperties;
+    private final ProxyService proxyService;
 
     private final Cache<String, Boolean> idempotency = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofHours(24))
             .maximumSize(50_000)
+            .build();
+
+    // 网盘播放 id 的 proxyId → 规范文件路径(含未命中缓存),进度 tick 高频 upsert 不应每次查库
+    private final Cache<Integer, Optional<String>> drivePathById = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofMinutes(10))
+            .maximumSize(10_000)
             .build();
 
     // ── 令牌解析(双源:playback_token 表 ∪ session) ──────────────────────────
@@ -168,6 +177,7 @@ public class PlaybackSyncService {
             return;
         }
         normalizeSource(in);
+        canonicalizeDrivePath(in);
         String sourceKind = in.getSourceKind() != null ? in.getSourceKind() : KIND_SITE;
         String dedupe = dedupeKey != null && !dedupeKey.isBlank() ? dedupeKey
                 : (eventId != null && !eventId.isBlank() ? eventId : null);
@@ -224,6 +234,23 @@ public class PlaybackSyncService {
             h.setSourceKey(in.getSourceKey());
             h.setVodId(in.getVodId());
             h.setKey(buildKey(sourceKind, in.getSourceKey(), in.getVodId()));
+        } else {
+            // 旧行还没有规范路径时按其 episodeUrl 惰性回填,供下面的同文件比较使用
+            if (exist.getDrivePath() == null) {
+                DriveRef existRef = resolveDriveRef(exist.getEpisodeUrl());
+                if (existRef != null) {
+                    exist.setDriveShareKey(existRef.shareKey());
+                    exist.setDrivePath(existRef.path());
+                }
+            }
+            // 上报端(FongMi 宿主)看不见这些导航坐标,且播放内容已切换到别的资源;
+            // 保留旧值会把"夸克S02的坐标 + 百度S01的内容"拼进同一条记录,误导其他端续播。
+            if (in.getSourceGroupIndex() == null && in.getSourceIndex() == null && in.getDriveDirId() == null
+                    && isDifferentContent(in, exist)) {
+                h.setSourceGroupIndex(null);
+                h.setSourceIndex(null);
+                h.setDriveDirId(null);
+            }
         }
         if (in.getVodName() != null) {
             h.setVodName(clamp(in.getVodName(), 255));
@@ -282,6 +309,12 @@ public class PlaybackSyncService {
         }
         if (in.getDriveDirId() != null) {
             h.setDriveDirId(in.getDriveDirId());
+        }
+        if (in.getDriveShareKey() != null) {
+            h.setDriveShareKey(clamp(in.getDriveShareKey(), 255));
+        }
+        if (in.getDrivePath() != null) {
+            h.setDrivePath(in.getDrivePath());
         }
         h.setUpdatedAt(updatedAt);
         h.setChangeSeq(changeSeq);
@@ -697,6 +730,86 @@ public class PlaybackSyncService {
         }
     }
 
+    // ── 网盘播放内容的规范标识 ─────────────────────────────────────────────
+
+    /** 规范内容指针:分享身份(盘类型@分享ID@提取码)+ 资源内相对路径(含文件名)。 */
+    private record DriveRef(String shareKey, String path) {
+    }
+
+    /**
+     * 网盘播放 id 形如 {@code siteId@proxyId@folderId@fileId},其中 proxyId 由
+     * 完整文件路径注册(见 TvBoxService.buildPlayUrl),可解回规范路径。
+     * 分享挂载段为 {@code /temp/<盘类型>@<分享ID>@<提取码>/...}(见 ShareService.add)。
+     */
+    private void canonicalizeDrivePath(PlaybackSyncInput in) {
+        DriveRef ref = resolveDriveRef(in.getEpisodeUrl());
+        if (ref != null) {
+            in.setDriveShareKey(ref.shareKey());
+            in.setDrivePath(ref.path());
+        }
+    }
+
+    private DriveRef resolveDriveRef(String episodeUrl) {
+        if (!isDrivePlayId(episodeUrl)) {
+            return null;
+        }
+        int proxyId = Integer.parseInt(episodeUrl.split("@", -1)[1]);
+        return drivePathById.get(proxyId, id -> {
+            try {
+                return Optional.ofNullable(proxyService.getPath(id));
+            } catch (Exception e) {
+                return Optional.empty();
+            }
+        }).flatMap(path -> {
+            int index = path.indexOf("/temp/");
+            if (index < 0) {
+                return Optional.empty();
+            }
+            String rest = path.substring(index + "/temp/".length());
+            int slash = rest.indexOf('/');
+            if (slash <= 0) {
+                return Optional.empty();
+            }
+            return Optional.of(new DriveRef(rest.substring(0, slash), rest.substring(slash)));
+        }).orElse(null);
+    }
+
+    private static boolean isDrivePlayId(String url) {
+        if (url == null || url.isEmpty()) {
+            return false;
+        }
+        String[] parts = url.split("@", -1);
+        if (parts.length != 4) {
+            return false;
+        }
+        for (String part : parts) {
+            if (part.isEmpty()) {
+                return false;
+            }
+            for (int i = 0; i < part.length(); i++) {
+                if (!Character.isDigit(part.charAt(i))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 判断本次上报是否切换到了别的播放内容。优先比较规范网盘路径 —— 同一文件重新解析后
+     * proxyId 会变,episodeUrl 字符串不可比;任一侧解析不到规范路径时退回字符串比较。
+     */
+    private boolean isDifferentContent(PlaybackSyncInput in, History exist) {
+        if (in.getEpisodeUrl() == null) {
+            return false;
+        }
+        if (in.getDrivePath() != null && exist.getDrivePath() != null) {
+            return !in.getDrivePath().equals(exist.getDrivePath())
+                    || !Objects.equals(in.getDriveShareKey(), exist.getDriveShareKey());
+        }
+        return !in.getEpisodeUrl().equals(exist.getEpisodeUrl());
+    }
+
     private void normalizeSource(PlaybackDeleteInput input) {
         String siteKey = tvBoxSiteKey(input.getSourceKind(), input.getSourceKey());
         if (siteKey != null) {
@@ -946,6 +1059,8 @@ public class PlaybackSyncService {
         in.setSourceSubgroupIndex(h.getSourceSubgroupIndex());
         in.setSourceSubgroupName(h.getSourceSubgroupName());
         in.setDriveDirId(h.getDriveDirId());
+        in.setDriveShareKey(h.getDriveShareKey());
+        in.setDrivePath(h.getDrivePath());
         return in;
     }
 

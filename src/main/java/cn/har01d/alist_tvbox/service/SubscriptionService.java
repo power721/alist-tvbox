@@ -90,7 +90,7 @@ import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 public class SubscriptionService {
     private static final String PLUGIN_RUN_MODE = "plugin_run_mode";
     private static final String PLUGIN_RUN_MODE_PYTHON = "python";
-    private static final String ATVP_RUNTIME_REVISION = "link-check-v1";
+    private static final String ATVP_RUNTIME_REVISION = "resume-group-v1";
     private static final String AUTO_UPDATE_PG = "auto_update_pg";
     private static final String AUTO_UPDATE_ZX = "auto_update_zx";
     private static final String AUTO_UPDATE_XS = "auto_update_xs";
