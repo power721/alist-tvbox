@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {onMounted, ref} from "vue";
+import {computed, onMounted, ref} from "vue";
 import axios from "axios";
 import mpegts from "mpegts.js";
 import {onUnmounted} from "@vue/runtime-core";
@@ -71,6 +71,18 @@ const activeName = ref("");
 const activeTab = ref("");
 const follows = ref<LiveFollow[]>([]);
 const followsLoading = ref(false);
+const followLoading = ref(false);
+const playGroups = ref<string[]>([]);
+const platformNames: Record<string, string> = {
+  bili: "B站",
+  bilibili: "B站",
+  cc: "网易",
+  douyin: "抖音",
+  douyu: "斗鱼",
+  huya: "虎牙",
+  ks: "快手",
+  kuaishou: "快手"
+};
 
 interface Category {
   type_id: string;
@@ -165,7 +177,7 @@ const destory = () => {
 
 const handleClick = (tab: TabsPaneContext) => {
   const index = +(tab.index || "0");
-  playUrls.value = room.value.vod_play_url.split("$$$")[index].split("#");
+  playUrls.value = playGroups.value[index].split("#");
   loadFlv(playUrls.value[0]);
 };
 
@@ -199,12 +211,6 @@ const loadConfig = () => {
 }
 
 const loadFlv = (url: string) => {
-  // 详情页"关注/取消关注"轨道:label$action$platform$roomId,走管理接口而不是播放
-  const parts = url.split("$");
-  if (parts.length >= 4 && (parts[1] === "follow" || parts[1] === "unfollow")) {
-    toggleFollow(parts[1] === "unfollow", parts[2], parts.slice(3).join("$"));
-    return;
-  }
   console.log(url);
   playUrl.value = url;
   destory();
@@ -214,16 +220,31 @@ const loadFlv = (url: string) => {
   });
 };
 
-const toggleFollow = (unfollow: boolean, platform: string, roomId: string) => {
+const currentRoom = computed(() => {
+  const [platform, ...roomIdParts] = room.value.vod_id.split("$");
+  return {platform, roomId: roomIdParts.join("$")};
+});
+
+const isFollowed = computed(() => currentRoom.value.platform && currentRoom.value.roomId
+  && follows.value.some(follow => follow.platform === currentRoom.value.platform && follow.roomId === currentRoom.value.roomId));
+
+const toggleFollow = () => {
+  const {platform, roomId} = currentRoom.value;
+  if (!platform || !roomId) {
+    return;
+  }
+  const unfollow = isFollowed.value;
+  followLoading.value = true;
   const request = unfollow
     ? axios.delete("/api/live/follows", {params: {platform, roomId}})
     : axios.post("/api/live/follows", {platform, roomId});
   request.then(() => {
     ElMessage.success(unfollow ? "已取消关注" : "已关注");
-    loadRoom(room.value.vod_id);
     loadFollows();
   }).catch(() => {
     ElMessage.error("操作失败");
+  }).finally(() => {
+    followLoading.value = false;
   });
 };
 
@@ -270,10 +291,16 @@ const loadRoom = (id: string) => {
   axios.get("/live/" + store.token + "?platform=web&ids=" + id).then(({data}) => {
     loading.value = false;
     room.value = data.list[0];
-    playFrom.value = room.value.vod_play_from.split("$$$");
-    playUrls.value = room.value.vod_play_url.split("$$$")[0].split("#");
+    const sources = room.value.vod_play_from.split("$$$");
+    playGroups.value = room.value.vod_play_url.split("$$$").filter(group => !group.split("#").some(url => {
+      const [, action] = url.split("$");
+      return action === "follow" || action === "unfollow";
+    }));
+    playFrom.value = sources.slice(0, playGroups.value.length);
+    playUrls.value = playGroups.value[0]?.split("#") || [];
     activeName.value = playFrom.value[0];
     dialogVisible.value = true;
+    loadFollows();
   });
 };
 
@@ -287,7 +314,7 @@ const loadCategories = (id: string) => {
   room.value.vod_id = "";
   typeKeyword.value = "";
   axios.get("/live/" + store.token + '?platform=web').then(({data}) => {
-    categories.value = data.class;
+    categories.value = data.class.filter((item: Category) => item.type_id !== "follow");
     if (id === "manage") {
       category.value = categories.value[0];
       activeTab.value = "manage";
@@ -477,7 +504,7 @@ onUnmounted(() => {
           <el-table-column label="房间" min-width="300">
             <template #default="{row}">
               <div class="follow-room">
-                <img v-if="row.cover" :src="row.cover" :alt="row.roomName" referrerpolicy="no-referrer">
+                <img v-if="row.cover" :src="row.cover" :alt="row.roomName" referrerpolicy="no-referrer" @click="openFollowRoom(row)">
                 <div>
                   <div>{{ row.roomName || row.roomId }}</div>
                   <div class="follow-anchor">{{ row.anchorName }}</div>
@@ -485,7 +512,9 @@ onUnmounted(() => {
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="platform" label="平台" width="100"/>
+          <el-table-column label="平台" width="100">
+            <template #default="{row}">{{ platformNames[row.platform] || row.platform }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="110">
             <template #default="{row}">
               <el-tag :type="row.live === true ? 'danger' : row.live === false ? 'info' : 'warning'">
@@ -493,7 +522,7 @@ onUnmounted(() => {
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="关注时间" width="180">
+          <el-table-column label="关注时间" width="210">
             <template #default="{row}">{{ formatTime(row.followedTime) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="170">
@@ -563,6 +592,14 @@ onUnmounted(() => {
             <el-descriptions-item label="主播">{{ room.vod_actor }}</el-descriptions-item>
             <el-descriptions-item label="人气">{{ room.vod_remarks }}</el-descriptions-item>
           </el-descriptions>
+          <el-button
+            class="follow-button"
+            :type="isFollowed ? 'danger' : 'primary'"
+            :loading="followLoading"
+            @click="toggleFollow"
+          >
+            {{ isFollowed ? '取消关注' : '关注主播' }}
+          </el-button>
         </el-col>
       </el-row>
 <!--      <template #footer>-->
@@ -670,12 +707,17 @@ onUnmounted(() => {
   height: 54px;
   object-fit: cover;
   border-radius: 4px;
+  cursor: pointer;
 }
 
 .follow-anchor {
   color: var(--el-text-color-secondary);
   font-size: 12px;
   margin-top: 4px;
+}
+
+.follow-button {
+  margin-top: 16px;
 }
 
 #pagination {
