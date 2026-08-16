@@ -54,6 +54,9 @@ public class ImageController {
             headers.set(HttpHeaders.REFERER, "https://www.youtube.com/");
         } else if (url.contains("netease.com")) {
             headers.set(HttpHeaders.REFERER, "https://cc.163.com/");
+        } else if (url.contains("hdslb.com")) {
+            // B站图床有防盗链,豆瓣等第三方 Referer 会被 403
+            headers.set(HttpHeaders.REFERER, "https://live.bilibili.com/");
         } else if (url.contains("/Images/Primary")) {
             headers.set(HttpHeaders.REFERER, referer);
             headers.set(HttpHeaders.USER_AGENT, Constants.EMBY_USER_AGENT);

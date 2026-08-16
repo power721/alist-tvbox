@@ -286,7 +286,8 @@ public class BilibiliService implements LivePlatform {
         MovieDetail detail = new MovieDetail();
         detail.setVod_id(tid);
         detail.setVod_name(room.getTitle());
-        detail.setVod_pic(fixCover(room.getCover()));
+        String cover = room.getUser_cover();
+        detail.setVod_pic(fixCover(cover == null || cover.isBlank() ? room.getCover() : cover));
         detail.setVod_actor(userMap.get(id));
         detail.setType_name(room.getArea_name());
         detail.setVod_remarks(playCount(room.getOnline()));
@@ -306,6 +307,11 @@ public class BilibiliService implements LivePlatform {
 
         String url = "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?protocol=0,1&format=0,1,2&codec=0,1&platform=web&room_id=" + id;
         var response = restTemplate.getForObject(url, BilibiliRoomPlayResponse.class);
+
+        // 房间未开播时接口不返回 playurl_info,无流可播;返回后 vod_play_url 为空即"未开播"标记
+        if (response.getData() == null || response.getData().getPlayurl_info() == null) {
+            return;
+        }
 
         int count = 1;
         var streams = response.getData().getPlayurl_info().getPlayurl().getStream();

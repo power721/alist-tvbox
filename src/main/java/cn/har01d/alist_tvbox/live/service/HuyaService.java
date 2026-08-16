@@ -12,7 +12,6 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -23,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
 
 @Slf4j
 @Service
@@ -75,11 +76,11 @@ public class HuyaService implements LivePlatform {
     }
 
     @Override
-    public MovieList home() throws JsonProcessingException {
+    public MovieList home() throws IOException {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
         String url = "https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&tagAll=0";
-        var json = restTemplate.getForObject(url, String.class);
+        var json = httpGet(url);
         log.trace("home json: {}", json);
         var response = objectMapper.readValue(json, HuyaLiveRoomInfoListResponse.class);
         for (var room : response.getData().getDatas()) {
@@ -104,7 +105,7 @@ public class HuyaService implements LivePlatform {
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
 
-        var json = restTemplate.getForObject("https://m.huya.com/cache.php?m=Game&do=ajaxGameList&bussType=", String.class);
+        var json = httpGet("https://m.huya.com/cache.php?m=Game&do=ajaxGameList&bussType=");
         log.trace("category json: {}", json);
         var huyaCategoryList = objectMapper.readValue(json, HuyaCategoryList.class);
         for (var item : huyaCategoryList.getGameList()) {
@@ -133,7 +134,7 @@ public class HuyaService implements LivePlatform {
         List<MovieDetail> list = new ArrayList<>();
 
         String url = "https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&gameId=" + gid + "&tagAll=0&page=" + pg;
-        var json = restTemplate.getForObject(url, String.class);
+        var json = httpGet(url);
         log.trace("list json: {}", json);
         var response = objectMapper.readValue(json.replaceAll("\\p{Cntrl}", ""), HuyaLiveRoomInfoListResponse.class);
         for (var room : response.getData().getDatas()) {
@@ -190,7 +191,7 @@ public class HuyaService implements LivePlatform {
         String id = parts[1];
         MovieList result = new MovieList();
         String url = "https://m.huya.com/" + id;
-        var response = restTemplate.getForObject(url, String.class);
+        var response = httpGet(url);
         Matcher matcherOwnerName = OwnerName.matcher(response);
         Matcher matcherRoomName = RoomName.matcher(response);
         Matcher matcherRoomPic = RoomPic.matcher(response);
@@ -283,6 +284,20 @@ public class HuyaService implements LivePlatform {
         }
         movieDetail.setVod_play_from(String.join("$$$", playFrom));
         movieDetail.setVod_play_url(String.join("$$$", playUrl));
+    }
+
+    // 虎牙部分 CDN 边缘节点会无视 Accept-Encoding 直接返回 gzip 响应，HttpURLConnection 不会自动解压
+    private String httpGet(String url) throws IOException {
+        byte[] body = restTemplate.getForObject(url, byte[].class);
+        if (body == null || body.length == 0) {
+            return "";
+        }
+        if (body.length > 2 && body[0] == 0x1f && body[1] == (byte) 0x8b) {
+            try (GZIPInputStream gis = new GZIPInputStream(new ByteArrayInputStream(body))) {
+                body = gis.readAllBytes();
+            }
+        }
+        return new String(body, StandardCharsets.UTF_8);
     }
 
     private List<String> findAll(String text, Pattern pattern) {

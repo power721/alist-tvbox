@@ -8,6 +8,7 @@ public class BilibiliRoomInfo {
     private String title;
     private String uname;
     private String cover;
+    private String user_cover;
     private String area_name;
     private int online;
 }

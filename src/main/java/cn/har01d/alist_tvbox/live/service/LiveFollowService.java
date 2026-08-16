@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.live.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.LiveFollowDto;
 import cn.har01d.alist_tvbox.entity.LiveFollow;
@@ -8,6 +9,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.UserService;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.PreDestroy;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -44,6 +47,7 @@ public class LiveFollowService {
 
     private final LiveFollowRepository followRepository;
     private final UserService userService;
+    private final AppProperties appProperties;
     private final List<LivePlatform> platforms;
     private final Cache<String, Optional<MovieDetail>> statusCache = Caffeine.newBuilder()
             .maximumSize(500)
@@ -55,9 +59,10 @@ public class LiveFollowService {
         return thread;
     });
 
-    public LiveFollowService(LiveFollowRepository followRepository, UserService userService, List<LivePlatform> platforms) {
+    public LiveFollowService(LiveFollowRepository followRepository, UserService userService, AppProperties appProperties, List<LivePlatform> platforms) {
         this.followRepository = followRepository;
         this.userService = userService;
+        this.appProperties = appProperties;
         this.platforms = platforms;
     }
 
@@ -153,7 +158,7 @@ public class LiveFollowService {
             dto.setRoomId(follow.getRoomId());
             dto.setRoomName(follow.getRoomName());
             dto.setAnchorName(follow.getAnchorName());
-            dto.setCover(follow.getCover());
+            dto.setCover(absoluteCover(follow.getCover()));
             dto.setFollowedTime(follow.getCreatedTime());
             MovieDetail info = refreshed.get(cacheKey(follow.getPlatform(), follow.getRoomId()));
             if (info != null) {
@@ -193,7 +198,7 @@ public class LiveFollowService {
         MovieDetail detail = new MovieDetail();
         detail.setVod_id(follow.getPlatform() + "$" + follow.getRoomId());
         detail.setVod_name(info != null && StringUtils.isNotBlank(info.getVod_name()) ? info.getVod_name() : follow.getRoomName());
-        detail.setVod_pic(info != null && StringUtils.isNotBlank(info.getVod_pic()) ? cleanUrl(info.getVod_pic()) : follow.getCover());
+        detail.setVod_pic(info != null && StringUtils.isNotBlank(info.getVod_pic()) ? cleanUrl(info.getVod_pic()) : absoluteCover(follow.getCover()));
         String platformName = platformName(follow.getPlatform());
         if (isLive(info)) {
             String remarks = StringUtils.isNotBlank(info.getVod_remarks()) ? info.getVod_remarks() : "直播中";
@@ -203,9 +208,20 @@ public class LiveFollowService {
         }
         String anchor = info != null && StringUtils.isNotBlank(info.getVod_actor()) ? info.getVod_actor() : follow.getAnchorName();
         detail.setVod_actor(anchor);
-        if (info != null && StringUtils.isNotBlank(info.getVod_name()) && !Objects.equals(info.getVod_name(), follow.getRoomName())) {
-            follow.setRoomName(info.getVod_name());
-            followRepository.save(follow);
+        if (info != null) {
+            // 顺带同步最新房间名/封面到已存元数据
+            boolean changed = false;
+            if (StringUtils.isNotBlank(info.getVod_name()) && !Objects.equals(info.getVod_name(), follow.getRoomName())) {
+                follow.setRoomName(info.getVod_name());
+                changed = true;
+            }
+            if (StringUtils.isNotBlank(info.getVod_pic()) && !Objects.equals(normalizeCover(info.getVod_pic()), follow.getCover())) {
+                follow.setCover(normalizeCover(info.getVod_pic()));
+                changed = true;
+            }
+            if (changed) {
+                followRepository.save(follow);
+            }
         }
         return detail;
     }
@@ -293,12 +309,39 @@ public class LiveFollowService {
             follow.setRoomName(info.getVod_name());
         }
         if (StringUtils.isNotBlank(info.getVod_pic())) {
-            follow.setCover(cleanUrl(info.getVod_pic()));
+            follow.setCover(normalizeCover(info.getVod_pic()));
         }
         String anchor = StringUtils.isNotBlank(info.getVod_actor()) ? info.getVod_actor() : info.getVod_remarks();
         if (StringUtils.isNotBlank(anchor)) {
             follow.setAnchorName(anchor);
         }
+    }
+
+    /** 代理封面(/images?url=...)依赖请求 host,入库只存相对路径,避免固化关注时的访问地址。 */
+    private String normalizeCover(String url) {
+        String cleaned = cleanUrl(url);
+        if (cleaned == null) {
+            return null;
+        }
+        int idx = cleaned.indexOf("/images?url=");
+        if (idx > 0 && cleaned.startsWith("http")) {
+            return cleaned.substring(idx);
+        }
+        return cleaned;
+    }
+
+    /** 展示时把相对代理封面按当前请求 host 重建绝对地址。 */
+    private String absoluteCover(String stored) {
+        if (stored == null || !stored.startsWith("/")) {
+            return stored;
+        }
+        String query = stored.contains("?") ? stored.substring(stored.indexOf('?') + 1) : "";
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/images")
+                .replaceQuery(query)
+                .build()
+                .toUriString();
     }
 
     /** 虎牙等平台的封面 URL 内嵌 JSON 转义(\u002F),入库/展示前归一为可直接访问的 URL。 */
