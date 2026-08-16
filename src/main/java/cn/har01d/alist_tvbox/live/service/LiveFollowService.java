@@ -170,7 +170,11 @@ public class LiveFollowService {
         return result;
     }
 
-    /** 详情页追加"关注/取消关注"轨道(spider playerContent 拦截 follow$/unfollow$ 前缀)。 */
+    /**
+     * 详情页追加"关注"轨道组:固定提供"关注"和"取消关注"两个选集(后端幂等),
+     * 组名按当前状态显示"关注"/"已关注"——播放器详情页打开后不会重新拉取,
+     * 状态文字会过期,必须两个操作都常驻才能立即取关。spider 拦截 follow$/unfollow$ 前缀。
+     */
     public void appendFollowTrack(MovieDetail detail, int uid) {
         String[] parts = detail.getVod_id().split("\\$");
         if (parts.length < 2) {
@@ -178,13 +182,11 @@ public class LiveFollowService {
         }
         String platform = parts[0];
         String roomId = String.join("$", Arrays.copyOfRange(parts, 1, parts.length));
-        boolean followed = isFollowed(uid, platform, roomId);
-        String label = followed ? "取消关注" : "关注";
-        String action = followed ? "unfollow" : "follow";
+        String label = isFollowed(uid, platform, roomId) ? "已关注" : "关注";
         String from = StringUtils.isEmpty(detail.getVod_play_from()) ? "" : detail.getVod_play_from() + "$$$";
         String url = StringUtils.isEmpty(detail.getVod_play_url()) ? "" : detail.getVod_play_url() + "$$$";
         detail.setVod_play_from(from + label);
-        detail.setVod_play_url(url + label + "$" + action + "$" + platform + "$" + roomId);
+        detail.setVod_play_url(url + "关注主播$follow$" + platform + "$" + roomId + "#取消关注$unfollow$" + platform + "$" + roomId);
     }
 
     private MovieDetail toMovieDetail(LiveFollow follow, MovieDetail info) {

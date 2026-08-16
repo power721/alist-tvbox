@@ -10,10 +10,12 @@
 
 ## 关注操作
 
-TVBox 无原生"关注"按钮,采用播放轨道约定:直播间详情页(`GET /live/{token}?ids={platform}${roomId}`)会在最后一个播放组追加一组:
+TVBox 无原生"关注"按钮,采用播放轨道约定:直播间详情页(`GET /live/{token}?ids={platform}${roomId}`)会在最后一个播放组追加"关注"组,组内固定两个选集(后端幂等):
 
-- 未关注:`vod_play_from` 追加 `关注`,episode 为 `关注$follow$平台$房间号`
-- 已关注:追加 `取消关注`,episode 为 `取消关注$unfollow$平台$房间号`
+- `关注$follow$平台$房间号`
+- `取消关注$unfollow$平台$房间号`
+
+组名按当前状态显示"关注"/"已关注"。播放器详情页打开后不会重新拉取(状态文字会过期),因此两个操作常驻,关注后可立即取关。
 
 spider.jar(`csp_Live`)的 `playerContent` 拦截 `follow$` / `unfollow$` 前缀的 id,POST 到后端完成关注/取关。响应为带缩进的 JSON(`"success" : true`),spider 端解析 JSON 判断结果(不能子串匹配)。成功后 spider 再调详情接口取第一播放组的流地址直接返回给播放器,**恢复播放状态**;同时用 Android 原生 Toast 弹"已关注/已取消关注"(spider 运行在播放器进程内,经主线程 Handler + application context 弹出)。
 
