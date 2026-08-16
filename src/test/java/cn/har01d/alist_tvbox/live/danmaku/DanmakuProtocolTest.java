@@ -109,6 +109,18 @@ class DanmakuProtocolTest {
         assertEquals(2, data[8] << 24 | (data[9] & 0xFF) << 16 | (data[10] & 0xFF) << 8 | data[11] & 0xFF, "operation=2");
     }
 
+    @Test
+    void biliHeartbeatReplyIgnored() {
+        // 心跳回应(op=3)的人气值已弃用恒为 1,不得再 emit;实时人气走 get_info 轮询
+        var client = new BilibiliDanmakuClient(new BilibiliDanmakuClient.BiliDanmakuArgs(1, 0, "t", "", "h", ""),
+                new okhttp3.OkHttpClient(), java.util.concurrent.Executors.newSingleThreadScheduledExecutor());
+        List<cn.har01d.alist_tvbox.dto.LiveDanmaku> received = new java.util.ArrayList<>();
+        client.setListener(received::add);
+        client.handleMessage(BilibiliDanmakuClient.encode("\u0000\u0000\u0000\u0001", 3));
+        assertTrue(received.isEmpty(), "弃用的心跳人气不应下发");
+        client.stop();
+    }
+
     // ---- 抖音 X-Bogus ----
 
     @Test
