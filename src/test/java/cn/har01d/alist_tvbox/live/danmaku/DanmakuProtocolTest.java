@@ -110,14 +110,23 @@ class DanmakuProtocolTest {
     }
 
     @Test
-    void biliHeartbeatReplyIgnored() {
-        // 心跳回应(op=3)的人气值已弃用恒为 1,不得再 emit;实时人气走 get_info 轮询
+    void biliHeartbeatReplyIgnored() throws Exception {
+        // 心跳回应(op=3)的人气值已弃用恒为 1,不得 emit;在线人数走 ONLINE_RANK_COUNT
         var client = new BilibiliDanmakuClient(new BilibiliDanmakuClient.BiliDanmakuArgs(1, 0, "t", "", "h", ""),
                 new okhttp3.OkHttpClient(), java.util.concurrent.Executors.newSingleThreadScheduledExecutor());
+        // emit 以 running 门控,不起真实 WS 连接,反射置位模拟运行中
+        var running = AbstractDanmakuClient.class.getDeclaredField("running");
+        running.setAccessible(true);
+        running.set(client, true);
         List<cn.har01d.alist_tvbox.dto.LiveDanmaku> received = new java.util.ArrayList<>();
         client.setListener(received::add);
         client.handleMessage(BilibiliDanmakuClient.encode("\u0000\u0000\u0000\u0001", 3));
         assertTrue(received.isEmpty(), "弃用的心跳人气不应下发");
+        client.handleMessage(BilibiliDanmakuClient.encode(
+                "{\"cmd\":\"ONLINE_RANK_COUNT\",\"data\":{\"count\":72862,\"count_text\":\"7万+\"}}", 5));
+        assertEquals(1, received.size());
+        assertEquals("online", received.get(0).getType());
+        assertEquals("72862", received.get(0).getMessage());
         client.stop();
     }
 
