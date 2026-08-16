@@ -10,3 +10,4 @@ db.migration.current.V15__PlaybackSyncScope
 db.migration.current.V16__MigrateLegacyHistory
 db.migration.current.V17__FixChangeSequenceWatermark
 db.migration.current.V18__PlaybackDrivePath
+db.migration.current.V19__LiveFollow

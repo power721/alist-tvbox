@@ -45,7 +45,11 @@ public class WebSecurityConfiguration {
                                 "/api/playback/event",
                                 "/api/playback/events",
                                 "/api/playback/changes",
-                                "/api/playback/sync"
+                                "/api/playback/sync",
+                                "/live/follow",
+                                "/live/unfollow",
+                                "/live/*/follow",
+                                "/live/*/unfollow"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(
@@ -60,6 +64,8 @@ public class WebSecurityConfiguration {
                                 "/api/accounts/principal"
                         ).authenticated()
                         .requestMatchers("/api/playback/tokens/**", "/api/playback/records", "/api/playback/records/**")
+                        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        .requestMatchers("/api/live/follows", "/api/live/follows/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/users/**", "/api/tenants/**", "/api/files/**", "/api/alist/alias/**")
                         .hasAuthority(Role.ADMIN.name())

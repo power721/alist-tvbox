@@ -68,11 +68,24 @@ const room = ref<Movie>({
   vod_play_url: ""
 });
 const activeName = ref("");
+const activeTab = ref("");
+const follows = ref<LiveFollow[]>([]);
+const followsLoading = ref(false);
 
 interface Category {
   type_id: string;
   type_name: string;
   type_flag: number;
+}
+
+interface LiveFollow {
+  platform: string;
+  roomId: string;
+  roomName?: string;
+  anchorName?: string;
+  cover?: string;
+  live?: boolean | null;
+  followedTime?: number;
 }
 
 interface Movie {
@@ -157,12 +170,18 @@ const handleClick = (tab: TabsPaneContext) => {
 };
 
 const handleCategoryClick = (tab: TabsPaneContext) => {
+  if (tab.props.name === "manage") {
+    router.push('/live/manage')
+    loadFollows();
+    return;
+  }
   const index = +(tab.index || "0");
   if (index >= categories.value.length) {
     router.push('/live/config')
     loadConfig();
   } else {
     category.value = categories.value[index];
+    activeTab.value = category.value.type_id;
     router.push('/live/' + category.value.type_id)
     loadTypes();
   }
@@ -180,6 +199,12 @@ const loadConfig = () => {
 }
 
 const loadFlv = (url: string) => {
+  // 详情页"关注/取消关注"轨道:label$action$platform$roomId,走管理接口而不是播放
+  const parts = url.split("$");
+  if (parts.length >= 4 && (parts[1] === "follow" || parts[1] === "unfollow")) {
+    toggleFollow(parts[1] === "unfollow", parts[2], parts.slice(3).join("$"));
+    return;
+  }
   console.log(url);
   playUrl.value = url;
   destory();
@@ -187,6 +212,44 @@ const loadFlv = (url: string) => {
     URL: url.split("$")[1],
     elementId: "live"
   });
+};
+
+const toggleFollow = (unfollow: boolean, platform: string, roomId: string) => {
+  const request = unfollow
+    ? axios.delete("/api/live/follows", {params: {platform, roomId}})
+    : axios.post("/api/live/follows", {platform, roomId});
+  request.then(() => {
+    ElMessage.success(unfollow ? "已取消关注" : "已关注");
+    loadRoom(room.value.vod_id);
+    loadFollows();
+  }).catch(() => {
+    ElMessage.error("操作失败");
+  });
+};
+
+const loadFollows = () => {
+  followsLoading.value = true;
+  axios.get("/api/live/follows").then(({data}) => {
+    follows.value = data;
+    followsLoading.value = false;
+  }).catch(() => {
+    followsLoading.value = false;
+  });
+};
+
+const removeFollow = (row: LiveFollow) => {
+  axios.delete("/api/live/follows", {params: {platform: row.platform, roomId: row.roomId}}).then(() => {
+    ElMessage.success("已取消关注");
+    loadFollows();
+  });
+};
+
+const openFollowRoom = (row: LiveFollow) => {
+  loadRoom(row.platform + "$" + row.roomId);
+};
+
+const formatTime = (time?: number) => {
+  return time ? new Date(time).toLocaleString() : "";
 };
 
 const start = () => {
@@ -225,11 +288,18 @@ const loadCategories = (id: string) => {
   typeKeyword.value = "";
   axios.get("/live/" + store.token + '?platform=web').then(({data}) => {
     categories.value = data.class;
+    if (id === "manage") {
+      category.value = categories.value[0];
+      activeTab.value = "manage";
+      loadFollows();
+      return;
+    }
     if (id) {
       category.value = categories.value.find(e => e.type_id == id) || categories.value[0];
     } else {
       category.value = categories.value[0];
     }
+    activeTab.value = category.value.type_id;
     loadTypes();
   });
 };
@@ -265,8 +335,17 @@ const loadTypes = () => {
   room.value.vod_id = "";
   roomKeyword.value = "";
   axios.get("/live/" + store.token + "?platform=web&t=" + id).then(({data}) => {
-    types.value = data.list;
-    filteredTypes.value = types.value;
+    if (id === "follow") {
+      // 关注分类直接返回直播间列表(非文件夹)
+      types.value = [];
+      filteredTypes.value = [];
+      rooms.value = data.list;
+      filteredRooms.value = data.list;
+      total.value = data.pagecount || 1;
+    } else {
+      types.value = data.list;
+      filteredTypes.value = types.value;
+    }
   });
 };
 
@@ -320,7 +399,7 @@ onUnmounted(() => {
 
 <template>
   <div class="mainContainer">
-    <el-tabs v-model="category.type_id" @tab-click="handleCategoryClick">
+    <el-tabs v-model="activeTab" @tab-click="handleCategoryClick">
       <el-tab-pane :label="item.type_name" :name="item.type_id" v-for="item of categories">
         <el-breadcrumb separator="/">
           <el-breadcrumb-item>
@@ -388,6 +467,42 @@ onUnmounted(() => {
             </el-col>
           </el-row>
         </div>
+      </el-tab-pane>
+      <el-tab-pane label="关注管理" name="manage">
+        <div id="follow-toolbar">
+          <el-button :icon="Refresh" circle @click="loadFollows"/>
+          <span v-if="follows.length" class="follow-summary">共 {{ follows.length }} 个关注</span>
+        </div>
+        <el-table :data="follows" v-loading="followsLoading">
+          <el-table-column label="房间" min-width="300">
+            <template #default="{row}">
+              <div class="follow-room">
+                <img v-if="row.cover" :src="row.cover" :alt="row.roomName" referrerpolicy="no-referrer">
+                <div>
+                  <div>{{ row.roomName || row.roomId }}</div>
+                  <div class="follow-anchor">{{ row.anchorName }}</div>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="platform" label="平台" width="100"/>
+          <el-table-column label="状态" width="110">
+            <template #default="{row}">
+              <el-tag :type="row.live === true ? 'danger' : row.live === false ? 'info' : 'warning'">
+                {{ row.live === true ? '直播中' : row.live === false ? '未开播' : '未知' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="关注时间" width="180">
+            <template #default="{row}">{{ formatTime(row.followedTime) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="170">
+            <template #default="{row}">
+              <el-button size="small" @click="openFollowRoom(row)">观看</el-button>
+              <el-button size="small" type="danger" @click="removeFollow(row)">取关</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </el-tab-pane>
 <!--      <el-tab-pane label="配置" name="config">-->
 <!--        <el-form label-width="110px">-->
@@ -530,6 +645,37 @@ onUnmounted(() => {
 #type-filter {
   display: flex;
   justify-content: flex-end;
+}
+
+#follow-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.follow-summary {
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+}
+
+.follow-room {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.follow-room img {
+  width: 96px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.follow-anchor {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 #pagination {
