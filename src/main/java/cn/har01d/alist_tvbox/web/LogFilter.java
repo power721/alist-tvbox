@@ -23,7 +23,13 @@ public class LogFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String url = request.getRequestURI();
         if (!skip(request)) {
-            log.info("{} - {} {} {}", getRemoteAddr(request), request.getMethod(), url, decodeUrl(maskQuery(request.getQueryString())));
+            String query = decodeUrl(maskQuery(request.getQueryString()));
+            // 弹幕轮询接口每房间约 2 秒一次:降为 debug,避免 INFO 刷屏
+            if (url.startsWith("/live/danmaku")) {
+                log.debug("{} - {} {} {}", getRemoteAddr(request), request.getMethod(), url, query);
+            } else {
+                log.info("{} - {} {} {}", getRemoteAddr(request), request.getMethod(), url, query);
+            }
         }
         filterChain.doFilter(request, response);
     }

@@ -22,7 +22,7 @@ public class HuyaDanmakuClient extends AbstractDanmakuClient {
     private final long ayyuid;
 
     public HuyaDanmakuClient(long ayyuid, OkHttpClient okHttpClient, ScheduledExecutorService scheduler) {
-        super("huya-danmaku", SERVER_URL, Map.of(), 30_000, okHttpClient, scheduler);
+        super("huya-danmaku", SERVER_URL, Map.of(), 60_000, okHttpClient, scheduler);
         this.ayyuid = ayyuid;
     }
 
@@ -31,8 +31,12 @@ public class HuyaDanmakuClient extends AbstractDanmakuClient {
         send(buildJoinData(ayyuid));
     }
 
-    /** OnlineUserHeartBeat 请求的 Tars 编码(pure_live 固定字节,内嵌 adr_wap 设备标识) */
-    private static final byte[] HEARTBEAT = {
+    /**
+     * OnlineUserHeartBeat 请求的 Tars 编码(pure_live 固定字节,内嵌 adr_wap 设备标识)。
+     * 注意包内 lTid/lSid(偏移 79/84)是抓包留下的死值,与当前房间无关;实测把它们换成本房间
+     * 频道号并不能让虎牙持续推送(见 HuyaProbeTest 的 original/patched/none 对照),故保持原样。
+     */
+    static final byte[] HEARTBEAT = {
             0x00, 0x03, 0x1d, 0x00, 0x00, 0x69, 0x00, 0x00, 0x00, 0x69, 0x10, 0x03, 0x2c, 0x3c, 0x4c, 0x56,
             0x08, 0x6f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x75, 0x69, 0x66, 0x0f, 0x4f, 0x6e, 0x55, 0x73, 0x65,
             0x72, 0x48, 0x65, 0x61, 0x72, 0x74, 0x42, 0x65, 0x61, 0x74, 0x7d, 0x00, 0x00, 0x3c, 0x08, 0x00,
