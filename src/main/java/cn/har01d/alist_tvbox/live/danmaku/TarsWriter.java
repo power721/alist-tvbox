@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.live.danmaku;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * 虎牙弹幕 Tars 协议编码器(移植 pure_live TarsOutputStream,仅实现进房包用到的类型)。
@@ -13,6 +14,7 @@ final class TarsWriter {
     private static final int TYPE_LONG = 3;
     private static final int TYPE_STRING1 = 6;
     private static final int TYPE_STRING4 = 7;
+    private static final int TYPE_LIST = 9;
     private static final int TYPE_STRUCT_BEGIN = 10;
     private static final int TYPE_STRUCT_END = 11;
     private static final int TYPE_ZERO_TAG = 12;
@@ -75,6 +77,15 @@ final class TarsWriter {
     private void writeInt(long n, int len) {
         for (int i = len - 1; i >= 0; i--) {
             out.write((int) ((n >> (i * 8)) & 0xFF));
+        }
+    }
+
+    /** 写字符串列表:LIST 头 + tag0 长度 + 逐个 tag0 字符串 */
+    void write(List<String> items, int tag) {
+        writeHead(TYPE_LIST, tag);
+        write(items.size(), 0);
+        for (String item : items) {
+            write(item, 0);
         }
     }
 

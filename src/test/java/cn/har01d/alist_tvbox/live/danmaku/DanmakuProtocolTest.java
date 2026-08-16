@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.live.danmaku.MiniProto.ProtoWriter;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.zip.GZIPOutputStream;
 import java.io.ByteArrayOutputStream;
 
@@ -38,20 +39,48 @@ class DanmakuProtocolTest {
     // ---- 虎牙 Tars ----
 
     @Test
-    void huyaJoinDataRoundTrip() {
-        long uid = 5242556L;
-        byte[] data = HuyaDanmakuClient.buildJoinData(uid);
+    void huyaSubscribeFrame() {
+        byte[] data = HuyaDanmakuClient.subscribe(List.of("live:123", "chat:123"));
         TarsReader outer = new TarsReader(data);
-        assertEquals(1, outer.readInt(0), "外层 type=1");
+        assertEquals(16, outer.readInt(0), "命令 16 = 订阅消息组");
         byte[] payload = outer.readBytes(1);
-        assertTrue(payload.length > 0);
+        assertEquals(2, new TarsReader(payload).enterList(0), "两个消息组");
+        String text = new String(payload, StandardCharsets.UTF_8);
+        assertTrue(text.contains("live:123") && text.contains("chat:123"), "组名写进 tag0 的字符串列表");
+    }
 
-        TarsReader inner = new TarsReader(payload);
-        assertEquals(uid, inner.readInt(0));
-        assertEquals(0, inner.readInt(4));
-        assertEquals(0, inner.readInt(5));
-        assertEquals(uid, inner.readInt(6));
-        assertEquals(3, inner.readInt(7));
+    /**
+     * 命令 22 群组推送的 payload:tag0 = 组名,tag1 = list&lt;struct{ tag0 uri, tag1 bytes 消息体, tag2 msgId }&gt;。
+     * 手工按抓包的字节布局拼一帧,验证 TarsReader 的 list/struct 遍历。
+     */
+    @Test
+    void huyaGroupPushList() throws Exception {
+        TarsWriter body = new TarsWriter();
+        body.write("弹幕", 3);
+
+        TarsWriter element = new TarsWriter();
+        element.write(1400, 0);
+        element.write(body.toByteArray(), 1);
+        element.write(2018405541718215680L, 2);
+
+        ByteArrayOutputStream payload = new ByteArrayOutputStream();
+        TarsWriter group = new TarsWriter();
+        group.write("live:123", 0);
+        payload.writeBytes(group.toByteArray());
+        payload.write((1 << 4) | 9);        // tag1, LIST
+        payload.write(0);                   // tag0, BYTE:元素个数
+        payload.write(1);
+        payload.write(10);                  // STRUCT_BEGIN
+        payload.writeBytes(element.toByteArray());
+        payload.write(11);                  // STRUCT_END
+
+        TarsReader reader = new TarsReader(payload.toByteArray());
+        assertEquals("live:123", reader.readString(0));
+        assertEquals(1, reader.enterList(1));
+        assertTrue(reader.enterStructElement());
+        assertEquals(1400, reader.readInt(0));
+        assertEquals("弹幕", new TarsReader(reader.readBytes(1)).readString(3));
+        reader.endStruct();
     }
 
     @Test

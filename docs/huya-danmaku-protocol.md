@@ -1,209 +1,172 @@
-# 虎牙直播弹幕协议逆向记录
+# 虎牙直播弹幕协议
 
-> 2026-08-16。起因:`live/danmaku/HuyaDanmakuClient`(移植自 pure_live)连接后只能收到约 15 秒弹幕就停止推送。
+> 2026-08-16。起因:`live/danmaku/HuyaDanmakuClient`(原移植自 pure_live)连接后只能收到约 15 秒弹幕就停止推送。
+> **已解决**,本文记录当前协议与两个坑。
 
-## 1. 结论先行
+## 1. 结论
 
-pure_live 那套虎牙协议**已对当前虎牙部分失效**:注册能成功、能收到进房瞬间的几条弹幕,之后服务端不再推送。虎牙网页版早已换用另一套协议。
+两个独立问题叠在一起:
 
-已排除的假设(都做过 A/B 对照,见 `HuyaProbeTest`):
+1. **pure_live 那套协议已失效**。`wss://cdnws.api.huya.com` + 命令 1 `RegisterReq` 进房:注册仍返回成功、
+   也会推十几秒弹幕,之后服务端就不再推送,且与心跳无关。网页版早已换成 `wsapi.huya.com` 上的
+   **命令 16 订阅消息组**。
+2. **OkHttp 强制协商 `permessage-deflate`**。换到新协议后仍然只能收约 2 秒:OkHttp 在
+   `RealWebSocket.connect()` 里无条件加 `Sec-WebSocket-Extensions: permessage-deflate`,虎牙接受该扩展
+   (回 `server_no_context_takeover;client_no_context_takeover`),但握手后约 2 秒就彻底停推 —— 此时连
+   WS ping 都不回 pong,而连接还开着。去掉该扩展即可持续收弹幕。
 
-| 假设 | 结论 |
-|---|---|
-| 心跳间隔太长(60s) | 否。30s / 10s / 首个心跳立即发,均无改善 |
-| 心跳包字节抄错 | 否。与 pure_live 逐字节相同 |
-| 心跳包内 lTid/lSid 是死值(偏移 79/84 = 61796367) | 属实但无关。换成本房间频道号后反而收不到 |
-| 缺 WS 层心跳(命令 5) | 否。发了更差 |
-| 周期性重发进房包 | 否。直接归零 |
-| 缺 `Origin` 头 | 否。无变化 |
-| 本机 IP 被限流 | 部分成立(连续测试推送量单调下降),但**不是主因** —— 用户在另一个 IP 同样复现 |
+对照数据(同一房间、同一时间窗、45 秒):
 
-对照数据(同一时段、同一房间、70 秒):
+| 客户端 | 扩展 | 帧数 | 弹幕 |
+|---|---|---|---|
+| OkHttp 默认 | permessage-deflate | 2~4 | 0~1(只在第 0 秒) |
+| OkHttp 去扩展 | 无 | 197 | 128(全程均匀) |
+| JDK `java.net.http.WebSocket`(不支持该扩展) | 无 | 167 | 81(全程均匀) |
+| Node undici `WebSocket` | 无 | — | 88(全程均匀) |
 
-```
-original(pure_live 固定心跳)  frames=11 danmaku=7   到达时刻 1s 3s 6s 9s 9s 14s 14s ← 之后全停
-patched(换成本房间频道号)     frames=1  danmaku=0
-wscmd5(WS 层心跳)            frames=1  danmaku=0
-none(完全不发心跳)            frames=4  danmaku=2   1s 2s
-```
+**坑**:OkHttp 对 WebSocket 调用**不执行 network interceptor**
+(`RealCall.getResponseWithInterceptorChain()` 里 `if (!forWebSocket) interceptors += client.networkInterceptors`),
+必须用 application interceptor 才能改掉这个请求头。
 
-## 2. 网页版实际使用的协议
-
-抓包来源:未登录状态直接打开 `https://www.huya.com/660002`(主播 uid `1571877666`)。
-信令库 `https://fedlib.msstatic.com/fedbasic/huyabaselibs/taf-signal/taf-signal.global.0.1.2.prod.js`。
+## 2. 当前协议
 
 ### 2.1 连接
 
 ```
-wss://ded35397-ws.va.huya.com/?baseinfo=<base64(Tars) 再 URL 转义>
+wss://wsapi.huya.com/?baseinfo=<base64(Tars) 再 URL 转义>
 ```
 
-host 由服务端下发的 IP 列表决定,但 JS 里保留了三个常量,`cdnws.api.huya.com` 仍可连:
-
-```js
-DEBUG_IP   = "testws.va.huya.com"
-DEFAULT_IP = "ws.api.huya.com"
-CDN_IP     = "cdnws.api.huya.com"
-this.url = this.wsProtocol + r + this.baseinfo   // r 取自 wsIps / httpWs
-```
-
-`baseinfo`(Tars 编码 → base64 → `encodeURIComponent`):
+`baseinfo`:
 
 ```
-tag0  ZERO
-tag1  string  guid,32 位小写 hex(随机)
-tag2  string  "webh5&2608121011&websocket"
-tag3  string  "HUYA&ZH&2052"
-tag4  string  ""
-tag5  string  "44299.76949,57293.104883"
-tag6  ZERO
-tag7  string  ""
-tag8  string  ""
-tag9  string  ""
-tag10 map     { "HUYA_NET": "0", "HUYA_VSDKUA": "webh5&2608121011&websocket" }   // key 用 tag0,value 用 tag1
+tag0 ZERO
+tag1 string  guid,32 位小写 hex;可随机生成,也可留空(留空时 launch.wsLaunch 会下发一个)
+tag2 string  "webh5&2608121011&websocket"
+tag3 string  "HUYA&ZH&2052"
+tag4~9       空串 / ZERO
+tag10 map    可省略
 ```
+
+主播 uid 取 `https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=<房间号>` 的
+`data.profileInfo.uid`(即 `HuyaService.getAyyuid()`)。房间 660527 → `1199565822350`。
 
 ### 2.2 WS 帧外层
 
 ```
-tag0 int      命令码
-tag1 bytes    payload
-tag2 ZERO
-tag3 string   形如 "c1b0a8cd2b27807e:c1b0a8cd2b27807e:0:0"(trace,疑似可选)
-tag4 ZERO
-tag5 ZERO
-tag6 string   32 位 hex(疑似可选)
+tag0 int     命令码
+tag1 bytes   payload
+tag2~6       可选(网页会带,服务端不要求)
 ```
 
 命令码:
 
-| 值 | 含义 |
-|---|---|
-| 1 | RegisterReq(**旧**协议进房,现在只能收到十几秒) |
-| 2 | RegisterRsp |
-| 3 | WupReq(通用 RPC) |
-| 4 | WupRsp |
-| 7 | MsgPushReq(推送,uri 1400=弹幕 / 8006=在线人数,**格式没变**) |
-| 22 | RegisterGroupReq(**订阅消息组**) |
+| 值 | 方向 | 含义 |
+|---|---|---|
+| 1 | → | RegisterReq(**旧**进房,已半废弃) |
+| 3 / 4 | ↔ | WupReq / WupRsp(通用 RPC) |
+| 7 | ← | MsgPushReq,单条推送 |
+| 16 | → | RegisterGroupReq,**订阅消息组** |
+| 17 | ← | 订阅结果,`{tag0 int 错误码(0=成功), tag1 list<string> 组名}` |
+| 22 | ← | 群组批量推送 |
+| 33 | → | 网页版每 30 秒发一次的保活(**非必需**) |
 
-### 2.3 Wup 包(命令 3 的 payload)
-
-前置 4 字节大端整包长(含自身),其后 Tars:
-
-```
-tag1  byte    iVersion = 3
-tag2  ZERO    cPacketType
-tag3  ZERO    iMessageType
-tag4  byte    iRequestId(递增)
-tag5  string  sServantName
-tag6  string  sFuncName
-tag7  bytes   sBuffer = UniAttribute
-tag8  ZERO    iTimeout
-tag9  map{}   context
-tag10 map{}   status
-```
-
-`sBuffer` 是 UniAttribute:`map{ "tReq": <bytes> }`(size 与 key/value 都带 head,key 用 tag0、value 用 tag1)。
-
-**关键陷阱**:`tReq` 的 bytes 里**还要再包一层 struct(tag0)**,里面 tag0 才是 `tId`。少这一层服务端回:
-
-```
-STATUS_RESULT_DESC = "read 'struct' type mismatch, tag: 0, get type: 12.;"
-```
-
-### 2.4 网页建连后的调用序列(同一条 WS)
-
-| # | servant.func |
-|---|---|
-| 1 | `huyaliveui.getLivingInfo` |
-| 2 | `launch.wsTimeSync` |
-| 3 | `hypcdngw.clientQueryPcdnSchedule` |
-| 4 | `mediaui.getStreamInfoByRoomFake` |
-| 5 | `launch.wsTimeSync` |
-| 6 | `huyaliveui.getLivingMultiStreamInfo` |
-| 7 | `hypcdngw.onClientGetStunServerInfo` |
-| 8 | `presenteruid.getPresenterLiveScheduleInfo` |
-
-`getLivingInfo` 的 `tReq`(外层已按 2.3 包一层 struct):
-
-```
-tag0 struct tId:
-     tag0 ZERO       lUid = 0(未登录)
-     tag1 string     sGuid,与 baseinfo 同一个
-     tag2 string     ""
-     tag3 string     "webh5&2608121011&websocket"
-     tag4 string     sCookie(浏览器 cookie 全文;未登录时只有 guid 等匿名标识)
-     tag5 ZERO
-     tag6 string     "chrome"
-     tag7 string     ""
-tag1 ZERO
-tag2 ZERO
-tag3 int     主播 uid(= profileRoom 的 data.profileInfo.uid)
-tag4 string  ""
-tag5 string  ""
-tag6 ZERO
-tag7 ZERO
-tag8 byte    1
-```
-
-`launch.wsTimeSync` 的 `tReq`:`struct{ tag0 string guid, tag1 short }`。
-
-### 2.5 订阅(命令 22)——弹幕的关键
+### 2.3 订阅(命令 16)—— 唯一必需的请求
 
 payload:
 
 ```
-tag0 string  组名
-tag1 list<struct{ tag0 short/int, tag1 bytes(内含主播 uid + 昵称), tag2 long }>
+tag0 list<string>  组名:["live:<主播uid>", "chat:<主播uid>"]
+tag1 string        ""
 ```
 
-抓到两个组:
+**不需要** `getLivingInfo`、`wsLaunch`、`doLaunch` 等任何 RPC 打底,连上直接发就能订阅成功。
+组名也**不需要** `-aibarrage-<hash>` / `-caption-<hash>` 后缀(那是 AI 字幕组,另一回事)。
+
+实际字节(房间 660527):
 
 ```
-live:1571877666
-chat:1571877666-aibarrage-5a5f5e987cf211e12b0eb0c554d44181
+00 10                                          cmd = 16
+1d 00 00 2d                                    tag1 SimpleList,长 45
+   09 00 02                                    tag0 LIST,2 个元素
+   06 12 "live:1199565822350"
+   06 12 "chat:1199565822350"
+   16 00                                       tag1 空串
 ```
 
-`chat:` 组才是弹幕。后缀 `-aibarrage-<32hex>` 来源未确认,推测在 `getLivingInfo` 的响应里。
-`tag1` 里带主播昵称,说明这些数据取自 `getLivingInfo` 的响应 —— 即**订阅依赖进房响应**。
+### 2.4 推送
 
-## 3. 当前卡点
+**命令 7**(单条):
 
-`getLivingInfo` **始终收不到响应**(包格式已正确 —— 服务端不再报 struct 类型错;同一连接上 `launch.wsTimeSync` 能拿到正常 cmd4 响应)。拿不到响应就拿不到订阅所需数据。
+```
+tag0 int    pushType
+tag1 int    uri
+tag2 bytes  消息体
+```
 
-已排除的变量:
+**命令 22**(按组批量):
 
-- guid:随机生成 vs 抓包里的真实 guid,表现相同
-- host:`cdnws.api.huya.com`(能回 wsTimeSync)vs 抓包里的 `ded35397-ws.va.huya.com`(已过期,0 帧)
-- 订阅帧:原样重放抓包的命令 22 帧(不含 guid/cookie,不绑会话),无效
-- cookie:空 / 最小 `guid=...`,均无 getLivingInfo 响应
+```
+tag0 string             组名
+tag1 list<struct{
+        tag0 int    uri
+        tag1 bytes  消息体
+        tag2 long   msgId
+     }>
+```
 
-下一步方向:
+两者的 uri 含义相同:
 
-1. 拿到 `getLivingInfo` 的**响应帧**(抓包),确认 `-aibarrage-` 后缀与订阅 `tag1` 的数据来源
-2. 或者确认 `getLivingInfo` 静默失败的原因(可能 sCookie 有必填项,或 WS 帧外层 tag3/tag6 那两个 hash 是必需的签名)
-3. 若代价过高,可考虑放弃虎牙实时弹幕
+| uri | 含义 |
+|---|---|
+| 1400 | 弹幕 |
+| 8006 | 在线人数 |
+| 6111 | 用户进房 |
+| 6892 | 贡献榜 |
+| 6501 / 2100000 / … | 礼物、活动等 |
 
-## 4. 诊断工具(均 `@EnabledIfSystemProperty`,默认不跑)
+uri 1400 的消息体(与旧协议**没变**):
+
+```
+tag0 struct  发送者 { tag0 uid, tag2 昵称, tag4 头像 }
+tag3 string  弹幕内容
+tag6 struct  格式 { tag0 字体颜色(ARGB,-1 = 默认白) }
+```
+
+## 3. 不要再查的两条岔路
+
+- **`wss://<十进制IP>-server.va.huya.com:<端口>/`**:是 PCDN / P2P 分发,不是弹幕。
+  主机名前缀是 IPv4 的十进制编码(`2773734366` = `165.83.211.222`);收到的大帧是**对端列表**
+  (每项 = 4 字节 IP + 若干 id + `"chrome"`/`"firefox"`/`"safari"`),发送帧里有客户端自己的公网 IP。
+  抓包里的 `hypcdngw.clientQueryPcdnSchedule` / `onClientGetStunServerInfo` 就是在给它调度节点。
+- **`wss://<hash>-ws.va.huya.com/`**:`liveui.doLaunch` 下发的备用接入点,有时效;`wsapi.huya.com` 长期可用。
+
+已排除过的假设(旧协议时期,都做过 A/B):心跳间隔、心跳包字节、包内写死的 lTid/lSid、
+WS 层命令 5 心跳、周期性重发进房包、缺 `Origin` 头、本机 IP 限流 —— 均非主因。
+
+## 4. 抓包方法
+
+环境里有 `google-chrome`,用 headless + CDP 直接抓,不必手工导出:
 
 ```bash
-# 旧协议心跳 A/B 对照
-mvn -o test -Dtest=HuyaProbeTest -Dhuya.probe=1 \
-    -Dhuya.uid=1571877666 -Dhuya.mode=original -Dhuya.seconds=70
-# mode: original | patched | wscmd5 | both | none
-
-# 原样重放抓包帧(/tmp/huya_new.txt:第 1 行 URL,其后每行一个 base64 帧)
-mvn -o test -Dtest=HuyaReplayTest -Dhuya.replay=1
-
-# 自建新协议(baseinfo + getLivingInfo + wsTimeSync + 订阅)
-mvn -o test -Dtest=HuyaNewProtocolTest -Dhuya.new=1 -Dhuya.uid=1571877666 \
-    [-Dhuya.host=...] [-Dhuya.guid=...] [-Dhuya.cookie=...] [-Dhuya.subfile=/tmp/huya_sub.txt]
+google-chrome --headless=new --disable-gpu --mute-audio --no-first-run \
+  --user-data-dir=/tmp/huya-chrome --remote-debugging-port=9222 about:blank &
 ```
 
-`HuyaNewProtocolTest` 内含一个最小 Tars 编码器 `W`(比主代码的 `TarsWriter` 多了 map/struct),
-新协议若跑通,应把它并回 `TarsWriter`。
+再用 Node(v22+ 有全局 `WebSocket`,零依赖)连 CDP:`Target.setAutoAttach`(`flatten: true`,
+`waitForDebuggerOnStart: true`)→ 每个 session 上 `Network.enable` → 收
+`Network.webSocketCreated` / `webSocketFrameSent` / `webSocketFrameReceived`。
+二进制帧的 `payloadData` 是 base64。虎牙的 WS 建在 Worker 里,**必须**开 autoAttach 才抓得到。
 
-## 5. 主代码现状
+> 抓包会带出浏览器 cookie(`udb_*`、`sdid`、`guid` 等)。落盘只放 `/tmp`,别写进仓库,用完删掉。
 
-虎牙**未做任何改动**,仍是 pure_live 那套(表现为进房后十几秒有弹幕、之后停)。
-本轮所有实验改动均已撤回。斗鱼 / B站 / 抖音不受影响。
+## 5. 探针
+
+```bash
+# 主播 uid
+curl -s 'https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=660527' | jq .data.profileInfo.uid
+
+# 用真实房间驱动 HuyaDanmakuClient,每 15 秒报一次,便于看出中途是否停推
+mvn -o test -Dtest=HuyaProbeTest -Dhuya.probe=1 -Dhuya.uid=1199565822350 -Dhuya.seconds=180
+```
+
+实测 180 秒 → 388 条弹幕、9 次在线人数更新,全程不断。

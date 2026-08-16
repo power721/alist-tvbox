@@ -204,6 +204,32 @@ final class TarsReader {
     }
 
     /**
+     * 进入 tag 处的 LIST,返回元素个数。随后按序对每个元素调用 {@link #enterStructElement()}
+     * 读字段、再调用 {@link #endStruct()} 同步到该元素结尾。
+     */
+    int enterList(int tag) {
+        if (!skipToTag(tag)) {
+            return 0;
+        }
+        Head hd = new Head();
+        readHead(hd);
+        if (hd.type != TYPE_LIST) {
+            return 0;
+        }
+        return readIntTag0();
+    }
+
+    /** 消费列表中一个结构体元素的 STRUCT_BEGIN 头 */
+    boolean enterStructElement() {
+        if (pos >= data.length) {
+            return false;
+        }
+        Head hd = new Head();
+        readHead(hd);
+        return hd.type == TYPE_STRUCT_BEGIN;
+    }
+
+    /**
      * 同步到结构体结束。虎牙消息字段可变(嵌套 struct/LIST/双字节 tag),
      * 同步失败不应影响已读出的字段,因此吞掉异常尽力而为。
      */

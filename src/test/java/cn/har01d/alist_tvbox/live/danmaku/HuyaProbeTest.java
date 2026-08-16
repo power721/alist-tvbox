@@ -1,109 +1,65 @@
 package cn.har01d.alist_tvbox.live.danmaku;
 
+import cn.har01d.alist_tvbox.dto.LiveDanmaku;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import okhttp3.WebSocket;
-import okhttp3.WebSocketListener;
-import okio.ByteString;
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 虎牙弹幕推送探针(诊断用,默认不跑)。同一时段内对照不同心跳包,排除限流/房间冷热带来的干扰。
+ * 虎牙弹幕在线探针(诊断用,默认不跑):用真实房间验证 {@link HuyaDanmakuClient} 能持续收到弹幕。
+ * uid 取 mp.huya.com profileRoom 的 data.profileInfo.uid。
  * <pre>
- * mvn -o test -Dtest=HuyaProbeTest -Dhuya.probe=1 -Dhuya.uid=1571877666 -Dhuya.mode=patched
+ * curl -s 'https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=660527' | jq .data.profileInfo.uid
+ * mvn -o test -Dtest=HuyaProbeTest -Dhuya.probe=1 -Dhuya.uid=1199565822350 -Dhuya.seconds=120
  * </pre>
- * mode: original = pure_live 固定心跳; patched = 用房间频道号替换 lTid/lSid; none = 不发心跳
  */
 @EnabledIfSystemProperty(named = "huya.probe", matches = "1")
 class HuyaProbeTest {
 
-    private static void writeIntBE(byte[] buffer, int offset, int value) {
-        buffer[offset] = (byte) ((value >> 24) & 0xFF);
-        buffer[offset + 1] = (byte) ((value >> 16) & 0xFF);
-        buffer[offset + 2] = (byte) ((value >> 8) & 0xFF);
-        buffer[offset + 3] = (byte) (value & 0xFF);
-    }
-
     @Test
     void probe() throws Exception {
-        long uid = Long.parseLong(System.getProperty("huya.uid", "1571877666"));
-        String mode = System.getProperty("huya.mode", "original");
-        int seconds = Integer.parseInt(System.getProperty("huya.seconds", "70"));
-        long heartbeatMillis = Long.parseLong(System.getProperty("huya.hb", "30000"));
+        long uid = Long.parseLong(System.getProperty("huya.uid", "1199565822350"));
+        int seconds = Integer.parseInt(System.getProperty("huya.seconds", "120"));
 
         OkHttpClient client = new OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).build();
-        AtomicInteger frames = new AtomicInteger();
-        AtomicInteger danmaku = new AtomicInteger();
-        long start = System.currentTimeMillis();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+        AtomicInteger chat = new AtomicInteger();
+        AtomicInteger online = new AtomicInteger();
         StringBuilder timeline = new StringBuilder();
+        long start = System.currentTimeMillis();
 
-        WebSocket ws = client.newWebSocket(new Request.Builder()
-                .url("wss://cdnws.api.huya.com")
-                .header("User-Agent", AbstractDanmakuClient.USER_AGENT)
-                .build(), new WebSocketListener() {
-            @Override
-            public void onOpen(@NotNull WebSocket socket, @NotNull Response response) {
-                socket.send(ByteString.of(HuyaDanmakuClient.buildJoinData(uid)));
-            }
-
-            @Override
-            public void onMessage(@NotNull WebSocket socket, @NotNull ByteString bytes) {
-                frames.incrementAndGet();
-                long at = (System.currentTimeMillis() - start) / 1000;
-                try {
-                    TarsReader stream = new TarsReader(bytes.toByteArray());
-                    if (stream.readInt(0) == 7) {
-                        TarsReader push = new TarsReader(stream.readBytes(1));
-                        push.readInt(0);
-                        long uri = push.readInt(1);
-                        if (uri == 1400) {
-                            danmaku.incrementAndGet();
-                            timeline.append(at).append("s ");
-                        }
-                    }
-                } catch (Exception ignored) {
+        HuyaDanmakuClient danmakuClient = new HuyaDanmakuClient(uid, client, scheduler);
+        danmakuClient.setListener(message -> {
+            long at = (System.currentTimeMillis() - start) / 1000;
+            if (LiveDanmaku.TYPE_ONLINE.equals(message.getType())) {
+                online.incrementAndGet();
+            } else {
+                int n = chat.incrementAndGet();
+                if (timeline.length() < 400) {
+                    timeline.append(at).append("s ");
+                }
+                if (n <= 10 || n % 50 == 0) {
+                    System.out.printf("  [%3ds] %s: %s (%s)%n", at,
+                            message.getUserName(), message.getMessage(), message.getColor());
                 }
             }
         });
+        danmakuClient.start();
 
-        Thread heartbeat = new Thread(() -> {
-            try {
-                while (!Thread.currentThread().isInterrupted()) {
-                    Thread.sleep(heartbeatMillis);
-                    if ("none".equals(mode)) {
-                        continue;
-                    }
-                    if ("wscmd5".equals(mode) || "both".equals(mode)) {
-                        // EWSCmdC2S_HeartBeat:WS 连接层心跳,pure_live 没发过
-                        ws.send(ByteString.of(new byte[]{0x00, 0x05}));
-                    }
-                    if ("wscmd5".equals(mode)) {
-                        continue;
-                    }
-                    byte[] packet = HuyaDanmakuClient.HEARTBEAT.clone();
-                    if ("patched".equals(mode)) {
-                        // 把包内抓包遗留的 lTid/lSid(偏移 79/84,大端 INT)换成本房间频道号
-                        writeIntBE(packet, 79, (int) uid);
-                        writeIntBE(packet, 84, (int) uid);
-                    }
-                    ws.send(ByteString.of(packet));
-                }
-            } catch (InterruptedException ignored) {
-            }
-        });
-        heartbeat.setDaemon(true);
-        heartbeat.start();
-
-        Thread.sleep(seconds * 1000L);
-        heartbeat.interrupt();
-        ws.cancel();
-        System.out.printf("[huya-probe] mode=%s hb=%dms %ds → frames=%d danmaku=%d%n  at: %s%n",
-                mode, heartbeatMillis, seconds, frames.get(), danmaku.get(), timeline);
+        // 每 15 秒报一次,便于看出中途是否停推
+        for (int i = 0; i < seconds / 15; i++) {
+            Thread.sleep(15_000);
+            System.out.printf("[probe] t=%3ds chat=%d online=%d%n",
+                    (System.currentTimeMillis() - start) / 1000, chat.get(), online.get());
+        }
+        danmakuClient.stop();
+        scheduler.shutdownNow();
+        System.out.printf("[probe] %ds → chat=%d online=%d%n  at: %s%n",
+                seconds, chat.get(), online.get(), timeline);
     }
 }

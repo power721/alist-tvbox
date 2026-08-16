@@ -1,93 +1,146 @@
 package cn.har01d.alist_tvbox.live.danmaku;
 
 import cn.har01d.alist_tvbox.dto.LiveDanmaku;
-import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.WebSocket;
 
-import java.util.HexFormat;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
- * 虎牙直播弹幕客户端(移植 pure_live HuyaDanmaku)。
- * Tars 二进制协议:wss://cdnws.api.huya.com,进房包 uid=ayyuid,uri=1400 弹幕 / uri=8006 在线人数。
+ * 虎牙直播弹幕客户端。
+ * <p>
+ * 走网页版当前使用的 webh5 信令:连接 {@code wss://wsapi.huya.com/?baseinfo=<Tars>},
+ * 用命令 16 订阅消息组 {@code live:<主播uid>} / {@code chat:<主播uid>},此后服务端以
+ * 命令 7(单条)和命令 22(按组批量)推送,两者的消息体都用 uri 区分:1400 弹幕、8006 在线人数。
+ * <p>
+ * 旧的 {@code cdnws.api.huya.com} + 命令 1 进房包(pure_live 那套)已被虎牙半废弃:注册仍返回成功、
+ * 也会推十几秒弹幕,之后服务端就不再推送,且与心跳无关。逆向过程见 docs/huya-danmaku-protocol.md。
  */
-@Slf4j
 public class HuyaDanmakuClient extends AbstractDanmakuClient {
-    private static final String SERVER_URL = "wss://cdnws.api.huya.com";
+    private static final String SERVER_URL = "wss://wsapi.huya.com/";
+    private static final String HUYA_UA = "webh5&2608121011&websocket";
+
+    private static final int CMD_PUSH = 7;
+    private static final int CMD_SUBSCRIBE = 16;
+    private static final int CMD_GROUP_PUSH = 22;
+
     private static final int URI_MESSAGE = 1400;
     private static final int URI_ONLINE = 8006;
 
-    private final long ayyuid;
+    private final long presenterUid;
 
-    public HuyaDanmakuClient(long ayyuid, OkHttpClient okHttpClient, ScheduledExecutorService scheduler) {
-        super("huya-danmaku", SERVER_URL, Map.of(), 60_000, okHttpClient, scheduler);
-        this.ayyuid = ayyuid;
+    /**
+     * @param presenterUid 主播 uid,取 mp.huya.com profileRoom 接口的 data.profileInfo.uid
+     */
+    public HuyaDanmakuClient(long presenterUid, OkHttpClient okHttpClient, ScheduledExecutorService scheduler) {
+        super("huya-danmaku", SERVER_URL + "?baseinfo=" + baseinfo(randomGuid()), Map.of(),
+                30_000, withoutDeflate(okHttpClient), scheduler);
+        this.presenterUid = presenterUid;
+    }
+
+    /**
+     * 去掉 OkHttp 默认带上的 {@code Sec-WebSocket-Extensions: permessage-deflate}。
+     * <p>
+     * 虎牙会接受该扩展并回 {@code server_no_context_takeover;client_no_context_takeover},但握手后约 2 秒
+     * 就彻底停止推送(此时连 WS ping 都不回 pong,连接仍开着);不带该扩展则可持续收弹幕。
+     * 注意 OkHttp 对 WebSocket 调用**不执行** network interceptor,只能用 application interceptor。
+     */
+    private static OkHttpClient withoutDeflate(OkHttpClient okHttpClient) {
+        return okHttpClient.newBuilder()
+                .addInterceptor(chain -> chain.proceed(chain.request().newBuilder()
+                        .removeHeader("Sec-WebSocket-Extensions").build()))
+                .build();
     }
 
     @Override
     protected void onConnected(WebSocket ws) {
-        send(buildJoinData(ayyuid));
+        send(subscribe(List.of("live:" + presenterUid, "chat:" + presenterUid)));
     }
 
-    /**
-     * OnlineUserHeartBeat 请求的 Tars 编码(pure_live 固定字节,内嵌 adr_wap 设备标识)。
-     * 注意包内 lTid/lSid(偏移 79/84)是抓包留下的死值,与当前房间无关;实测把它们换成本房间
-     * 频道号并不能让虎牙持续推送(见 HuyaProbeTest 的 original/patched/none 对照),故保持原样。
-     */
-    static final byte[] HEARTBEAT = {
-            0x00, 0x03, 0x1d, 0x00, 0x00, 0x69, 0x00, 0x00, 0x00, 0x69, 0x10, 0x03, 0x2c, 0x3c, 0x4c, 0x56,
-            0x08, 0x6f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x75, 0x69, 0x66, 0x0f, 0x4f, 0x6e, 0x55, 0x73, 0x65,
-            0x72, 0x48, 0x65, 0x61, 0x72, 0x74, 0x42, 0x65, 0x61, 0x74, 0x7d, 0x00, 0x00, 0x3c, 0x08, 0x00,
-            0x01, 0x06, 0x04, 0x74, 0x52, 0x65, 0x71, 0x1d, 0x00, 0x00, 0x2f, 0x0a, 0x0a, 0x0c, 0x16, 0x00,
-            0x26, 0x00, 0x36, 0x07, 0x61, 0x64, 0x72, 0x5f, 0x77, 0x61, 0x70, 0x46, 0x00, 0x0b, 0x12, 0x03,
-            (byte) 0xae, (byte) 0xf0, 0x0f, 0x22, 0x03, (byte) 0xae, (byte) 0xf0, 0x0f, 0x3c, 0x42, 0x6d, 0x52,
-            0x02, 0x60, 0x5c, 0x60, 0x01, 0x7c, (byte) 0x82, 0x00, 0x0b, (byte) 0xb0, 0x1f, (byte) 0x9c,
-            (byte) 0xac, 0x0b, (byte) 0x8c, (byte) 0x98, 0x0c, (byte) 0xa8, 0x0c, 0x20,
-    };
-
+    /** 服务端不要求应用层心跳,靠 OkHttp 的 WebSocket ping 保活即可 */
     @Override
     protected byte[] heartbeatMessage() {
-        return HEARTBEAT;
+        return null;
     }
 
-    static byte[] buildJoinData(long uid) {
-        TarsWriter oos = new TarsWriter();
-        oos.write(uid, 0);
-        oos.write(false, 1);
-        oos.write("", 2);
-        oos.write("", 3);
-        oos.write(0, 4);
-        oos.write(0, 5);
-        oos.write(uid, 6);
-        oos.write(3, 7);
+    private static String randomGuid() {
+        byte[] bytes = new byte[16];
+        new SecureRandom().nextBytes(bytes);
+        StringBuilder sb = new StringBuilder(32);
+        for (byte b : bytes) {
+            sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+        }
+        return sb.toString();
+    }
 
-        TarsWriter wscmd = new TarsWriter();
-        wscmd.write(1, 0);
-        wscmd.write(oos.toByteArray(), 1);
-        return wscmd.toByteArray();
+    /** URL 上的 baseinfo:设备/语言标识的 Tars 编码,base64 后再 URL 转义 */
+    static String baseinfo(String guid) {
+        TarsWriter oos = new TarsWriter();
+        oos.write(0, 0);
+        oos.write(guid, 1);
+        oos.write(HUYA_UA, 2);
+        oos.write("HUYA&ZH&2052", 3);
+        oos.write("", 4);
+        oos.write("", 5);
+        oos.write(0, 6);
+        oos.write("", 7);
+        oos.write("", 8);
+        oos.write("", 9);
+        return URLEncoder.encode(Base64.getEncoder().encodeToString(oos.toByteArray()), StandardCharsets.UTF_8);
+    }
+
+    /** 命令 16 = 订阅消息组;订阅成功后服务端才开始推送该组的消息 */
+    static byte[] subscribe(List<String> groups) {
+        TarsWriter payload = new TarsWriter();
+        payload.write(groups, 0);
+        payload.write("", 1);
+
+        TarsWriter frame = new TarsWriter();
+        frame.write(CMD_SUBSCRIBE, 0);
+        frame.write(payload.toByteArray(), 1);
+        return frame.toByteArray();
     }
 
     @Override
     protected void handleMessage(byte[] data) {
-        if (log.isTraceEnabled()) {
-            log.trace("huya ws frame: {}", HexFormat.of().formatHex(data));
-        }
         TarsReader stream = new TarsReader(data);
-        long type = stream.readInt(0);
-        if (type != 7) {
+        long cmd = stream.readInt(0);
+        byte[] payload = stream.readBytes(1);
+        if (cmd == CMD_PUSH) {
+            TarsReader push = new TarsReader(payload);
+            push.readInt(0); // pushType
+            long uri = push.readInt(1);
+            dispatch(uri, push.readBytes(2));
+        } else if (cmd == CMD_GROUP_PUSH) {
+            TarsReader group = new TarsReader(payload);
+            group.readString(0); // 组名
+            int size = group.enterList(1);
+            for (int i = 0; i < size; i++) {
+                if (!group.enterStructElement()) {
+                    break;
+                }
+                long uri = group.readInt(0);
+                byte[] body = group.readBytes(1);
+                group.endStruct();
+                dispatch(uri, body);
+            }
+        }
+    }
+
+    private void dispatch(long uri, byte[] body) {
+        if (body.length == 0) {
             return;
         }
-        byte[] payload = stream.readBytes(1);
-        TarsReader push = new TarsReader(payload);
-        push.readInt(0); // pushType
-        long uri = push.readInt(1);
-        byte[] msg = push.readBytes(2);
         if (uri == URI_MESSAGE) {
-            parseMessage(msg);
+            parseMessage(body);
         } else if (uri == URI_ONLINE) {
-            long online = new TarsReader(msg).readInt(0);
+            long online = new TarsReader(body).readInt(0);
             if (online > 0) {
                 emit(LiveDanmaku.online(String.valueOf(online)));
             }
