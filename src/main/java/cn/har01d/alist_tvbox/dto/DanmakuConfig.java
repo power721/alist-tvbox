@@ -22,6 +22,8 @@ public class DanmakuConfig {
     private int opacity = 100;
     /** 强制单色 #RRGGBB,空=跟随平台原色 */
     private String color = "";
+    /** 是否下发实时人气值消息,关闭后 online 消息不入房间缓冲 */
+    private boolean showOnline = true;
 
     /** 归一化非法取值,解析与更新时都调用 */
     public void normalize() {

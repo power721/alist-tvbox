@@ -73,7 +73,7 @@ const follows = ref<LiveFollow[]>([]);
 const followsLoading = ref(false);
 const followLoading = ref(false);
 const playGroups = ref<string[]>([]);
-const danmaku = ref<DanmakuConfig>({enabled: true, rows: 0, speed: 1, fontSize: 100, opacity: 100, color: ""});
+const danmaku = ref<DanmakuConfig>({enabled: true, rows: 0, speed: 1, fontSize: 100, opacity: 100, color: "", showOnline: true});
 const platformNames: Record<string, string> = {
   bili: "B站",
   bilibili: "B站",
@@ -108,6 +108,7 @@ interface DanmakuConfig {
   fontSize: number;
   opacity: number;
   color: string | null;
+  showOnline: boolean;
 }
 
 interface Movie {
@@ -586,6 +587,16 @@ onUnmounted(() => {
               @change="updateDanmakuConfig"
             />
             <span class="danmaku-tip">关闭后播放中约 1 分钟内停止拉取</span>
+          </el-form-item>
+          <el-form-item label="实时人气值">
+            <el-switch
+              v-model="danmaku.showOnline"
+              inline-prompt
+              active-text="显示"
+              inactive-text="隐藏"
+              @change="updateDanmakuConfig"
+            />
+            <span class="danmaku-tip">播放画面顶部的实时在线人数</span>
           </el-form-item>
           <el-form-item label="弹幕行数">
             <el-input-number v-model="danmaku.rows" :min="0" :max="8" @change="updateDanmakuConfig"/>

@@ -97,6 +97,8 @@ public class LiveDanmakuService {
         map.put("fontSize", config.getFontSize());
         map.put("opacity", config.getOpacity());
         map.put("color", config.getColor());
+        // 消费端据此清除已显示的人气角标:消息入口已过滤,旧值不会再来新值
+        map.put("showOnline", config.isShowOnline());
         return map;
     }
 
@@ -224,6 +226,12 @@ public class LiveDanmakuService {
         }
 
         void accept(LiveDanmaku message) {
+            // 在入口丢弃而非在 poll 出口过滤:出口过滤会把整批 online 消息留在缓冲里,
+            // next 游标不前进导致每轮重复拉到同一批;入口丢弃则 seq 照常被跳过
+            if (!appProperties.getDanmakuConfig().isShowOnline()
+                    && LiveDanmaku.TYPE_ONLINE.equals(message.getType())) {
+                return;
+            }
             message.setSeq(seq.incrementAndGet());
             synchronized (buffer) {
                 buffer.addLast(message);
