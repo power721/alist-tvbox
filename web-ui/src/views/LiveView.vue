@@ -73,6 +73,7 @@ const follows = ref<LiveFollow[]>([]);
 const followsLoading = ref(false);
 const followLoading = ref(false);
 const playGroups = ref<string[]>([]);
+const danmaku = ref<DanmakuConfig>({enabled: true, rows: 0, speed: 1, fontSize: 100, opacity: 100, color: ""});
 const platformNames: Record<string, string> = {
   bili: "B站",
   bilibili: "B站",
@@ -98,6 +99,15 @@ interface LiveFollow {
   cover?: string;
   live?: boolean | null;
   followedTime?: number;
+}
+
+interface DanmakuConfig {
+  enabled: boolean;
+  rows: number;
+  speed: number;
+  fontSize: number;
+  opacity: number;
+  color: string | null;
 }
 
 interface Movie {
@@ -187,6 +197,11 @@ const handleCategoryClick = (tab: TabsPaneContext) => {
     loadFollows();
     return;
   }
+  if (tab.props.name === "danmaku") {
+    router.push('/live/danmaku')
+    loadDanmakuConfig();
+    return;
+  }
   const index = +(tab.index || "0");
   if (index >= categories.value.length) {
     router.push('/live/config')
@@ -265,6 +280,27 @@ const removeFollow = (row: LiveFollow) => {
   });
 };
 
+const loadDanmakuConfig = () => {
+  axios.get("/api/settings/danmaku_config").then(({data}) => {
+    if (data?.value) {
+      try {
+        danmaku.value = {...danmaku.value, ...JSON.parse(data.value)};
+      } catch {
+        // 配置解析失败保持默认值
+      }
+    }
+  });
+};
+
+const updateDanmakuConfig = () => {
+  axios.post("/api/settings", {
+    name: "danmaku_config",
+    value: JSON.stringify({...danmaku.value, color: danmaku.value.color || ""})
+  }).then(() => {
+    ElMessage.success("更新成功,播放中最迟 2 秒生效");
+  });
+};
+
 const openFollowRoom = (row: LiveFollow) => {
   loadRoom(row.platform + "$" + row.roomId);
 };
@@ -319,6 +355,12 @@ const loadCategories = (id: string) => {
       category.value = categories.value[0];
       activeTab.value = "manage";
       loadFollows();
+      return;
+    }
+    if (id === "danmaku") {
+      category.value = categories.value[0];
+      activeTab.value = "danmaku";
+      loadDanmakuConfig();
       return;
     }
     if (id) {
@@ -533,6 +575,41 @@ onUnmounted(() => {
           </el-table-column>
         </el-table>
       </el-tab-pane>
+      <el-tab-pane label="弹幕管理" name="danmaku">
+        <el-form label-width="110px" style="max-width: 620px">
+          <el-form-item label="弹幕开关">
+            <el-switch
+              v-model="danmaku.enabled"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateDanmakuConfig"
+            />
+            <span class="danmaku-tip">关闭后播放中约 1 分钟内停止拉取</span>
+          </el-form-item>
+          <el-form-item label="弹幕行数">
+            <el-input-number v-model="danmaku.rows" :min="0" :max="8" @change="updateDanmakuConfig"/>
+            <span class="danmaku-tip">0 为自动</span>
+          </el-form-item>
+          <el-form-item label="弹幕速度">
+            <el-select v-model="danmaku.speed" style="width: 120px" @change="updateDanmakuConfig">
+              <el-option label="慢" :value="0"/>
+              <el-option label="正常" :value="1"/>
+              <el-option label="快" :value="2"/>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="字体大小">
+            <el-slider v-model="danmaku.fontSize" :min="50" :max="200" :step="5" show-input @change="updateDanmakuConfig"/>
+          </el-form-item>
+          <el-form-item label="不透明度">
+            <el-slider v-model="danmaku.opacity" :min="10" :max="100" :step="5" show-input @change="updateDanmakuConfig"/>
+          </el-form-item>
+          <el-form-item label="弹幕颜色">
+            <el-color-picker v-model="danmaku.color" @change="updateDanmakuConfig"/>
+            <span class="danmaku-tip">默认跟随平台弹幕原色</span>
+          </el-form-item>
+        </el-form>
+      </el-tab-pane>
 <!--      <el-tab-pane label="配置" name="config">-->
 <!--        <el-form label-width="110px">-->
 <!--          <el-form-item label="订阅">-->
@@ -694,6 +771,12 @@ onUnmounted(() => {
 .follow-summary {
   color: var(--el-text-color-secondary);
   font-size: 14px;
+}
+
+.danmaku-tip {
+  margin-left: 10px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .follow-room {

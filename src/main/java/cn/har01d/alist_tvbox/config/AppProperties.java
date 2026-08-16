@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.config;
 
+import cn.har01d.alist_tvbox.dto.DanmakuConfig;
 import cn.har01d.alist_tvbox.tvbox.Site;
 import cn.har01d.alist_tvbox.util.Constants;
 import lombok.Data;
@@ -65,6 +66,8 @@ public class AppProperties {
     private List<Site> sites;
     private List<String> excludedPaths;
     private Map<String, Map<String, Object>> localProxyConfig = defaultLocalProxyConfig();
+    // 直播弹幕渲染配置,由 SettingService 从 Setting 表 danmaku_config 加载热缓存
+    private DanmakuConfig danmakuConfig = new DanmakuConfig();
 
     public static Map<String, Map<String, Object>> defaultLocalProxyConfig() {
         Map<String, Map<String, Object>> map = new HashMap<>();

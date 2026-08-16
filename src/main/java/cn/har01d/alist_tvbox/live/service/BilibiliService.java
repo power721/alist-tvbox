@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.live.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.live.danmaku.BilibiliDanmakuClient;
 import cn.har01d.alist_tvbox.live.model.BilibiliCategoriesResponse;
 import cn.har01d.alist_tvbox.live.model.BilibiliCategory;
 import cn.har01d.alist_tvbox.live.model.BilibiliRoomPlayInfo;
@@ -349,6 +350,46 @@ public class BilibiliService implements LivePlatform {
             return response.get("data").get("room_info").get("room_id").asText();
         }
         return roomId;
+    }
+
+    private static final Pattern BUVID = Pattern.compile("buvid3=([^;]+)");
+    private static final Pattern DEDE_USER_ID = Pattern.compile("DedeUserID=(\\d+)");
+
+    /**
+     * 获取 B站弹幕连接参数:真实房间号 + getDanmuInfo(WBI 签名)返回的 token 与弹幕服务器。
+     */
+    public BilibiliDanmakuClient.BiliDanmakuArgs getDanmakuArgs(String roomId) {
+        try {
+            String realRoomId = getRealRoomId(roomId);
+            getKeys();
+            Map<String, Object> params = new HashMap<>();
+            params.put("id", realRoomId);
+            String url = "https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo?" + Utils.encryptWbi(params, imgKey, subKey);
+            var response = restTemplate.exchange(url, HttpMethod.GET, buildHttpEntity(null), ObjectNode.class);
+            var data = response.getBody().path("data");
+            String token = data.path("token").asText("");
+            String host = data.path("host_list").path(0).path("host").asText("");
+            if (token.isEmpty() || host.isEmpty()) {
+                log.warn("B站弹幕参数获取失败: code={} {}", response.getBody().path("code").asInt(), roomId);
+                return null;
+            }
+            String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+            Matcher matcher = BUVID.matcher(cookie);
+            String buvid = matcher.find() ? matcher.group(1) : "";
+            // 进房包的 uid 必须与 Cookie 的登录身份一致,否则服务端在握手后立刻断开
+            Matcher uidMatcher = DEDE_USER_ID.matcher(cookie);
+            long uid = 0;
+            if (uidMatcher.find()) {
+                try {
+                    uid = Long.parseLong(uidMatcher.group(1));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            return new BilibiliDanmakuClient.BiliDanmakuArgs(Long.parseLong(realRoomId), uid, token, buvid, host, cookie);
+        } catch (Exception e) {
+            log.warn("B站弹幕参数获取失败: {}", roomId, e);
+            return null;
+        }
     }
 
     private String fixCover(String url) {

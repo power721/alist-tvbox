@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.auth.TokenFilter;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.domain.Role;
+import cn.har01d.alist_tvbox.dto.DanmakuConfig;
 import cn.har01d.alist_tvbox.dto.SearchSetting;
 import cn.har01d.alist_tvbox.dto.backup.BackupRestoreMode;
 import cn.har01d.alist_tvbox.dto.backup.BackupRestoreResponse;
@@ -131,6 +132,7 @@ public class SettingService {
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(72));
         appProperties.setValidateSharesInterval(settingRepository.findById("validateSharesInterval").map(Setting::getValue).map(Integer::parseInt).orElse(4));
         appProperties.setLocalProxyConfig(loadLocalProxyConfig());
+        appProperties.setDanmakuConfig(loadDanmakuConfig());
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
@@ -378,7 +380,7 @@ public class SettingService {
         if (!authorities.isEmpty() && authorities.iterator().next().getAuthority().equals(Role.USER.name())) {
             Map<String, String> settings = new HashMap<>();
             Set<String> keys = Set.of("alist_version", "app_version", "enabled_token", "search_excluded_paths",
-                    "playback_sync_enabled");
+                    "playback_sync_enabled", "danmaku_config");
             for (String key : keys) {
                 settings.put(key, map.get(key));
             }
@@ -587,6 +589,12 @@ public class SettingService {
             appProperties.setLocalProxyConfig(parseLocalProxyConfig(setting.getValue()));
             aListLocalService.updateProxyConfig(setting.getValue());
         }
+        if ("danmaku_config".equals(setting.getName())) {
+            // 归一化后回写,Setting 表里始终是钳位后的值,web-ui 读回即为生效配置
+            DanmakuConfig danmakuConfig = parseDanmakuConfig(setting.getValue());
+            appProperties.setDanmakuConfig(danmakuConfig);
+            setting.setValue(writeDanmakuConfig(danmakuConfig));
+        }
         if ("delete_delay_time".equals(setting.getName())) {
             aListLocalService.updateSetting("delete_delay_time", setting.getValue(), "number");
         }
@@ -687,6 +695,37 @@ public class SettingService {
         } catch (Exception e) {
             log.warn("parse local proxy config failed: {}", value, e);
             return AppProperties.defaultLocalProxyConfig();
+        }
+    }
+
+    private DanmakuConfig loadDanmakuConfig() {
+        return settingRepository.findById("danmaku_config")
+                .map(Setting::getValue)
+                .filter(StringUtils::isNotBlank)
+                .map(this::parseDanmakuConfig)
+                .orElseGet(DanmakuConfig::new);
+    }
+
+    private DanmakuConfig parseDanmakuConfig(String value) {
+        try {
+            DanmakuConfig config = objectMapper.readValue(value, DanmakuConfig.class);
+            if (config == null) {
+                return new DanmakuConfig();
+            }
+            config.normalize();
+            return config;
+        } catch (Exception e) {
+            log.warn("parse danmaku config failed: {}", value, e);
+            return new DanmakuConfig();
+        }
+    }
+
+    private String writeDanmakuConfig(DanmakuConfig config) {
+        try {
+            return objectMapper.writeValueAsString(config);
+        } catch (Exception e) {
+            log.warn("serialize danmaku config failed", e);
+            return "{}";
         }
     }
 

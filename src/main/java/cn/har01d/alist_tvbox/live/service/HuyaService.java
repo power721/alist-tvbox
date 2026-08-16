@@ -185,6 +185,20 @@ public class HuyaService implements LivePlatform {
         return result;
     }
 
+    /**
+     * 获取主播 yyuid(弹幕进房参数),来自 mp.huya.com 的 profileRoom 接口 data.profileInfo.uid。
+     */
+    public long getAyyuid(String roomId) {
+        try {
+            String url = "https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=" + roomId + "&showSecret=1";
+            JsonNode root = objectMapper.readTree(httpGet(url));
+            return root.path("data").path("profileInfo").path("uid").asLong(0);
+        } catch (Exception e) {
+            log.warn("虎牙获取yyuid失败,roomId:[{}]", roomId, e);
+            return 0;
+        }
+    }
+
     @Override
     public MovieList detail(String tid, String client) throws IOException {
         String[] parts = tid.split("\\$");

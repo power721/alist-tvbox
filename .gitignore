@@ -51,6 +51,7 @@ musl-toolchain/
 /atv-cli/atv-cli
 /atv-proxy/atv-proxy
 /.codex
+/.zcode/
 /sync2server.sh
 /mylocalbuild.sh
 /rebuild.sh

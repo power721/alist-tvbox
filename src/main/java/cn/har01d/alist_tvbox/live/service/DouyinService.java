@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.live.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.live.danmaku.DouyinDanmakuClient;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -392,6 +393,39 @@ public class DouyinService implements LivePlatform {
 
         log.debug("抖音detail: {}", result);
         return result;
+    }
+
+    /**
+     * 获取抖音弹幕连接参数:真实房间号 id_str(每次开播变化)+ 随机 user_unique_id + ttwid cookie。
+     */
+    public DouyinDanmakuClient.DouyinDanmakuArgs getDanmakuArgs(String webRid) {
+        try {
+            ensureCookie();
+            String roomId = "";
+            JsonNode roomData = getRoomDataByApi(webRid);
+            if (roomData != null) {
+                roomId = roomData.path("room").path("id_str").asText("");
+            }
+            if (roomId.isEmpty()) {
+                // enter 接口经常被风控挡回(detail 同样靠 HTML 兜底),弹幕不能只依赖它
+                JsonNode state = getRoomDataByHtml(webRid);
+                if (state != null) {
+                    JsonNode roomInfo = state.path("roomStore").path("roomInfo");
+                    roomId = roomInfo.path("room").path("id_str").asText("");
+                    if (roomId.isEmpty()) {
+                        roomId = roomInfo.path("roomId").asText("");
+                    }
+                }
+            }
+            if (roomId.isEmpty()) {
+                log.warn("抖音弹幕房间号获取失败: {}", webRid);
+                return null;
+            }
+            return new DouyinDanmakuClient.DouyinDanmakuArgs(webRid, roomId, DouyinDanmakuClient.randomUserId(), cookie == null ? "" : cookie);
+        } catch (Exception e) {
+            log.warn("抖音弹幕参数获取失败: {}", webRid, e);
+            return null;
+        }
     }
 
     private JsonNode getRoomDataByApi(String webRid) {
