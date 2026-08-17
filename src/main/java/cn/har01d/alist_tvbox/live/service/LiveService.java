@@ -130,6 +130,11 @@ public class LiveService {
             try {
                 MovieList platformResult = platform.search(wd);
                 if (platformResult != null) {
+                    for (MovieDetail detail : platformResult.getList()) {
+                        String remarks = detail.getVod_remarks();
+                        detail.setVod_remarks("[" + platform.getName() + "]" +
+                                (remarks == null || remarks.isBlank() ? "" : " " + remarks));
+                    }
                     list.addAll(platformResult.getList());
                 }
             } catch (Exception e) {

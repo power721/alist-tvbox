@@ -48,6 +48,7 @@ class LiveServiceTest {
 
     @Test
     void searchCombinesAvailablePlatformResultsWhenOnePlatformFails() throws IOException {
+        when(huyaService.getName()).thenReturn("虎牙");
         when(douyuService.getName()).thenReturn("斗鱼");
         when(huyaService.search("test")).thenReturn(movieList("huya$1"));
         when(douyuService.search("test")).thenThrow(new IOException("unavailable"));
@@ -56,6 +57,7 @@ class LiveServiceTest {
         MovieList result = liveService.search("test");
 
         assertEquals(List.of("huya$1", "bili$2"), result.getList().stream().map(MovieDetail::getVod_id).toList());
+        assertEquals("[虎牙]", result.getList().get(0).getVod_remarks());
         assertEquals(2, result.getTotal());
         assertEquals(2, result.getLimit());
     }
