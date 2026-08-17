@@ -125,7 +125,21 @@ public class LiveService {
 
     public MovieList search(String wd) throws IOException {
         MovieList result = new MovieList();
-        // TODO:
+        List<MovieDetail> list = new ArrayList<>();
+        for (LivePlatform platform : platforms) {
+            try {
+                MovieList platformResult = platform.search(wd);
+                if (platformResult != null) {
+                    list.addAll(platformResult.getList());
+                }
+            } catch (Exception e) {
+                log.warn("{} search failed: {}", platform.getName(), wd, e);
+            }
+        }
+        result.setList(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+        log.debug("search result: {}", result);
         return result;
     }
 
