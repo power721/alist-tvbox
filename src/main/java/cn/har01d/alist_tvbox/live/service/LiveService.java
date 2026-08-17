@@ -32,7 +32,7 @@ public class LiveService {
     private final LiveFollowService liveFollowService;
     private final SubscriptionService subscriptionService;
 
-    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService, LiveFollowService liveFollowService, SubscriptionService subscriptionService) {
+    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService, TwitchService twitchService, LiveFollowService liveFollowService, SubscriptionService subscriptionService) {
         this.huyaService = huyaService;
         platforms.add(huyaService);
         platforms.add(douyuService);
@@ -40,6 +40,7 @@ public class LiveService {
         platforms.add(ccService);
         platforms.add(kuaishouService);
         platforms.add(douyinService);
+        platforms.add(twitchService);
         this.liveFollowService = liveFollowService;
         this.subscriptionService = subscriptionService;
     }

@@ -179,6 +179,8 @@ public class LiveFollowService {
      * 详情页追加"关注"轨道组:固定提供"关注"和"取消关注"两个选集(后端幂等),
      * 组名按当前状态显示"关注"/"已关注"——播放器详情页打开后不会重新拉取,
      * 状态文字会过期,必须两个操作都常驻才能立即取关。spider 拦截 follow$/unfollow$ 前缀。
+     * 未开播时平台没有可播线路,需先补"未开播"占位线路,否则"关注主播"成为第一集
+     * 被播放器自动选中起播,导致误关注(占位选集 id=offline,spider 提示后拦截)。
      */
     public void appendFollowTrack(MovieDetail detail, int uid) {
         String[] parts = detail.getVod_id().split("\\$");
@@ -188,10 +190,14 @@ public class LiveFollowService {
         String platform = parts[0];
         String roomId = String.join("$", Arrays.copyOfRange(parts, 1, parts.length));
         String label = isFollowed(uid, platform, roomId) ? "已关注" : "关注";
-        String from = StringUtils.isEmpty(detail.getVod_play_from()) ? "" : detail.getVod_play_from() + "$$$";
-        String url = StringUtils.isEmpty(detail.getVod_play_url()) ? "" : detail.getVod_play_url() + "$$$";
-        detail.setVod_play_from(from + label);
-        detail.setVod_play_url(url + "关注主播$follow$" + platform + "$" + roomId + "#取消关注$unfollow$" + platform + "$" + roomId);
+        String from = StringUtils.defaultString(detail.getVod_play_from());
+        String url = detail.getVod_play_url();
+        if (StringUtils.isEmpty(url)) {
+            from = "未开播";
+            url = "未开播$offline";
+        }
+        detail.setVod_play_from(from + "$$$" + label);
+        detail.setVod_play_url(url + "$$$" + "关注主播$follow$" + platform + "$" + roomId + "#取消关注$unfollow$" + platform + "$" + roomId);
     }
 
     private MovieDetail toMovieDetail(LiveFollow follow, MovieDetail info) {

@@ -123,6 +123,20 @@ abstract class AbstractDanmakuClient {
             }
 
             @Override
+            public void onMessage(@NotNull WebSocket ws, @NotNull String text) {
+                reconnectCount = 0;
+                try {
+                    if (log.isTraceEnabled()) {
+                        log.trace("[{}] text frame: {}", name,
+                                text.length() > 320 ? text.substring(0, 320) + "..." : text);
+                    }
+                    handleTextMessage(text);
+                } catch (Exception e) {
+                    log.debug("[{}] handle text message failed: {}", name, text, e);
+                }
+            }
+
+            @Override
             public void onFailure(@NotNull WebSocket ws, @NotNull Throwable t, @Nullable Response response) {
                 log.warn("[{}] connection failure: {}", name, t.toString());
                 scheduleReconnect();
@@ -205,6 +219,14 @@ abstract class AbstractDanmakuClient {
         }
     }
 
+    /** 发送文本帧(IRC 类协议,如 Twitch) */
+    protected void sendText(String message) {
+        WebSocket ws = webSocket;
+        if (ws != null && running) {
+            ws.send(message);
+        }
+    }
+
     /** 连接建立后发送进房包 */
     protected abstract void onConnected(WebSocket ws);
 
@@ -213,4 +235,8 @@ abstract class AbstractDanmakuClient {
 
     /** 解析平台二进制帧并回调 emit */
     protected abstract void handleMessage(byte[] data);
+
+    /** 解析平台文本帧并回调 emit,纯二进制协议无需覆写 */
+    protected void handleTextMessage(String text) {
+    }
 }

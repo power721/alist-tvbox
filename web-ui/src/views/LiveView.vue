@@ -82,7 +82,8 @@ const platformNames: Record<string, string> = {
   douyu: "斗鱼",
   huya: "虎牙",
   ks: "快手",
-  kuaishou: "快手"
+  kuaishou: "快手",
+  twitch: "Twitch"
 };
 
 interface Category {

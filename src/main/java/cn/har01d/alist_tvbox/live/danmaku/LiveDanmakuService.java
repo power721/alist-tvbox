@@ -38,7 +38,7 @@ public class LiveDanmakuService {
     private static final int RECENT_SIZE = 30;
     private static final long IDLE_MILLIS = 60_000;
     private static final long RETRY_DELAY = 60_000;
-    private static final Set<String> SUPPORTED = Set.of("huya", "douyu", "bili", "douyin");
+    private static final Set<String> SUPPORTED = Set.of("huya", "douyu", "bili", "douyin", "twitch");
     // 弹幕速度档(慢/正常/快)对应的横穿一个屏宽毫秒数,下发解析值,调档不必更新 spider
     private static final int[] SPEED_DURATIONS = {12_000, 8_000, 5_000};
 
@@ -220,6 +220,8 @@ public class LiveDanmakuService {
                     DouyinDanmakuClient.DouyinDanmakuArgs args = douyinService.getDanmakuArgs(roomId);
                     return args == null ? null : new DouyinDanmakuClient(args, okHttpClient, scheduler);
                 }
+                case "twitch":
+                    return new TwitchDanmakuClient(roomId, okHttpClient, scheduler);
                 default:
                     return null;
             }
