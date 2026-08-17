@@ -32,7 +32,7 @@ public class LiveService {
     private final LiveFollowService liveFollowService;
     private final SubscriptionService subscriptionService;
 
-    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService, TwitchService twitchService, LiveFollowService liveFollowService, SubscriptionService subscriptionService) {
+    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService, TwitchService twitchService, SoopService soopService, LiveFollowService liveFollowService, SubscriptionService subscriptionService) {
         this.huyaService = huyaService;
         platforms.add(huyaService);
         platforms.add(douyuService);
@@ -41,6 +41,7 @@ public class LiveService {
         platforms.add(kuaishouService);
         platforms.add(douyinService);
         platforms.add(twitchService);
+        platforms.add(soopService);
         this.liveFollowService = liveFollowService;
         this.subscriptionService = subscriptionService;
     }
@@ -129,7 +130,9 @@ public class LiveService {
     }
 
     public MovieList detail(String tid, String client) throws IOException {
-        MovieList result = cache.getIfPresent(tid);
+        // 网页端与安卓客户端拿到的播放地址形态不同(如 Twitch/SOOP 仅网页端走代理),缓存键须区分
+        String cacheKey = tid + "@" + (client == null ? "" : client);
+        MovieList result = cache.getIfPresent(cacheKey);
         if (result == null) {
             result = new MovieList();
             String[] parts = tid.split("\\$");
@@ -139,7 +142,7 @@ public class LiveService {
                     if (!result.getList().isEmpty()) {
                         result.getList().get(0).setVod_director(platform.getName());
                     }
-                    cache.put(tid, result);
+                    cache.put(cacheKey, result);
                     break;
                 }
             }

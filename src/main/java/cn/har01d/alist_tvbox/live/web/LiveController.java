@@ -2,9 +2,11 @@ package cn.har01d.alist_tvbox.live.web;
 
 import cn.har01d.alist_tvbox.dto.LiveFollowDto;
 import cn.har01d.alist_tvbox.live.service.LiveFollowService;
+import cn.har01d.alist_tvbox.live.service.LiveProxyService;
 import cn.har01d.alist_tvbox.live.service.LiveService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,11 +21,13 @@ import java.util.Map;
 public class LiveController {
     private final LiveService liveService;
     private final LiveFollowService liveFollowService;
+    private final LiveProxyService liveProxyService;
     private final SubscriptionService subscriptionService;
 
-    public LiveController(LiveService liveService, LiveFollowService liveFollowService, SubscriptionService subscriptionService) {
+    public LiveController(LiveService liveService, LiveFollowService liveFollowService, LiveProxyService liveProxyService, SubscriptionService subscriptionService) {
         this.liveService = liveService;
         this.liveFollowService = liveFollowService;
+        this.liveProxyService = liveProxyService;
         this.subscriptionService = subscriptionService;
     }
 
@@ -64,6 +68,17 @@ public class LiveController {
         subscriptionService.checkToken(token);
 
         return liveService.play(id);
+    }
+
+    @GetMapping("/live-proxy")
+    public void proxy(String u, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        proxy("", u, request, response);
+    }
+
+    @GetMapping("/live-proxy/{token}")
+    public void proxy(@PathVariable String token, String u, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        subscriptionService.checkToken(token);
+        liveProxyService.proxy(u, request, response);
     }
 
     @PostMapping("/live/follow")

@@ -50,18 +50,20 @@ public class TwitchService implements LivePlatform {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final LiveProxyService liveProxyService;
     // 关注状态刷新会绕过 LiveService 缓存直接调 detail,内部缓存挡住重复的 GQL/usher 请求
     private final Cache<String, MovieList> detailCache = Caffeine.newBuilder()
             .maximumSize(50)
             .expireAfterWrite(Duration.ofMinutes(5))
             .build();
 
-    public TwitchService(RestTemplateBuilder builder, ObjectMapper objectMapper) {
+    public TwitchService(RestTemplateBuilder builder, ObjectMapper objectMapper, LiveProxyService liveProxyService) {
         this.restTemplate = builder
                 .defaultHeader("User-Agent", Constants.USER_AGENT)
                 .defaultHeader("Client-Id", CLIENT_ID)
                 .build();
         this.objectMapper = objectMapper;
+        this.liveProxyService = liveProxyService;
     }
 
     @Override
@@ -188,7 +190,9 @@ public class TwitchService implements LivePlatform {
 
     @Override
     public MovieList detail(String tid, String client) throws IOException {
-        MovieList cached = detailCache.getIfPresent(tid);
+        // 网页端与客户端的播放地址形态不同(代理 vs 直连),缓存键需带 client
+        String cacheKey = tid + "@" + (client == null ? "" : client);
+        MovieList cached = detailCache.getIfPresent(cacheKey);
         if (cached != null) {
             return cached;
         }
@@ -219,7 +223,7 @@ public class TwitchService implements LivePlatform {
             detail.setType_name(game);
             detail.setVod_remarks(live ? (game.isEmpty() ? "直播中" : game) : "未开播");
             if (live) {
-                parsePlayUrls(detail, login);
+                parsePlayUrls(detail, login, client);
             }
         } catch (Exception e) {
             log.warn("get twitch room detail failed: {}", tid, e);
@@ -230,11 +234,11 @@ public class TwitchService implements LivePlatform {
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         log.debug("detail: {}", result);
-        detailCache.put(tid, result);
+        detailCache.put(cacheKey, result);
         return result;
     }
 
-    private void parsePlayUrls(MovieDetail detail, String login) throws IOException {
+    private void parsePlayUrls(MovieDetail detail, String login, String client) throws IOException {
         JsonNode token = gql(request("PlaybackAccessToken", HASH_ACCESS_TOKEN, variables(
                 "isLive", true,
                 "login", login,
@@ -290,7 +294,9 @@ public class TwitchService implements LivePlatform {
                     quality = "原画";
                 }
                 if (!"audio_only".equals(quality)) {
-                    variants.add(new Variant(bandwidth, quality, line));
+                    // 清单域名对带 Origin/Referer 的浏览器请求 403,仅网页端经代理;安卓客户端直连 CDN
+                    String variantUrl = "web".equals(client) ? liveProxyService.buildProxyUrl(line) : line;
+                    variants.add(new Variant(bandwidth, quality, variantUrl));
                 }
                 quality = null;
             }

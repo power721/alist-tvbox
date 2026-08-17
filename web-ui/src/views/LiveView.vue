@@ -2,6 +2,7 @@
 import {computed, onMounted, ref} from "vue";
 import axios from "axios";
 import mpegts from "mpegts.js";
+import Hls from "hls.js";
 import {onUnmounted} from "@vue/runtime-core";
 import {Search, Refresh, CircleCloseFilled} from "@element-plus/icons-vue";
 import {ElMessage, type TabsPaneContext} from "element-plus";
@@ -19,6 +20,7 @@ const playUrl = ref("");
 const playFrom = ref<string[]>([]);
 const playUrls = ref<string[]>([]);
 const flvPlayer: any = ref();
+const hlsPlayer: any = ref();
 const categories = ref<Category[]>([]);
 const category = ref<Category>({
   type_id: "",
@@ -83,6 +85,7 @@ const platformNames: Record<string, string> = {
   huya: "虎牙",
   ks: "快手",
   kuaishou: "快手",
+  soop: "SOOP",
   twitch: "Twitch"
 };
 
@@ -126,9 +129,13 @@ interface Movie {
 }
 
 /**
- * 创建 mpegts 实例
+ * 创建 mpegts 实例;m3u8 地址(Twitch/SOOP 经 /live-proxy 下发)走 hls.js
  */
 const initFlv = (ops: { URL: string; elementId: string }) => {
+  if (ops.URL.includes(".m3u8") || ops.URL.includes("/live-proxy")) {
+    initHls(ops.URL, ops.elementId);
+    return;
+  }
   if (mpegts.isSupported()) {
     // 根据id名称创建对应的video
     const ele = document.getElementById(ops.elementId);
@@ -159,6 +166,27 @@ const initFlv = (ops: { URL: string; elementId: string }) => {
   }
 };
 
+const initHls = (url: string, elementId: string) => {
+  const ele = document.getElementById(elementId) as HTMLVideoElement;
+  if (Hls.isSupported()) {
+    hlsPlayer.value = new Hls({
+      lowLatencyMode: true,
+      backBufferLength: 30,
+      liveSyncDurationCount: 3
+    });
+    hlsPlayer.value.loadSource(url);
+    hlsPlayer.value.attachMedia(ele);
+    hlsPlayer.value.on(Hls.Events.ERROR, (_event: unknown, data: any) => {
+      console.log("hls 错误:" + data.type + " " + data.details);
+    });
+    ele.play();
+  } else if (ele.canPlayType("application/vnd.apple.mpegurl")) {
+    // Safari 原生 HLS
+    ele.src = url;
+    ele.play();
+  }
+};
+
 const play = (flv: any) => {
   flv.load();
   flv.play();
@@ -178,6 +206,10 @@ const flvEvent = () => {
 
 
 const destory = () => {
+  if (hlsPlayer.value) {
+    hlsPlayer.value.destroy();
+    hlsPlayer.value = null;
+  }
   if (flvPlayer.value) {
     //flvPlayer.value.pause;
     flvPlayer.value.unload();
