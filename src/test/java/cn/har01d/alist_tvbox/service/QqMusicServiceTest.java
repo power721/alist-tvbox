@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.qqmusic.QqMusicLoginStatus;
 import cn.har01d.alist_tvbox.entity.Plugin;
 import cn.har01d.alist_tvbox.entity.PluginRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -122,7 +123,7 @@ class QqMusicServiceTest {
 
     @Test
     void checkLoginReportsExpiredForUnknownKey() {
-        QqMusicService.QqMusicLoginStatus status = newService().checkLogin("missing");
+        QqMusicLoginStatus status = newService().checkLogin("missing");
         assertThat(status.status()).isEqualTo("expired");
         assertThat(status.extend()).isNull();
     }

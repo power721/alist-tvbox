@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.qqmusic.QqMusicLoginStatus;
+import cn.har01d.alist_tvbox.dto.qqmusic.QqMusicQrCode;
 import cn.har01d.alist_tvbox.entity.Plugin;
 import cn.har01d.alist_tvbox.entity.PluginRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -636,12 +638,6 @@ public class QqMusicService {
                 break;
             }
         }
-    }
-
-    public record QqMusicQrCode(String key, String type, String image) {
-    }
-
-    public record QqMusicLoginStatus(String status, String message, String extend) {
     }
 
     private static class QrSession {

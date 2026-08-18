@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.qqmusic.QqMusicLoginStatus;
+import cn.har01d.alist_tvbox.dto.qqmusic.QqMusicQrCode;
 import cn.har01d.alist_tvbox.service.QqMusicService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,14 +23,14 @@ public class QqMusicController {
 
     // type=qq 或 wx，返回二维码图片（base64）与会话 key
     @PostMapping("/api/qqmusic/login")
-    public QqMusicService.QqMusicQrCode login(@RequestParam(defaultValue = "qq") String type)
+    public QqMusicQrCode login(@RequestParam(defaultValue = "qq") String type)
             throws IOException, InterruptedException {
         return qqMusicService.createQrLogin(type);
     }
 
     // status: waiting / scanned / success / expired / failed；success 时 extend 为爬虫配置 JSON
     @GetMapping("/api/qqmusic/check")
-    public QqMusicService.QqMusicLoginStatus check(@RequestParam String key) {
+    public QqMusicLoginStatus check(@RequestParam String key) {
         return qqMusicService.checkLogin(key);
     }
 
