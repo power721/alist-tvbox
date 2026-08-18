@@ -15,8 +15,9 @@ public class PluginFilterConfigField {
     // 面向用户展示的中文名称。
     private String label = "";
 
-    // 字段类型，目前前端支持 string / number / boolean / object / secret。
+    // 字段类型，目前前端支持 string / number / boolean / object / secret / list。
     // secret 用于 cookie / 密码等敏感字段，前端脱敏展示，写入 extend 时仍是普通字符串。
+    // list 用于可增删的多项配置（如自定义频道列表），children 描述每一项的字段结构。
     private String type = "string";
 
     // 是否必填。前端保存前会据此做校验。
@@ -34,6 +35,9 @@ public class PluginFilterConfigField {
     // 兼容旧配置时可接受的别名列表，例如 snake_case / camelCase。
     private List<String> aliases = new ArrayList<>();
 
-    // 当 type=object 时，children 描述其嵌套字段结构。
+    // 当 type=object 时，children 描述其嵌套字段结构；当 type=list 时，children 描述每一项的字段结构。
     private List<PluginFilterConfigField> children = new ArrayList<>();
+
+    // 当 type=list 时每项的标题（如 "频道"），前端展示为 “频道 1”、“频道 2”。
+    private String itemLabel = "";
 }

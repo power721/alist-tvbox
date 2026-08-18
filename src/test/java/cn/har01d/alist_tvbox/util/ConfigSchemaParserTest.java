@@ -141,7 +141,7 @@ class ConfigSchemaParserTest {
                 }
 
                 class Spider(BaseSpider):
-                    pass
+                  pass
                 """;
 
         PluginFilterConfigSchema schema = ConfigSchemaParser.parse(py, "PLUGIN_CONFIG_SCHEMA");
@@ -153,5 +153,36 @@ class ConfigSchemaParserTest {
         assertThat(headers.getChildren()).hasSize(2);
         assertThat(headers.getChildren().get(0).getKey()).isEqualTo("ua");
         assertThat(headers.getChildren().get(1).getKey()).isEqualTo("referer");
+    }
+
+    @Test
+    void listFieldsWithItemSchemaAreParsed() {
+        String py = """
+                PLUGIN_CONFIG_SCHEMA = {
+                  "fields": [
+                    {"key": "channels", "label": "自定义频道", "type": "list", "itemLabel": "频道", "children": [
+                      {"key": "name", "label": "名称", "type": "string"},
+                      {"key": "id", "label": "频道ID", "type": "string"},
+                      {"key": "url", "label": "频道链接", "type": "string"}
+                    ]}
+                  ]
+                }
+
+                class Spider(BaseSpider):
+                  pass
+                """;
+
+        PluginFilterConfigSchema schema = ConfigSchemaParser.parse(py, "PLUGIN_CONFIG_SCHEMA");
+
+        assertThat(schema).isNotNull();
+        assertThat(schema.getFields()).hasSize(1);
+        PluginFilterConfigField channels = schema.getFields().get(0);
+        assertThat(channels.getType()).isEqualTo("list");
+        assertThat(channels.getLabel()).isEqualTo("自定义频道");
+        assertThat(channels.getItemLabel()).isEqualTo("频道");
+        assertThat(channels.getChildren()).hasSize(3);
+        assertThat(channels.getChildren().get(0).getKey()).isEqualTo("name");
+        assertThat(channels.getChildren().get(1).getLabel()).isEqualTo("频道ID");
+        assertThat(channels.getChildren().get(2).getKey()).isEqualTo("url");
     }
 }

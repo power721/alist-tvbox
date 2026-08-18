@@ -48,6 +48,27 @@
       />
     </div>
 
+    <div v-else-if="field.type === 'list' && field.children?.length" class="filter-config-list">
+      <div v-for="(item, index) in listValue" :key="index" class="filter-config-list-item">
+        <div class="filter-config-list-item-header">
+          <span>
+            {{ field.itemLabel || '项' }} {{ index + 1 }}
+            <span v-if="!Object.keys(item).length" class="filter-config-list-item-empty">（未填写）</span>
+          </span>
+          <el-button link type="danger" size="small" @click="removeListItem(index)">删除</el-button>
+        </div>
+        <PluginFilterConfigFieldEditor
+          v-for="child in field.children"
+          :key="`${field.key}.${index}.${child.key}`"
+          :field="child"
+          :model-value="modelValue"
+          :container-path="[...containerPath, field.key, String(index)]"
+          @update:model-value="emit('update:modelValue', $event)"
+        />
+      </div>
+      <el-button link type="primary" @click="addListItem">添加{{ field.itemLabel || '项' }}</el-button>
+    </div>
+
     <el-input
       v-else-if="field.type === 'object'"
       type="textarea"
@@ -81,6 +102,7 @@ interface PluginFilterConfigField {
   placeholder: string
   aliases: string[]
   children: PluginFilterConfigField[]
+  itemLabel?: string
 }
 
 const props = withDefaults(defineProps<{
@@ -103,7 +125,8 @@ const cloneValue = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 const getObjectAtPath = (root: Record<string, any>, path: string[]) => {
   let current: any = root
   for (const segment of path) {
-    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+    // 中间节点可能是 list 数组，数字索引通过字符串下标访问
+    if (current === null || current === undefined || typeof current !== 'object') {
       return {}
     }
     current = current[segment]
@@ -130,7 +153,7 @@ const patchRootValue = (nextFieldValue: any) => {
   let current: any = nextRoot
   for (const segment of props.containerPath) {
     const nested = current[segment]
-    if (!nested || typeof nested !== 'object' || Array.isArray(nested)) {
+    if (nested === null || nested === undefined || typeof nested !== 'object') {
       current[segment] = {}
     }
     current = current[segment]
@@ -193,6 +216,50 @@ const setObjectValue = (value: string) => {
   }
   patchRootValue(text)
 }
+
+// list 字段值兼容旧数据：字符串形式的 JSON 数组解析为数组展示
+const parseListValue = (value: any): Record<string, any>[] => {
+  if (Array.isArray(value)) {
+    return value.filter(item => item && typeof item === 'object' && !Array.isArray(item))
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      return parseListValue(JSON.parse(value))
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+const listValue = computed(() => parseListValue(getValueByAliases()))
+
+const patchListValue = (next: Record<string, any>[]) => {
+  patchRootValue(next.length ? next : '')
+}
+
+const addListItem = () => {
+  patchListValue([...listValue.value, {}])
+}
+
+const removeListItem = (index: number) => {
+  patchListValue(listValue.value.filter((_, i) => i !== index))
+}
+
+// 历史数据里 list 值可能以 JSON 字符串保存（旧 object textarea 的行为），
+// 打开表单时先规范化为数组，避免子字段编辑把字符串容器覆盖为空对象。
+if (props.field.type === 'list') {
+  const container = getContainerObject()
+  const keys = [props.field.key, ...(props.field.aliases || [])].filter(Boolean)
+  const rawKey = keys.find(key => container[key] !== undefined && container[key] !== null)
+  const raw = rawKey ? container[rawKey] : undefined
+  if (typeof raw === 'string' && raw.trim()) {
+    const parsed = parseListValue(raw)
+    if (parsed.length) {
+      patchRootValue(parsed)
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -233,5 +300,33 @@ const setObjectValue = (value: string) => {
   flex-direction: column;
   gap: 10px;
   padding: 12px;
+}
+
+.filter-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-config-list-item {
+  border: 1px dashed var(--el-border-color);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.filter-config-list-item-header {
+  align-items: center;
+  color: var(--el-text-color-secondary);
+  display: flex;
+  font-size: 13px;
+  justify-content: space-between;
+}
+
+.filter-config-list-item-empty {
+  color: var(--el-text-color-placeholder);
+  margin-left: 4px;
 }
 </style>

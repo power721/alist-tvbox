@@ -114,6 +114,7 @@ public final class ConfigSchemaParser {
             field.setDefaultValue(parseScalarValue(defaultValue));
         }
         field.setAliases(parseStringArray(extractJsonArray(fieldJson, "aliases")));
+        field.setItemLabel(extractJsonString(fieldJson, "itemLabel"));
         String childrenJson = extractJsonArray(fieldJson, "children");
         if (childrenJson != null) {
             for (String childJson : splitTopLevelObjects(childrenJson)) {

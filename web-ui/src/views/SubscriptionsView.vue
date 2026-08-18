@@ -1067,6 +1067,7 @@ interface PluginFilterConfigField {
   placeholder: string
   aliases: string[]
   children: PluginFilterConfigField[]
+  itemLabel?: string
 }
 
 interface PluginFilterConfigSchema {
@@ -1528,7 +1529,8 @@ const normalizePluginFilterConfigField = (field: PluginFilterConfigField): Plugi
     defaultValue: field?.defaultValue,
     placeholder: field?.placeholder || '',
     aliases: Array.isArray(field?.aliases) ? field.aliases : [],
-    children: Array.isArray(field?.children) ? field.children.map(item => normalizePluginFilterConfigField(item)) : []
+    children: Array.isArray(field?.children) ? field.children.map(item => normalizePluginFilterConfigField(item)) : [],
+    itemLabel: field?.itemLabel || ''
   }
 }
 
@@ -1665,6 +1667,22 @@ const fieldValueByAliases = (field: PluginFilterConfigField, container: Record<s
   return field.defaultValue
 }
 
+// list 字段值可能是数组，也可能是旧数据留下的 JSON 字符串
+const resolveConfigListItems = (value: any): any[] => {
+  if (Array.isArray(value)) {
+    return value
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 const rebuildPluginFilterConfigExtras = () => {
   const declared = new Set(getDeclaredFieldKeys(pluginFilterConfigSchema.value))
   pluginFilterConfigExtras.value = Object.entries(pluginFilterConfigObject.value)
@@ -1689,6 +1707,21 @@ const validatePluginFilterConfigObject = () => {
         const nestedRequiredPath = validateFields(field.children, nested, currentPath)
         if (nestedRequiredPath) {
           return nestedRequiredPath
+        }
+        continue
+      }
+      if (field.type === 'list' && field.children?.length) {
+        const items = resolveConfigListItems(value)
+        if (field.required && items.length === 0) {
+          return currentPath.join(' / ')
+        }
+        for (let index = 0; index < items.length; index++) {
+          const item = items[index] && typeof items[index] === 'object' && !Array.isArray(items[index]) ? items[index] : {}
+          const itemPath = [...currentPath, `${field.itemLabel || '项'} ${index + 1}`]
+          const itemRequiredPath = validateFields(field.children, item, itemPath)
+          if (itemRequiredPath) {
+            return itemRequiredPath
+          }
         }
         continue
       }
@@ -1831,6 +1864,21 @@ const validateSourceConfigObject = () => {
         const nestedRequiredPath = validateFields(field.children, nested, currentPath)
         if (nestedRequiredPath) {
           return nestedRequiredPath
+        }
+        continue
+      }
+      if (field.type === 'list' && field.children?.length) {
+        const items = resolveConfigListItems(value)
+        if (field.required && items.length === 0) {
+          return currentPath.join(' / ')
+        }
+        for (let index = 0; index < items.length; index++) {
+          const item = items[index] && typeof items[index] === 'object' && !Array.isArray(items[index]) ? items[index] : {}
+          const itemPath = [...currentPath, `${field.itemLabel || '项'} ${index + 1}`]
+          const itemRequiredPath = validateFields(field.children, item, itemPath)
+          if (itemRequiredPath) {
+            return itemRequiredPath
+          }
         }
         continue
       }

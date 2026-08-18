@@ -1431,6 +1431,24 @@ public class SubscriptionService {
         return new HashMap<>(AppProperties.copyLocalProxyConfig(config));
     }
 
+    private static volatile String cachedSpiderJarMd5;
+    private static volatile boolean spiderJarMd5Resolved;
+
+    private String spiderJarUrl(String baseUrl) {
+        if (!spiderJarMd5Resolved) {
+            spiderJarMd5Resolved = true;
+            try (var in = getClass().getResourceAsStream("/static/spring.md5")) {
+                if (in != null) {
+                    cachedSpiderJarMd5 = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+                }
+            } catch (Exception e) {
+                log.warn("read spring.md5 failed", e);
+            }
+        }
+        String md5 = cachedSpiderJarMd5;
+        return StringUtils.isBlank(md5) ? baseUrl + "/spring.jar" : baseUrl + "/spring.jar;" + md5;
+    }
+
     private boolean isNativePythonPluginRunMode() {
         return settingRepository.findById(PLUGIN_RUN_MODE)
                 .map(Setting::getValue)
@@ -1523,7 +1541,7 @@ public class SubscriptionService {
         String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
-        String jar = url + "/spring.jar";
+        String jar = spiderJarUrl(url);
         site.put("jar", jar);
         site.put("changeable", 0);
         site.put("searchable", 1);
@@ -1596,7 +1614,7 @@ public class SubscriptionService {
         site.put("type", 3);
         site.put("key", pluginSiteKey(plugin));
         site.put("searchable", 1);
-        String jar = url + "/spring.jar";
+        String jar = spiderJarUrl(url);
         site.put("jar", jar);
 
         if ("8cdcaa4255534ca19aaa18948ea9c3524c1d".equals(plugin.getExternalId())) {

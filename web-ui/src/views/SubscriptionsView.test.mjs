@@ -43,3 +43,17 @@ test('keeps null benchmark success values pending', () => {
   assert.equal(viewSource.includes('const isBenchmarkPending = (result: any) => result?.success === null || result?.pending'), true)
   assert.equal(viewSource.includes('result.success !== undefined && result.success !== null'), true)
 })
+
+test('supports declarative list fields with per-item editors', () => {
+  const editorSource = readFileSync(new URL('../components/PluginFilterConfigFieldEditor.vue', import.meta.url), 'utf8')
+  assert.equal(editorSource.includes("field.type === 'list'"), true)
+  assert.equal(editorSource.includes('addListItem'), true)
+  assert.equal(editorSource.includes('removeListItem'), true)
+  assert.equal(editorSource.includes('itemLabel'), true)
+})
+
+test('validates and normalizes list config fields', () => {
+  assert.equal(viewSource.includes('resolveConfigListItems'), true)
+  assert.equal(viewSource.includes("field.type === 'list'"), true)
+  assert.equal(viewSource.includes('itemLabel: field?.itemLabel'), true)
+})
