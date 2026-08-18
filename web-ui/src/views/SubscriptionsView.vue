@@ -568,12 +568,13 @@
             <span>{{ scope.row.lastError || '正常' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160">
+        <el-table-column label="操作" width="200">
           <template #default="scope">
             <el-button v-if="scope.row.extendable" link type="primary" @click="openSourceConfig(scope.row)">配置</el-button>
+            <el-button v-if="isQqMusicSource(scope.row)" link type="primary" @click="openQqMusicLogin(scope.row)">扫码</el-button>
             <el-button v-if="scope.row.refreshable" link type="primary" @click="refreshPlugin(scope.row.pluginId)">刷新</el-button>
             <el-button v-if="scope.row.deletable" link type="danger" @click="deletePlugin(scope.row.pluginId)">删除</el-button>
-            <span v-if="!scope.row.extendable && !scope.row.refreshable && !scope.row.deletable">-</span>
+            <span v-if="!scope.row.extendable && !isQqMusicSource(scope.row) && !scope.row.refreshable && !scope.row.deletable">-</span>
           </template>
         </el-table-column>
       </el-table>
@@ -983,6 +984,12 @@
       </template>
     </el-dialog>
 
+    <QqMusicQrLoginDialog
+      v-model="qqMusicLoginVisible"
+      :source="qqMusicLoginSource"
+      @success="loadManagedSources"
+    />
+
   </div>
 </template>
 
@@ -996,6 +1003,7 @@ import {Link, ArrowRight} from "@element-plus/icons-vue";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
 import PluginFilterConfigFieldEditor from "@/components/PluginFilterConfigFieldEditor.vue";
+import QqMusicQrLoginDialog from "@/components/QqMusicQrLoginDialog.vue";
 import SubscriptionConfigEditor from "@/components/SubscriptionConfigEditor.vue";
 import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";
 
@@ -1159,6 +1167,20 @@ const pluginVisible = ref(false)
 const pluginFilterVisible = ref(false)
 const pluginFilterConfigVisible = ref(false)
 const sourceExtendVisible = ref(false)
+
+// QQ音乐爬虫支持后端扫码登录，凭据直接写入订阅源 extend
+const qqMusicLoginVisible = ref(false)
+const qqMusicLoginSource = ref<ManagedSource | null>(null)
+
+const isQqMusicSource = (source: ManagedSource) => {
+  const name = `${source.name || ''}${source.sourceName || ''}`
+  return name.includes('QQ音乐')
+}
+
+const openQqMusicLogin = (source: ManagedSource) => {
+  qqMusicLoginSource.value = source
+  qqMusicLoginVisible.value = true
+}
 const importingPlugins = ref(false)
 const tgVisible = ref(false)
 const scanVisible = ref(false)
