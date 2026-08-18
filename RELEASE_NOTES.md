@@ -1,8 +1,9 @@
-# Release Notes - 1.51.0
+# Release Notes - 1.51.1
 
 ## 新增
 
 - QQ音乐支持扫码登录，无需手动填写 Cookie
+- YouTube支持自定义频道
 
 ## 优化
 
