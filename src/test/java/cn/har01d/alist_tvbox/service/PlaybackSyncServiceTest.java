@@ -119,6 +119,72 @@ class PlaybackSyncServiceTest {
         assertThat(deletedRows()).extracting(History::getVodId).containsExactly("v1");
     }
 
+    // ── 删除:回声限频 ───────────────────────────────────────────────────────
+
+    @Test
+    void repeatedItemDeleteWithinThrottleWindowIsDropped() {
+        // 旧版客户端每分钟重发同一条删除:墓碑 1 分钟前刚生效,本次必须按回声丢弃
+        PlaybackTombstone recent = tombstone("site", "v1", System.currentTimeMillis() - 60_000);
+        when(tombstoneRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
+                .thenReturn(List.of(recent));
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
+                .thenReturn(List.of(history("abc", "v1", 100)));
+
+        service.delete(UID, null, deleteInput(Map.of(
+                "scope", "item", "sourceKey", "abc", "vodId", "v1",
+                "deletedAt", System.currentTimeMillis())));
+
+        verify(tombstoneRepository, never()).save(any());
+        verify(historyRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    void itemDeleteAfterThrottleWindowAppliesAgain() {
+        // 窗口(默认 10 分钟)过后,重复删除可再次生效;配置 0 关闭限频
+        PlaybackTombstone stale = tombstone("site", "v1", System.currentTimeMillis() - 700_000);
+        when(tombstoneRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
+                .thenReturn(List.of(stale));
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
+                .thenReturn(List.of(history("abc", "v1", 100)));
+
+        service.delete(UID, null, deleteInput(Map.of(
+                "scope", "item", "sourceKey", "abc", "vodId", "v1",
+                "deletedAt", System.currentTimeMillis())));
+
+        assertThat(deletedRows()).extracting(History::getVodId).containsExactly("v1");
+    }
+
+    @Test
+    void zeroThrottleConfigDisablesEchoSuppression() {
+        appProperties.setPlaybackDeleteThrottleMs(0);
+        PlaybackTombstone recent = tombstone("site", "v1", System.currentTimeMillis());
+        when(tombstoneRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
+                .thenReturn(List.of(recent));
+        when(historyRepository.findAllByUidAndSourceKindAndSourceKeyAndVodId(UID, "site", "abc", "v1"))
+                .thenReturn(List.of(history("abc", "v1", 100)));
+
+        service.delete(UID, null, deleteInput(Map.of(
+                "scope", "item", "sourceKey", "abc", "vodId", "v1",
+                "deletedAt", System.currentTimeMillis())));
+
+        assertThat(deletedRows()).extracting(History::getVodId).containsExactly("v1");
+    }
+
+    @Test
+    void deleteTombstonesPurgesByIdentityAcrossSyncScopes() {
+        PlaybackTombstone scoped = tombstone("spider_plugin", "173", 100);
+        scoped.setSyncScope("sub-1");
+        PlaybackTombstone global = tombstone("spider_plugin", "173", 200);
+        when(tombstoneRepository.findItemAnyScope(UID, "spider_plugin", "key", "173"))
+                .thenReturn(List.of(scoped, global));
+
+        int removed = service.deleteTombstones(UID, List.of(deleteInput(Map.of(
+                "scope", "item", "sourceKind", "spider_plugin", "sourceKey", "key", "vodId", "173"))));
+
+        assertThat(removed).isEqualTo(2);
+        verify(tombstoneRepository).deleteAll(List.of(scoped, global));
+    }
+
     // ── 删除:作用域 ────────────────────────────────────────────────────────
 
     @Test

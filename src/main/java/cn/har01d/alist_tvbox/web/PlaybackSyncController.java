@@ -120,6 +120,15 @@ public class PlaybackSyncController {
         playbackSyncService.deleteAllRecords(currentUid());
     }
 
+    /**
+     * 管理页面按身份清除墓碑(支持 item/site/all 作用域),用于清理客户端 bug
+     * 产生的误报墓碑。只清删除水位,不改动现存的播放记录。
+     */
+    @PostMapping("/api/playback/tombstones/-/delete")
+    public Map<String, Integer> deleteTombstones(@RequestBody List<PlaybackDeleteInput> records) {
+        return Map.of("removed", playbackSyncService.deleteTombstones(currentUid(), records));
+    }
+
     // ── 令牌管理(session 鉴权,ADMIN|USER) ───────────────────────────────
 
     @GetMapping("/api/playback/tokens")

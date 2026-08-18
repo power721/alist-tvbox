@@ -380,6 +380,12 @@ public class PlaybackSyncService {
         List<History> histories = findByIdentity(uid, syncScope, sourceKind, in.getSourceKey(), in.getVodId());
         List<PlaybackTombstone> tombstones = findTombsByIdentity(uid, syncScope, sourceKind, in.getSourceKey(), in.getVodId());
         PlaybackTombstone tomb = newestTombstone(tombstones);
+        if (isDeleteEcho(tomb)) {
+            log.info("skip delete echo: uid={} kind={} key={} vodId={} lastEffectiveMs={}",
+                    uid, sourceKind, in.getSourceKey(), in.getVodId(),
+                    tomb.getChangeSeq() == null ? -1L : System.currentTimeMillis() - tomb.getChangeSeq());
+            return;
+        }
         if (tomb == null) {
             tomb = new PlaybackTombstone();
             tomb.setUid(uid);
@@ -441,6 +447,21 @@ public class PlaybackSyncService {
         if (!stale.isEmpty()) {
             historyRepository.deleteAll(stale);
         }
+    }
+
+    /**
+     * 同一身份的重复 item 删除按回声丢弃:异常/旧版客户端会把同一条删除事件每分钟重发,
+     * 且每次携带新的 deletedAt,把其他端刚复活的记录再杀掉。墓碑的 changeSeq 由
+     * nextChangeSeq() 分配(与墙钟同源、单调递增),可视为该身份上次删除生效的时间;
+     * 窗口内的重复删除不落墓碑、不删行。真实用户几乎不会在窗口内反复删除同一部剧,
+     * 确需再次删除时等窗口过后自然生效。
+     */
+    private boolean isDeleteEcho(PlaybackTombstone tomb) {
+        long throttle = appProperties.getPlaybackDeleteThrottleMs();
+        if (throttle <= 0 || tomb == null || tomb.getChangeSeq() == null) {
+            return false;
+        }
+        return System.currentTimeMillis() - tomb.getChangeSeq() < throttle;
     }
 
     /** 覆盖某条目的最新删除时间:item ∪ site ∪ all 三种作用域取最大值(同分区内)。 */
@@ -549,6 +570,47 @@ public class PlaybackSyncService {
         input.setScope(SCOPE_ALL);
         input.setDeletedAt(System.currentTimeMillis());
         delete(uid, null, input);
+    }
+
+    /**
+     * 管理端按身份清除墓碑:客户端 bug 产生的误报墓碑会在 TTL(90 天)内持续压制
+     * 同身份记录的复活(每次 upsert 都被"skip resurrect"挡掉),需要手动清理。
+     * 匹配忽略 sync_scope,item/site/all 三种作用域;只清删除水位,不动现存播放记录。
+     *
+     * @return 实际删除的墓碑行数
+     */
+    @Transactional
+    public int deleteTombstones(int uid, List<PlaybackDeleteInput> records) {
+        if (records == null) {
+            return 0;
+        }
+        int removed = 0;
+        for (PlaybackDeleteInput record : records) {
+            if (record == null || record.getSourceKey() == null || record.getSourceKey().isBlank()) {
+                continue;
+            }
+            normalizeSource(record);
+            String sourceKind = record.getSourceKind() != null ? record.getSourceKind() : KIND_SITE;
+            String scope = record.getScope() == null ? SCOPE_ITEM : record.getScope().trim().toLowerCase();
+            List<PlaybackTombstone> matches = switch (scope) {
+                case SCOPE_ALL -> tombstoneRepository.findAllAnyScope(uid);
+                case SCOPE_SITE -> tombstoneRepository.findSiteAnyScope(uid, sourceKind, record.getSourceKey());
+                default -> {
+                    if (record.getVodId() == null || record.getVodId().isBlank()) {
+                        yield List.<PlaybackTombstone>of();
+                    }
+                    yield tombstoneRepository.findItemAnyScope(uid, sourceKind, record.getSourceKey(), record.getVodId());
+                }
+            };
+            if (matches.isEmpty()) {
+                continue;
+            }
+            tombstoneRepository.deleteAll(matches);
+            removed += matches.size();
+            log.info("purged playback tombstones: uid={} scope={} kind={} key={} vodId={} count={}",
+                    uid, scope, sourceKind, record.getSourceKey(), record.getVodId(), matches.size());
+        }
+        return removed;
     }
 
     public PlaybackSyncPage pull(int uid, long since, int limit, String sourceKind, boolean latest) {

@@ -29,6 +29,9 @@ public class AppProperties {
     private boolean playbackSyncEnabled = false;
     // 同步分区粒度:uid(不分桶)/ token(按 vod token)/ subscription(按 vod token/id)
     private String playbackSyncScope = "token";
+    // 同一身份 item 删除的生效限频(ms):异常/旧版客户端会把同一条删除每分钟重发,
+    // 每次都携带新的 deletedAt,追杀其他端刚复活的记录;窗口内的重复删除按回声丢弃。0=关闭。
+    private long playbackDeleteThrottleMs = 600_000;
     private int pageSize = 100;
     private int maxSearchResult = 60;
     private String secretKey;

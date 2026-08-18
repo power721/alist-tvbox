@@ -73,4 +73,19 @@ public interface PlaybackTombstoneRepository extends JpaRepository<PlaybackTombs
             + "AND t.sourceKind IS NULL AND t.changeSeq > :since")
     List<PlaybackTombstone> findSyncAllBreadth(@Param("uid") int uid, @Param("syncScope") String syncScope,
                                                @Param("since") long since, Sort sort);
+
+    // ── 管理端墓碑清理:跨分区(忽略 sync_scope)按身份匹配,供误报墓碑的手动清除 ────
+
+    @Query("SELECT t FROM PlaybackTombstone t WHERE t.uid = :uid "
+            + "AND t.sourceKind = :sourceKind AND t.sourceKey = :sourceKey AND t.vodId = :vodId")
+    List<PlaybackTombstone> findItemAnyScope(@Param("uid") int uid, @Param("sourceKind") String sourceKind,
+                                             @Param("sourceKey") String sourceKey, @Param("vodId") String vodId);
+
+    @Query("SELECT t FROM PlaybackTombstone t WHERE t.uid = :uid AND t.scope = 'site' "
+            + "AND t.sourceKind = :sourceKind AND t.sourceKey = :sourceKey")
+    List<PlaybackTombstone> findSiteAnyScope(@Param("uid") int uid, @Param("sourceKind") String sourceKind,
+                                             @Param("sourceKey") String sourceKey);
+
+    @Query("SELECT t FROM PlaybackTombstone t WHERE t.uid = :uid AND t.scope = 'all'")
+    List<PlaybackTombstone> findAllAnyScope(@Param("uid") int uid);
 }
