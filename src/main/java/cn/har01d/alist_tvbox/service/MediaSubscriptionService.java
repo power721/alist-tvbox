@@ -353,6 +353,50 @@ public class MediaSubscriptionService {
         return result;
     }
 
+    /** 粘贴链接解析:豆瓣 subject / TMDB tv(含 season) / Bangumi subject / 腾讯 cover 链接 → 元数据绑定信息。 */
+    public Map<String, Object> resolveMetaLink(String url) {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        if (StringUtils.isBlank(url)) {
+            throw new BadRequestException("链接不能为空");
+        }
+        String link = url.trim();
+        java.util.regex.Matcher matcher;
+        if ((matcher = java.util.regex.Pattern.compile("douban\\.com/subject/(\\d+)").matcher(link)).find()) {
+            result.put("provider", "douban");
+            result.put("id", matcher.group(1));
+            result.put("doubanId", Integer.parseInt(matcher.group(1)));
+        } else if ((matcher = java.util.regex.Pattern.compile("themoviedb\\.org/(?:tv|movie)/(\\d+)").matcher(link)).find()) {
+            result.put("provider", "tmdb");
+            result.put("id", matcher.group(1));
+            java.util.regex.Matcher season = java.util.regex.Pattern.compile("/season/(\\d+)").matcher(link);
+            if (season.find()) {
+                result.put("season", Integer.parseInt(season.group(1)));
+            }
+        } else if ((matcher = java.util.regex.Pattern.compile("(?:bgm\\.tv|bangumi\\.tv|chii\\.in)/subject/(\\d+)").matcher(link)).find()) {
+            result.put("provider", "bangumi");
+            result.put("id", matcher.group(1));
+        } else if ((matcher = java.util.regex.Pattern.compile("v\\.qq\\.com/x/cover/([A-Za-z0-9]+)").matcher(link)).find()) {
+            result.put("provider", "official");
+            result.put("id", link); // metaId 存链接本身,details 按 cid 直取官方分集
+        } else {
+            throw new BadRequestException("无法识别的链接,支持:豆瓣 subject / TMDB tv / Bangumi subject / 腾讯视频 cover 链接");
+        }
+        // 尽力解析剧名(失败不阻断,用户可手填)
+        try {
+            MetadataDetails details = metadataService.details((String) result.get("provider"), (String) result.get("id"),
+                    result.get("season") instanceof Number number ? number.intValue() : null);
+            if (details != null && StringUtils.isNotBlank(details.getName())) {
+                result.put("name", details.getName());
+            }
+            if (details != null && details.getTotalEpisodes() != null && details.getTotalEpisodes() > 0) {
+                result.put("totalEpisodes", details.getTotalEpisodes());
+            }
+        } catch (Exception e) {
+            log.debug("resolve link name failed: {}", e.getMessage());
+        }
+        return result;
+    }
+
     /** 元数据条目搜索(web 端):封面经后端 /images 代理(TMDB/Bangumi 图床直连可能被墙/防盗链),并附带各源失败原因。 */
     public Map<String, Object> metaSearch(String provider, String keyword) {
         var result = metadataService.searchReport(provider, keyword);

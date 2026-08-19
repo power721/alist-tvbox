@@ -47,6 +47,7 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
     private static final String TENCENT_SEARCH_URL = "https://pbaccess.video.qq.com/trpc.videosearch.mobile_search.MultiTerminalSearch/MbSearch?vversion_platform=2";
     private static final String TENCENT_EPISODE_URL = "https://pbaccess.video.qq.com/trpc.universal_backend_service.page_server_rpc.PageServer/GetPageData?video_appid=3000010&vplatform=2&vversion_name=8.2.96";
     private static final Pattern TENCENT_COVER_ID = Pattern.compile("/cover/([A-Za-z0-9]+)");
+    private static final Pattern TENCENT_LINK = Pattern.compile("v\\.qq\\.com/x/cover/([A-Za-z0-9]+)");
     private static final String YOUKU_SEARCH_URL = "https://search.youku.com/api/search";
     private static final String IQIYI_SEARCH_URL = "https://mesh.if.iqiyi.com/portal/lw/search/homePageV3";
 
@@ -107,6 +108,17 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         if (StringUtils.isBlank(id)) {
             return details;
         }
+        // 腾讯 cover 链接(metaId 直接存 URL):按 cid 直取官方分集列表,无需按名重搜
+        Matcher linkMatcher = TENCENT_LINK.matcher(id);
+        if (linkMatcher.find()) {
+            try {
+                applyEpisodeDates(details, tencentCoverEpisodeDates(linkMatcher.group(1)));
+            } catch (Exception e) {
+                log.debug("tencent link episodes failed: {}", e.getMessage());
+            }
+            details.setName(null); // 链接本身不含剧名,展示名由订阅名称承担
+            return details;
+        }
         // 1) 腾讯官方分集列表:publish_date 可推算已播/下集播出(综艺/独播剧最准)
         try {
             JsonNode item = tencentFirstNative(id);
@@ -115,21 +127,10 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
             if (cover.find()) {
                 List<LocalDate> dates = tencentCoverEpisodeDates(cover.group(1));
                 if (!dates.isEmpty()) {
-                    LocalDate today = LocalDate.now(ZONE);
-                    int aired = 0;
-                    LocalDate nextAir = null;
-                    for (LocalDate date : dates) {
-                        if (!date.isAfter(today)) {
-                            aired++;
-                        } else if (nextAir == null || date.isBefore(nextAir)) {
-                            nextAir = date;
-                        }
+                    applyEpisodeDates(details, dates);
+                    if (item.path("videoInfo").path("title").asText("").length() > 0) {
+                        details.setName(item.path("videoInfo").path("title").asText());
                     }
-                    details.setAiredEpisodes(aired);
-                    details.setTotalEpisodes(null); // 官方分集列表只含已上架集,总数交给豆瓣/TMDB 或期望值
-                    details.setNextAirTime(nextAir == null ? null
-                            : nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
-                    details.setStatus(nextAir == null ? MetadataDetails.STATUS_UNKNOWN : MetadataDetails.STATUS_RETURNING);
                     return details;
                 }
             }
@@ -147,6 +148,27 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         // 3) 可配置模板兜底(自建代理/渲染端点)
         applyTemplate(details, id);
         return details;
+    }
+
+    private void applyEpisodeDates(MetadataDetails details, List<LocalDate> dates) {
+        if (dates.isEmpty()) {
+            return;
+        }
+        LocalDate today = LocalDate.now(ZONE);
+        int aired = 0;
+        LocalDate nextAir = null;
+        for (LocalDate date : dates) {
+            if (!date.isAfter(today)) {
+                aired++;
+            } else if (nextAir == null || date.isBefore(nextAir)) {
+                nextAir = date;
+            }
+        }
+        details.setAiredEpisodes(aired);
+        details.setTotalEpisodes(null); // 官方分集列表只含已上架集,总数交给豆瓣/TMDB 或期望值
+        details.setNextAirTime(nextAir == null ? null
+                : nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
+        details.setStatus(nextAir == null ? MetadataDetails.STATUS_UNKNOWN : MetadataDetails.STATUS_RETURNING);
     }
 
     static void applyUpdateText(MetadataDetails details, String text) {

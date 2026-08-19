@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -109,6 +110,11 @@ public class MediaSubscriptionController {
     @GetMapping("/{id}/next-season")
     public Map<String, Object> nextSeason(@PathVariable int id) {
         return subscriptionService.nextSeason(currentUid(), id);
+    }
+
+    @GetMapping("/meta/resolve")
+    public Map<String, Object> resolveMetaLink(@RequestParam String url) {
+        return subscriptionService.resolveMetaLink(url);
     }
 
     @GetMapping("/meta/search")

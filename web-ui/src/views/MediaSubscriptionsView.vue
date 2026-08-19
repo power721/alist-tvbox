@@ -125,6 +125,14 @@
         <el-form-item label="搜索词">
           <el-input v-model="form.keyword" placeholder="默认同剧名;资源命名差异大时可填别名"/>
         </el-form-item>
+        <el-form-item label="条目链接">
+          <div class="meta-search">
+            <el-input v-model="metaLink" placeholder="粘贴豆瓣/TMDB/Bangumi/腾讯视频条目链接,自动识别"
+                      @keyup.enter="resolveLink"/>
+            <el-button @click="resolveLink" :loading="resolvingLink">解析</el-button>
+          </div>
+          <span v-if="form.metaId" class="sub-text">已绑定:{{ providerName(form.metaProvider) }} {{ form.metaId }}</span>
+        </el-form-item>
         <el-form-item label="元数据条目">
           <el-tabs v-model="metaProvider" style="width: 100%">
             <el-tab-pane label="豆瓣" name="douban"/>
@@ -388,6 +396,8 @@ const metaProvider = ref('douban')
 const metaKeyword = ref('')
 const metaSearching = ref(false)
 const metaResults = ref<any[]>([])
+const metaLink = ref('')
+const resolvingLink = ref(false)
 const accounts = ref<any[]>([])
 const previewVisible = ref(false)
 const previewing = ref(false)
@@ -480,6 +490,33 @@ const handleEdit = (row: SubscriptionDto) => {
   metaKeyword.value = ''
   metaResults.value = []
   formVisible.value = true
+}
+
+const resolveLink = () => {
+  if (!metaLink.value) return
+  resolvingLink.value = true
+  axios.get('/api/media-subscriptions/meta/resolve', {params: {url: metaLink.value.trim()}})
+      .then(response => {
+        const data = response.data
+        form.value.metaProvider = data.provider
+        form.value.metaId = data.id
+        if (data.provider === 'douban' && data.doubanId) {
+          form.value.doubanId = data.doubanId
+        }
+        if (data.season) {
+          form.value.season = data.season
+        }
+        if (!form.value.name && data.name) {
+          form.value.name = data.name
+        }
+        if (data.totalEpisodes && !form.value.expectedEpisodes) {
+          form.value.expectedEpisodes = data.totalEpisodes
+        }
+        ElMessage.success(`已识别 ${providerName(data.provider)} 条目${data.name ? ':' + data.name : ''}`)
+        metaLink.value = ''
+      }).finally(() => {
+    resolvingLink.value = false
+  })
 }
 
 const searchMeta = () => {
