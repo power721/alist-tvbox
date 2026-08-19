@@ -220,6 +220,21 @@ public class MediaSubscriptionTransferService {
             taskService.failTask(task.getId(), "转存 " + transferred + "/" + missing.size() + " 集");
             checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_TRANSFER_FAILED,
                     "转存不完整(" + account.getName() + "):成功 " + transferred + " / " + missing.size() + "(可能配额/空间不足)");
+            if (done && transferred < missing.size()) {
+                // 任务已结束仍缺失 = 源里列得出、实际取不了(如夸克分享单集被和谐):
+                // 登记为该源损坏集,下轮集数统计/转存取源跳过,自动从其他分享补(7 天过期重试)
+                Map<Integer, String> broken = new java.util.LinkedHashMap<>();
+                missing.forEach((episode, file) -> {
+                    if (!after.contains(episode)) {
+                        broken.put(episode, file.dir());
+                    }
+                });
+                if (!broken.isEmpty()) {
+                    checkService.addBrokenEpisodes(subscription, broken);
+                    subscriptionRepository.save(subscription);
+                    log.info("subscription {} marked {} broken episodes (listed but not copyable)", subscription.getId(), broken.size());
+                }
+            }
             return transferred == 0 ? null : transferred;
         } catch (Exception e) {
             taskService.failTask(task.getId(), e.getMessage());

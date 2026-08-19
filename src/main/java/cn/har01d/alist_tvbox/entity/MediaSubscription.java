@@ -105,6 +105,10 @@ public class MediaSubscription {
     @Column(columnDefinition = "TEXT", name = "episode_list")
     private String episodeList;
 
+    /** 损坏集登记(JSON {集号: "源目录|时间戳"}):分享有效但某集被和谐,转存校验发现后登记,7 天过期 */
+    @Column(columnDefinition = "TEXT", name = "broken_episodes")
+    private String brokenEpisodes;
+
     @Column(nullable = false, length = 16)
     private String status = STATUS_ACTIVE;
 

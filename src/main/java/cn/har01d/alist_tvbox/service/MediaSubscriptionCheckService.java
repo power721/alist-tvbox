@@ -641,6 +641,7 @@ public class MediaSubscriptionCheckService {
         subscription.setShareId(share.getId());
         subscription.setStallCount(0);
         subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
+        subscription.setBrokenEpisodes(null); // 换源 = 干净起点,旧源的损坏登记全部作废
         applyInventory(subscription, episodes);
 
         resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).forEach(r -> {
@@ -711,9 +712,59 @@ public class MediaSubscriptionCheckService {
 
     // ---------- 集数清单 ----------
 
-    /** 递归列出挂载目录,解析集数清单(SxxEyy 优先,否则取剥离技术标签后的最后一个数字)。 */
+    /** 递归列出挂载目录,解析集数清单(SxxEyy 优先,否则取剥离技术标签后的最后一个数字)。损坏集(被和谐,登记于 brokenEpisodes)不计入。 */
     Set<Integer> listEpisodes(MediaSubscription subscription) {
-        return walkEpisodes(site(), subscription.getSeason(), subscription.getMountPath(), maxEpisodeBytes(subscription));
+        Set<Integer> episodes = walkEpisodes(site(), subscription.getSeason(), subscription.getMountPath(), maxEpisodeBytes(subscription));
+        Map<Integer, String> broken = parseBroken(subscription);
+        if (!broken.isEmpty()) {
+            episodes.removeIf(episode -> subscription.getMountPath().equals(brokenDir(broken, episode)));
+        }
+        return episodes;
+    }
+
+    /** 损坏集登记表:JSON {集号: "源目录|时间戳"};解析并剔除 7 天以上过期项。 */
+    Map<Integer, String> parseBroken(MediaSubscription subscription) {
+        if (StringUtils.isBlank(subscription.getBrokenEpisodes())) {
+            return Map.of();
+        }
+        try {
+            Map<String, String> raw = objectMapper.readValue(subscription.getBrokenEpisodes(),
+                    new TypeReference<java.util.LinkedHashMap<String, String>>() {
+                    });
+            Map<Integer, String> result = new java.util.LinkedHashMap<>();
+            long expireBefore = System.currentTimeMillis() - 7L * 24 * 3600_000;
+            raw.forEach((episode, value) -> {
+                int index = value.lastIndexOf('|');
+                long timestamp = 0;
+                try {
+                    timestamp = Long.parseLong(value.substring(index + 1));
+                } catch (NumberFormatException ignored) {
+                    // 无时间戳按过期前处理,重新登记
+                }
+                if (timestamp >= expireBefore) {
+                    result.put(Integer.parseInt(episode), value.substring(0, index < 0 ? value.length() : index));
+                }
+            });
+            return result;
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    /** 登记损坏集(转存校验发现:源里列得出、实际拷不过去)。 */
+    void addBrokenEpisodes(MediaSubscription subscription, Map<Integer, String> additions) {
+        Map<Integer, String> merged = new java.util.LinkedHashMap<>(parseBroken(subscription));
+        long now = System.currentTimeMillis();
+        additions.forEach((episode, dir) -> merged.put(episode, dir + "|" + now));
+        try {
+            subscription.setBrokenEpisodes(objectMapper.writeValueAsString(merged));
+        } catch (Exception e) {
+            log.warn("serialize broken episodes failed: {}", e.getMessage());
+        }
+    }
+
+    private static String brokenDir(Map<Integer, String> broken, int episode) {
+        return broken.getOrDefault(episode, "");
     }
 
     private Site site() {
@@ -744,10 +795,11 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** 集 → 文件信息(转存增量 copy 需要:目录 + 文件名)。主源缺集时合并补缺挂载。 */
+    /** 集 → 文件信息(转存增量 copy 需要:目录 + 文件名)。主源缺集时合并补缺挂载;损坏集跳过其登记源,让其他源供给。 */
     TreeMap<Integer, EpisodeFile> walkEpisodeFiles(MediaSubscription subscription, boolean includeGaps) {
         Site site = site();
         long maxBytes = maxEpisodeBytes(subscription);
+        Map<Integer, String> broken = parseBroken(subscription);
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, maxBytes);
         if (includeGaps) {
@@ -760,6 +812,9 @@ public class MediaSubscriptionCheckService {
                     }
                 }
             }
+        }
+        if (!broken.isEmpty()) {
+            result.entrySet().removeIf(entry -> entry.getValue().dir().equals(brokenDir(broken, entry.getKey())));
         }
         return result;
     }

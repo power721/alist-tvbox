@@ -15,3 +15,4 @@ db.migration.current.V20__MediaSubscription
 db.migration.current.V21__MediaSubscriptionMeta
 db.migration.current.V22__MediaSubscriptionMetaFix
 db.migration.current.V23__MediaSubscriptionAccounts
+db.migration.current.V24__MediaSubscriptionBrokenEpisodes
