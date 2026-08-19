@@ -101,6 +101,8 @@ public class AppProperties {
         private int metaRefreshIntervalHours = 24;
         /** 缺集补搜:每轮巡检最多临时挂载探测的候选数 */
         private int maxGapProbesPerRound = 3;
+        /** 缺集补缺:每个订阅最多同时保留的补缺挂载数(-补N) */
+        private int maxGapMounts = 3;
         /** 自动转存:每日转存任务数上限(防配额/风控) */
         private int maxTransfersPerDay = 20;
         /** 自动转存:单轮转存等待 AList copy 任务完成的超时(分钟) */

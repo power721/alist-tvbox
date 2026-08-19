@@ -359,17 +359,39 @@ public class MediaSubscriptionCheckService {
 
     /**
      * 探测候选池(临时挂载列集数,用后即删),覆盖缺口的资源挂为"补缺"源(mountPath-补N,常驻,清理豁免)。
-     * 池耗尽仍缺 → 搜索:先整季关键词,再逐集降级(第N集)。
+     * 已挂载的补缺源:直接刷新其挂载目录覆盖快照(挂载原地增长)并从缺口扣除 —— 不重复探测、不重复挂载、不重复事件。
+     * 挂载数达上限(maxGapMounts)后不再探测新候选;池耗尽仍缺 → 搜索:先整季关键词,再逐集降级(第N集)。
      */
     private void fillGaps(MediaSubscription subscription, Set<Integer> missingStill) {
+        int gapMounted = 0;
+        int maxMounts = appProperties.getSubscription().getMaxGapMounts();
+        for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
+            if (resource.isGap() && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
+                gapMounted++;
+                // 补缺挂载原位刷新覆盖快照(不临时挂载探测),并从剩余缺口中扣除
+                try {
+                    Set<Integer> coverage = walkEpisodes(site(), subscription.getSeason(),
+                            resource.getMountPath(), maxEpisodeBytes(subscription));
+                    if (!coverage.isEmpty()) {
+                        resource.setEpisodeList(serializeEpisodes(coverage));
+                        resource.setCheckedTime(System.currentTimeMillis());
+                        resourceRepository.save(resource);
+                    }
+                } catch (Exception e) {
+                    log.debug("refresh gap mount coverage failed: {} {}", resource.getMountPath(), e.getMessage());
+                }
+                missingStill.removeAll(new TreeSet<>(parseEpisodeList(resource.getEpisodeList())));
+            }
+        }
+
         int probed = 0;
         int maxProbes = appProperties.getSubscription().getMaxGapProbesPerRound();
         for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
-            if (probed >= maxProbes || missingStill.isEmpty()) {
+            if (probed >= maxProbes || missingStill.isEmpty() || gapMounted >= maxMounts) {
                 break;
             }
-            if (resource.isActive()) {
-                continue;
+            if (resource.isActive() || resource.getShareId() != null) {
+                continue; // 主源或已挂载(补缺)的不在此处理
             }
             Set<Integer> coverage = new TreeSet<>(parseEpisodeList(resource.getEpisodeList()));
             boolean known = resource.getEpisodeList() != null;
@@ -392,11 +414,13 @@ public class MediaSubscriptionCheckService {
             useful = intersection(coverage, missingStill);
             if (!useful.isEmpty()) {
                 try {
-                    mountGap(subscription, resource);
-                    missingStill.removeAll(useful);
-                    addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
-                            "补缺 第" + joinNumbers(new ArrayList<>(useful)) + " 集(来自 " + StringUtils.defaultIfBlank(resource.getTitle(), "候选源") + ")");
-                    gapSearchRounds.remove(subscription.getId());
+                    if (mountGap(subscription, resource)) {
+                        gapMounted++;
+                        missingStill.removeAll(useful);
+                        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
+                                "补缺 第" + joinNumbers(new ArrayList<>(useful)) + " 集(来自 " + StringUtils.defaultIfBlank(resource.getTitle(), "候选源") + ")");
+                        gapSearchRounds.remove(subscription.getId());
+                    }
                 } catch (Exception e) {
                     log.warn("mount gap source failed: {}", e.getMessage());
                     addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "补缺挂载失败:" + e.getMessage());
@@ -454,10 +478,10 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** 挂补缺源到 {mountPath}-补N(常驻非 temp,前缀 /追剧/ 清理豁免)。 */
-    private void mountGap(MediaSubscription subscription, MediaSubscriptionResource resource) {
+    /** 挂补缺源到 {mountPath}-补N(常驻非 temp,前缀 /追剧/ 清理豁免)。@return 是否真正新挂载(false=已挂载) */
+    private boolean mountGap(MediaSubscription subscription, MediaSubscriptionResource resource) {
         if (resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
-            return; // 已挂载
+            return false; // 已挂载
         }
         int n = 1;
         String path = subscription.getMountPath() + "-补" + n;
@@ -478,6 +502,7 @@ public class MediaSubscriptionCheckService {
         resource.setMountPath(path);
         resource.setShareId(share.getId());
         resource.setValidity(MediaSubscriptionResource.VALIDITY_OK);
+        return true;
     }
 
     /** 主源已覆盖补缺源全部集数 → 退役补缺挂载(删 share,资源保留为普通候选)。 */
