@@ -13,6 +13,10 @@ import db.migration.current.V16__MigrateLegacyHistory;
 import db.migration.current.V17__FixChangeSequenceWatermark;
 import db.migration.current.V18__PlaybackDrivePath;
 import db.migration.current.V19__LiveFollow;
+import db.migration.current.V20__MediaSubscription;
+import db.migration.current.V21__MediaSubscriptionMeta;
+import db.migration.current.V22__MediaSubscriptionMetaFix;
+import db.migration.current.V23__MediaSubscriptionAccounts;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -56,7 +60,11 @@ public class NativeFlywayMigrationConfig {
                     new V16__MigrateLegacyHistory(),
                     new V17__FixChangeSequenceWatermark(),
                     new V18__PlaybackDrivePath(),
-                    new V19__LiveFollow());
+                    new V19__LiveFollow(),
+                    new V20__MediaSubscription(),
+                    new V21__MediaSubscriptionMeta(),
+                    new V22__MediaSubscriptionMetaFix(),
+                    new V23__MediaSubscriptionAccounts());
         };
     }
 }

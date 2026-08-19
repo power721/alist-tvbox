@@ -4,8 +4,12 @@ import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
+import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TelegramService;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.CategoryList;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,15 +36,18 @@ public class TelegramController {
     private final TelegramChannelRepository telegramChannelRepository;
     private final TelegramService telegramService;
     private final SubscriptionService subscriptionService;
+    private final MediaSubscriptionService mediaSubscriptionService;
     private final ObjectMapper objectMapper;
 
     public TelegramController(TelegramChannelRepository telegramChannelRepository,
                               TelegramService telegramService,
                               SubscriptionService subscriptionService,
+                              MediaSubscriptionService mediaSubscriptionService,
                               ObjectMapper objectMapper) {
         this.telegramChannelRepository = telegramChannelRepository;
         this.telegramService = telegramService;
         this.subscriptionService = subscriptionService;
+        this.mediaSubscriptionService = mediaSubscriptionService;
         this.objectMapper = objectMapper;
     }
 
@@ -62,9 +69,21 @@ public class TelegramController {
     @GetMapping("/tg-search/{token}")
     public Object browse(@PathVariable String token, String id, String t, String ac, String wd, String title, boolean web, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         subscriptionService.checkToken(token);
+        int uid = mediaSubscriptionService.resolveUid(token);
+        if (StringUtils.isNotBlank(id) && id.startsWith(MediaSubscriptionService.VOD_ID_PREFIX)) {
+            return mediaSubscriptionDetail(token, id, ac, title);
+        }
         if (StringUtils.isNotBlank(id)) {
-            return telegramService.detail(id, ac, title, wd);
+            Object result = telegramService.detail(id, ac, title, wd);
+            // 一键订阅入口(§10.1):TG 条目详情页追加"追更"操作组,spider 拦截 $msub$/$munsub$ 前缀
+            if (result instanceof MovieList movieList && !movieList.getList().isEmpty()) {
+                mediaSubscriptionService.appendFollowTrack(movieList.getList().get(0), uid, id, title);
+            }
+            return result;
         } else if (StringUtils.isNotBlank(t)) {
+            if (t.equals(MediaSubscriptionService.CATEGORY_ID)) {
+                return mediaSubscriptionService.contentList(mediaSubscriptionService.resolveUid(token));
+            }
             if (t.equals("0")) {
                 return telegramService.searchMovies("", web, 5);
             }
@@ -72,7 +91,40 @@ public class TelegramController {
         } else if (StringUtils.isNotBlank(wd)) {
             return telegramService.searchMovies(wd, web, 20);
         }
-        return telegramService.category(web);
+        Object category = telegramService.category(web);
+        // 首页分类首位插入"我的追更"(仅有订阅时显示)
+        if (category instanceof CategoryList categoryList && categoryList.getCategories() != null
+                && !mediaSubscriptionService.contentList(uid).getList().isEmpty()) {
+            Category item = new Category();
+            item.setType_id(MediaSubscriptionService.CATEGORY_ID);
+            item.setType_name("我的追更");
+            categoryList.getCategories().add(0, item);
+            categoryList.setTotal(categoryList.getCategories().size());
+            categoryList.setLimit(categoryList.getTotal());
+        }
+        return category;
+    }
+
+    /** TVBox 操作组动作:action = follow/unfollow/next,token 即鉴权(同 live-follow)。 */
+    @PostMapping("/tg-search/{token}/msub/{action}")
+    public Map<String, Object> mediaSubscriptionAction(@PathVariable String token, @PathVariable String action,
+                                                       @RequestBody Map<String, Object> body) {
+        subscriptionService.checkToken(token);
+        int uid = mediaSubscriptionService.resolveUid(token);
+        return mediaSubscriptionService.handleAction(uid, action, body);
+    }
+
+    /** 追剧订阅详情(msub:{id}):播放列表复用 TvBoxService,固定挂载路径保证续看不因换源断链。 */
+    private Object mediaSubscriptionDetail(String token, String id, String ac, String title) {
+        String vid = id.substring(MediaSubscriptionService.VOD_ID_PREFIX.length());
+        int subscriptionId;
+        try {
+            subscriptionId = Integer.parseInt(vid.split("\\$")[0].split("#")[0]);
+        } catch (NumberFormatException e) {
+            return telegramService.detail(id, ac, title, null);
+        }
+        int uid = mediaSubscriptionService.resolveUid(token);
+        return mediaSubscriptionService.contentDetail(uid, subscriptionId, ac, title);
     }
 
     @GetMapping("/tgsc")

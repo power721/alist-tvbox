@@ -25,6 +25,7 @@ import EmbyView from "@/views/EmbyView.vue";
 import JellyfinView from "@/views/JellyfinView.vue";
 import FeiniuView from "@/views/FeiniuView.vue";
 import LiveView from "@/views/LiveView.vue";
+import MediaSubscriptionsView from "@/views/MediaSubscriptionsView.vue";
 import VodApiView from "@/views/VodApiView.vue";
 import AclView from "@/views/AclView.vue";
 import UsersView from "@/views/UsersView.vue";
@@ -175,6 +176,12 @@ const router = createRouter({
       path: '/live',
       name: 'liveHome',
       component: LiveView,
+      meta: {auth: true}
+    },
+    {
+      path: '/media-subscriptions',
+      name: 'mediaSubscriptions',
+      component: MediaSubscriptionsView,
       meta: {auth: true}
     },
     {

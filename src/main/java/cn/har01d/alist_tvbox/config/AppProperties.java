@@ -66,6 +66,8 @@ public class AppProperties {
     private int tgTimeout = 5000;
     private int tempShareExpiration = 72;
     private int validateSharesInterval = 4;
+    // 追剧订阅(自动追更)配置,详见 docs/media-subscription-design.md
+    private Subscription subscription = new Subscription();
     private Set<String> formats;
     private Set<String> subtitles;
     private List<Site> sites;
@@ -85,6 +87,24 @@ public class AppProperties {
         map.put("BAIDU", localProxyItem(true, 5, 2048));
         map.put("GUANGYA", localProxyItem(true, 10, 256));
         return map;
+    }
+
+    @Data
+    public static class Subscription {
+        private boolean enabled = true;
+        private int checkIntervalHours = 6;
+        private int maxChecksPerRound = 10;
+        private int candidatePoolSize = 5;
+        private int stallRoundsBeforeSearch = 3;
+        private int minEpisodeSizeMb = 20;
+        private int maxListDepth = 3;
+        private int metaRefreshIntervalHours = 24;
+        /** 缺集补搜:每轮巡检最多临时挂载探测的候选数 */
+        private int maxGapProbesPerRound = 3;
+        /** 自动转存:每日转存任务数上限(防配额/风控) */
+        private int maxTransfersPerDay = 20;
+        /** 自动转存:单轮转存等待 AList copy 任务完成的超时(分钟) */
+        private int transferTimeoutMinutes = 30;
     }
 
     public static Map<String, Map<String, Object>> copyLocalProxyConfig(Map<String, Map<String, Object>> source) {

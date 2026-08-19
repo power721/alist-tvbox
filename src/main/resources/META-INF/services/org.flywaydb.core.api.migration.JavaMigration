@@ -11,3 +11,7 @@ db.migration.current.V16__MigrateLegacyHistory
 db.migration.current.V17__FixChangeSequenceWatermark
 db.migration.current.V18__PlaybackDrivePath
 db.migration.current.V19__LiveFollow
+db.migration.current.V20__MediaSubscription
+db.migration.current.V21__MediaSubscriptionMeta
+db.migration.current.V22__MediaSubscriptionMetaFix
+db.migration.current.V23__MediaSubscriptionAccounts
