@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.live.danmaku.BilibiliDanmakuClient;
 import cn.har01d.alist_tvbox.live.model.BilibiliCategoriesResponse;
 import cn.har01d.alist_tvbox.live.model.BilibiliCategory;
+import cn.har01d.alist_tvbox.live.model.BilibiliRoomInfo;
 import cn.har01d.alist_tvbox.live.model.BilibiliRoomPlayInfo;
 import cn.har01d.alist_tvbox.live.model.BilibiliRoomPlayResponse;
 import cn.har01d.alist_tvbox.live.model.BilibiliRoomResponse;
@@ -76,9 +77,23 @@ public class BilibiliService implements LivePlatform {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        String url = "https://api.live.bilibili.com/xlive/web-interface/v1/second/getListByArea?sort=online&platform=web&page=1&page_size=30";
-        var response = restTemplate.getForObject(url, BilibiliRoomsResponse.class);
-        for (var room : response.getData().getList()) {
+        // getListByArea 已被游客风控拦截(code:-352),改用直播首页推荐流(需 buvid3+Referer)
+        String url = "https://api.live.bilibili.com/xlive/web-interface/v1/index/getList?platform=web&page=1";
+        var response = restTemplate.exchange(url, HttpMethod.GET, buildHttpEntity(null), BilibiliRoomsResponse.class).getBody();
+        List<BilibiliRoomInfo> rooms = new ArrayList<>();
+        if (response != null && response.getCode() == 0 && response.getData() != null) {
+            if (response.getData().getRecommend_room_list() != null) {
+                rooms.addAll(response.getData().getRecommend_room_list());
+            }
+            if (response.getData().getRoom_list() != null) {
+                for (var room : response.getData().getRoom_list()) {
+                    if (rooms.stream().noneMatch(item -> item.getRoomid() == room.getRoomid())) {
+                        rooms.add(room);
+                    }
+                }
+            }
+        }
+        for (var room : rooms) {
             MovieDetail detail = new MovieDetail();
             detail.setVod_id(getType() + "$" + room.getRoomid());
             detail.setVod_name(room.getTitle());
