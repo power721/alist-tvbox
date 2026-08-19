@@ -64,6 +64,8 @@ public class MediaSubscriptionCheckService {
     private static final Pattern TECH_TAGS = Pattern.compile(
             "(?i)(2160p|1080p|720p|480p|4k|8k|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|国语|粤语|中字|简体|繁体|双语|字幕)");
     private static final String INDEX_TEMPLATE_NAME = "追剧";
+    /** 补缺源内部目录(藏于 /追剧/ 下的点目录,用户视角每部剧只有一个文件夹入口) */
+    private static final String GAP_SOURCES_ROOT = cn.har01d.alist_tvbox.util.Constants.SUBSCRIPTION_MOUNT_ROOT + ".sources/";
 
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionResourceRepository resourceRepository;
@@ -368,6 +370,7 @@ public class MediaSubscriptionCheckService {
         for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
             if (resource.isGap() && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
                 gapMounted++;
+                migrateLegacyGapMount(subscription, resource);
                 // 补缺挂载原位刷新覆盖快照(不临时挂载探测),并从剩余缺口中扣除
                 try {
                     Set<Integer> coverage = walkEpisodes(site(), subscription.getSeason(),
@@ -478,16 +481,53 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** 挂补缺源到 {mountPath}-补N(常驻非 temp,前缀 /追剧/ 清理豁免)。@return 是否真正新挂载(false=已挂载) */
+    /** 旧版补缺挂载(/追剧/{mount}-补N 与主源并排暴露给用户)迁移到内部目录 /追剧/.sources/ 下;失败保旧路径下轮重试。 */
+    private void migrateLegacyGapMount(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        String legacyPrefix = subscription.getMountPath() + "-补";
+        if (!resource.getMountPath().startsWith(legacyPrefix)) {
+            return;
+        }
+        try {
+            String slug = subscription.getMountPath().substring(cn.har01d.alist_tvbox.util.Constants.SUBSCRIPTION_MOUNT_ROOT.length());
+            int n = 1;
+            String path = GAP_SOURCES_ROOT + slug + "-补" + n;
+            while (shareRepository.existsByPath(path)) {
+                n++;
+                path = GAP_SOURCES_ROOT + slug + "-补" + n;
+            }
+            Share old = shareRepository.findByPath(resource.getMountPath());
+            if (old != null) {
+                shareService.deleteShare(old.getId());
+            }
+            ShareLink shareLink = new ShareLink();
+            shareLink.setLink(resource.getLink());
+            shareLink.setCode(StringUtils.defaultString(resource.getPassword()));
+            shareLink.setPath(path);
+            shareService.add(shareLink);
+            Share share = shareRepository.findByPath(path);
+            if (share == null) {
+                throw new IllegalStateException("迁移补缺挂载失败:" + resource.getLink());
+            }
+            resource.setMountPath(path);
+            resource.setShareId(share.getId());
+            resourceRepository.save(resource);
+            log.info("migrated gap mount of subscription {} to {}", subscription.getId(), path);
+        } catch (Exception e) {
+            log.warn("migrate legacy gap mount failed, keep old path: {}", e.getMessage());
+        }
+    }
+
+    /** 挂补缺源到内部目录 /追剧/.sources/{slug}-补N(用户视角 /追剧/ 下每部剧只有一个入口;常驻非 temp,清理豁免)。@return 是否真正新挂载(false=已挂载) */
     private boolean mountGap(MediaSubscription subscription, MediaSubscriptionResource resource) {
         if (resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
             return false; // 已挂载
         }
+        String slug = subscription.getMountPath().substring(cn.har01d.alist_tvbox.util.Constants.SUBSCRIPTION_MOUNT_ROOT.length());
         int n = 1;
-        String path = subscription.getMountPath() + "-补" + n;
+        String path = GAP_SOURCES_ROOT + slug + "-补" + n;
         while (shareRepository.existsByPath(path)) {
             n++;
-            path = subscription.getMountPath() + "-补" + n;
+            path = GAP_SOURCES_ROOT + slug + "-补" + n;
         }
         ShareLink shareLink = new ShareLink();
         shareLink.setLink(resource.getLink());
@@ -623,10 +663,29 @@ public class MediaSubscriptionCheckService {
         ensureIndexTemplate();
     }
 
-    /** 索引模板联动:首次成功挂载后确保"追剧"索引模板存在(增量),新集自动进入主索引/最近更新。 */
+    /** 索引模板联动:首次成功挂载后确保"追剧"索引模板存在(增量,排除 .sources 内部目录,否则补缺源会造成索引重复条目);已存在的旧模板补上排除项。 */
     private void ensureIndexTemplate() {
         try {
-            if (indexTemplateRepository.existsByName(INDEX_TEMPLATE_NAME)) {
+            String root = cn.har01d.alist_tvbox.util.Constants.SUBSCRIPTION_MOUNT_ROOT;
+            String excludePath = "-" + GAP_SOURCES_ROOT; // IndexService 约定:paths 中 "-" 前缀 = 排除
+            var existing = indexTemplateRepository.findAll().stream()
+                    .filter(t -> INDEX_TEMPLATE_NAME.equals(t.getName())).findFirst().orElse(null);
+            if (existing != null) {
+                IndexRequest request;
+                try {
+                    request = objectMapper.readValue(existing.getData(), IndexRequest.class);
+                } catch (Exception e) {
+                    return;
+                }
+                if (request.getPaths() == null || !request.getPaths().contains(excludePath)) {
+                    List<String> paths = new ArrayList<>(request.getPaths() == null
+                            ? List.of(root) : request.getPaths().stream().filter(p -> !p.startsWith("-")).toList());
+                    paths.add(excludePath);
+                    request.setPaths(paths);
+                    existing.setData(objectMapper.writeValueAsString(request));
+                    indexTemplateRepository.save(existing);
+                    log.info("updated subscription index template excludes: {}", GAP_SOURCES_ROOT);
+                }
                 return;
             }
             IndexRequest request = new IndexRequest();
@@ -634,7 +693,7 @@ public class MediaSubscriptionCheckService {
             request.setIndexName(INDEX_TEMPLATE_NAME);
             request.setIncremental(true);
             request.setMaxDepth(3);
-            request.setPaths(new ArrayList<>(List.of(cn.har01d.alist_tvbox.util.Constants.SUBSCRIPTION_MOUNT_ROOT)));
+            request.setPaths(new ArrayList<>(List.of(root, excludePath)));
             IndexTemplate template = new IndexTemplate();
             template.setSiteId(1);
             template.setName(INDEX_TEMPLATE_NAME);
