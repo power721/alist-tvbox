@@ -108,6 +108,7 @@ public class SettingService {
         appProperties.setPlaybackSyncScope(settingRepository.findById("playback_sync_scope")
                 .map(Setting::getValue).filter(StringUtils::isNotBlank).orElse("token"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
+        appProperties.setLiveHotMode(normalizeLiveHotMode(settingRepository.findById("live_hot_mode").map(Setting::getValue).orElse(null)));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
         appProperties.setTgSearchApiKey(settingRepository.findById("tg_search_api_key").map(Setting::getValue).orElse(""));
@@ -431,6 +432,10 @@ public class SettingService {
         return n.contains("password") || n.contains("secret");
     }
 
+    private String normalizeLiveHotMode(String value) {
+        return "mix".equals(value) || "none".equals(value) ? value : "folder";
+    }
+
     public Setting update(Setting setting) {
         if ("merge_site_source".equals(setting.getName())) {
             appProperties.setMerge("true".equals(setting.getValue()));
@@ -449,6 +454,10 @@ public class SettingService {
         }
         if ("mix_site_source".equals(setting.getName())) {
             appProperties.setMix("true".equals(setting.getValue()));
+        }
+        if ("live_hot_mode".equals(setting.getName())) {
+            setting.setValue(normalizeLiveHotMode(setting.getValue()));
+            appProperties.setLiveHotMode(setting.getValue());
         }
         if ("replace_ali_token".equals(setting.getName())) {
             appProperties.setReplaceAliToken("true".equals(setting.getValue()));

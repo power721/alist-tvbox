@@ -26,6 +26,8 @@ public class AppProperties {
     private boolean enableHttps;
     private boolean cleanInvalidShares;
     private boolean enabledToken;
+    // 直播平台首页热门展示方式:mix=热门直播间混排在分类文件夹前;folder=入口为"热门直播间"文件夹;none=仅分类文件夹
+    private String liveHotMode = "folder";
     private boolean playbackSyncEnabled = false;
     // 同步分区粒度:uid(不分桶)/ token(按 vod token)/ subscription(按 vod token/id)
     private String playbackSyncScope = "token";

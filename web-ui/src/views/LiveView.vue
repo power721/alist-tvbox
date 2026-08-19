@@ -75,6 +75,7 @@ const follows = ref<LiveFollow[]>([]);
 const followsLoading = ref(false);
 const followLoading = ref(false);
 const playGroups = ref<string[]>([]);
+const hotMode = ref("folder");
 const danmaku = ref<DanmakuConfig>({enabled: true, rows: 0, speed: 1, fontSize: 100, opacity: 100, color: "", showOnline: true});
 const platformNames: Record<string, string> = {
   bili: "B站",
@@ -326,6 +327,16 @@ const loadDanmakuConfig = () => {
   });
 };
 
+const updateHotMode = () => {
+  axios.post("/api/settings", {name: "live_hot_mode", value: hotMode.value}).then(() => {
+    ElMessage.success("更新成功");
+    // 平台首页层立即按新模式刷新(深入子分类时不打断当前浏览)
+    if (!type0.value.vod_id && !type.value.vod_id) {
+      loadTypes();
+    }
+  });
+};
+
 const updateDanmakuConfig = () => {
   axios.post("/api/settings", {
     name: "danmaku_config",
@@ -493,6 +504,11 @@ onMounted(async () => {
     });
   }
   loadCategories(route.params.id as string);
+  axios.get("/api/settings/live_hot_mode").then(({data}) => {
+    if (data?.value) {
+      hotMode.value = data.value;
+    }
+  });
 });
 
 onUnmounted(() => {
@@ -525,15 +541,26 @@ onUnmounted(() => {
               @input="filterTypes"
               :prefix-icon="Search"
             />
+            <el-select v-model="hotMode" style="width: 140px" @change="updateHotMode">
+              <el-option label="热门混排" value="mix"/>
+              <el-option label="热门文件夹" value="folder"/>
+              <el-option label="仅分类" value="none"/>
+            </el-select>
           </div>
           <el-row>
             <el-col :span="5" v-for="type of filteredTypes" class="type">
-              <RouterLink :to="'/live/'+type.vod_id" @click="loadRooms(type)">
+              <RouterLink :to="'/live/'+type.vod_id" @click="loadRooms(type)" v-if="type.vod_tag=='folder'">
                 <div class="card-header">
                   <span>{{ type.vod_name }}</span>
                 </div>
                 <img :src="type.vod_pic" :alt="type.vod_name">
               </RouterLink>
+              <a href="javascript:void(0);" @click="load(type)" v-else>
+                <div class="card-header">
+                  <span>{{ type.vod_remarks }}： {{ type.vod_name }}</span>
+                </div>
+                <img :src="type.vod_pic" :alt="type.vod_name">
+              </a>
             </el-col>
           </el-row>
         </div>
