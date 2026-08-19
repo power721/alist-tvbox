@@ -203,7 +203,10 @@ public class LiveFollowService {
     private MovieDetail toMovieDetail(LiveFollow follow, MovieDetail info) {
         MovieDetail detail = new MovieDetail();
         detail.setVod_id(follow.getPlatform() + "$" + follow.getRoomId());
-        detail.setVod_name(info != null && StringUtils.isNotBlank(info.getVod_name()) ? info.getVod_name() : follow.getRoomName());
+        String anchor = info != null && StringUtils.isNotBlank(info.getVod_actor()) ? info.getVod_actor() : follow.getAnchorName();
+        // 列表标题显示主播名,播放器列表不展示 vod_actor,拿不到主播名时才回退房间名
+        String roomName = info != null && StringUtils.isNotBlank(info.getVod_name()) ? info.getVod_name() : follow.getRoomName();
+        detail.setVod_name(StringUtils.isNotBlank(anchor) ? anchor : roomName);
         detail.setVod_pic(info != null && StringUtils.isNotBlank(info.getVod_pic()) ? cleanUrl(info.getVod_pic()) : absoluteCover(follow.getCover()));
         String platformName = platformName(follow.getPlatform());
         if (isLive(info)) {
@@ -212,13 +215,16 @@ public class LiveFollowService {
         } else {
             detail.setVod_remarks(platformName + " · 未开播");
         }
-        String anchor = info != null && StringUtils.isNotBlank(info.getVod_actor()) ? info.getVod_actor() : follow.getAnchorName();
         detail.setVod_actor(anchor);
         if (info != null) {
-            // 顺带同步最新房间名/封面到已存元数据
+            // 顺带同步最新房间名/封面/主播名到已存元数据(主播名修正早期由 remarks 误存的脏数据)
             boolean changed = false;
             if (StringUtils.isNotBlank(info.getVod_name()) && !Objects.equals(info.getVod_name(), follow.getRoomName())) {
                 follow.setRoomName(info.getVod_name());
+                changed = true;
+            }
+            if (StringUtils.isNotBlank(info.getVod_actor()) && !Objects.equals(info.getVod_actor(), follow.getAnchorName())) {
+                follow.setAnchorName(info.getVod_actor());
                 changed = true;
             }
             if (StringUtils.isNotBlank(info.getVod_pic()) && !Objects.equals(normalizeCover(info.getVod_pic()), follow.getCover())) {
@@ -317,9 +323,9 @@ public class LiveFollowService {
         if (StringUtils.isNotBlank(info.getVod_pic())) {
             follow.setCover(normalizeCover(info.getVod_pic()));
         }
-        String anchor = StringUtils.isNotBlank(info.getVod_actor()) ? info.getVod_actor() : info.getVod_remarks();
-        if (StringUtils.isNotBlank(anchor)) {
-            follow.setAnchorName(anchor);
+        // detail 接口的 remarks 是人气/开播状态文案,不是主播名,不能当 anchor 存
+        if (StringUtils.isNotBlank(info.getVod_actor())) {
+            follow.setAnchorName(info.getVod_actor());
         }
     }
 
