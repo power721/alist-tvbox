@@ -59,6 +59,7 @@ public class MediaSubscriptionService {
     private final ShareService shareService;
     private final MetadataService metadataService;
     private final MediaSubscriptionCheckService checkService;
+    private final MediaSubscriptionTransferService transferService;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
 
@@ -72,6 +73,7 @@ public class MediaSubscriptionService {
                                     ShareService shareService,
                                     MetadataService metadataService,
                                     MediaSubscriptionCheckService checkService,
+                                    MediaSubscriptionTransferService transferService,
                                     AppProperties appProperties,
                                     ObjectMapper objectMapper) {
         this.subscriptionRepository = subscriptionRepository;
@@ -84,6 +86,7 @@ public class MediaSubscriptionService {
         this.shareService = shareService;
         this.metadataService = metadataService;
         this.checkService = checkService;
+        this.transferService = transferService;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
     }
@@ -368,45 +371,55 @@ public class MediaSubscriptionService {
         return "/images?url=" + java.net.URLEncoder.encode(cover, java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /** 多源合并播放(§4.5,需求 1):主源优先,补缺源补空缺集,按集号排序成单一播放列表。 */
+    /** 多源合并播放(§4.5,需求 1):按集号合并,优先级 转存副本(自有盘)> 主源 > 补缺源,排序成单一播放列表。
+     * 支持逐集异源:已转存的集走自有盘(如夸克盘),未转存的集继续走原分享(如百度分享)。 */
     private void mergeGapPlaylists(MediaSubscription subscription, MovieList result) {
         if (result == null || result.getList().isEmpty()) {
             return;
         }
         MovieDetail detail = result.getList().get(0);
+        // 主源条目
+        TreeMap<Integer, String> primary = new TreeMap<>();
+        if (!parsePlayEntries(detail.getVod_play_url(), subscription.getSeason(), primary)) {
+            return; // 主源列表解析失败不动原始输出
+        }
         List<MediaSubscriptionResource> gaps = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
                 .filter(r -> r.isGap() && r.getShareId() != null && StringUtils.isNotBlank(r.getMountPath()))
                 .toList();
-        if (gaps.isEmpty()) {
+        boolean transferMode = MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                && !parseAccountIds(subscription).isEmpty();
+        if (gaps.isEmpty() && !transferMode) {
             return;
         }
         TreeMap<Integer, String> merged = new TreeMap<>();
-        if (!parsePlayEntries(detail.getVod_play_url(), subscription.getSeason(), merged)) {
-            return; // 主源列表解析失败不动原始输出
-        }
-        boolean extended = false;
-        for (MediaSubscriptionResource gap : gaps) {
-            try {
-                MovieList gapResult = tvBoxService.getDetail("detail", "1$" + gap.getMountPath() + Constants.PLAYLIST,
-                        subscription.getName(), null, null);
-                if (gapResult == null || gapResult.getList().isEmpty()) {
-                    continue;
-                }
-                TreeMap<Integer, String> entries = new TreeMap<>();
-                if (!parsePlayEntries(gapResult.getList().get(0).getVod_play_url(), subscription.getSeason(), entries)) {
-                    continue;
-                }
-                for (var entry : entries.entrySet()) {
-                    merged.putIfAbsent(entry.getKey(), entry.getValue()); // 主源优先
-                    extended = true;
-                }
-            } catch (Exception e) {
-                log.warn("load gap playlist failed: {} {}", gap.getMountPath(), e.getMessage());
+        // 1) 转存副本(自有盘,按目标顺序):已转存的集优先从自有盘播
+        if (transferMode) {
+            for (var target : transferService.transferredTargets(subscription.getUid(), subscription.getId())) {
+                mergePlaylistFrom(subscription, target.path(), merged);
             }
         }
-        if (extended) {
+        // 2) 主源
+        primary.forEach(merged::putIfAbsent);
+        // 3) 补缺源
+        for (MediaSubscriptionResource gap : gaps) {
+            mergePlaylistFrom(subscription, gap.getMountPath(), merged);
+        }
+        if (transferMode || merged.size() != primary.size()) {
             detail.setVod_play_from("追更");
             detail.setVod_play_url(String.join("#", merged.values()));
+        }
+    }
+
+    private void mergePlaylistFrom(MediaSubscription subscription, String path, TreeMap<Integer, String> merged) {
+        try {
+            MovieList playlist = tvBoxService.getDetail("detail", "1$" + path + Constants.PLAYLIST,
+                    subscription.getName(), null, null);
+            if (playlist == null || playlist.getList().isEmpty()) {
+                return;
+            }
+            parsePlayEntries(playlist.getList().get(0).getVod_play_url(), subscription.getSeason(), merged);
+        } catch (Exception e) {
+            log.debug("load playlist from {} failed: {}", path, e.getMessage());
         }
     }
 
@@ -442,11 +455,20 @@ public class MediaSubscriptionService {
         return any;
     }
 
-    /** 集数清单(详情页集数页签):每集是否已有、来源(主源/补缺)。 */
+    /** 集数清单(详情页集数页签):每集是否已有、来源(转存>主源>补缺)。 */
     public List<Map<String, Object>> episodes(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
         TreeMap<Integer, String> sources = new TreeMap<>();
-        checkService.parseEpisodeList(subscription.getEpisodeList()).forEach(e -> sources.put(e, "主源"));
+        // 1) 转存副本(自有盘)
+        if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
+            for (var target : transferService.transferredTargets(uid, id)) {
+                checkService.walkEpisodesAt(target.path(), subscription.getSeason(), checkService.maxEpisodeBytes(subscription))
+                        .forEach(e -> sources.putIfAbsent(e, "转存:" + target.account()));
+            }
+        }
+        // 2) 主源
+        checkService.parseEpisodeList(subscription.getEpisodeList()).forEach(e -> sources.putIfAbsent(e, "主源"));
+        // 3) 补缺
         for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(id)) {
             if (resource.isGap() || resource.isActive()) {
                 checkService.parseEpisodeList(resource.getEpisodeList())

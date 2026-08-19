@@ -735,6 +735,15 @@ public class MediaSubscriptionCheckService {
         return episodes;
     }
 
+    /** 任意挂载路径的集数清单(转存目录等非本订阅挂载点)。目录不存在/为空返回空集而非抛错。 */
+    public Set<Integer> walkEpisodesAt(String path, Integer season, long maxEpisodeBytes) {
+        try {
+            return walkEpisodes(site(), season, path, maxEpisodeBytes);
+        } catch (Exception e) {
+            return new TreeSet<>();
+        }
+    }
+
     /** 集 → 文件信息(转存增量 copy 需要:目录 + 文件名)。主源缺集时合并补缺挂载。 */
     TreeMap<Integer, EpisodeFile> walkEpisodeFiles(MediaSubscription subscription, boolean includeGaps) {
         Site site = site();

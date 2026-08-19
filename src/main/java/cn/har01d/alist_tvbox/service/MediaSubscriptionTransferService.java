@@ -300,6 +300,22 @@ public class MediaSubscriptionTransferService {
         }
     }
 
+    public record TransferredTarget(String account, String path) {
+    }
+
+    /** 已配置转存目标(各账号)的 /追剧/{名称} 目录挂载路径,按目标顺序;供播放列表按集优先合并自有盘副本(§4.5 转存>主源>补缺)。 */
+    public List<TransferredTarget> transferredTargets(int uid, int id) {
+        MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
+        if (subscription == null || subscription.getUid() != uid) {
+            throw new BadRequestException("订阅不存在: " + id);
+        }
+        List<TransferredTarget> result = new ArrayList<>();
+        for (DriverAccount account : resolveTargets(subscription)) {
+            result.add(new TransferredTarget(account.getName(), targetDir(subscription, account)));
+        }
+        return result;
+    }
+
     /** 转存进度(前端显示):各目标网盘的已转存/源覆盖。 */
     public Map<String, Object> progress(int uid, int id) {
         MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
