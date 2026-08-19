@@ -817,7 +817,28 @@ public class MediaSubscriptionService {
         if (slug.isEmpty()) {
             slug = "sub";
         }
+        // 目录名带元数据 id:全局唯一防同名剧冲突,刮削器(Emby/Jellyfin/TMM)可精准匹配;
+        // 未绑定元数据时兜底内部 id。仅在创建时定名,存量订阅不改(固定路径不动)
+        String tag = metaIdTag(subscription);
+        if (tag != null) {
+            return Constants.SUBSCRIPTION_MOUNT_ROOT + slug + " " + tag;
+        }
         return Constants.SUBSCRIPTION_MOUNT_ROOT + subscription.getId() + "-" + slug;
+    }
+
+    /** 元数据 id 目录标签:豆瓣 [dbid-x] / TMDB [tmdbid-x] / Bangumi [bgmid-x];未绑定返回 null。 */
+    public static String metaIdTag(MediaSubscription subscription) {
+        if (subscription.getDoubanId() != null) {
+            return "[dbid-" + subscription.getDoubanId() + "]";
+        }
+        if (StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
+            return null;
+        }
+        return switch (subscription.getMetaProvider().toLowerCase()) {
+            case "tmdb" -> "[tmdbid-" + subscription.getMetaId() + "]";
+            case "bangumi" -> "[bgmid-" + subscription.getMetaId() + "]";
+            default -> null;
+        };
     }
 
     private String displayName(MediaSubscription subscription) {

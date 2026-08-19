@@ -172,6 +172,7 @@ public class MediaSubscriptionTransferService {
     /** @return 转存成功的集数;null = 失败(事件已记);0 = 无需转存 */
     private Integer transferToAccount(MediaSubscription subscription, DriverAccount account) {
         Site site = siteRepository.findById(1).orElseThrow();
+        migrateLegacyTransferDir(subscription, site, account);
         String targetDir = targetDir(subscription, account);
 
         // 源覆盖(主源 + 补缺挂载)与目标已有集对比
@@ -256,9 +257,38 @@ public class MediaSubscriptionTransferService {
     }
 
     private static String targetDir(MediaSubscription subscription, DriverAccount account) {
-        return Storage.getMountPath(account) + "/追剧/"
-                + sanitize(subscription.getName())
+        return Storage.getMountPath(account) + "/追剧/" + dirBaseName(subscription);
+    }
+
+    /** 转存目录名:剧名 + 季 + 元数据 id 标签(与挂载目录命名一致,刮削器可按 id 精准匹配)。 */
+    private static String dirBaseName(MediaSubscription subscription) {
+        String base = sanitize(subscription.getName())
                 + (subscription.getSeason() != null && subscription.getSeason() > 1 ? "-第" + subscription.getSeason() + "季" : "");
+        String tag = MediaSubscriptionService.metaIdTag(subscription);
+        return tag == null ? base : base + " " + tag;
+    }
+
+    /** 旧命名(无 id 标签)目录一次性原地 rename 迁移,避免带标签的新目录整季重拷。 */
+    private void migrateLegacyTransferDir(MediaSubscription subscription, Site site, DriverAccount account) {
+        try {
+            String tag = MediaSubscriptionService.metaIdTag(subscription);
+            if (tag == null) {
+                return;
+            }
+            String oldDir = Storage.getMountPath(account) + "/追剧/" + sanitize(subscription.getName())
+                    + (subscription.getSeason() != null && subscription.getSeason() > 1 ? "-第" + subscription.getSeason() + "季" : "");
+            String newDir = targetDir(subscription, account);
+            if (oldDir.equals(newDir)) {
+                return;
+            }
+            if (!listTargetEpisodes(site, subscription, oldDir).isEmpty()
+                    && listTargetEpisodes(site, subscription, newDir).isEmpty()) {
+                aListService.rename(site, oldDir, newDir.substring(newDir.lastIndexOf('/') + 1));
+                log.info("renamed legacy transfer dir of subscription {} to {}", subscription.getId(), newDir);
+            }
+        } catch (Exception e) {
+            log.warn("migrate legacy transfer dir failed: {}", e.getMessage());
+        }
     }
 
     /** 转存不可用时自动降级挂载模式,追更不中断(§10.6 空间水位同理)。 */
@@ -367,6 +397,7 @@ public class MediaSubscriptionTransferService {
             try {
                 Site site = siteRepository.findById(1).orElseThrow();
                 for (DriverAccount account : resolveTargets(subscription)) {
+                    migrateLegacyTransferDir(subscription, site, account); // 旧命名目录先归位,确保能删干净
                     String targetDir = targetDir(subscription, account);
                     aListService.remove(site, targetDir);
                 }
