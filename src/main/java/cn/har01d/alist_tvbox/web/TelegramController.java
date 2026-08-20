@@ -70,20 +70,22 @@ public class TelegramController {
     public Object browse(@PathVariable String token, String id, String t, String ac, String wd, String title, boolean web, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         subscriptionService.checkToken(token);
         int uid = mediaSubscriptionService.resolveUid(token);
-        if (StringUtils.isNotBlank(id) && id.startsWith(MediaSubscriptionService.VOD_ID_PREFIX)) {
-            return mediaSubscriptionDetail(token, id, ac, title);
-        }
+        // 旧"我的追更"详情通道(msub:{id})已下线:TVBox 入口收敛到 csp_Media(/media/{token})
+//        if (StringUtils.isNotBlank(id) && id.startsWith(MediaSubscriptionService.VOD_ID_PREFIX)) {
+//            return mediaSubscriptionDetail(token, id, ac, title);
+//        }
         if (StringUtils.isNotBlank(id)) {
             Object result = telegramService.detail(id, ac, title, wd);
             // 一键订阅入口(§10.1):TG 条目详情页追加"追更"操作组,spider 拦截 $msub$/$munsub$ 前缀
-            if (result instanceof MovieList movieList && !movieList.getList().isEmpty()) {
-                mediaSubscriptionService.appendFollowTrack(movieList.getList().get(0), uid, id, title);
-            }
+//            if (result instanceof MovieList movieList && !movieList.getList().isEmpty()) {
+//                mediaSubscriptionService.appendFollowTrack(movieList.getList().get(0), uid, id, title);
+//            }
             return result;
         } else if (StringUtils.isNotBlank(t)) {
-            if (t.equals(MediaSubscriptionService.CATEGORY_ID)) {
-                return mediaSubscriptionService.contentList(mediaSubscriptionService.resolveUid(token));
-            }
+            // 旧 t=msub 列表通道已下线:TVBox 入口收敛到 csp_Media(/media/{token})
+//            if (t.equals(MediaSubscriptionService.CATEGORY_ID)) {
+//                return mediaSubscriptionService.contentList(mediaSubscriptionService.resolveUid(token));
+//            }
             if (t.equals("0")) {
                 return telegramService.searchMovies("", web, 5);
             }
@@ -93,26 +95,27 @@ public class TelegramController {
         }
         Object category = telegramService.category(web);
         // 首页分类首位插入"我的追更"(仅有订阅时显示)
-        if (category instanceof CategoryList categoryList && categoryList.getCategories() != null
-                && !mediaSubscriptionService.contentList(uid).getList().isEmpty()) {
-            Category item = new Category();
-            item.setType_id(MediaSubscriptionService.CATEGORY_ID);
-            item.setType_name("我的追更");
-            categoryList.getCategories().add(0, item);
-            categoryList.setTotal(categoryList.getCategories().size());
-            categoryList.setLimit(categoryList.getTotal());
-        }
+//        if (category instanceof CategoryList categoryList && categoryList.getCategories() != null
+//                && !mediaSubscriptionService.contentList(uid).getList().isEmpty()) {
+//            Category item = new Category();
+//            item.setType_id(MediaSubscriptionService.CATEGORY_ID);
+//            item.setType_name("我的追更");
+//            categoryList.getCategories().add(0, item);
+//            categoryList.setTotal(categoryList.getCategories().size());
+//            categoryList.setLimit(categoryList.getTotal());
+//        }
         return category;
     }
 
-    /** TVBox 操作组动作:action = follow/unfollow/next,token 即鉴权(同 live-follow)。 */
-    @PostMapping("/tg-search/{token}/msub/{action}")
-    public Map<String, Object> mediaSubscriptionAction(@PathVariable String token, @PathVariable String action,
-                                                       @RequestBody Map<String, Object> body) {
-        subscriptionService.checkToken(token);
-        int uid = mediaSubscriptionService.resolveUid(token);
-        return mediaSubscriptionService.handleAction(uid, action, body);
-    }
+    // 旧 TVBox 操作组回调端点($msub$/$munsub$ 拦截的落点)已下线:注入取消后不再触发,入口收敛到 csp_Media
+//    /** TVBox 操作组动作:action = follow/unfollow/next,token 即鉴权(同 live-follow)。 */
+//    @PostMapping("/tg-search/{token}/msub/{action}")
+//    public Map<String, Object> mediaSubscriptionAction(@PathVariable String token, @PathVariable String action,
+//                                                       @RequestBody Map<String, Object> body) {
+//        subscriptionService.checkToken(token);
+//        int uid = mediaSubscriptionService.resolveUid(token);
+//        return mediaSubscriptionService.handleAction(uid, action, body);
+//    }
 
     /** 追剧订阅详情(msub:{id}):播放列表复用 TvBoxService,固定挂载路径保证续看不因换源断链。 */
     private Object mediaSubscriptionDetail(String token, String id, String ac, String title) {
