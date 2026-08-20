@@ -1210,7 +1210,7 @@ public class MediaSubscriptionCheckService {
     }
 
     /** DriverType → 分享类型码(DriveId);同系账号合并(OPEN115/QUARK_TV 等并入主盘),未知 -1。 */
-    private static int driveCode(cn.har01d.alist_tvbox.domain.DriverType type) {
+    static int driveCode(cn.har01d.alist_tvbox.domain.DriverType type) {
         if (type == null) {
             return -1;
         }

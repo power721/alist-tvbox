@@ -195,6 +195,10 @@
           </el-select>
           <span class="sub-text">转存到各网盘 /追剧/ 目录下;全部失败才降级挂载模式</span>
         </el-form-item>
+        <el-form-item v-if="form.mode === 'TRANSFER'" label="跨网盘转存">
+          <el-switch v-model="form.crossDrive"/>
+          <span class="sub-text" style="margin-left:8px">默认仅同盘转存(快而稳);开启后跨盘也转(慢,走服务端中转);AList 跨盘秒传配置允许的方向不受此开关限制</span>
+        </el-form-item>
         <el-form-item label="检查周期(时)">
           <el-input-number v-model="form.checkIntervalHours" :min="1" :max="168"/>
           <span class="sub-text" style="margin-left:8px">绑定元数据后按播出日程自动调度</span>
@@ -359,6 +363,7 @@ interface SubscriptionDto {
   gapCount: number
   activeResourceTitle: string | null
   mountPath: string | null
+  crossDrive: boolean
   filter: Filter | null
 }
 
@@ -478,6 +483,7 @@ const handleAdd = () => {
     mode: 'FOLLOW',
     accountId: null,
     accountIds: [],
+    crossDrive: false,
     checkIntervalHours: 6,
     driveTypes: [],
     qualities: [],
@@ -504,6 +510,7 @@ const handleEdit = (row: SubscriptionDto) => {
     mode: row.mode,
     accountId: null,
     accountIds: row.accountIds || (row.accountId ? [row.accountId] : []),
+    crossDrive: !!row.crossDrive,
     checkIntervalHours: row.checkIntervalHours ?? 6,
     driveTypes: row.filter?.driveTypes || [],
     qualities: row.filter?.qualities || [],
@@ -588,6 +595,7 @@ const buildBody = () => ({
   mode: form.value.mode,
   accountId: form.value.accountId,
   accountIds: form.value.accountIds,
+  crossDrive: form.value.crossDrive,
   checkIntervalHours: form.value.checkIntervalHours,
   filter: {
     driveTypes: form.value.driveTypes,

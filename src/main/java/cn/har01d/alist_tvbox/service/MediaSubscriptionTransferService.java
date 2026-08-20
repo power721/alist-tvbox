@@ -45,6 +45,7 @@ public class MediaSubscriptionTransferService {
     private final DriverAccountRepository accountRepository;
     private final SiteRepository siteRepository;
     private final SettingRepository settingRepository;
+    private final cn.har01d.alist_tvbox.entity.ShareRepository shareRepository;
     private final AListService aListService;
     private final MediaSubscriptionCheckService checkService;
     private final TaskService taskService;
@@ -64,6 +65,7 @@ public class MediaSubscriptionTransferService {
                                             DriverAccountRepository accountRepository,
                                             SiteRepository siteRepository,
                                             SettingRepository settingRepository,
+                                            cn.har01d.alist_tvbox.entity.ShareRepository shareRepository,
                                             AListService aListService,
                                             MediaSubscriptionCheckService checkService,
                                             TaskService taskService,
@@ -74,6 +76,7 @@ public class MediaSubscriptionTransferService {
         this.accountRepository = accountRepository;
         this.siteRepository = siteRepository;
         this.settingRepository = settingRepository;
+        this.shareRepository = shareRepository;
         this.aListService = aListService;
         this.checkService = checkService;
         this.taskService = taskService;
@@ -170,6 +173,69 @@ public class MediaSubscriptionTransferService {
     }
 
     /** @return 转存成功的集数;null = 失败(事件已记);0 = 无需转存 */
+    /** 源目录 → 分享类型映射(主源+补缺挂载),供按盘路由转存。 */
+    private Map<String, Integer> sourceTypesByDir(MediaSubscription subscription) {
+        Map<String, Integer> result = new java.util.LinkedHashMap<>();
+        try {
+            cn.har01d.alist_tvbox.entity.Share primary = shareRepository.findByPath(subscription.getMountPath());
+            if (primary != null && primary.getType() != null) {
+                result.put(subscription.getMountPath(), primary.getType());
+            }
+            for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId())) {
+                if (resource.isGap() && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
+                    shareRepository.findById(resource.getShareId())
+                            .filter(share -> share.getType() != null)
+                            .ifPresent(share -> result.put(resource.getMountPath(), share.getType()));
+                }
+            }
+        } catch (Exception e) {
+            log.debug("resolve source types failed: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    private static Integer sourceTypeFor(Map<String, Integer> sourceTypes, String dir) {
+        Integer best = null;
+        int bestLen = -1;
+        for (var entry : sourceTypes.entrySet()) {
+            if (dir.startsWith(entry.getKey()) && entry.getKey().length() > bestLen) {
+                best = entry.getValue();
+                bestLen = entry.getKey().length();
+            }
+        }
+        return best;
+    }
+
+    /** 跨盘秒传配置的盘名(Setting {src}_to_{dst},如 quark_to_123);无配置体系的盘返回 null。 */
+    private static String transferDriveName(int type) {
+        return switch (type) {
+            case 0 -> "ali";
+            case 3 -> "123";
+            case 5 -> "quark";
+            case 7 -> "uc";
+            case 8 -> "115";
+            case 12 -> "guangya";
+            default -> null;
+        };
+    }
+
+    /** 转存路由:同盘恒允许;跨盘需订阅显式开启,或 AList 跨盘秒传配置允许该方向。 */
+    private boolean crossAllowed(MediaSubscription subscription, Integer srcType, int dstType) {
+        if (srcType == null || srcType == dstType) {
+            return true;
+        }
+        if (subscription.isCrossDrive()) {
+            return true;
+        }
+        String src = transferDriveName(srcType);
+        String dst = transferDriveName(dstType);
+        if (src == null || dst == null) {
+            return false;
+        }
+        return "true".equals(settingRepository.findById(src + "_to_" + dst)
+                .map(s -> s.getValue()).orElse("false"));
+    }
+
     private Integer transferToAccount(MediaSubscription subscription, DriverAccount account) {
         Site site = siteRepository.findById(1).orElseThrow();
         migrateLegacyTransferDir(subscription, site, account);
@@ -188,6 +254,22 @@ public class MediaSubscriptionTransferService {
                 missing.put(episode, file);
             }
         });
+        // 按盘路由:默认只转同盘(服务端保存式,快而稳);跨盘需显式开启或秒传配置允许,
+        // 未路由的集继续走分享播放(合并列表不受影响)
+        int dstType = MediaSubscriptionCheckService.driveCode(account.getType());
+        Map<String, Integer> sourceTypes = sourceTypesByDir(subscription);
+        List<Integer> skippedCross = new ArrayList<>();
+        missing.entrySet().removeIf(entry -> {
+            if (!crossAllowed(subscription, sourceTypeFor(sourceTypes, entry.getValue().dir()), dstType)) {
+                skippedCross.add(entry.getKey());
+                return true;
+            }
+            return false;
+        });
+        if (!skippedCross.isEmpty()) {
+            log.info("subscription {} skip {} cross-drive episodes to account {} (仅同盘转存;分享源继续播放)",
+                    subscription.getId(), skippedCross.size(), account.getName());
+        }
         if (missing.isEmpty()) {
             return 0;
         }

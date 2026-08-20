@@ -132,6 +132,7 @@ public class MediaSubscriptionService {
         subscription.setMode(StringUtils.isBlank(request.getMode()) ? MediaSubscription.MODE_FOLLOW : request.getMode());
         subscription.setAccountId(request.getAccountId());
         subscription.setAccountIds(serializeAccountIds(request.getAccountIds(), request.getAccountId()));
+        subscription.setCrossDrive(request.getCrossDrive() != null && request.getCrossDrive());
         subscription.setCheckIntervalHours(request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0
                 ? request.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours());
         subscription.setFilterConfig(serializeFilter(resolveFilter(uid, request.getFilter())));
@@ -187,6 +188,9 @@ public class MediaSubscriptionService {
         }
         if (request.getAccountIds() != null || request.getAccountId() != null) {
             subscription.setAccountIds(serializeAccountIds(request.getAccountIds(), request.getAccountId()));
+        }
+        if (request.getCrossDrive() != null) {
+            subscription.setCrossDrive(request.getCrossDrive());
         }
         if (request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0) {
             subscription.setCheckIntervalHours(request.getCheckIntervalHours());
@@ -1237,6 +1241,7 @@ public class MediaSubscriptionService {
         dto.setAccountId(subscription.getAccountId());
         dto.setAccountIds(parseAccountIds(subscription));
         dto.setMountPath(subscription.getMountPath());
+        dto.setCrossDrive(subscription.isCrossDrive());
         dto.setStatus(subscription.getStatus());
         dto.setExpectedEpisodes(subscription.getExpectedEpisodes());
         dto.setCurrentEpisodes(subscription.getCurrentEpisodes());

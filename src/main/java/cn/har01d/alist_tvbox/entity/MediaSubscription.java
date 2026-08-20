@@ -113,6 +113,10 @@ public class MediaSubscription {
     @Column(columnDefinition = "TEXT", name = "schedule")
     private String schedule;
 
+    /** 显式允许跨网盘转存(默认仅同盘:AList 秒传配置允许的方向除外) */
+    @Column(name = "cross_drive")
+    private boolean crossDrive;
+
     @Column(nullable = false, length = 16)
     private String status = STATUS_ACTIVE;
 

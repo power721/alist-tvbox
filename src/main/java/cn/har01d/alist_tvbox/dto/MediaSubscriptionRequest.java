@@ -18,6 +18,8 @@ public class MediaSubscriptionRequest {
     private Integer accountId;
     /** 多网盘转存目标(TRANSFER 模式,可多选) */
     private java.util.List<Integer> accountIds;
+    /** 显式允许跨网盘转存(默认仅同盘,AList 秒传配置允许的方向除外) */
+    private Boolean crossDrive;
     private Integer checkIntervalHours;
     private MediaSubscriptionFilter filter;
 }

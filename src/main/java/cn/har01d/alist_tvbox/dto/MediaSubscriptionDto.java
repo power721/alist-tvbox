@@ -23,6 +23,7 @@ public class MediaSubscriptionDto {
     private Integer accountId;
     private List<Integer> accountIds;
     private String mountPath;
+    private boolean crossDrive;
     private String status;
     private Integer expectedEpisodes;
     private Integer currentEpisodes;

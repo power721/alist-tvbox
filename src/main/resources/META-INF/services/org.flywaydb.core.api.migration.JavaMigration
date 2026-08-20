@@ -17,3 +17,4 @@ db.migration.current.V22__MediaSubscriptionMetaFix
 db.migration.current.V23__MediaSubscriptionAccounts
 db.migration.current.V24__MediaSubscriptionBrokenEpisodes
 db.migration.current.V25__MediaSubscriptionSchedule
+db.migration.current.V26__MediaSubscriptionCrossDrive

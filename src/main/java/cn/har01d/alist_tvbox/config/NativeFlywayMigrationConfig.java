@@ -19,6 +19,7 @@ import db.migration.current.V22__MediaSubscriptionMetaFix;
 import db.migration.current.V23__MediaSubscriptionAccounts;
 import db.migration.current.V24__MediaSubscriptionBrokenEpisodes;
 import db.migration.current.V25__MediaSubscriptionSchedule;
+import db.migration.current.V26__MediaSubscriptionCrossDrive;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -68,7 +69,8 @@ public class NativeFlywayMigrationConfig {
                     new V22__MediaSubscriptionMetaFix(),
                     new V23__MediaSubscriptionAccounts(),
                     new V24__MediaSubscriptionBrokenEpisodes(),
-                    new V25__MediaSubscriptionSchedule());
+                    new V25__MediaSubscriptionSchedule(),
+                    new V26__MediaSubscriptionCrossDrive());
         };
     }
 }
