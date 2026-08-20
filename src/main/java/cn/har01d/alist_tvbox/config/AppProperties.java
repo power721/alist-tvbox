@@ -111,6 +111,12 @@ public class AppProperties {
         private boolean preheatEnabled = true;
         /** 新集播放预热验证:每轮最多探测的集数 */
         private int preheatMaxPerRound = 5;
+        /** 播出后短轮窗口(小时):窗口内每小时一查(网盘资源常在播出后 1~12h 才上线) */
+        private int shortPollWindowHours = 12;
+        /** 追更中(官方状态 RETURNING)无新集退避封顶(小时);完结/无元数据维持 24h */
+        private int returningBackoffCapHours = 12;
+        /** BAD 候选冷却(天):超期允许重探一次(误标自愈),再失败重新计时 */
+        private int badCooldownDays = 7;
     }
 
     public static Map<String, Map<String, Object>> copyLocalProxyConfig(Map<String, Map<String, Object>> source) {

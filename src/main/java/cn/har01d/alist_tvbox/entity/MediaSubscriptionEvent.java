@@ -33,6 +33,7 @@ public class MediaSubscriptionEvent {
     public static final String TYPE_ARCHIVED = "ARCHIVED";
     public static final String TYPE_ERROR = "ERROR";
     public static final String TYPE_ENDED = "ENDED";
+    public static final String TYPE_RESUMED = "RESUMED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")

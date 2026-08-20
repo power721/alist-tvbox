@@ -68,6 +68,8 @@ public class MediaSubscriptionCheckService {
     private static final String INDEX_TEMPLATE_NAME = "追剧";
     /** 补缺源内部目录(藏于 /追剧/ 下的点目录,用户视角每部剧只有一个文件夹入口) */
     private static final String GAP_SOURCES_ROOT = cn.har01d.alist_tvbox.util.Constants.SUBSCRIPTION_MOUNT_ROOT + ".sources/";
+    /** AList 整体不可用时本轮跳过后的短间隔重试(15min,下个每小时 sweep 即可捞到) */
+    private static final long INVALID_RETRY_DELAY_MS = 15 * 60_000L;
 
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionResourceRepository resourceRepository;
@@ -142,10 +144,15 @@ public class MediaSubscriptionCheckService {
 
     void sweepDue() {
         int limit = appProperties.getSubscription().getMaxChecksPerRound();
-        List<MediaSubscription> due = subscriptionRepository
+        List<MediaSubscription> due = new ArrayList<>(subscriptionRepository
                 .findByStatusAndNextCheckTimeLessThanEqualOrderByNextCheckTimeAsc(
                         MediaSubscription.STATUS_ACTIVE, System.currentTimeMillis(), PageRequest.of(0, limit))
-                .getContent();
+                .getContent());
+        // ENDED 订阅按到期时间参与轻量复查(官方加更/集数修正自动重开,每日节奏)
+        due.addAll(subscriptionRepository
+                .findByStatusAndNextCheckTimeLessThanEqualOrderByNextCheckTimeAsc(
+                        MediaSubscription.STATUS_ENDED, System.currentTimeMillis(), PageRequest.of(0, limit))
+                .getContent());
         log.info("media subscription sweep: {} due (limit {})", due.size(), limit);
         for (MediaSubscription subscription : due) {
             try {
@@ -221,8 +228,12 @@ public class MediaSubscriptionCheckService {
 
     public void check(Integer id) {
         MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
-        if (subscription == null || MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus())
-                || MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
+        if (subscription == null || MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus())) {
+            return;
+        }
+        if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus()) && !reopenEnded(subscription)) {
+            subscription.setNextCheckTime(System.currentTimeMillis() + 24 * 3600_000L); // 每日复查一次
+            subscriptionRepository.save(subscription);
             return;
         }
         if (!tryLock(id)) {
@@ -244,6 +255,32 @@ public class MediaSubscriptionCheckService {
         }
     }
 
+    /** ENDED 订阅每日轻量复查(只刷元数据,不列源不搜索):官方已播/手填期望超过本地集数 = 加更或集数修正,自动回 ACTIVE。 */
+    private boolean reopenEnded(MediaSubscription subscription) {
+        refreshMetadata(subscription);
+        if (!shouldReopen(subscription)) {
+            return false;
+        }
+        int local = subscription.getCurrentEpisodes() == null ? 0 : subscription.getCurrentEpisodes();
+        int target = Math.max(
+                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes(),
+                subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes());
+        subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
+        subscription.setStallCount(0);
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_RESUMED,
+                "官方集数上调(" + local + " → " + target + "),自动重开追更");
+        log.info("subscription {} reopened: {} -> {}", subscription.getId(), local, target);
+        return true;
+    }
+
+    /** 重开判定:官方已播或手填期望集数 > 本地集数。 */
+    boolean shouldReopen(MediaSubscription subscription) {
+        int local = subscription.getCurrentEpisodes() == null ? 0 : subscription.getCurrentEpisodes();
+        Integer official = subscription.getOfficialEpisodes();
+        Integer expected = subscription.getExpectedEpisodes();
+        return (official != null && official > local) || (expected != null && expected > local);
+    }
+
     private void doCheck(MediaSubscription subscription) {
         subscription.setLastCheckTime(System.currentTimeMillis());
         refreshMetadata(subscription);
@@ -254,12 +291,25 @@ public class MediaSubscriptionCheckService {
             return;
         }
 
-        Set<Integer> episodes;
-        try {
-            episodes = listEpisodes(subscription);
-        } catch (Exception e) {
-            log.info("subscription {} primary source invalid: {}", subscription.getId(), e.getMessage());
-            onInvalid(subscription, e.getMessage());
+        // 失效确认:列目录失败先静默重试一次(瞬时抖动);仍失败再探测 AList 健康,
+        // 服务整体不可用时不能把失败归因于主源(防误杀好源+BAD 污染候选池)
+        Set<Integer> episodes = null;
+        String invalidReason = null;
+        for (int attempt = 1; attempt <= 2 && episodes == null; attempt++) {
+            try {
+                episodes = listEpisodes(subscription);
+            } catch (Exception e) {
+                invalidReason = e.getMessage();
+                log.info("subscription {} primary listing failed (attempt {}): {}", subscription.getId(), attempt, e.getMessage());
+            }
+        }
+        if (episodes == null) {
+            if (!isAListHealthy()) {
+                log.warn("subscription {} skipped: AList unavailable, retry later", subscription.getId());
+                subscription.setNextCheckTime(System.currentTimeMillis() + INVALID_RETRY_DELAY_MS);
+                return;
+            }
+            onInvalid(subscription, invalidReason);
             scheduleNext(subscription);
             return;
         }
@@ -454,23 +504,65 @@ public class MediaSubscriptionCheckService {
 
         if (!missingStill.isEmpty()) {
             int round = gapSearchRounds.merge(subscription.getId(), 1, Integer::sum);
-            String keyword;
-            if (round == 1) {
-                keyword = StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()); // 整季
-            } else {
-                // 单集降级:逐次尝试不同缺失集
-                List<Integer> list = new ArrayList<>(missingStill);
-                int index = Math.min(round - 2, list.size() - 1);
-                keyword = subscription.getName() + " 第" + list.get(Math.max(index, 0)) + "集";
+            String keyword = gapSearchKeyword(subscription, missingStill, round);
+            if (keyword != null) {
+                fillPool(subscription, true, keyword);
             }
-            fillPool(subscription, true, keyword);
         }
     }
 
+    /** 补搜关键词决策:播出窗口内且缺口只含官方已播最新一集 = 资源大概率未上线,
+     * 保持整季关键词且隔轮限频(空搜节制,窗口过后恢复逐集降级);其余场景整季(首轮)→单集降级。
+     * @return null = 本轮跳过搜索(限频) */
+    String gapSearchKeyword(MediaSubscription subscription, Set<Integer> missing, int round) {
+        if (inPostAirWindow(subscription) && latestOnlyGap(subscription, missing)) {
+            return round % 2 == 1 ? seasonKeyword(subscription) : null;
+        }
+        if (round == 1) {
+            return seasonKeyword(subscription);
+        }
+        // 单集降级:逐次尝试不同缺失集
+        List<Integer> list = new ArrayList<>(missing);
+        int index = Math.min(round - 2, list.size() - 1);
+        return subscription.getName() + " 第" + list.get(Math.max(index, 0)) + "集";
+    }
+
+    private String seasonKeyword(MediaSubscription subscription) {
+        return StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName());
+    }
+
+    /** 是否处于播出后短轮窗口:窗口内新集资源可能尚未上线,缺最新集不构成"资源缺失"。 */
+    boolean inPostAirWindow(MediaSubscription subscription) {
+        Long air = subscription.getNextAirTime();
+        if (air == null || air <= 0) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        return now >= air && now < air + appProperties.getSubscription().getShortPollWindowHours() * 3600_000L;
+    }
+
+    /** 缺口只含官方已播的最新一集(老集都齐,只差刚播的这集)。 */
+    boolean latestOnlyGap(MediaSubscription subscription, Set<Integer> missing) {
+        Integer aired = subscription.getOfficialEpisodes();
+        return aired != null && aired > 0 && !missing.isEmpty()
+                && missing.stream().allMatch(episode -> episode.equals(aired));
+    }
+
     private List<MediaSubscriptionResource> candidatesOrdered(MediaSubscription subscription) {
+        long now = System.currentTimeMillis();
         return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
-                .filter(r -> !MediaSubscriptionResource.VALIDITY_BAD.equals(r.getValidity()))
+                .filter(r -> !MediaSubscriptionResource.VALIDITY_BAD.equals(r.getValidity()) || isBadCooled(r, now))
                 .toList();
+    }
+
+    /** BAD 冷却超期 = 允许重探一次(历史误标自愈;池仅 TopN 席位,BAD 永久退出会耗尽池);重探再失败会刷新计时。 */
+    boolean isBadCooled(MediaSubscriptionResource resource, long now) {
+        if (!MediaSubscriptionResource.VALIDITY_BAD.equals(resource.getValidity())) {
+            return false;
+        }
+        Long checked = resource.getCheckedTime();
+        long cooldown = appProperties.getSubscription().getBadCooldownDays() * 24L * 3600_000;
+        return checked == null || now - checked >= cooldown;
     }
 
     /** 临时挂载候选列集数,用后即删(不常驻,不占 AList 挂载)。 */
@@ -744,6 +836,16 @@ public class MediaSubscriptionCheckService {
      * 统一走 walkEpisodeFiles:损坏集(被和谐)按文件的【实际目录】过滤 —— 嵌套子目录(Season 1/第N季)也能命中。 */
     Set<Integer> listEpisodes(MediaSubscription subscription) {
         return walkEpisodeFiles(subscription, false).keySet();
+    }
+
+    /** AList 健康探测:列根目录。用于区分"主源失效"与"服务整体不可用"(嵌入式 AList 重启/网络断)。 */
+    private boolean isAListHealthy() {
+        try {
+            aListService.listFiles(site(), "/", 1, 0, false);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** 损坏集登记表:JSON {集号: "源目录|时间戳"};解析并剔除 7 天以上过期项。 */
@@ -1331,7 +1433,7 @@ public class MediaSubscriptionCheckService {
 
     // ---------- 调度 ----------
 
-    private void scheduleNext(MediaSubscription subscription) {
+    void scheduleNext(MediaSubscription subscription) {
         Long air = subscription.getNextAirTime();
         long now = System.currentTimeMillis();
         if (air != null && air > 0) {
@@ -1340,16 +1442,19 @@ public class MediaSubscriptionCheckService {
                 subscription.setNextCheckTime(Math.min(air + 15 * 60_000L, now + 24 * 3600_000L));
                 return;
             }
-            if (now < air + 3 * 3600_000L) {
-                subscription.setNextCheckTime(now + 3600_000L); // 播后连查 3 短轮
+            if (now < air + appProperties.getSubscription().getShortPollWindowHours() * 3600_000L) {
+                subscription.setNextCheckTime(now + 3600_000L); // 播后短轮:窗口内每小时一查(资源常在播后 1~12h 上线)
                 return;
             }
         }
         int hours = subscription.getCheckIntervalHours() != null && subscription.getCheckIntervalHours() > 0
                 ? subscription.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours();
-        // 无更新退避 ×1.5/轮,上限 24h;有更新 stallCount 归零自动回落
+        // 无更新退避 ×1.5/轮;追更中(官方 RETURNING)封顶收紧(重列主源零成本,不该隔一天才发现),
+        // 完结/无元数据维持 24h
+        int cap = MetadataDetails.STATUS_RETURNING.equals(subscription.getOfficialStatus())
+                ? appProperties.getSubscription().getReturningBackoffCapHours() : 24;
         double factor = Math.min(Math.pow(1.5, Math.min(subscription.getStallCount(), 6)), 4);
-        long interval = (long) (Math.min(hours * factor, 24) * 3600_000L);
+        long interval = (long) (Math.min(hours * factor, cap) * 3600_000L);
         subscription.setNextCheckTime(now + interval);
     }
 

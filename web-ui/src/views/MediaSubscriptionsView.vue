@@ -869,6 +869,7 @@ const validityType = (validity: string | null) => {
 const eventType = (type: string) => {
   switch (type) {
     case 'NEW_EPISODE':
+    case 'RESUMED':
       return 'success'
     case 'GAP_FILLED':
       return 'warning'
@@ -896,6 +897,7 @@ const eventTypeName = (type: string) => {
     ARCHIVED: '归档',
     ERROR: '异常',
     ENDED: '完结',
+    RESUMED: '自动重开',
   }
   return names[type] || type
 }
