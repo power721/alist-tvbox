@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class MediaSubscriptionCheckServiceTest {
 
     private final MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
-            null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+            null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
     @Test
     void seasonEpisodePattern() {

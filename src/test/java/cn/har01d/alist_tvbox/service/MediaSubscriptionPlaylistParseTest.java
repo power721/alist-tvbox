@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MediaSubscriptionPlaylistParseTest {
 
     private final MediaSubscriptionCheckService checkService = new MediaSubscriptionCheckService(
-            null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+            null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             null, null, null, null, null, null, null, null, null, checkService, null, null, null, new ObjectMapper());

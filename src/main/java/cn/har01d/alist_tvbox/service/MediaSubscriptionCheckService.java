@@ -60,6 +60,8 @@ public class MediaSubscriptionCheckService {
     private static final Pattern NUMBER = Pattern.compile("(\\d{1,4})");
     /** 预告/花絮等非正片 */
     private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost)");
+    /** 完结资源包形态:对追更中的订阅不会持续更新 */
+    private static final Pattern COMPLETE_PACK = Pattern.compile("全\\s*\\d{1,3}\\s*集|全集|完整版|已?完结");
     /** 扫集号前先剥掉的技术标签(避免 1080/2160/4K 被当成集数) */
     private static final Pattern TECH_TAGS = Pattern.compile(
             "(?i)(2160p|1080p|720p|480p|4k|8k|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|国语|粤语|中字|简体|繁体|双语|字幕)");
@@ -72,6 +74,7 @@ public class MediaSubscriptionCheckService {
     private final MediaSubscriptionEventRepository eventRepository;
     private final ShareRepository shareRepository;
     private final SiteRepository siteRepository;
+    private final cn.har01d.alist_tvbox.entity.DriverAccountRepository driverAccountRepository;
     private final IndexTemplateRepository indexTemplateRepository;
     private final SettingRepository settingRepository;
     private final ShareService shareService;
@@ -96,6 +99,7 @@ public class MediaSubscriptionCheckService {
                                          MediaSubscriptionEventRepository eventRepository,
                                          ShareRepository shareRepository,
                                          SiteRepository siteRepository,
+                                         cn.har01d.alist_tvbox.entity.DriverAccountRepository driverAccountRepository,
                                          IndexTemplateRepository indexTemplateRepository,
                                          SettingRepository settingRepository,
                                          ShareService shareService,
@@ -110,6 +114,7 @@ public class MediaSubscriptionCheckService {
         this.eventRepository = eventRepository;
         this.shareRepository = shareRepository;
         this.siteRepository = siteRepository;
+        this.driverAccountRepository = driverAccountRepository;
         this.indexTemplateRepository = indexTemplateRepository;
         this.settingRepository = settingRepository;
         this.shareService = shareService;
@@ -1020,7 +1025,7 @@ public class MediaSubscriptionCheckService {
             if (activeLink != null && activeLink.equals(message.getLink())) {
                 continue;
             }
-            scored.add(score(message, title, filter));
+            scored.add(score(subscription, message, title, filter));
         }
         scored.sort((a, b) -> Integer.compare(b.score, a.score));
 
@@ -1075,7 +1080,7 @@ public class MediaSubscriptionCheckService {
             if (matchesKeywords(title, filter == null ? null : filter.getExcludeKeywords())) {
                 continue;
             }
-            Scored scored = score(message, title, filter);
+            Scored scored = score(null, message, title, filter);
             result.add(Map.of(
                     "title", title,
                     "link", message.getLink(),
@@ -1088,10 +1093,16 @@ public class MediaSubscriptionCheckService {
         return result;
     }
 
-    /** 元数据级打分(挂载前粗排):新近度 + 清晰度 + 盘偏好 + 体积合理 + 包含词;reasons 供预览/透明化。 */
-    private Scored score(Message message, String title, MediaSubscriptionFilter filter) {
+    /** 元数据级打分(挂载前粗排):新近度 + 清晰度 + 盘偏好 + 账号/VIP感知 + 资源形态 + 体积合理 + 包含词。
+     * 账号感知:已配置该盘账号 +8(可转存/账号播放加速),VIP 账号再 +15(Setting msub_vip_accounts 勾选)。
+     * 资源形态:标题"免会员"+15(百度免会员资源);115 分享与"全N集"完结包对追更中订阅减分(不持续更新)。 */
+    private Scored score(MediaSubscription subscription, Message message, String title, MediaSubscriptionFilter filter) {
         int result = 0;
         List<String> reasons = new ArrayList<>();
+        boolean ongoing = subscription == null || isOngoing(subscription);
+        int type = parseIntOr(StringUtils.defaultString(message.getType()), -1);
+        Set<Integer> accountTypes = driveAccountTypes();
+        Set<Integer> vipTypes = vipDriveTypes(accountTypes);
         if (message.getTime() != null) {
             Duration age = Duration.between(message.getTime(), Instant.now());
             if (age.toDays() <= 30) {
@@ -1130,6 +1141,28 @@ public class MediaSubscriptionCheckService {
                 // 非数字类型不会进入候选
             }
         }
+        if (type >= 0 && accountTypes.contains(type)) {
+            result += 8;
+            reasons.add("已配置账号+8");
+            if (vipTypes.contains(type)) {
+                result += 15;
+                reasons.add("VIP账号+15");
+            }
+        }
+        if (StringUtils.contains(title, "免会员")) {
+            result += 15;
+            reasons.add("免会员+15");
+        }
+        if (ongoing) {
+            if (type == 8 /* 115 分享码,见 DriveId */) {
+                result -= 10;
+                reasons.add("115分享追更弱-10");
+            }
+            if (COMPLETE_PACK.matcher(title).find()) {
+                result -= 6;
+                reasons.add("完结包不更新-6");
+            }
+        }
         Long size = message.getSize();
         if (size != null && size > 1024L * 1024 * 1024 && size < 2L * 1024 * 1024 * 1024 * 1024) {
             result += 10;
@@ -1145,6 +1178,86 @@ public class MediaSubscriptionCheckService {
             }
         }
         return new Scored(message, title, result, reasons);
+    }
+
+    /** 订阅是否仍在追更(未完结且未达期望)。 */
+    private boolean isOngoing(MediaSubscription subscription) {
+        if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
+            return false;
+        }
+        if (cn.har01d.alist_tvbox.dto.MetadataDetails.STATUS_RETURNING.equals(subscription.getOfficialStatus())) {
+            return true;
+        }
+        Integer expected = subscription.getExpectedEpisodes();
+        return expected == null || expected <= 0
+                || subscription.getCurrentEpisodes() == null || subscription.getCurrentEpisodes() < expected;
+    }
+
+    /** 系统已配置的网盘账号类型集合(账号全局,与订阅归属用户无关)。DriverType 枚举 → 分享类型码。 */
+    private Set<Integer> driveAccountTypes() {
+        Set<Integer> types = new java.util.HashSet<>();
+        try {
+            driverAccountRepository.findAll().forEach(account -> {
+                int code = driveCode(account.getType());
+                if (code >= 0) {
+                    types.add(code);
+                }
+            });
+        } catch (Exception e) {
+            log.debug("load accounts failed: {}", e.getMessage());
+        }
+        return types;
+    }
+
+    /** DriverType → 分享类型码(DriveId);同系账号合并(OPEN115/QUARK_TV 等并入主盘),未知 -1。 */
+    private static int driveCode(cn.har01d.alist_tvbox.domain.DriverType type) {
+        if (type == null) {
+            return -1;
+        }
+        return switch (type) {
+            case QUARK, QUARK_TV -> 5;
+            case UC, UC_TV -> 7;
+            case PAN115, OPEN115 -> 8;
+            case PAN123, OPEN123 -> 3;
+            case PAN139 -> 6;
+            case CLOUD189 -> 9;
+            case THUNDER -> 2;
+            case BAIDU -> 10;
+            case ALI -> 0;
+            case GUANGYA -> 12;
+            default -> -1;
+        };
+    }
+
+    /** VIP 账号类型集合(Setting msub_vip_accounts 勾选的账号 id CSV)。 */
+    private Set<Integer> vipDriveTypes(Set<Integer> accountTypes) {
+        Set<Integer> vip = new java.util.HashSet<>();
+        if (accountTypes.isEmpty()) {
+            return vip;
+        }
+        try {
+            String csv = settingRepository.findById("msub_vip_accounts").map(s -> s.getValue()).orElse("");
+            Set<Integer> vipIds = new java.util.HashSet<>();
+            for (String id : csv.split(",")) {
+                if (StringUtils.isNotBlank(id)) {
+                    vipIds.add(Integer.parseInt(id.trim()));
+                }
+            }
+            if (vipIds.isEmpty()) {
+                return vip;
+            }
+            driverAccountRepository.findAll().forEach(account -> {
+                if (vipIds.contains(account.getId())) {
+                    int code = driveCode(account.getType());
+                    if (code >= 0) {
+                        vip.add(code);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            log.debug("load vip accounts failed: {}", e.getMessage());
+        }
+        return vip;
     }
 
     private boolean matchesKeywords(String title, List<String> keywords) {

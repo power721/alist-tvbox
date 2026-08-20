@@ -310,6 +310,12 @@
           <el-input-number v-model="notifyForm.archiveDays" :min="0" :max="3650"/>
           <span class="sub-text" style="margin-left:8px">完结 N 天后自动释放转存文件,0=关闭</span>
         </el-form-item>
+        <el-form-item label="VIP 账号">
+          <el-select v-model="notifyForm.vipAccounts" multiple placeholder="勾选 SVIP/会员账号,资源评分加权" style="width: 100%">
+            <el-option v-for="account in accounts" :key="account.id" :label="account.name + '(' + account.type + ')'" :value="account.id"/>
+          </el-select>
+          <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="notifyVisible = false">取消</el-button>
@@ -432,7 +438,7 @@ const importVisible = ref(false)
 const importText = ref('')
 const importing = ref(false)
 const notifyVisible = ref(false)
-const notifyForm = ref({botToken: '', chatId: '', archiveDays: 0})
+const notifyForm = ref({botToken: '', chatId: '', archiveDays: 0, vipAccounts: [] as number[]})
 
 onMounted(() => {
   loadAll()
@@ -795,6 +801,8 @@ const openNotify = () => {
     notifyForm.value.botToken = settings['msub_telegram_bot_token'] || ''
     notifyForm.value.chatId = settings['msub_telegram_chat_id'] || ''
     notifyForm.value.archiveDays = parseInt(settings['msub_archive_days'] || '0') || 0
+    notifyForm.value.vipAccounts = (settings['msub_vip_accounts'] || '')
+        .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
     notifyVisible.value = true
   }).catch(() => {
     notifyVisible.value = true
@@ -806,9 +814,10 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'msub_telegram_bot_token', value: notifyForm.value.botToken}),
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
     axios.post('/api/settings', {name: 'msub_archive_days', value: String(notifyForm.value.archiveDays)}),
+    axios.post('/api/settings', {name: 'msub_vip_accounts', value: notifyForm.value.vipAccounts.join(',')}),
   ]
   Promise.all(saves).then(() => {
-    ElMessage.success('已保存')
+    ElMessage.success('已保存(评分加权下轮巡检生效)')
     notifyVisible.value = false
   })
 }
