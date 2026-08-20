@@ -4,7 +4,7 @@ import axios from "axios";
 import mpegts from "mpegts.js";
 import Hls from "hls.js";
 import {onUnmounted} from "@vue/runtime-core";
-import {Search, Refresh, CircleCloseFilled} from "@element-plus/icons-vue";
+import {Search, Refresh, CircleCloseFilled, Link} from "@element-plus/icons-vue";
 import {ElMessage, type TabsPaneContext} from "element-plus";
 import {useRoute, useRouter} from "vue-router";
 import {store} from "@/services/store";
@@ -315,6 +315,28 @@ const removeFollow = (row: LiveFollow) => {
   });
 };
 
+const followUrl = ref("");
+const followUrlLoading = ref(false);
+
+// 粘贴官方直播间地址直接关注,平台/房间号解析与房间校验都在后端完成
+const addFollowByUrl = () => {
+  const url = followUrl.value.trim();
+  if (!url) {
+    ElMessage.warning("请输入直播间地址");
+    return;
+  }
+  followUrlLoading.value = true;
+  axios.post("/api/live/follows/url", {url}).then(() => {
+    ElMessage.success("关注成功");
+    followUrl.value = "";
+    loadFollows();
+  }).catch((error) => {
+    ElMessage.error(error.response?.data?.detail || "添加关注失败");
+  }).finally(() => {
+    followUrlLoading.value = false;
+  });
+};
+
 const loadDanmakuConfig = () => {
   axios.get("/api/settings/danmaku_config").then(({data}) => {
     if (data?.value) {
@@ -347,6 +369,11 @@ const updateDanmakuConfig = () => {
 };
 
 const openFollowRoom = (row: LiveFollow) => {
+  // 未开播房间打开也只有"未开播"占位线路,播放必然黑屏,直接拦截
+  if (row.live === false) {
+    ElMessage.warning("该直播间未开播");
+    return;
+  }
   loadRoom(row.platform + "$" + row.roomId);
 };
 
@@ -600,6 +627,15 @@ onUnmounted(() => {
       </el-tab-pane>
       <el-tab-pane label="关注管理" name="manage">
         <div id="follow-toolbar">
+          <el-input
+            v-model="followUrl"
+            class="follow-url-input"
+            placeholder="粘贴直播间地址或分享短链,如 https://live.bilibili.com/6"
+            clearable
+            :prefix-icon="Link"
+            @keyup.enter="addFollowByUrl"
+          />
+          <el-button type="primary" :loading="followUrlLoading" @click="addFollowByUrl">添加关注</el-button>
           <el-button :icon="Refresh" circle @click="loadFollows"/>
           <span v-if="follows.length" class="follow-summary">共 {{ follows.length }} 个关注</span>
         </div>
@@ -607,7 +643,8 @@ onUnmounted(() => {
           <el-table-column label="房间" min-width="300">
             <template #default="{row}">
               <div class="follow-room">
-                <img v-if="row.cover" :src="row.cover" :alt="row.roomName" referrerpolicy="no-referrer" @click="openFollowRoom(row)">
+                <img v-if="row.cover" :src="row.cover" :alt="row.roomName" referrerpolicy="no-referrer"
+                     :class="{offline: row.live === false}" @click="openFollowRoom(row)">
                 <div>
                   <div>{{ row.roomName || row.roomId }}</div>
                   <div class="follow-anchor">{{ row.anchorName }}</div>
@@ -630,7 +667,7 @@ onUnmounted(() => {
           </el-table-column>
           <el-table-column label="操作" width="170">
             <template #default="{row}">
-              <el-button size="small" @click="openFollowRoom(row)">观看</el-button>
+              <el-button size="small" :disabled="row.live === false" @click="openFollowRoom(row)">观看</el-button>
               <el-button size="small" type="danger" @click="removeFollow(row)">取关</el-button>
             </template>
           </el-table-column>
@@ -839,6 +876,11 @@ onUnmounted(() => {
   margin-top: 8px;
 }
 
+.follow-url-input {
+  flex: 1;
+  max-width: 480px;
+}
+
 .follow-summary {
   color: var(--el-text-color-secondary);
   font-size: 14px;
@@ -862,6 +904,12 @@ onUnmounted(() => {
   object-fit: cover;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.follow-room img.offline {
+  cursor: default;
+  filter: grayscale(0.8);
+  opacity: 0.6;
 }
 
 .follow-anchor {
