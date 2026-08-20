@@ -333,6 +333,20 @@ public class MediaSubscriptionCheckService {
         subscription.setOfficialTotal(details.getTotalEpisodes());
         subscription.setOfficialStatus(details.getStatus());
         subscription.setNextAirTime(details.getNextAirTime());
+        // 播出日程快照(昨日 00:00 ~ +14 天窗口,播放时间轴用);provider 未提供日程时保留旧快照
+        if (details.getUpcoming() != null) {
+            java.time.ZoneId zone = java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID);
+            long windowStart = java.time.LocalDate.now(zone).minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
+            long windowEnd = System.currentTimeMillis() + 14L * 24 * 3600_000;
+            List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> windowed = details.getUpcoming().stream()
+                    .filter(e -> e.getAirTime() >= windowStart && e.getAirTime() <= windowEnd)
+                    .limit(60).toList();
+            try {
+                subscription.setSchedule(objectMapper.writeValueAsString(windowed));
+            } catch (Exception e) {
+                log.debug("serialize schedule failed: {}", e.getMessage());
+            }
+        }
     }
 
     /** 缺口 = 1..base 中本地没有的集;base = max(观测最大, 官方已播, 期望集数)。 */

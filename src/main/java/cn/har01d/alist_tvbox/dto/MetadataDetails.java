@@ -26,4 +26,6 @@ public class MetadataDetails {
     private Integer runtimeMinutes;
     private Integer totalSeasons;
     private List<String> aliases;
+    /** 未播分集日程(播出时间轴用,尽量只含近期) */
+    private List<EpisodeAirDate> upcoming;
 }

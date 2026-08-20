@@ -135,6 +135,7 @@ public class BangumiMetadataProvider implements MetadataProvider {
                 int total = 0;
                 int aired = 0;
                 LocalDate nextAir = null;
+                List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
                 for (JsonNode episode : episodes) {
                     if (episode.path("type").asInt(-1) != 0) {
                         continue; // 非正片(SP/OP/ED/trailer)不计
@@ -145,12 +146,20 @@ public class BangumiMetadataProvider implements MetadataProvider {
                         continue;
                     }
                     LocalDate airDate = localDate(episode.path("air_date").asText());
-                    if (airDate != null && airDate.isAfter(today) && (nextAir == null || airDate.isBefore(nextAir))) {
-                        nextAir = airDate;
+                    if (airDate != null && airDate.isAfter(today)) {
+                        if (nextAir == null || airDate.isBefore(nextAir)) {
+                            nextAir = airDate;
+                        }
+                        if (upcoming.size() < 60) {
+                            upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(
+                                    episode.path("ep").asInt(0),
+                                    airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
+                        }
                     }
                 }
                 details.setTotalEpisodes(total);
                 details.setAiredEpisodes(aired);
+                details.setUpcoming(upcoming);
                 if (nextAir != null) {
                     details.setNextAirTime(nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
                     details.setStatus(MetadataDetails.STATUS_RETURNING);

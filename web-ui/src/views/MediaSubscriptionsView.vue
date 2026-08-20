@@ -19,6 +19,18 @@
       <div class="stat-card danger"><div class="stat-value">{{ stats.error }}</div><div class="stat-label">异常</div></div>
     </div>
 
+    <div class="page-card schedule-card" v-if="scheduleDays.some(d => d.items.length)">
+      <div class="schedule-strip">
+        <div v-for="day in scheduleDays" :key="day.date" class="schedule-day" :class="{today: day.today}">
+          <div class="schedule-day-header">{{ day.label }} <span class="sub-text">{{ day.date }}</span></div>
+          <div v-for="(item, idx) in day.items" :key="idx" class="schedule-item" :class="{paused: item.paused}">
+            <span class="schedule-clock">{{ formatClock(item.airTime) }}</span>{{ item.name }}<template v-if="item.episode"> 第{{ item.episode }}集</template>
+          </div>
+          <div v-if="!day.items.length" class="schedule-empty">—</div>
+        </div>
+      </div>
+    </div>
+
     <div class="page-card inbox-card" v-if="inboxItems.length">
       <div class="inbox-header" @click="inboxExpanded = !inboxExpanded">
         <b>今日/近日更新({{ inboxItems.length }})</b>
@@ -390,6 +402,7 @@ const subscriptions = ref<SubscriptionDto[]>([])
 const stats = ref<any>(null)
 const inboxItems = ref<any[]>([])
 const inboxExpanded = ref(false)
+const scheduleDays = ref<any[]>([])
 const loading = ref(false)
 const tableRef = ref<any>(null)
 const selected = ref<any[]>([])
@@ -441,6 +454,9 @@ const loadAll = () => {
   })
   axios.get('/api/media-subscriptions/inbox').then(response => {
     inboxItems.value = response.data || []
+  })
+  axios.get('/api/media-subscriptions/schedule').then(response => {
+    scheduleDays.value = response.data || []
   })
 }
 
@@ -880,6 +896,10 @@ const formatTime = (time: number | null) => {
   if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN', {hour12: false})
 }
+
+const formatClock = (time: number) => {
+  return new Date(time).toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
+}
 </script>
 
 <style scoped>
@@ -915,6 +935,54 @@ const formatTime = (time: number | null) => {
 .inbox-card {
   margin-bottom: 12px;
   padding: 10px 16px;
+}
+
+.schedule-card {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.schedule-strip {
+  display: flex;
+  gap: 8px;
+  min-width: max-content;
+}
+
+.schedule-day {
+  min-width: 118px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.schedule-day.today {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.schedule-day-header {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.schedule-item {
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.schedule-item.paused {
+  opacity: 0.5;
+}
+
+.schedule-clock {
+  color: var(--el-color-primary);
+  margin-right: 4px;
+}
+
+.schedule-empty {
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
 }
 
 .inbox-header {

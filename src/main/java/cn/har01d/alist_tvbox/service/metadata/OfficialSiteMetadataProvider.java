@@ -157,11 +157,18 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         LocalDate today = LocalDate.now(ZONE);
         int aired = 0;
         LocalDate nextAir = null;
+        List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
         for (LocalDate date : dates) {
             if (!date.isAfter(today)) {
                 aired++;
-            } else if (nextAir == null || date.isBefore(nextAir)) {
-                nextAir = date;
+            } else {
+                if (nextAir == null || date.isBefore(nextAir)) {
+                    nextAir = date;
+                }
+                if (upcoming.size() < 60) {
+                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(0,
+                            date.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
+                }
             }
         }
         details.setAiredEpisodes(aired);
@@ -169,6 +176,7 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         details.setNextAirTime(nextAir == null ? null
                 : nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
         details.setStatus(nextAir == null ? MetadataDetails.STATUS_UNKNOWN : MetadataDetails.STATUS_RETURNING);
+        details.setUpcoming(upcoming);
     }
 
     static void applyUpdateText(MetadataDetails details, String text) {

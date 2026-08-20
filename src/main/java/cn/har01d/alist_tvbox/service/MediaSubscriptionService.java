@@ -522,6 +522,74 @@ public class MediaSubscriptionService {
         }
     }
 
+    /** 播出时间轴:昨天 → 未来 7 天,每天更新的订阅与媒体播出时间。日程来自 provider 分集日期快照,窗口外退化为 nextAirTime。 */
+    public List<Map<String, Object>> schedule(int uid) {
+        java.time.ZoneId zone = java.time.ZoneId.of(Constants.ZONE_ID);
+        java.time.LocalDate startDate = java.time.LocalDate.now(zone).minusDays(1);
+        String[] weekdays = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
+        List<Map<String, Object>> days = new ArrayList<>();
+        List<List<Map<String, Object>>> dayItems = new ArrayList<>();
+        for (int i = 0; i < 9; i++) {
+            java.time.LocalDate date = startDate.plusDays(i);
+            String label = switch (i) {
+                case 0 -> "昨天";
+                case 1 -> "今天";
+                case 2 -> "明天";
+                default -> weekdays[date.getDayOfWeek().getValue() - 1];
+            };
+            Map<String, Object> day = new java.util.LinkedHashMap<>();
+            day.put("label", label);
+            day.put("date", date.getMonthValue() + "/" + date.getDayOfMonth());
+            day.put("today", i == 1);
+            days.add(day);
+            dayItems.add(new ArrayList<>());
+        }
+        long windowStart = startDate.atStartOfDay(zone).toInstant().toEpochMilli();
+        long windowEnd = startDate.plusDays(9).atStartOfDay(zone).toInstant().toEpochMilli();
+        for (MediaSubscription subscription : subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid)) {
+            if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
+                continue;
+            }
+            List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> entries = new ArrayList<>();
+            try {
+                if (StringUtils.isNotBlank(subscription.getSchedule())) {
+                    entries = objectMapper.readValue(subscription.getSchedule(),
+                            new TypeReference<List<cn.har01d.alist_tvbox.dto.EpisodeAirDate>>() {
+                            });
+                }
+            } catch (Exception e) {
+                log.debug("parse schedule failed: {}", e.getMessage());
+            }
+            if (entries.isEmpty() && subscription.getNextAirTime() != null
+                    && subscription.getNextAirTime() >= windowStart && subscription.getNextAirTime() < windowEnd) {
+                entries = List.of(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(0, subscription.getNextAirTime()));
+            }
+            boolean paused = MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus());
+            for (var entry : entries) {
+                if (entry.getAirTime() < windowStart || entry.getAirTime() >= windowEnd) {
+                    continue;
+                }
+                int index = (int) java.time.Duration.between(
+                        java.time.Instant.ofEpochMilli(windowStart),
+                        java.time.Instant.ofEpochMilli(entry.getAirTime())).toDays();
+                if (index < 0 || index >= dayItems.size()) {
+                    continue;
+                }
+                Map<String, Object> item = new java.util.LinkedHashMap<>();
+                item.put("subscriptionId", subscription.getId());
+                item.put("name", displayName(subscription));
+                item.put("episode", entry.getEpisode());
+                item.put("airTime", entry.getAirTime());
+                item.put("paused", paused);
+                dayItems.get(index).add(item);
+            }
+        }
+        for (int i = 0; i < days.size(); i++) {
+            days.get(i).put("items", dayItems.get(i));
+        }
+        return days;
+    }
+
     /** 粘贴链接解析:豆瓣 subject / TMDB tv(含 season) / Bangumi subject / 腾讯 cover /
      *  B站番剧播放页(ss/ep)/ 优酷 / 爱奇艺剧集页 → 元数据绑定信息。 */
     public Map<String, Object> resolveMetaLink(String url) {

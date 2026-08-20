@@ -144,6 +144,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 int total = 0;
                 int aired = 0;
                 LocalDate nextAir = null;
+                List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
                 for (JsonNode episode : seasonNode.get("episodes")) {
                     total++;
                     LocalDate airDate = localDate(episode.path("air_date").asText());
@@ -152,12 +153,20 @@ public class TmdbMetadataProvider implements MetadataProvider {
                     }
                     if (!airDate.isAfter(today)) {
                         aired++;
-                    } else if (nextAir == null || airDate.isBefore(nextAir)) {
-                        nextAir = airDate;
+                    } else {
+                        if (nextAir == null || airDate.isBefore(nextAir)) {
+                            nextAir = airDate;
+                        }
+                        if (upcoming.size() < 60) {
+                            upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(
+                                    episode.path("episode_number").asInt(0),
+                                    airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
+                        }
                     }
                 }
                 details.setTotalEpisodes(total);
                 details.setAiredEpisodes(aired);
+                details.setUpcoming(upcoming);
                 if (nextAir != null) {
                     details.setNextAirTime(nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
                 }

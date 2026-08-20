@@ -109,6 +109,10 @@ public class MediaSubscription {
     @Column(columnDefinition = "TEXT", name = "broken_episodes")
     private String brokenEpisodes;
 
+    /** 播出日程快照(JSON [{episode,airTime}]),provider 分集播出日期,昨日~+14 天窗口 */
+    @Column(columnDefinition = "TEXT", name = "schedule")
+    private String schedule;
+
     @Column(nullable = false, length = 16)
     private String status = STATUS_ACTIVE;
 

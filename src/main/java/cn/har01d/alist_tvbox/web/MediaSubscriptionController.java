@@ -112,6 +112,12 @@ public class MediaSubscriptionController {
         return subscriptionService.nextSeason(currentUid(), id);
     }
 
+    /** 播出时间轴:昨天 → 未来 7 天,每天更新的订阅与播出时间。 */
+    @GetMapping("/schedule")
+    public List<Map<String, Object>> schedule() {
+        return subscriptionService.schedule(currentUid());
+    }
+
     @GetMapping("/meta/resolve")
     public Map<String, Object> resolveMetaLink(@RequestParam String url) {
         return subscriptionService.resolveMetaLink(url);
