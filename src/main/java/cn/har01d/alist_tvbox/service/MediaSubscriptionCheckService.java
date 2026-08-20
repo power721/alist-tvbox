@@ -1206,7 +1206,7 @@ public class MediaSubscriptionCheckService {
             } catch (NumberFormatException e) {
                 resource.setType(null);
             }
-            resource.setTitle(candidate.title);
+            resource.setTitle(StringUtils.abbreviate(candidate.title, 250)); // 列 VARCHAR(255),TG 消息名可超长
             resource.setScore(candidate.score);
             resource.setValidity(StringUtils.isNotBlank(candidate.message.getValidityState())
                     ? candidate.message.getValidityState() : MediaSubscriptionResource.VALIDITY_UNKNOWN);

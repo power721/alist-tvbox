@@ -118,8 +118,10 @@ public class MediaSubscriptionService {
         }
         MediaSubscription subscription = new MediaSubscription();
         subscription.setUid(uid);
-        subscription.setName(request.getName().trim());
-        subscription.setKeyword(StringUtils.defaultIfBlank(request.getKeyword(), request.getName()).trim());
+        // 标题列 VARCHAR(255):TG 消息名可超长,统一截断防 22001
+        subscription.setName(StringUtils.abbreviate(request.getName().trim(), 250));
+        subscription.setKeyword(StringUtils.abbreviate(
+                StringUtils.defaultIfBlank(request.getKeyword(), request.getName()).trim(), 250));
         subscription.setSeason(request.getSeason());
         subscription.setDoubanId(request.getDoubanId());
         subscription.setMetaProvider(StringUtils.defaultIfBlank(request.getMetaProvider(), null));
@@ -157,10 +159,10 @@ public class MediaSubscriptionService {
         }
         boolean searchRelevant = false;
         if (StringUtils.isNotBlank(request.getName())) {
-            subscription.setName(request.getName().trim());
+            subscription.setName(StringUtils.abbreviate(request.getName().trim(), 250));
         }
         if (request.getKeyword() != null) {
-            subscription.setKeyword(request.getKeyword().trim());
+            subscription.setKeyword(StringUtils.abbreviate(request.getKeyword().trim(), 250));
             searchRelevant = true;
         }
         if (request.getSeason() != null) {
@@ -1107,7 +1109,7 @@ public class MediaSubscriptionService {
                     MediaSubscriptionResource resource = new MediaSubscriptionResource();
                     resource.setSubscriptionId(dto.getId());
                     resource.setLink(link.trim());
-                    resource.setTitle(name.trim());
+                    resource.setTitle(StringUtils.abbreviate(name.trim(), 250));
                     resource.setScore(1000); // 订阅即所见:当前源优先
                     resource.setValidity(MediaSubscriptionResource.VALIDITY_UNKNOWN);
                     resource.setCreatedTime(System.currentTimeMillis());
