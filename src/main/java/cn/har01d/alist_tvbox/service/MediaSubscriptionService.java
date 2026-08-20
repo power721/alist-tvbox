@@ -303,7 +303,16 @@ public class MediaSubscriptionService {
 
     /** TVBox/web"我的追更"列表(t=msub)。 */
     public MovieList contentList(int uid) {
+        return contentList(uid, null, null);
+    }
+
+    /** 媒体库列表(csp_Media 源):status 过滤(active/ended/null=全部),keyword 搜索(名称包含)。
+     * 封面走绝对地址的后端 /images 代理(安卓端直连豆瓣/TMDB 图床可能被墙/防盗链)。 */
+    public MovieList contentList(int uid, String status, String keyword) {
         List<MediaSubscription> subscriptions = subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid).stream()
+                .filter(s -> filterByStatus(s, status))
+                .filter(s -> StringUtils.isBlank(keyword) || StringUtils.contains(s.getName(), keyword.trim())
+                        || StringUtils.contains(StringUtils.defaultString(s.getKeyword()), keyword.trim()))
                 .sorted(Comparator.comparing((MediaSubscription s) -> s.getUpdatedTime() == null ? 0 : s.getUpdatedTime(),
                         Comparator.reverseOrder()))
                 .toList();
@@ -313,7 +322,7 @@ public class MediaSubscriptionService {
             MovieDetail detail = new MovieDetail();
             detail.setVod_id(VOD_ID_PREFIX + subscription.getId());
             detail.setVod_name(displayName(subscription));
-            detail.setVod_pic(coverOf(subscription));
+            detail.setVod_pic(absoluteCover(coverOf(subscription)));
             detail.setVod_remarks(buildRemarks(subscription));
             list.add(detail);
         }
@@ -321,6 +330,44 @@ public class MediaSubscriptionService {
         result.setTotal(list.size());
         result.setLimit(list.size());
         return result;
+    }
+
+    private boolean filterByStatus(MediaSubscription subscription, String status) {
+        if (StringUtils.isBlank(status) || "all".equals(status)) {
+            return true;
+        }
+        return switch (status) {
+            case "active" -> !MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
+                    && !MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus());
+            case "ended" -> MediaSubscription.STATUS_ENDED.equals(subscription.getStatus());
+            default -> true;
+        };
+    }
+
+    /** 安卓端封面:相对 /images 代理 → 按当前请求 host 重建绝对地址(图床直连可能被墙)。 */
+    private String absoluteCover(String stored) {
+        if (StringUtils.isBlank(stored)) {
+            return stored;
+        }
+        if (!stored.startsWith("/images")) {
+            return stored; // 直链封面原样返回
+        }
+        try {
+            int queryAt = stored.indexOf('?');
+            if (queryAt < 0) {
+                return stored;
+            }
+            String query = stored.substring(queryAt + 1);
+            boolean https = appProperties.isEnableHttps() && !cn.har01d.alist_tvbox.util.Utils.isLocalAddress();
+            return org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentRequest()
+                    .scheme(https ? "https" : "http")
+                    .replacePath("/images")
+                    .replaceQuery(query)
+                    .build()
+                    .toUriString();
+        } catch (Exception e) {
+            return stored;
+        }
     }
 
     /** TVBox/web 详情(msub:{id}):复用 TvBoxService 播放列表(代理 URL/排序/豆瓣匹配),vod_id 重写为稳定键。 */
@@ -345,7 +392,7 @@ public class MediaSubscriptionService {
                 result.getList().get(0).setVod_id(VOD_ID_PREFIX + id);
                 result.getList().get(0).setVod_name(displayName(subscription));
             }
-            mergeGapPlaylists(subscription, result);
+            mergeGapPlaylists(subscription, result, ac);
         } catch (Exception e) {
             log.warn("subscription detail failed: {} {}", id, e.getMessage());
             MovieDetail detail = new MovieDetail();
@@ -686,9 +733,52 @@ public class MediaSubscriptionService {
         return "/images?url=" + java.net.URLEncoder.encode(cover, java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    /** 播放逻辑集 msubep:{订阅}:{集}:实时选源并回退(转存>主源>补缺),某源解析失败登记损坏并落下一个,用户无感知。 */
+    public Map<String, Object> playEpisode(int uid, int subscriptionId, int episode, String client, String type) {
+        MediaSubscription subscription = getOwned(uid, subscriptionId);
+        Map<Integer, String> broken = checkService.parseBroken(subscription);
+        // 逐源清单(不去重合并):转存各账号盘 → 主源 → 补缺挂载(按分序)
+        List<MediaSubscriptionCheckService.EpisodeFile> candidates = new ArrayList<>();
+        if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
+            for (var target : transferService.transferredTargets(uid, subscriptionId)) {
+                var file = checkService.episodeFilesAt(target.path(), subscription).get(episode);
+                if (file != null) {
+                    candidates.add(file);
+                }
+            }
+        }
+        var primaryFile = checkService.episodeFilesAt(subscription.getMountPath(), subscription).get(episode);
+        if (primaryFile != null) {
+            candidates.add(primaryFile);
+        }
+        for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscriptionId)) {
+            if (resource.isGap() && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
+                var file = checkService.episodeFilesAt(resource.getMountPath(), subscription).get(episode);
+                if (file != null) {
+                    candidates.add(file);
+                }
+            }
+        }
+        List<String> errors = new ArrayList<>();
+        for (MediaSubscriptionCheckService.EpisodeFile file : candidates) {
+            if (broken.containsKey(episode) && file.dir().equals(broken.get(episode))) {
+                continue; // 该源此集已登记损坏
+            }
+            try {
+                return tvBoxService.getPlayUrl(1, file.dir() + "/" + file.name(), true, client, type);
+            } catch (Exception e) {
+                log.info("subscription {} episode {} via {} failed: {}", subscriptionId, episode, file.dir(), e.getMessage());
+                errors.add(file.dir() + ": " + e.getMessage());
+                checkService.addBrokenEpisodes(subscription, Map.of(episode, file.dir()));
+            }
+        }
+        throw new BadRequestException("第 " + episode + " 集暂无可用播放源(已尝试 " + candidates.size() + " 个源"
+                + (errors.isEmpty() ? "" : ";" + String.join("; ", errors)) + ")");
+    }
+
     /** 多源合并播放(§4.5,需求 1):按集号合并,优先级 转存副本(自有盘)> 主源 > 补缺源,排序成单一播放列表。
      * 支持逐集异源:已转存的集走自有盘(如夸克盘),未转存的集继续走原分享(如百度分享)。 */
-    private void mergeGapPlaylists(MediaSubscription subscription, MovieList result) {
+    private void mergeGapPlaylists(MediaSubscription subscription, MovieList result, String ac) {
         if (result == null || result.getList().isEmpty()) {
             return;
         }
@@ -703,7 +793,8 @@ public class MediaSubscriptionService {
                 .toList();
         boolean transferMode = MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
                 && !parseAccountIds(subscription).isEmpty();
-        if (gaps.isEmpty() && !transferMode) {
+        boolean tvboxRequest = StringUtils.isBlank(ac);
+        if (!tvboxRequest && gaps.isEmpty() && !transferMode) {
             return;
         }
         TreeMap<Integer, String> merged = new TreeMap<>();
@@ -719,10 +810,31 @@ public class MediaSubscriptionService {
         for (MediaSubscriptionResource gap : gaps) {
             mergePlaylistFrom(subscription, gap.getMountPath(), merged);
         }
-        if (transferMode || merged.size() != primary.size()) {
+        if (tvboxRequest) {
+            // TVBox/spider 请求:每集重写为逻辑链接 msubep:{subId}:{集},播放时实时选源并逐源回退,
+            // 换源/补缺/转存切换不影响续看进度(历史绑定逻辑 id 而非物理地址)。
+            detail.setVod_play_from("我的追剧");
+            detail.setVod_play_url(buildMsubepPlaylist(subscription.getId(), merged));
+        } else if (transferMode || merged.size() != primary.size()) {
+            // web 请求保留真实地址,与挂载目录播放一致
             detail.setVod_play_from("追更");
             detail.setVod_play_url(String.join("#", merged.values()));
         }
+    }
+
+    /** TVBox 逻辑播放列表:集号 → `title$msubep:{subId}:{集}`(title 取自原条目,无 '$' 时退化为"第N集")。 */
+    static String buildMsubepPlaylist(int subscriptionId, TreeMap<Integer, String> merged) {
+        StringBuilder playUrl = new StringBuilder();
+        for (var entry : merged.entrySet()) {
+            if (!playUrl.isEmpty()) {
+                playUrl.append('#');
+            }
+            String source = entry.getValue();
+            int index = source.lastIndexOf('$');
+            String episodeTitle = index > 0 ? source.substring(0, index) : ("第" + entry.getKey() + "集");
+            playUrl.append(episodeTitle).append("$msubep:").append(subscriptionId).append(':').append(entry.getKey());
+        }
+        return playUrl.toString();
     }
 
     private void mergePlaylistFrom(MediaSubscription subscription, String path, TreeMap<Integer, String> merged) {

@@ -273,6 +273,7 @@ public class SubscriptionSourceService {
             definitions.add(new BuiltinDefinition("csp_XiaoYa", xiaoya.getName(), order++));
         }
         definitions.add(new BuiltinDefinition("csp_AList", "AList", order++));
+        definitions.add(new BuiltinDefinition("csp_Media", "我的追剧", order++));
         definitions.add(new BuiltinDefinition("csp_BiliBili", "BiliBili", order++));
         if (embyRepository.count() > 0) {
             definitions.add(new BuiltinDefinition("csp_Emby", "Emby", order++));

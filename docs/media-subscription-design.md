@@ -1,11 +1,12 @@
 # 追剧系统(自动追更)设计
 
-> **实现状态(2026-08-19):P0-P3 全部落地**(个别标注"可选/留待"的细项见末尾说明)。
+> **实现状态(2026-08-20):P0-P3 全部落地**(个别标注"可选/留待"的细项见末尾说明)。
 >
 > - **P0**:V20 四表、订阅 CRUD、定时巡检(重列主源/失效换源/候选池/退避)、固定挂载路径换源、事件流、web 管理页(菜单"追剧")、ShareService 清理豁免、TVBox `t=msub` 列表与单源播放。
 > - **P1**:V21 元数据列;`MetadataProvider` SPI(豆瓣/TMDB/Bangumi + official 兜底,`service/metadata/`);官方集数触发补搜、播出日程调度(播出+15min 起 3 短轮)、官方状态自动完结;缺集补搜(整季→单集降级,临时挂载探测)与**多源合并播放**(主源优先,补缺源挂 `{mount}-补N`,主源补齐自动退役);集数清单接口/页签;索引模板联动(首次挂载建"追剧"增量模板);一键订阅(TVBox 详情页"追更"操作组 `$msub$/$munsub$` + spider 拦截[TgSearch,已构建拷回 spring.jar]、web 搜索页追更按钮、播放记录追更按钮、"我的追更"首页分类);dry-run 预览(打分明细);更新收件箱(近 3 天);导出/导入。
 > - **P2**:`AListService.mkdir/copy/awaitCopyTasks`;`MediaSubscriptionTransferService` 增量转存(按源目录分组提交、事后校验、日限额 `maxTransfersPerDay`、失败自动降级 FOLLOW、:40 自愈扫描);`TaskType.SUBSCRIPTION` + Task 行;转存模式 UI(账号下拉/手动转存/进度);健康面板统计卡;批量操作(全选/全不选/反选 + 检查/暂停/恢复/删除)。
 > - **P3**:版本升级提醒(4K 完整候选探测,事件不自动替换);归档清理(`msub_archive_days`,完结 N 天释放转存文件);多季联动(`/next-season` 一键续订下一季);Telegram Bot 通知(`msub_telegram_bot_token/chat_id`,新集/错误/完结/转存完成);指标(今日更新/搜索成功率/来源存活率,`/stats`);ERROR 每日自动重试 + 连续 7 天失败提示;官方视频平台 provider(**参考 atv-player `src/atv_player/metadata/providers/` 的已验证实现**:腾讯 pbaccess trpc 搜索+GetPageData 官方分集列表 publish_date 推算已播/下集播出、优酷 `search.youku.com/api/search` 的"更新至N/M集"文案、爱奇艺 `mesh.if.iqiyi.com` updateTime;`msub_official_url_template` 仅作最后兜底)。豆瓣搜索升级 `movie.douban.com/j/subject_suggest` 在线接口(subject id 直接对接 rexxar 集数),本地 movie 表兜底。实测(2026-08-19):三平台接口与豆瓣 suggest 均可达且字段符合解析。
+> - **媒体库单入口(2026-08-20)**:**`csp_Media`「我的追剧」内置源** —— 订阅配置 sites 自动出现,用户视角就是一个媒体库:封面/元数据来自订阅绑定的豆瓣/TMDB(`/media/{token}` 端点,分类 全部/追更中/已完结,按名称搜索,封面走绝对地址 `/images` 代理)。集 id 为**逻辑链接** `msubep:{subId}:{episode}`(spider `Media.java` 已构建拷回 spring.jar),播放时 `PlayController` → `playEpisode` 实时选源(**已转存集优先走用户网盘 → 主源 → 补缺按评分序**)并**逐源回退**:某源取链接失败即登记损坏集换下一源,用户无感;FongMi 续看/播放同步绑定逻辑 id,换源不断播。`PlaybackSyncService`「网页播放」筛选纳入 `csp_Media`。
 >
 > 关键类:`MediaSubscriptionService`(CRUD/内容/合并播放/收件箱/导出导入/动作)、`MediaSubscriptionCheckService`(巡检/换源/补缺/探测/打分/通知)、`MediaSubscriptionTransferService`(转存/归档)、`web/MediaSubscriptionController`、`web/TelegramController`(msub 分支/操作组端点/首页分类)、`service/metadata/*`、迁移 `V20__MediaSubscription` + `V21__MediaSubscriptionMeta` + `V22__MediaSubscriptionMetaFix`(V21 曾因带引号小写列名在 H2 上导致 Column not found,V22 自愈,详见 `MediaSubscriptionMigrationTest`)。
 > 留待:集→源映射仅动态计算+接口固化展示(未落表,设计标注条件性);搜索成功率等指标在追剧页 `/stats`(未嵌入 SystemInfo 页);转存空间水位依赖事后校验发现(未做转存前预估)。

@@ -825,12 +825,12 @@ public class MediaSubscriptionCheckService {
         long maxBytes = maxEpisodeBytes(subscription);
         Map<Integer, String> broken = parseBroken(subscription);
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
-        collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, maxBytes);
+        collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, maxBytes, true);
         if (includeGaps) {
             for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId())) {
                 if (resource.isGap() && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
                     try {
-                        collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, result, maxBytes);
+                        collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, result, maxBytes, true);
                     } catch (Exception e) {
                         log.warn("walk gap files failed: {} {}", resource.getMountPath(), e.getMessage());
                     }
@@ -843,12 +843,24 @@ public class MediaSubscriptionCheckService {
         return result;
     }
 
+    /** 任意挂载路径的 集→文件 映射(转存目录/播放解析用);refresh=false 走 AList 列表缓存,轻量。 */
+    public TreeMap<Integer, EpisodeFile> episodeFilesAt(String path, MediaSubscription subscription) {
+        TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
+        try {
+            collectEpisodeFiles(site(), subscription.getSeason(), path, 1, result,
+                    maxEpisodeBytes(subscription), false);
+        } catch (Exception e) {
+            log.debug("episodeFilesAt {} failed: {}", path, e.getMessage());
+        }
+        return result;
+    }
+
     private void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
-                                     long maxEpisodeBytes) {
+                                     long maxEpisodeBytes, boolean refresh) {
         if (depth > appProperties.getSubscription().getMaxListDepth()) {
             return;
         }
-        FsResponse response = aListService.listFiles(site, path, 1, 0, true);
+        FsResponse response = aListService.listFiles(site, path, 1, 0, refresh);
         List<FsInfo> files = response.getFiles();
         if (files == null || files.isEmpty()) {
             throw new IllegalStateException("目录为空或不可访问: " + path);
@@ -872,7 +884,7 @@ public class MediaSubscriptionCheckService {
         for (FsInfo file : files) {
             if (file.getType() == 1 && depth < appProperties.getSubscription().getMaxListDepth()
                     && !EXTRA.matcher(file.getName()).find()) {
-                collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, maxEpisodeBytes);
+                collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, maxEpisodeBytes, refresh);
             }
         }
     }

@@ -40,4 +40,20 @@ class MediaSubscriptionPlaylistParseTest {
         assertEquals(3, out.size());
         assertEquals("[1, 2, 3]", out.keySet().toString());
     }
+
+    @Test
+    void msubepPlaylistRewritesEveryEpisodeToLogicalId() {
+        TreeMap<Integer, String> merged = new TreeMap<>();
+        merged.put(1, "第01集(1.2G)$/proxy/100#storageId=9");
+        merged.put(2, "第02集(1.2G)$/proxy/101");
+        assertEquals("第01集(1.2G)$msubep:5:1#第02集(1.2G)$msubep:5:2",
+                MediaSubscriptionService.buildMsubepPlaylist(5, merged));
+    }
+
+    @Test
+    void msubepPlaylistFallsBackToGenericTitleWhenEntryHasNoUrl() {
+        TreeMap<Integer, String> merged = new TreeMap<>();
+        merged.put(7, "纯文本选集名");
+        assertEquals("第7集$msubep:3:7", MediaSubscriptionService.buildMsubepPlaylist(3, merged));
+    }
 }
