@@ -567,18 +567,8 @@ const isNavSubscribed = (item: any) => {
 const navSubscribe = (item: any) => {
   const body: any = {name: item.vod_name, keyword: item.vod_name, season: 1}
   const vodId = String(item.vod_id || '')
-  if (vodId.startsWith('tmdb:')) {
-    // tmdb:tv:{id} / tmdb:movie:{id}:绑定元数据,官方集数/播出日程驱动追更
-    const parts = vodId.split(':')
-    body.metaProvider = 'tmdb'
-    body.metaId = parts[2] || null
-    if (!body.metaId) {
-      ElMessage.warning('条目缺少 TMDB 标识,无法绑定元数据')
-      return
-    }
-  }
   navSubscribing.value = vodId
-  axios.post('/api/media-subscriptions', body).then(() => {
+  const create = () => axios.post('/api/media-subscriptions', body).then(() => {
     navSubscribed.value.add(item.vod_name)
     ElMessage.success(`已订阅「${item.vod_name}」,开始首次搜索(稍后刷新查看结果)`)
   }).catch(error => {
@@ -586,6 +576,31 @@ const navSubscribe = (item: any) => {
   }).finally(() => {
     navSubscribing.value = ''
   })
+  if (vodId.startsWith('tmdb:')) {
+    // tmdb:tv:{id} / tmdb:movie:{id}:绑定元数据,官方集数/播出日程驱动追更
+    const parts = vodId.split(':')
+    body.metaProvider = 'tmdb'
+    body.metaId = parts[2] || null
+    if (!body.metaId) {
+      navSubscribing.value = ''
+      ElMessage.warning('条目缺少 TMDB 标识,无法绑定元数据')
+      return
+    }
+    create()
+    return
+  }
+  // 豆瓣条目:榜单 API 不带 subject id,按标题搜 suggest 自动绑定(封面/官方集数/播出日程随之生效);
+  // 匹配要求名称严格相等且年份一致(防同名翻拍误绑),搜不到/失败则退回纯标题订阅
+  axios.get('/api/media-subscriptions/meta/search', {params: {keyword: item.vod_name, provider: 'douban'}})
+      .then(response => {
+        const hit = ((response.data.items || []) as any[]).find(m =>
+            m.provider === 'douban' && m.name === item.vod_name
+            && (!item.vod_year || !m.year || m.year === item.vod_year))
+        if (hit && /^\d+$/.test(String(hit.id))) {
+          body.doubanId = Number(hit.id)
+        }
+      }).catch(() => {
+      }).finally(() => create())
 }
 
 const loadAll = () => {
