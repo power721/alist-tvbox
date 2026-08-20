@@ -57,7 +57,12 @@
                   </template>
                 </el-image>
                 <div>
-                  <div>{{ scope.row.name }}</div>
+                  <div>
+                    <router-link v-if="scope.row.mountPath" :to="'/vod' + scope.row.mountPath" class="name-link">
+                      {{ scope.row.name }}
+                    </router-link>
+                    <template v-else>{{ scope.row.name }}</template>
+                  </div>
                   <div class="sub-text">
                     {{ scope.row.activeResourceTitle || scope.row.keyword }}
                     <el-tag v-if="scope.row.gapCount" size="small" type="warning" style="margin-left:4px">补缺×{{ scope.row.gapCount }}</el-tag>
@@ -952,6 +957,15 @@ const formatTime = (time: number | null) => {
   justify-content: center;
   background: var(--el-fill-color-dark);
   color: var(--el-text-color-secondary);
+}
+
+.name-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+.name-link:hover {
+  text-decoration: underline;
 }
 
 .sub-text {
