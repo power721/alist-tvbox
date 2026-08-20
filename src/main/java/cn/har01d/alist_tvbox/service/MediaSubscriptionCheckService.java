@@ -1095,7 +1095,7 @@ public class MediaSubscriptionCheckService {
 
     /** 元数据级打分(挂载前粗排):新近度 + 清晰度 + 盘偏好 + 账号/VIP感知 + 资源形态 + 体积合理 + 包含词。
      * 账号感知:已配置该盘账号 +8(可转存/账号播放加速),VIP 账号再 +15(Setting msub_vip_accounts 勾选)。
-     * 资源形态:标题"免会员"+15(百度免会员资源);115 分享与"全N集"完结包对追更中订阅减分(不持续更新)。 */
+     * 资源形态:百度分享本身免会员 +15;115 分享与"全N集"完结包对追更中订阅减分(不持续更新)。 */
     private Scored score(MediaSubscription subscription, Message message, String title, MediaSubscriptionFilter filter) {
         int result = 0;
         List<String> reasons = new ArrayList<>();
@@ -1149,9 +1149,9 @@ public class MediaSubscriptionCheckService {
                 reasons.add("VIP账号+15");
             }
         }
-        if (StringUtils.contains(title, "免会员")) {
+        if (type == 10 /* 百度,DriveId:分享本身免会员,人人可看 */) {
             result += 15;
-            reasons.add("免会员+15");
+            reasons.add("百度分享免会员+15");
         }
         if (ongoing) {
             if (type == 8 /* 115 分享码,见 DriveId */) {
