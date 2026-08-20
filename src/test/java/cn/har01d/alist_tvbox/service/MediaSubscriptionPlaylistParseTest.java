@@ -1,14 +1,19 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.MediaSubscriptionFilter;
+import cn.har01d.alist_tvbox.entity.MediaSubscription;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -113,7 +118,7 @@ class MediaSubscriptionPlaylistParseTest {
         quark.put(1, "01(5G)$1@301@0@0");
         quark.put(2, "02(5G)$1@201@0@1");
         drives.put("quark", quark);
-        String[] lines = MediaSubscriptionService.buildTvBoxPlayLines(12, merged, drives);
+        String[] lines = MediaSubscriptionService.buildTvBoxPlayLines(12, merged, drives, Set.of("quark", "baidu"));
         assertEquals("我的追剧$$$百度网盘$$$夸克网盘", lines[0]);
         assertEquals("01(5G)$msubep-12-1#02(5G)$msubep-12-2"
                 + "$$$01(5G)$1@101@0@0"
@@ -121,13 +126,35 @@ class MediaSubscriptionPlaylistParseTest {
     }
 
     @Test
-    void tvboxPlayLinesSkipEmptyDrivesAndShowUnknownKeyRaw() {
-        // 空盘线路(该盘无任何集)跳过;未知盘 key 原样展示不吞
+    void tvboxPlayLinesKeepMainDrivesAndCompleteOthersOnly() {
+        // 主网盘线路固定展示(允许暂不完整);非主网盘须覆盖齐 merged 全部集才上线路
+        TreeMap<Integer, String> merged = new TreeMap<>();
+        merged.put(1, "01(5G)$1@101@0@0");
+        merged.put(2, "02(5G)$1@201@0@1");
         Map<String, TreeMap<Integer, String>> drives = new LinkedHashMap<>();
-        drives.put("baidu", new TreeMap<>());
-        drives.put("xx", new TreeMap<>(Map.of(1, "01(5G)$1@1@0@0")));
-        String[] lines = MediaSubscriptionService.buildTvBoxPlayLines(3, new TreeMap<>(), drives);
-        assertEquals("我的追剧$$$xx", lines[0]);
-        assertEquals("$$$01(5G)$1@1@0@0", lines[1]);
+        TreeMap<Integer, String> baidu = new TreeMap<>();
+        baidu.put(1, "01(5G)$1@101@0@0"); // 百度为主网盘但只有第 1 集 → 仍出线路
+        drives.put("baidu", baidu);
+        TreeMap<Integer, String> uc = new TreeMap<>();
+        uc.put(1, "01(5G)$1@401@0@0"); // UC 非主网盘且集不齐 → 不上线路
+        drives.put("uc", uc);
+        TreeMap<Integer, String> quark = new TreeMap<>();
+        quark.put(1, "01(5G)$1@301@0@0");
+        quark.put(2, "02(5G)$1@201@0@1"); // 夸克非主网盘但集齐 → 上线路
+        drives.put("quark", quark);
+        String[] lines = MediaSubscriptionService.buildTvBoxPlayLines(12, merged, drives, Set.of("baidu"));
+        assertEquals("我的追剧$$$百度网盘$$$夸克网盘", lines[0]);
+        assertFalse(lines[1].contains("1@401@0@0"), "UC 集不齐不应出线路");
+    }
+
+    @Test
+    void mainDrivesTakeFirstTwoDriveTypePreferences() throws Exception {
+        MediaSubscription subscription = new MediaSubscription();
+        assertEquals(List.of(), checkService.mainDrives(subscription), "无筛选配置时无主网盘");
+
+        MediaSubscriptionFilter filter = new MediaSubscriptionFilter();
+        filter.setDriveTypes(List.of(10, 5, 0)); // 百度/夸克/阿里 → 前 2 个为主网盘
+        subscription.setFilterConfig(new ObjectMapper().writeValueAsString(filter));
+        assertEquals(List.of("baidu", "quark"), checkService.mainDrives(subscription));
     }
 }

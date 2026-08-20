@@ -338,6 +338,7 @@ public class MediaSubscriptionCheckService {
             }
             detectUpgrade(subscription, episodes);
         }
+        ensureMainDrives(subscription, episodes);
         scheduleNext(subscription);
     }
 
@@ -575,6 +576,109 @@ public class MediaSubscriptionCheckService {
                 .toList();
     }
 
+    /** 主网盘:筛选盘类型偏好前 2 个(DriveId 盘 key)。巡检保证该盘完整剧集覆盖,播放列表固定出该盘线路。 */
+    List<String> mainDrives(MediaSubscription subscription) {
+        MediaSubscriptionFilter filter = parseFilter(subscription);
+        if (filter == null || filter.getDriveTypes() == null || filter.getDriveTypes().isEmpty()) {
+            return List.of();
+        }
+        return filter.getDriveTypes().stream().limit(2).map(DriveId::toDrive).toList();
+    }
+
+    /** 当前主源所在盘(active 资源行的分享类型;旧数据无 type 返回 null)。 */
+    String activeDrive(MediaSubscription subscription) {
+        return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
+                .filter(MediaSubscriptionResource::isActive).findFirst()
+                .filter(r -> r.getType() != null)
+                .map(r -> DriveId.toDrive(r.getType()))
+                .orElse(null);
+    }
+
+    /** 主网盘完整覆盖保障:观测全集(主源 ∪ 各补缺挂载快照)按盘核算,主网盘缺口从候选池**同盘**资源探则挂
+     * (与 fillGaps 同机制但按盘约束,主源所在盘天然计为已覆盖)。池内无该盘资源不强制搜索——
+     * driveTypes 偏好已让搜索召回偏向主网盘,靠常规搜索周期自然补池;转存副本不计入(自有事后校验保障)。
+     * 分享挂载均为游客态(免登录);需登录态才稳定的盘探测会失败落 BAD,自然退出候选。 */
+    void ensureMainDrives(MediaSubscription subscription, Set<Integer> primaryEpisodes) {
+        List<String> mains = mainDrives(subscription);
+        if (mains.isEmpty() || primaryEpisodes.isEmpty()) {
+            return;
+        }
+        List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId());
+        String active = activeDrive(subscription);
+        Set<Integer> union = new TreeSet<>(primaryEpisodes);
+        for (MediaSubscriptionResource resource : resources) {
+            if (resource.isGap() && resource.getShareId() != null) {
+                union.addAll(parseEpisodeList(resource.getEpisodeList()));
+            }
+        }
+        int mounted = 0;
+        int maxMounts = appProperties.getSubscription().getMaxGapMounts();
+        for (String drive : mains) {
+            Set<Integer> coverage = new TreeSet<>();
+            if (drive.equals(active)) {
+                coverage.addAll(primaryEpisodes);
+            }
+            for (MediaSubscriptionResource resource : resources) {
+                if (resource.isGap() && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())
+                        && resource.getType() != null && drive.equals(DriveId.toDrive(resource.getType()))) {
+                    coverage.addAll(parseEpisodeList(resource.getEpisodeList()));
+                }
+            }
+            Set<Integer> missing = new TreeSet<>(union);
+            missing.removeAll(coverage);
+            if (missing.isEmpty()) {
+                continue;
+            }
+            int probed = 0;
+            int maxProbes = appProperties.getSubscription().getMaxGapProbesPerRound();
+            for (MediaSubscriptionResource resource : resources) {
+                if (missing.isEmpty() || probed >= maxProbes || mounted >= maxMounts) {
+                    break;
+                }
+                if (resource.isActive() || resource.isGap() || resource.getShareId() != null
+                        || resource.getType() == null || !drive.equals(DriveId.toDrive(resource.getType()))) {
+                    continue;
+                }
+                Set<Integer> candidate = new TreeSet<>(parseEpisodeList(resource.getEpisodeList()));
+                if (resource.getEpisodeList() != null && intersection(candidate, missing).isEmpty()) {
+                    continue; // 已探测过且不覆盖主网盘缺口
+                }
+                try {
+                    candidate = probeShare(subscription, resource);
+                    resource.setEpisodeList(serializeEpisodes(candidate));
+                    resource.setCheckedTime(System.currentTimeMillis());
+                    probed++;
+                } catch (Exception e) {
+                    log.info("probe main-drive candidate {} failed: {}", resource.getId(), e.getMessage());
+                    resource.setValidity(MediaSubscriptionResource.VALIDITY_BAD);
+                    resource.setCheckedTime(System.currentTimeMillis());
+                    resourceRepository.save(resource);
+                    continue;
+                }
+                Set<Integer> useful = intersection(candidate, missing);
+                if (!useful.isEmpty()) {
+                    try {
+                        if (mountGap(subscription, resource)) {
+                            mounted++;
+                            missing.removeAll(useful);
+                            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
+                                    "主网盘[" + drive + "] 补齐 第" + joinNumbers(new ArrayList<>(useful)) + " 集(来自 "
+                                            + StringUtils.defaultIfBlank(resource.getTitle(), "候选源") + ")");
+                        }
+                    } catch (Exception e) {
+                        log.warn("mount main-drive source failed: {}", e.getMessage());
+                        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "主网盘补缺挂载失败:" + e.getMessage());
+                    }
+                }
+                resourceRepository.save(resource);
+            }
+            if (!missing.isEmpty()) {
+                log.info("subscription {} main drive [{}] still missing episodes {} (pool has no covering candidate)",
+                        subscription.getId(), drive, missing);
+            }
+        }
+    }
+
     /** BAD 冷却超期 = 允许重探一次(历史误标自愈;池仅 TopN 席位,BAD 永久退出会耗尽池);重探再失败会刷新计时。 */
     boolean isBadCooled(MediaSubscriptionResource resource, long now) {
         if (!MediaSubscriptionResource.VALIDITY_BAD.equals(resource.getValidity())) {
@@ -687,9 +791,15 @@ public class MediaSubscriptionCheckService {
 
     /** 主源已覆盖补缺源全部集数 → 退役补缺挂载(删 share,资源保留为普通候选)。 */
     private void retireGapMounts(MediaSubscription subscription, Set<Integer> present) {
+        List<String> mains = mainDrives(subscription);
+        String active = activeDrive(subscription);
         for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId())) {
             if (!resource.isGap() || resource.getShareId() == null) {
                 continue;
+            }
+            String drive = resource.getType() == null ? null : DriveId.toDrive(resource.getType());
+            if (drive != null && mains.contains(drive) && !drive.equals(active)) {
+                continue; // 主网盘冗余挂载:即使主源已覆盖也保留,主源换盘/失效时该盘线路不断供
             }
             Set<Integer> coverage = new TreeSet<>(parseEpisodeList(resource.getEpisodeList()));
             if (coverage.isEmpty() || present.containsAll(coverage)) {

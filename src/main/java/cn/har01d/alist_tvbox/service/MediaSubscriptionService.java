@@ -40,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -830,8 +831,10 @@ public class MediaSubscriptionService {
         if (tvboxRequest) {
             // TVBox/spider 请求:首条线路每集重写为逻辑链接 msubep-{subId}-{集},播放时实时选源并逐源回退,
             // 换源/补缺/转存切换不影响续看进度(历史绑定逻辑 id 而非物理地址);
-            // 其余线路按网盘分线(百度/夸克/…,同盘聚合所有源)——逻辑线路失败或想固定某个盘时手动切换。
-            String[] lines = buildTvBoxPlayLines(subscription.getId(), merged, driveLines);
+            // 其余线路按网盘分线(百度/夸克/…,同盘聚合所有源)——主网盘线路固定展示(完整覆盖由巡检保障),
+            // 其它盘覆盖齐全部观测集才上线路。逻辑线路失败或想固定某个盘时手动切换。
+            String[] lines = buildTvBoxPlayLines(subscription.getId(), merged, driveLines,
+                    Set.copyOf(checkService.mainDrives(subscription)));
             detail.setVod_play_from(lines[0]);
             detail.setVod_play_url(lines[1]);
         } else if (transferMode || merged.size() != primary.size()) {
@@ -874,9 +877,10 @@ public class MediaSubscriptionService {
             Map.entry("strm", "STRM"));
 
     /** TVBox 多线路装配:首条「我的追剧」为 msubep 逻辑线路(默认,续看绑定逻辑 id),
-     * 其余每个网盘一条线路(同盘聚合 转存>主源>补缺 的全部集)。返回 [vod_play_from, vod_play_url]。 */
+     * 其余每个网盘一条线路(同盘聚合 转存>主源>补缺 的全部集)。主网盘固定出线路(完整覆盖由巡检保障),
+     * 非主网盘须覆盖齐 merged 全部集才上线路。返回 [vod_play_from, vod_play_url]。 */
     static String[] buildTvBoxPlayLines(int subscriptionId, TreeMap<Integer, String> merged,
-                                        Map<String, TreeMap<Integer, String>> driveLines) {
+                                        Map<String, TreeMap<Integer, String>> driveLines, Set<String> mainDrives) {
         List<String> from = new ArrayList<>();
         from.add("我的追剧");
         List<String> urls = new ArrayList<>();
@@ -884,6 +888,9 @@ public class MediaSubscriptionService {
         for (var line : driveLines.entrySet()) {
             if (line.getValue().isEmpty()) {
                 continue;
+            }
+            if (!mainDrives.contains(line.getKey()) && !line.getValue().keySet().containsAll(merged.keySet())) {
+                continue; // 非主网盘且集不齐:不上线路(其集仍并入合并线路)
             }
             from.add(DRIVE_NAMES.getOrDefault(line.getKey(), line.getKey()));
             urls.add(String.join("#", line.getValue().values()));

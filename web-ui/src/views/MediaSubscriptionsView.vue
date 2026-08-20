@@ -204,10 +204,11 @@
           <el-input-number v-model="form.checkIntervalHours" :min="1" :max="168"/>
           <span class="sub-text" style="margin-left:8px">绑定元数据后按播出日程自动调度</span>
         </el-form-item>
-        <el-form-item label="盘类型偏好">
+        <el-form-item label="主网盘/盘类型偏好">
           <el-select v-model="form.driveTypes" multiple placeholder="多选,按优先级排序">
-            <el-option v-for="drive in driveOptions" :key="drive.value" :label="drive.label" :value="drive.value"/>
+            <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
           </el-select>
+          <span class="sub-text" style="margin-left:8px">前2个为主网盘:巡检保证该盘剧集完整并固定播放线路,其余仅偏好加分;分享挂载均免登录,标注"已加账号"的盘更稳且可转存</span>
         </el-form-item>
         <el-form-item label="清晰度">
           <el-select v-model="form.qualities" multiple allow-create placeholder="如 4K / 1080P">
@@ -443,6 +444,24 @@ const driveOptions = [
   {value: 1, label: 'PikPak'},
   {value: 12, label: '光鸭'},
 ]
+
+// DriverType 枚举名 → 分享类型码(driveOptions 同一命名空间)
+const driverTypeCodes: Record<string, number> = {
+  QUARK: 5, QUARK_TV: 5, PAN115: 8, OPEN115: 8, ALI: 0, UC: 7, UC_TV: 7,
+  CLOUD189: 9, BAIDU: 10, PAN123: 3, OPEN123: 3, THUNDER: 2, GUANGYA: 12, PAN139: 6,
+}
+
+const accountDriveCodes = () => {
+  const codes = new Set<number>()
+  for (const account of accounts.value || []) {
+    const code = driverTypeCodes[(account as any).type]
+    if (code !== undefined) codes.add(code)
+  }
+  return codes
+}
+
+const driveLabel = (drive: { value: number, label: string }) =>
+    accountDriveCodes().has(drive.value) ? `${drive.label}(已加账号)` : drive.label
 
 const subscriptions = ref<SubscriptionDto[]>([])
 const stats = ref<any>(null)
