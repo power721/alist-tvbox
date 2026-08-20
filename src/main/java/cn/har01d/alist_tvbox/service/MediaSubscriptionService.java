@@ -353,13 +353,130 @@ public class MediaSubscriptionService {
         return result;
     }
 
-    /** 粘贴链接解析:豆瓣 subject / TMDB tv(含 season) / Bangumi subject / 腾讯 cover 链接 → 元数据绑定信息。 */
+    /** 链接解析专用客户端(跟随重定向;String 收包 + UTF-8 默认字符集防中文乱码) */
+    private final org.springframework.web.client.RestTemplate linkRestTemplate = buildLinkRestTemplate();
+
+    private static org.springframework.web.client.RestTemplate buildLinkRestTemplate() {
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10_000);
+        factory.setReadTimeout(15_000);
+        org.springframework.web.client.RestTemplate template =
+                new org.springframework.web.client.RestTemplate(factory);
+        template.getMessageConverters().forEach(converter -> {
+            if (converter instanceof org.springframework.http.converter.StringHttpMessageConverter stringConverter) {
+                stringConverter.setDefaultCharset(java.nio.charset.StandardCharsets.UTF_8);
+            }
+        });
+        return template;
+    }
+
+    /** b23.tv 等短链展开:JDK 连接手动读 Location 逐跳跟随(≤5 跳)。 */
+    private String expandShortLink(String url) {
+        if (!url.contains("b23.tv")) {
+            return url;
+        }
+        String current = url;
+        for (int i = 0; i < 5; i++) {
+            try {
+                java.net.HttpURLConnection connection = (java.net.HttpURLConnection) java.net.URI.create(current).toURL().openConnection();
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(10_000);
+                connection.setReadTimeout(10_000);
+                connection.setRequestProperty(org.springframework.http.HttpHeaders.USER_AGENT,
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 Safari/537.36");
+                int code = connection.getResponseCode();
+                String location = connection.getHeaderField(org.springframework.http.HttpHeaders.LOCATION);
+                connection.disconnect();
+                if (code >= 300 && code < 400 && StringUtils.isNotBlank(location)) {
+                    current = location;
+                    continue;
+                }
+                return current;
+            } catch (Exception e) {
+                log.debug("expand short link failed: {} {}", current, e.getMessage());
+                return current;
+            }
+        }
+        return current;
+    }
+
+    private static org.springframework.http.HttpHeaders browserHeaders() {
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.set(org.springframework.http.HttpHeaders.USER_AGENT,
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36");
+        headers.set(org.springframework.http.HttpHeaders.ACCEPT, "text/html,application/json");
+        return headers;
+    }
+
+    /** 页面服务端 <title> 提取与清洗:取首段、去"第N集…"尾巴、压缩空白。 */
+    private String fetchPageTitle(String url) {
+        try {
+            org.springframework.http.ResponseEntity<String> response = linkRestTemplate.exchange(
+                    java.net.URI.create(url), org.springframework.http.HttpMethod.GET,
+                    new org.springframework.http.HttpEntity<>(null, browserHeaders()), String.class);
+            String body = response.getBody();
+            if (StringUtils.isBlank(body)) {
+                return null;
+            }
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("<title>(.*?)</title>", java.util.regex.Pattern.DOTALL).matcher(body);
+            if (!matcher.find()) {
+                return null;
+            }
+            String title = matcher.group(1).trim()
+                    .replace("&amp;", "&").replace("&nbsp;", " ").replace("&quot;", "\"");
+            title = title.split("[_|·]")[0];
+            title = title.split("-")[0].trim();
+            title = title.replaceAll("(?:第?\\s*\\d+\\s*[集话話].*)$", "").trim();
+            title = title.replaceAll("\\s+", " ");
+            return StringUtils.isBlank(title) ? null : title;
+        } catch (Exception e) {
+            log.debug("fetch page title failed: {} {}", url, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 页面取剧名后绑定:优先 Bangumi(番剧)或豆瓣(剧集),都搜不到回落官方平台按名。 */
+    private Map<String, Object> resolveByPageTitle(String url, boolean preferBangumi) {
+        String title = fetchPageTitle(url);
+        if (StringUtils.isBlank(title)) {
+            throw new BadRequestException("无法从链接解析剧名(页面为前端渲染),请改用关键词搜索或元数据链接绑定");
+        }
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("name", title);
+        String first = preferBangumi ? "bangumi" : "douban";
+        String second = preferBangumi ? "douban" : "bangumi";
+        for (String provider : List.of(first, second)) {
+            try {
+                List<MetadataSearchItem> items = metadataService.searchReport(provider, title).items();
+                if (!items.isEmpty()) {
+                    MetadataSearchItem hit = items.get(0);
+                    result.put("provider", hit.getProvider());
+                    result.put("id", hit.getId());
+                    if ("douban".equals(hit.getProvider())) {
+                        result.put("doubanId", Integer.parseInt(hit.getId()));
+                    }
+                    return result;
+                }
+            } catch (Exception e) {
+                log.debug("bind by title via {} failed: {}", provider, e.getMessage());
+            }
+        }
+        // 未匹配条目:回落官方平台按名(腾讯/优酷/爱奇艺集数兜底)
+        result.put("provider", "official");
+        result.put("id", title);
+        return result;
+    }
+
+    /** 粘贴链接解析:豆瓣 subject / TMDB tv(含 season) / Bangumi subject / 腾讯 cover /
+     *  B站番剧播放页(ss/ep)/ 优酷 / 爱奇艺剧集页 → 元数据绑定信息。 */
     public Map<String, Object> resolveMetaLink(String url) {
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         if (StringUtils.isBlank(url)) {
             throw new BadRequestException("链接不能为空");
         }
-        String link = url.trim();
+        String link = expandShortLink(url.trim());
         java.util.regex.Matcher matcher;
         if ((matcher = java.util.regex.Pattern.compile("douban\\.com/subject/(\\d+)").matcher(link)).find()) {
             result.put("provider", "douban");
@@ -379,6 +496,17 @@ public class MediaSubscriptionService {
             result.put("provider", "official");
             // 规范化 canonical 形式:原链接可能带 ?vid= 等 query,超出 meta_id 列宽(VARCHAR 64)
             result.put("id", "https://v.qq.com/x/cover/" + matcher.group(1) + ".html");
+        } else if ((matcher = java.util.regex.Pattern.compile("bilibili\\.com/bangumi/play/(?:ss|ep)\\d+").matcher(link)).find()) {
+            // B 站播放页有服务端 title(media 页为前端渲染);番剧优先 Bangumi 绑定
+            return resolveByPageTitle(link, true);
+        } else if ((matcher = java.util.regex.Pattern.compile("(?:v\\.youku\\.com/v_show/id_|youku\\.com/show/id_|youku\\.com/.*/id_)[A-Za-z0-9=]+").matcher(link)).find()) {
+            // 优酷页面有服务端 title;国产剧优先豆瓣绑定
+            return resolveByPageTitle(link, false);
+        } else if ((matcher = java.util.regex.Pattern.compile("iqiyi\\.com/[av]_[A-Za-z0-9]+\\.html").matcher(link)).find()) {
+            // 爱奇艺:剧集页(a_)通常有服务端 title,单集页(v_)不一定,失败会给明确提示
+            return resolveByPageTitle(link, false);
+        } else if (link.contains("bilibili.com/bangumi/media/")) {
+            throw new BadRequestException("B 站 media 页为前端渲染无法解析,请改用播放页链接(含 ss/ep 的)");
         } else {
             throw new BadRequestException("无法识别的链接,支持:豆瓣 subject / TMDB tv / Bangumi subject / 腾讯视频 cover 链接");
         }
