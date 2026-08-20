@@ -26,6 +26,7 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -60,6 +61,7 @@ public class MediaSubscriptionService {
     private final MetadataService metadataService;
     private final MediaSubscriptionCheckService checkService;
     private final MediaSubscriptionTransferService transferService;
+    private final cn.har01d.alist_tvbox.entity.SettingRepository settingRepository;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
 
@@ -74,6 +76,7 @@ public class MediaSubscriptionService {
                                     MetadataService metadataService,
                                     MediaSubscriptionCheckService checkService,
                                     MediaSubscriptionTransferService transferService,
+                                    cn.har01d.alist_tvbox.entity.SettingRepository settingRepository,
                                     AppProperties appProperties,
                                     ObjectMapper objectMapper) {
         this.subscriptionRepository = subscriptionRepository;
@@ -87,6 +90,7 @@ public class MediaSubscriptionService {
         this.metadataService = metadataService;
         this.checkService = checkService;
         this.transferService = transferService;
+        this.settingRepository = settingRepository;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
     }
@@ -409,12 +413,20 @@ public class MediaSubscriptionService {
         return headers;
     }
 
-    /** 页面服务端 <title> 提取与清洗:取首段、去"第N集…"尾巴、压缩空白。 */
+    /** 页面服务端 <title> 提取与清洗:取首段、去"第N集…"尾巴、压缩空白。B站页面带用户 cookie 提升成功率。 */
     private String fetchPageTitle(String url) {
         try {
+            org.springframework.http.HttpHeaders headers = browserHeaders();
+            if (url.contains("bilibili.com")) {
+                String cookie = settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE)
+                        .map(s -> s.getValue()).orElse("");
+                if (StringUtils.isNotBlank(cookie)) {
+                    headers.set(org.springframework.http.HttpHeaders.COOKIE, cookie);
+                }
+            }
             org.springframework.http.ResponseEntity<String> response = linkRestTemplate.exchange(
                     java.net.URI.create(url), org.springframework.http.HttpMethod.GET,
-                    new org.springframework.http.HttpEntity<>(null, browserHeaders()), String.class);
+                    new org.springframework.http.HttpEntity<>(null, headers), String.class);
             String body = response.getBody();
             if (StringUtils.isBlank(body)) {
                 return null;
@@ -443,8 +455,14 @@ public class MediaSubscriptionService {
         if (StringUtils.isBlank(title)) {
             throw new BadRequestException("无法从链接解析剧名(页面为前端渲染),请改用关键词搜索或元数据链接绑定");
         }
-        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        Map<String, Object> result = bindByTitle(title, preferBangumi);
         result.put("name", title);
+        return result;
+    }
+
+    /** 按剧名绑定元数据条目。 */
+    private Map<String, Object> bindByTitle(String title, boolean preferBangumi) {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
         String first = preferBangumi ? "bangumi" : "douban";
         String second = preferBangumi ? "douban" : "bangumi";
         for (String provider : List.of(first, second)) {
@@ -467,6 +485,41 @@ public class MediaSubscriptionService {
         result.put("provider", "official");
         result.put("id", title);
         return result;
+    }
+
+    /** B站 PGC season API(存在 bilibili_cookie 时优先携带,游客直连会被风控 -404)。 */
+    private Map<String, Object> fetchBilibiliSeason(String queryParam) {
+        String cookie = settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE)
+                .map(s -> s.getValue()).orElse("");
+        try {
+            org.springframework.http.HttpHeaders headers = browserHeaders();
+            headers.set(org.springframework.http.HttpHeaders.REFERER, "https://www.bilibili.com/");
+            if (StringUtils.isNotBlank(cookie)) {
+                headers.set(org.springframework.http.HttpHeaders.COOKIE, cookie);
+            }
+            org.springframework.http.ResponseEntity<String> response = linkRestTemplate.exchange(
+                    java.net.URI.create("https://api.bilibili.com/pgc/view/web/season?" + queryParam),
+                    org.springframework.http.HttpMethod.GET, new org.springframework.http.HttpEntity<>(null, headers), String.class);
+            JsonNode root = StringUtils.isBlank(response.getBody()) ? null : objectMapper.readTree(response.getBody());
+            if (root == null || root.path("code").asInt(-1) != 0) {
+                return null;
+            }
+            JsonNode result = root.path("result");
+            String title = result.path("title").asText("");
+            if (StringUtils.isBlank(title)) {
+                return null;
+            }
+            Map<String, Object> data = new java.util.LinkedHashMap<>();
+            data.put("title", title);
+            int total = result.path("total").asInt(0);
+            if (total > 0) {
+                data.put("total", total);
+            }
+            return data;
+        } catch (Exception e) {
+            log.debug("bilibili season api failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     /** 粘贴链接解析:豆瓣 subject / TMDB tv(含 season) / Bangumi subject / 腾讯 cover /
@@ -496,9 +549,27 @@ public class MediaSubscriptionService {
             result.put("provider", "official");
             // 规范化 canonical 形式:原链接可能带 ?vid= 等 query,超出 meta_id 列宽(VARCHAR 64)
             result.put("id", "https://v.qq.com/x/cover/" + matcher.group(1) + ".html");
-        } else if ((matcher = java.util.regex.Pattern.compile("bilibili\\.com/bangumi/play/(?:ss|ep)\\d+").matcher(link)).find()) {
-            // B 站播放页有服务端 title(media 页为前端渲染);番剧优先 Bangumi 绑定
-            return resolveByPageTitle(link, true);
+        } else if ((matcher = java.util.regex.Pattern.compile("bilibili\\.com/bangumi/play/(ss|ep)(\\d+)").matcher(link)).find()
+                || (matcher = java.util.regex.Pattern.compile("bilibili\\.com/bangumi/media/md(\\d+)").matcher(link)).find()) {
+            // B站链接:优先 PGC season API(带用户 cookie 过风控,拿准确剧名+总集数,md 链接也支持);
+            // 失败回落播放页服务端 title(media 页为前端渲染,会明确报错)
+            String queryParam = matcher.groupCount() == 2 && matcher.group(1) != null && !matcher.group(1).equals("md")
+                    ? ("ss".equals(matcher.group(1)) ? "season_id=" : "ep_id=") + matcher.group(2)
+                    : "media_id=" + matcher.group(1);
+            Map<String, Object> season = fetchBilibiliSeason(queryParam);
+            if (season != null) {
+                String title = (String) season.get("title");
+                Map<String, Object> bound = bindByTitle(title, true);
+                bound.put("name", title);
+                if (season.get("total") instanceof Number number && number.intValue() > 0) {
+                    bound.put("totalEpisodes", number.intValue());
+                }
+                return bound;
+            }
+            if (link.contains("/bangumi/play/")) {
+                return resolveByPageTitle(link, true);
+            }
+            throw new BadRequestException("B 站 media 页为前端渲染且 season API 不可用(检查 bilibili_cookie),请改用播放页链接或关键词绑定");
         } else if ((matcher = java.util.regex.Pattern.compile("(?:v\\.youku\\.com/v_show/id_|youku\\.com/show/id_|youku\\.com/.*/id_)[A-Za-z0-9=]+").matcher(link)).find()) {
             // 优酷页面有服务端 title;国产剧优先豆瓣绑定
             return resolveByPageTitle(link, false);
@@ -507,8 +578,7 @@ public class MediaSubscriptionService {
             return resolveByPageTitle(link, false);
         } else if (link.contains("bilibili.com/bangumi/media/")) {
             throw new BadRequestException("B 站 media 页为前端渲染无法解析,请改用播放页链接(含 ss/ep 的)");
-        } else {
-            throw new BadRequestException("无法识别的链接,支持:豆瓣 subject / TMDB tv / Bangumi subject / 腾讯视频 cover 链接");
+        } else {            throw new BadRequestException("无法识别的链接,支持:豆瓣 subject / TMDB tv / Bangumi subject / 腾讯视频 cover 链接");
         }
         // 尽力解析剧名(失败不阻断,用户可手填)
         try {

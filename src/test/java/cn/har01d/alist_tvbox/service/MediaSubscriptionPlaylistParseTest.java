@@ -19,7 +19,7 @@ class MediaSubscriptionPlaylistParseTest {
             null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
     private final MediaSubscriptionService service = new MediaSubscriptionService(
-            null, null, null, null, null, null, null, null, null, checkService, null, null, new ObjectMapper());
+            null, null, null, null, null, null, null, null, null, checkService, null, null, null, new ObjectMapper());
 
     @Test
     void urlWithStorageIdFragmentNotSplit() {
