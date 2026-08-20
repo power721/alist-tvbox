@@ -83,9 +83,9 @@ public class PlayController {
             return biliBiliService.getPlayUrl(bvid, dash, client);
         }
 
-        if (StringUtils.isNotBlank(id) && id.startsWith("msubep:")) {
-            // 追剧逻辑集:实时选源(转存>主源>补缺)并自动回退,用户无感知
-            String[] parts = id.split(":");
+        if (StringUtils.isNotBlank(id) && id.startsWith("msubep-")) {
+            // 追剧逻辑集 msubep-{subId}-{集}:实时选源(转存>主源>补缺)并自动回退,用户无感知
+            String[] parts = id.split("-");
             if (parts.length < 3) {
                 throw new BadRequestException("播放参数格式不正确");
             }

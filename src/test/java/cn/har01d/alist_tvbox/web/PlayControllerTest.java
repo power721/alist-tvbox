@@ -59,14 +59,14 @@ class PlayControllerTest {
         when(mediaSubscriptionService.playEpisode(7, 5, 2, null, null))
                 .thenReturn(Map.of("url", "https://example.com/e2.mp4"));
 
-        mockMvc.perform(get("/play/test-token").param("id", "msubep:5:2"))
+        mockMvc.perform(get("/play/test-token").param("id", "msubep-5-2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.url").value("https://example.com/e2.mp4"));
     }
 
     @Test
     void playShouldRejectMalformedMediaSubscriptionEpisodeId() throws Exception {
-        mockMvc.perform(get("/play/test-token").param("id", "msubep:5"))
+        mockMvc.perform(get("/play/test-token").param("id", "msubep-5"))
                 .andExpect(status().isBadRequest());
     }
 }

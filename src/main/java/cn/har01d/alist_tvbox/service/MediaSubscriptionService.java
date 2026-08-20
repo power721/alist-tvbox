@@ -735,7 +735,7 @@ public class MediaSubscriptionService {
         return "/images?url=" + java.net.URLEncoder.encode(cover, java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /** 播放逻辑集 msubep:{订阅}:{集}:实时选源并回退(转存>主源>补缺),某源解析失败登记损坏并落下一个,用户无感知。 */
+    /** 播放逻辑集 msubep-{订阅}-{集}:实时选源并回退(转存>主源>补缺),某源解析失败登记损坏并落下一个,用户无感知。 */
     public Map<String, Object> playEpisode(int uid, int subscriptionId, int episode, String client, String type) {
         MediaSubscription subscription = getOwned(uid, subscriptionId);
         Map<Integer, String> broken = checkService.parseBroken(subscription);
@@ -813,7 +813,7 @@ public class MediaSubscriptionService {
             mergePlaylistFrom(subscription, gap.getMountPath(), merged);
         }
         if (tvboxRequest) {
-            // TVBox/spider 请求:每集重写为逻辑链接 msubep:{subId}:{集},播放时实时选源并逐源回退,
+            // TVBox/spider 请求:每集重写为逻辑链接 msubep-{subId}-{集},播放时实时选源并逐源回退,
             // 换源/补缺/转存切换不影响续看进度(历史绑定逻辑 id 而非物理地址)。
             detail.setVod_play_from("我的追剧");
             detail.setVod_play_url(buildMsubepPlaylist(subscription.getId(), merged));
@@ -824,7 +824,8 @@ public class MediaSubscriptionService {
         }
     }
 
-    /** TVBox 逻辑播放列表:集号 → `title$msubep:{subId}:{集}`(title 取自原条目,无 '$' 时退化为"第N集")。 */
+    /** TVBox 逻辑播放列表:集号 → `title$msubep-{subId}-{集}`(title 取自原条目,无 '$' 时退化为"第N集")。
+     * 分隔符用 '-':冒号在部分播放器/代理链路会被当 URL scheme 截断。 */
     static String buildMsubepPlaylist(int subscriptionId, TreeMap<Integer, String> merged) {
         StringBuilder playUrl = new StringBuilder();
         for (var entry : merged.entrySet()) {
@@ -834,7 +835,7 @@ public class MediaSubscriptionService {
             String source = entry.getValue();
             int index = source.lastIndexOf('$');
             String episodeTitle = index > 0 ? source.substring(0, index) : ("第" + entry.getKey() + "集");
-            playUrl.append(episodeTitle).append("$msubep:").append(subscriptionId).append(':').append(entry.getKey());
+            playUrl.append(episodeTitle).append("$msubep-").append(subscriptionId).append('-').append(entry.getKey());
         }
         return playUrl.toString();
     }

@@ -21,7 +21,7 @@ import java.util.List;
  * <p>
  * 用户视角即一个媒体库:封面/元数据来自订阅绑定的豆瓣/TMDB 数据,播放链接由
  * {@link MediaSubscriptionService#playEpisode} 实时选源(转存 &gt; 主源 &gt; 补缺)并逐源回退,
- * 同一集多个分享源切换对用户无感。集 id 为逻辑 id(msubep:{subId}:{episode}),播放时才解析。
+ * 同一集多个分享源切换对用户无感。集 id 为逻辑 id(msubep-{subId}-{episode}),播放时才解析。
  */
 @Slf4j
 @RestController
