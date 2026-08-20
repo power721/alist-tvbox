@@ -17,6 +17,29 @@ import static org.junit.jupiter.api.Assertions.*;
 class TextUtilsTest {
 
     @Test
+    void parseMetaIdTagSupportsBracketAndBraceForms() {
+        // 追剧转存目录方括号格式
+        assertEquals("37448094", TextUtils.parseMetaIdTag("一念永恒-完结季 [dbid-37448094]", "dbid"));
+        assertEquals("123", TextUtils.parseMetaIdTag("剧名 [tmdbid-123]", "tmdbid"));
+        assertEquals("456", TextUtils.parseMetaIdTag("番剧[bgmid-456]", "bgmid"));
+        // 削刮命名花括号格式
+        assertEquals("123", TextUtils.parseMetaIdTag("剧名 {tmdbid-123}", "tmdbid"));
+        // key 不匹配 / 无标记 / 空输入
+        assertNull(TextUtils.parseMetaIdTag("剧名 [dbid-1]", "tmdbid"));
+        assertNull(TextUtils.parseMetaIdTag("剧名 无标记", "dbid"));
+        assertNull(TextUtils.parseMetaIdTag(null, "dbid"));
+    }
+
+    @Test
+    void stripMetaIdTagsRemovesAllMarkers() {
+        assertEquals("一念永恒-完结季  ", TextUtils.stripMetaIdTags("一念永恒-完结季 [dbid-37448094]"));
+        String stripped = TextUtils.stripMetaIdTags("剧 [dbid-1][tmdbid-2]");
+        assertFalse(stripped.contains("dbid"));
+        assertFalse(stripped.contains("tmdbid"));
+        assertNull(TextUtils.stripMetaIdTags(null));
+    }
+
+    @Test
     public void test() {
         String name = TextUtils.updateName("2010.虹猫蓝兔勇者归来.99集全.720p");
         log.info("{}", name);

@@ -31,6 +31,8 @@ public class TextUtils {
     private static final Pattern SEASON_EPISODE2 = Pattern.compile("[.\\s]?(\\d{1,2})x(\\d{2,3})");
     // 新增：流媒体平台标签
     private static final Pattern STREAMING_PLATFORM = Pattern.compile("\\[(Netflix|Disney\\+|Hulu|HBO|Amazon\\+|Prime|Apple\\+|爱奇艺|腾讯|优酷|哔哩|Bilibili|芒果TV)]");
+    // 元数据 id 目录标记(追剧转存目录 metaIdTag / 削刮命名):豆瓣 dbid / TMDB tmdbid / Bangumi bgmid,方括号或花括号
+    private static final Pattern META_ID_TAG = Pattern.compile("[\\[{](dbid|tmdbid|bgmid)-(\\d+)[\\]}]");
     // 新增：编码和音视频格式
     private static final Pattern AV_FORMAT = Pattern.compile("\\.(HEVC|H265|H264|x265|x264|AVC|AV1|VP9|VC-1|mp4|mkv|MPEG-2|Xvid)", Pattern.CASE_INSENSITIVE);
     private static final Pattern AUDIO_FORMAT = Pattern.compile("(DTS|DDP|DD\\+|AC3|AAC|FLAC|MP3|Opus|Atmos|TrueHD)([.\\s]?\\d+\\.?\\d*)?", Pattern.CASE_INSENSITIVE);
@@ -45,6 +47,26 @@ public class TextUtils {
 
     public static boolean isChineseChar(int c) {
         return c >= 0x4E00 && c <= 0x9FA5;
+    }
+
+    /** 解析名称中的元数据 id 标记(如 `一念永恒-完结季 [dbid-37448094]` → dbid=37448094)。
+     * @param key dbid / tmdbid / bgmid;@return 对应数字 id 字符串,未命中返回 null */
+    public static String parseMetaIdTag(String text, String key) {
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        Matcher matcher = META_ID_TAG.matcher(text);
+        while (matcher.find()) {
+            if (matcher.group(1).equalsIgnoreCase(key)) {
+                return matcher.group(2);
+            }
+        }
+        return null;
+    }
+
+    /** 剥离全部元数据 id 标记(名称匹配前清洗,防标记污染搜索词)。 */
+    public static String stripMetaIdTags(String text) {
+        return text == null ? null : META_ID_TAG.matcher(text).replaceAll(" ");
     }
 
     public static boolean isChineseChar2(int c) {
@@ -158,7 +180,7 @@ public class TextUtils {
                 .replaceAll("1-\\d+集", " ")
                 .replaceAll("共\\d+集\\+\\d+部剧场版", " ")
                 .replaceAll("豆瓣：[0-9.]+", " ")
-                .replaceAll("\\{tmdbid-\\d+}", "")
+                .replaceAll("[\\[{](?:dbid|tmdbid|bgmid)-\\d+[\\]}]", " ")
                 .replace("天翼网盘", " ")
                 .replace("(臻彩)", " ")
                 .replace("（真彩）", " ")
