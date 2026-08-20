@@ -7,6 +7,7 @@
         <el-button @click="openNotify">通知</el-button>
         <el-button @click="exportSubs">导出</el-button>
         <el-button @click="importVisible = true">导入</el-button>
+        <el-button @click="openNavigation">片单追更</el-button>
         <el-button type="primary" @click="handleAdd">新建订阅</el-button>
       </div>
     </div>
@@ -326,6 +327,40 @@
         <el-button type="primary" @click="saveNotify">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="navigationVisible" title="片单追更(豆瓣/TMDB 热门榜单选剧订阅)" width="960" top="3vh">
+      <div class="nav-toolbar">
+        <el-select v-model="navType" filterable style="width: 240px" @change="onNavTypeChange">
+          <el-option v-for="item in navCategories" :key="item.type_id" :label="item.type_name" :value="item.type_id"/>
+        </el-select>
+        <el-select v-for="f in navFilterDefs" :key="f.key" v-model="navFilters[f.key]" :placeholder="f.name"
+                   clearable style="width: 132px" @change="onNavFilterChange">
+          <el-option v-for="option in f.value" :key="option.v" :label="option.n" :value="option.v"/>
+        </el-select>
+        <span class="sub-text">共 {{ navTotal }} 条 · TMDB 条目自动绑定元数据,豆瓣条目按剧名订阅</span>
+      </div>
+      <div class="nav-grid" v-loading="navLoading">
+        <div v-for="item in navList" :key="item.vod_id" class="nav-card">
+          <el-image :src="item.vod_pic" fit="cover" class="nav-cover" lazy>
+            <template #error><div class="nav-cover nav-cover-placeholder">{{ (item.vod_name || '?').charAt(0) }}</div></template>
+          </el-image>
+          <div class="nav-title" :title="item.vod_name">{{ item.vod_name }}</div>
+          <div class="nav-meta">
+            <span v-if="item.vod_remarks">{{ item.vod_remarks }}</span>
+            <span v-if="item.vod_year">{{ item.vod_year }}</span>
+            <span v-if="item.type_name">{{ item.type_name }}</span>
+          </div>
+          <el-button v-if="isNavSubscribed(item)" size="small" disabled>已追更</el-button>
+          <el-button v-else size="small" type="primary"
+                     :loading="navSubscribing === item.vod_id" :disabled="!!navSubscribing"
+                     @click="navSubscribe(item)">追更</el-button>
+        </div>
+      </div>
+      <div class="nav-pager" v-if="navPageCount > 1">
+        <el-pagination background layout="prev, pager, next" :total="navTotal" :page-size="24"
+                       :current-page="navPage" @current-change="onNavPageChange"/>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -444,6 +479,19 @@ const importText = ref('')
 const importing = ref(false)
 const notifyVisible = ref(false)
 const notifyForm = ref({botToken: '', chatId: '', archiveDays: 0, vipAccounts: [] as number[]})
+const navigationVisible = ref(false)
+const navCategories = ref<{ type_id: string, type_name: string }[]>([])
+const navAllFilters = ref<Record<string, any[]>>({})
+const navFilterDefs = ref<any[]>([])
+const navFilters = ref<Record<string, string>>({})
+const navType = ref('douban:hot_tv')
+const navList = ref<any[]>([])
+const navPage = ref(1)
+const navPageCount = ref(1)
+const navTotal = ref(0)
+const navLoading = ref(false)
+const navSubscribed = ref<Set<string>>(new Set())
+const navSubscribing = ref('')
 
 onMounted(() => {
   loadAll()
@@ -452,6 +500,92 @@ onMounted(() => {
   }).catch(() => {
   })
 })
+
+// ---------- 片单追更(csp_PianDan 片单导航榜单选剧一键订阅) ----------
+
+const openNavigation = () => {
+  navigationVisible.value = true
+  if (!navCategories.value.length) {
+    axios.get('/pian-dan').then(response => {
+      navCategories.value = (response.data.categories || []).filter((c: any) => c.type_id && c.type_id !== '0')
+      navAllFilters.value = response.data.filters || {}
+      if (!navCategories.value.some(c => c.type_id === navType.value)) {
+        navType.value = navCategories.value[0]?.type_id || ''
+      }
+      applyNavFilters()
+      loadNavList()
+    }).catch(() => ElMessage.error('片单分类加载失败'))
+  }
+}
+
+/** 分类切换:换用该分类的筛选定义(地区/年代/排序等,TVBox filter 同源),已选筛选清空。 */
+const applyNavFilters = () => {
+  navFilterDefs.value = navAllFilters.value[navType.value] || []
+  navFilters.value = {}
+}
+
+const onNavTypeChange = () => {
+  navPage.value = 1
+  applyNavFilters()
+  loadNavList()
+}
+
+const onNavFilterChange = () => {
+  navPage.value = 1
+  loadNavList()
+}
+
+const onNavPageChange = (page: number) => {
+  navPage.value = page
+  loadNavList()
+}
+
+const loadNavList = () => {
+  if (!navType.value) return
+  navLoading.value = true
+  const params: any = {t: navType.value, ac: 'web', pg: navPage.value, size: 24}
+  Object.entries(navFilters.value).forEach(([key, value]) => {
+    if (value) {
+      params[key] = value // 空串 = "全部"选项,不传参
+    }
+  })
+  axios.get('/pian-dan', {params}).then(response => {
+    const data = response.data || {}
+    navList.value = data.list || []
+    navPageCount.value = data.pagecount || 1
+    navTotal.value = data.total || navList.value.length
+  }).catch(() => ElMessage.error('片单加载失败,该分类可能依赖外部接口')).finally(() => {
+    navLoading.value = false
+  })
+}
+
+const isNavSubscribed = (item: any) => {
+  return navSubscribed.value.has(item.vod_name) || subscriptions.value.some(s => s.name === item.vod_name)
+}
+
+const navSubscribe = (item: any) => {
+  const body: any = {name: item.vod_name, keyword: item.vod_name, season: 1}
+  const vodId = String(item.vod_id || '')
+  if (vodId.startsWith('tmdb:')) {
+    // tmdb:tv:{id} / tmdb:movie:{id}:绑定元数据,官方集数/播出日程驱动追更
+    const parts = vodId.split(':')
+    body.metaProvider = 'tmdb'
+    body.metaId = parts[2] || null
+    if (!body.metaId) {
+      ElMessage.warning('条目缺少 TMDB 标识,无法绑定元数据')
+      return
+    }
+  }
+  navSubscribing.value = vodId
+  axios.post('/api/media-subscriptions', body).then(() => {
+    navSubscribed.value.add(item.vod_name)
+    ElMessage.success(`已订阅「${item.vod_name}」,开始首次搜索(稍后刷新查看结果)`)
+  }).catch(error => {
+    ElMessage.error('订阅失败:' + (error.response?.data?.message || error.message))
+  }).finally(() => {
+    navSubscribing.value = ''
+  })
+}
 
 const loadAll = () => {
   loading.value = true
@@ -1105,5 +1239,68 @@ const formatClock = (time: number) => {
 
 .meta-info {
   font-size: 13px;
+}
+
+.nav-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 12px;
+  min-height: 200px;
+}
+
+.nav-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+
+.nav-cover {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 4px;
+  background: var(--el-fill-color);
+}
+
+.nav-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-dark);
+}
+
+.nav-title {
+  font-size: 13px;
+  line-height: 1.3;
+  height: 34px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.nav-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  min-height: 18px;
+}
+
+.nav-pager {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
 }
 </style>
