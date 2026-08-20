@@ -514,6 +514,14 @@ public class MediaSubscriptionCheckService {
             log.info("migrated gap mount of subscription {} to {}", subscription.getId(), path);
         } catch (Exception e) {
             log.warn("migrate legacy gap mount failed, keep old path: {}", e.getMessage());
+            // 旧挂载已删而新挂载失败:清掉挂载字段并作废 stale 覆盖快照,
+            // 否则幽灵 episode_list 会把这些集从缺口中扣除、从播放列表消失;下轮作普通候选重探自愈
+            resource.setGap(false);
+            resource.setMountPath(null);
+            resource.setShareId(null);
+            resource.setEpisodeList(null);
+            resource.setCheckedTime(System.currentTimeMillis());
+            resourceRepository.save(resource);
         }
     }
 
@@ -712,14 +720,10 @@ public class MediaSubscriptionCheckService {
 
     // ---------- 集数清单 ----------
 
-    /** 递归列出挂载目录,解析集数清单(SxxEyy 优先,否则取剥离技术标签后的最后一个数字)。损坏集(被和谐,登记于 brokenEpisodes)不计入。 */
+    /** 递归列出挂载目录,解析集数清单(SxxEyy 优先,否则取剥离技术标签后的最后一个数字)。
+     * 统一走 walkEpisodeFiles:损坏集(被和谐)按文件的【实际目录】过滤 —— 嵌套子目录(Season 1/第N季)也能命中。 */
     Set<Integer> listEpisodes(MediaSubscription subscription) {
-        Set<Integer> episodes = walkEpisodes(site(), subscription.getSeason(), subscription.getMountPath(), maxEpisodeBytes(subscription));
-        Map<Integer, String> broken = parseBroken(subscription);
-        if (!broken.isEmpty()) {
-            episodes.removeIf(episode -> subscription.getMountPath().equals(brokenDir(broken, episode)));
-        }
-        return episodes;
+        return walkEpisodeFiles(subscription, false).keySet();
     }
 
     /** 损坏集登记表:JSON {集号: "源目录|时间戳"};解析并剔除 7 天以上过期项。 */

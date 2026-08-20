@@ -377,7 +377,8 @@ public class MediaSubscriptionService {
             result.put("id", matcher.group(1));
         } else if ((matcher = java.util.regex.Pattern.compile("v\\.qq\\.com/x/cover/([A-Za-z0-9]+)").matcher(link)).find()) {
             result.put("provider", "official");
-            result.put("id", link); // metaId 存链接本身,details 按 cid 直取官方分集
+            // 规范化 canonical 形式:原链接可能带 ?vid= 等 query,超出 meta_id 列宽(VARCHAR 64)
+            result.put("id", "https://v.qq.com/x/cover/" + matcher.group(1) + ".html");
         } else {
             throw new BadRequestException("无法识别的链接,支持:豆瓣 subject / TMDB tv / Bangumi subject / 腾讯视频 cover 链接");
         }

@@ -147,15 +147,14 @@ public class MediaSubscriptionTransferService {
             downgradeToFOLLOW(subscription, "账号不存在");
             return;
         }
-        boolean anyTransferred = false;
+        boolean anySuccess = false;  // 含"无需转存"(返回 0)——账号本来就已补齐也算成功
         boolean anyFailure = false;
         for (DriverAccount account : targets) {
             try {
                 Integer transferred = transferToAccount(subscription, account);
-                if (transferred != null && transferred > 0) {
-                    anyTransferred = true;
-                }
-                if (transferred == null) {
+                if (transferred != null) {
+                    anySuccess = true;
+                } else {
                     anyFailure = true;
                 }
             } catch (Exception e) {
@@ -163,8 +162,9 @@ public class MediaSubscriptionTransferService {
                 anyFailure = true;
             }
         }
-        // 全部目标都颗粒无收才降级(多目标时单盘失败不影响其余,追更不断)
-        if (!anyTransferred && anyFailure) {
+        // 全部目标都失败才降级(多目标时单盘失败不影响其余,追更不断);
+        // 无需转存(0)是成功,不能因为"另一盘失败"而误降级
+        if (anyFailure && !anySuccess) {
             downgradeToFOLLOW(subscription, "转存全部失败(检查账号配额与空间)");
         }
     }
@@ -356,7 +356,7 @@ public class MediaSubscriptionTransferService {
         }
         List<TransferredTarget> result = new ArrayList<>();
         for (DriverAccount account : resolveTargets(subscription)) {
-            result.add(new TransferredTarget(account.getName(), targetDir(subscription, account)));
+            result.add(new TransferredTarget(StringUtils.defaultIfBlank(account.getName(), "账号#" + account.getId()), targetDir(subscription, account)));
         }
         return result;
     }
@@ -381,7 +381,7 @@ public class MediaSubscriptionTransferService {
         List<Map<String, Object>> accounts = new ArrayList<>();
         for (DriverAccount account : targets) {
             int transferred = listTargetEpisodes(site, subscription, targetDir(subscription, account)).size();
-            accounts.add(Map.of("account", account.getName(), "transferred", transferred));
+            accounts.add(Map.of("account", StringUtils.defaultIfBlank(account.getName(), "账号#" + account.getId()), "transferred", transferred));
         }
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("covered", covered);
