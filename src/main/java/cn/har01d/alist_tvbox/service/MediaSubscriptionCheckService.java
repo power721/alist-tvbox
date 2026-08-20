@@ -23,6 +23,7 @@ import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
+import cn.har01d.alist_tvbox.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
@@ -65,6 +66,14 @@ public class MediaSubscriptionCheckService {
     /** 扫集号前先剥掉的技术标签(避免 1080/2160/4K 被当成集数) */
     private static final Pattern TECH_TAGS = Pattern.compile(
             "(?i)(2160p|1080p|720p|480p|4k|8k|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|国语|粤语|中字|简体|繁体|双语|字幕)");
+    /** 标题级季标记:中文"第N季"、SxxEyy 的季、独立 Sxx、Season N */
+    private static final Pattern TITLE_SEASON_CN = Pattern.compile("第\\s*([0-9一二三四五六七八九十]{1,3})\\s*季");
+    private static final Pattern TITLE_SEASON_SXXE = Pattern.compile("[Ss](\\d{1,2})\\s*[Ee]\\d{1,3}");
+    private static final Pattern TITLE_SEASON_ALONE = Pattern.compile("(?:^|[^A-Za-z0-9])[Ss](\\d{1,2})(?![\\dEe])");
+    private static final Pattern TITLE_SEASON_EN = Pattern.compile("(?i)season\\s*(\\d{1,2})");
+    /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
+    private static final Pattern TITLE_PROGRESS = Pattern.compile(
+            "(?i)更新?至\\s*(\\d{1,3})|全\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*[-~至]\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,3})(?!\\d)");
     private static final String INDEX_TEMPLATE_NAME = "追剧";
     /** 补缺源内部目录(藏于 /追剧/ 下的点目录,用户视角每部剧只有一个文件夹入口) */
     private static final String GAP_SOURCES_ROOT = cn.har01d.alist_tvbox.util.Constants.SUBSCRIPTION_MOUNT_ROOT + ".sources/";
@@ -389,6 +398,17 @@ public class MediaSubscriptionCheckService {
         subscription.setOfficialTotal(details.getTotalEpisodes());
         subscription.setOfficialStatus(details.getStatus());
         subscription.setNextAirTime(details.getNextAirTime());
+        if (details.getAliases() != null) {
+            // 别名快照(换行分隔):标题归属匹配用;单条过长/为空的丢弃,总量限幅
+            String joined = details.getAliases().stream()
+                    .map(String::trim)
+                    .filter(a -> a.length() >= 2 && a.length() <= 100)
+                    .distinct()
+                    .limit(12)
+                    .reduce((a, b) -> a + "\n" + b)
+                    .orElse(null);
+            subscription.setAliases(joined);
+        }
         // 播出日程快照(昨日 00:00 ~ +14 天窗口,播放时间轴用);provider 未提供日程时保留旧快照
         if (details.getUpcoming() != null) {
             java.time.ZoneId zone = java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID);
@@ -1059,6 +1079,40 @@ public class MediaSubscriptionCheckService {
         return episode;
     }
 
+    /** 播放列表显示标题(fixName 已剥公共前后缀)解析集号:剥掉的是集号前的公共前缀,
+     * 集号必在标题最前,取首个 1-999 数字即返回——文件名走 {@link #parseEpisode} 的"末个数字"规则,
+     * 但标题里集号后残留的年份/50fps 等未被 TECH_TAGS 覆盖的数字会盖过集号
+     * (如 "S01E15.2026.2160p.50fps.WEB-DL.H.265.AAC.mkv" 剥前缀后解析成 50,15-17 集全部丢失)。 */
+    int parseEpisodeFromTitle(String title, Integer season) {
+        String base = title;
+        int index = base.lastIndexOf('.');
+        if (index > 0 && index < base.length() - 1 && base.substring(index + 1).matches("[a-zA-Z0-9]{1,5}")) {
+            base = base.substring(0, index);
+        }
+        Matcher matcher = SEASON_EPISODE.matcher(base);
+        if (matcher.find()) {
+            int s = Integer.parseInt(matcher.group(1));
+            int ep = Integer.parseInt(matcher.group(2));
+            if (season != null && season > 0 && season != s) {
+                return -1;
+            }
+            return ep >= 1 && ep <= 999 ? ep : -1;
+        }
+        String cleaned = TECH_TAGS.matcher(base).replaceAll(" ");
+        Matcher numbers = NUMBER.matcher(cleaned);
+        while (numbers.find()) {
+            try {
+                int value = Integer.parseInt(numbers.group(1));
+                if (value >= 1 && value <= 999) {
+                    return value;
+                }
+            } catch (NumberFormatException ignored) {
+                // 4 位以上已被 \d{1,4} + 范围过滤兜底
+            }
+        }
+        return -1;
+    }
+
     private boolean isMediaFormat(String name) {
         int index = name.lastIndexOf('.');
         if (index > 0) {
@@ -1170,6 +1224,8 @@ public class MediaSubscriptionCheckService {
         }
 
         MediaSubscriptionFilter filter = parseFilter(subscription);
+        List<String> names = matchNames(subscription);
+        int irrelevant = 0;
         List<Scored> scored = new ArrayList<>();
         String activeLink = existing.stream().filter(MediaSubscriptionResource::isActive)
                 .map(MediaSubscriptionResource::getLink).findFirst().orElse(null);
@@ -1182,6 +1238,16 @@ public class MediaSubscriptionCheckService {
                 continue;
             }
             if (activeLink != null && activeLink.equals(message.getLink())) {
+                continue;
+            }
+            if (!names.isEmpty() && !matchesTitle(names, title)) {
+                irrelevant++; // 标题与剧名/别名均不沾边,大概率是同名召回噪声,挡在池外省去挂载试错
+                continue;
+            }
+            Integer titleSeason = parseTitleSeason(title);
+            if (subscription.getSeason() != null && subscription.getSeason() > 0
+                    && titleSeason != null && !titleSeason.equals(subscription.getSeason())) {
+                irrelevant++; // 标题明确标注其它季(常见同名剧前季资源)
                 continue;
             }
             scored.add(score(subscription, message, title, filter));
@@ -1216,9 +1282,11 @@ public class MediaSubscriptionCheckService {
             added++;
         }
         if (added > 0) {
-            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_POOL_FILLED, "候选池新增 " + added + " 个资源(" + keyword + ")");
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_POOL_FILLED,
+                    "候选池新增 " + added + " 个资源(" + keyword + (irrelevant > 0 ? ",过滤 " + irrelevant + " 条不相关结果" : "") + ")");
         } else if (force) {
-            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_POOL_FILLED, "搜索无新增候选(共 " + messages.size() + " 条结果)");
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_POOL_FILLED,
+                    "搜索无新增候选(共 " + messages.size() + " 条结果" + (irrelevant > 0 ? ",过滤 " + irrelevant + " 条不相关结果" : "") + ")");
         }
     }
 
@@ -1231,12 +1299,20 @@ public class MediaSubscriptionCheckService {
             return List.of(Map.of("error", StringUtils.defaultString(e.getMessage())));
         }
         List<Map<String, Object>> result = new ArrayList<>();
+        List<String> names = matchNames(keyword, keyword, null);
         for (Message message : messages) {
             if (StringUtils.isBlank(message.getLink()) || !PAN_TYPES.contains(StringUtils.defaultString(message.getType()))) {
                 continue;
             }
             String title = StringUtils.defaultIfBlank(message.getName(), message.getLink());
             if (matchesKeywords(title, filter == null ? null : filter.getExcludeKeywords())) {
+                continue;
+            }
+            if (!names.isEmpty() && !matchesTitle(names, title)) {
+                continue;
+            }
+            Integer titleSeason = parseTitleSeason(title);
+            if (season != null && season > 0 && titleSeason != null && !titleSeason.equals(season)) {
                 continue;
             }
             Scored scored = score(null, message, title, filter);
@@ -1336,6 +1412,30 @@ public class MediaSubscriptionCheckService {
                 }
             }
         }
+        if (subscription != null) {
+            List<String> names = matchNames(subscription);
+            if (!names.isEmpty() && matchesTitle(names, title)) {
+                result += 15;
+                reasons.add("标题归属+15");
+            }
+            Integer titleSeason = parseTitleSeason(title);
+            if (subscription.getSeason() != null && subscription.getSeason() > 0
+                    && titleSeason != null && titleSeason.equals(subscription.getSeason())) {
+                result += 10;
+                reasons.add("季标记匹配+10");
+            }
+            Integer progress = parseTitleProgress(title);
+            int current = subscription.getCurrentEpisodes() != null ? subscription.getCurrentEpisodes() : 0;
+            if (progress != null && current > 0) {
+                if (progress > current) {
+                    result += 8;
+                    reasons.add("集数领先+8");
+                } else if (progress < current) {
+                    result -= 8;
+                    reasons.add("集数落后-8");
+                }
+            }
+        }
         return new Scored(message, title, result, reasons);
     }
 
@@ -1429,6 +1529,162 @@ public class MediaSubscriptionCheckService {
             }
         }
         return false;
+    }
+
+    // ---------- 标题归属匹配(§4.7 候选过滤) ----------
+
+    /** 归属匹配名称集:剧名 + 搜索词(整串与最长词) + 元数据别名(换行分隔)。 */
+    static List<String> matchNames(String name, String keyword, String aliases) {
+        List<String> names = new ArrayList<>();
+        if (StringUtils.isNotBlank(name)) {
+            names.add(name.trim());
+        }
+        if (StringUtils.isNotBlank(keyword)) {
+            String trimmed = keyword.trim();
+            if (!names.contains(trimmed)) {
+                names.add(trimmed);
+            }
+            // 搜索词常是"剧名 + 盘名/限定词"组合,再取最长一段参与包含匹配
+            String longest = "";
+            for (String part : trimmed.split("\\s+")) {
+                if (part.length() > longest.length()) {
+                    longest = part;
+                }
+            }
+            if (longest.length() >= 2 && !names.contains(longest)) {
+                names.add(longest);
+            }
+        }
+        if (StringUtils.isNotBlank(aliases)) {
+            for (String alias : aliases.split("\\n")) {
+                String trimmed = alias.trim();
+                if (trimmed.length() >= 2 && !names.contains(trimmed)) {
+                    names.add(trimmed);
+                }
+            }
+        }
+        return names;
+    }
+
+    List<String> matchNames(MediaSubscription subscription) {
+        return matchNames(subscription.getName(), subscription.getKeyword(), subscription.getAliases());
+    }
+
+    /** 归一化:小写、剥技术标签、非字母数字/汉字转空格、汉字间空格塌缩 —— 抵消 TG 标题的 .【】·等防审查写法。 */
+    static String normalizeForMatch(String text) {
+        if (text == null) {
+            return "";
+        }
+        String s = TECH_TAGS.matcher(text.toLowerCase()).replaceAll(" ");
+        s = s.replaceAll("[^a-z0-9\\u4e00-\\u9fa5]+", " ");
+        s = TextUtils.collapseCjkSpaces(s);
+        return s.trim().replaceAll("\\s+", " ");
+    }
+
+    /**
+     * 标题归属匹配:候选资源标题是否属于本剧。归一化包含(剧名/搜索词/别名任一)为主;
+     * 全部未命中时对中文名做编辑距离滑窗兜底(防审查变形字,如"蒼蘭訣"对"苍兰诀"差 2 字)。
+     */
+    static boolean matchesTitle(List<String> names, String title) {
+        if (names == null || names.isEmpty()) {
+            return true; // 无可用名称时不拦截,保持纯搜索召回
+        }
+        String normalized = normalizeForMatch(title);
+        if (normalized.isBlank()) {
+            return false;
+        }
+        for (String name : names) {
+            String n = normalizeForMatch(name);
+            if (n.length() >= 2 && normalized.contains(n)) {
+                return true;
+            }
+        }
+        return fuzzyChineseMatch(names, normalized);
+    }
+
+    /** 中文变形兜底:标题紧凑串中存在与某中文名编辑距离 ≤ max(1, len/4) 的滑窗即命中。 */
+    private static boolean fuzzyChineseMatch(List<String> names, String normalizedTitle) {
+        String compactTitle = normalizedTitle.replace(" ", "");
+        for (String name : names) {
+            String n = normalizeForMatch(name).replace(" ", "");
+            if (!TextUtils.isChinese(n) || n.length() < 3 || n.length() > 20) {
+                continue;
+            }
+            int tolerance = Math.max(1, n.length() / 4);
+            for (int len = n.length() - tolerance; len <= n.length() + tolerance; len++) {
+                for (int start = 0; start + len <= compactTitle.length(); start++) {
+                    if (TextUtils.minDistance(n, compactTitle.substring(start, start + len)) <= tolerance) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /** 标题级季标记解析:返回标题明确标注的季号;无标记或多个不同季号(跨季合集)返回 null 不参与判定。 */
+    static Integer parseTitleSeason(String title) {
+        if (title == null || title.isBlank()) {
+            return null;
+        }
+        Set<Integer> seasons = new TreeSet<>();
+        Matcher cn = TITLE_SEASON_CN.matcher(title);
+        while (cn.find()) {
+            int value = cn.group(1).matches("\\d+") ? Integer.parseInt(cn.group(1)) : parseChineseNumber(cn.group(1));
+            if (value > 0) {
+                seasons.add(value);
+            }
+        }
+        collectSeason(title, seasons, TITLE_SEASON_SXXE);
+        collectSeason(title, seasons, TITLE_SEASON_ALONE);
+        collectSeason(title, seasons, TITLE_SEASON_EN);
+        return seasons.size() == 1 ? seasons.iterator().next() : null;
+    }
+
+    private static void collectSeason(String title, Set<Integer> seasons, Pattern pattern) {
+        Matcher matcher = pattern.matcher(title);
+        while (matcher.find()) {
+            seasons.add(Integer.parseInt(matcher.group(1)));
+        }
+    }
+
+    /** 中文数字(一~九十九)转阿拉伯;不可解析返回 0。 */
+    static int parseChineseNumber(String text) {
+        if (text == null || text.isBlank()) {
+            return 0;
+        }
+        int result = 0;
+        int current = 0;
+        for (char c : text.toCharArray()) {
+            int digit = "零一二三四五六七八九".indexOf(c);
+            if (digit >= 0) {
+                current = digit;
+            } else if (c == '十') {
+                result += current == 0 ? 10 : current * 10;
+                current = 0;
+            } else {
+                return 0;
+            }
+        }
+        return result + current;
+    }
+
+    /** 标题宣称的集数进度(TITLE_PROGRESS 各形态的最大值);无信息返回 null。 */
+    static Integer parseTitleProgress(String title) {
+        if (title == null || title.isBlank()) {
+            return null;
+        }
+        int max = -1;
+        Matcher matcher = TITLE_PROGRESS.matcher(title);
+        while (matcher.find()) {
+            for (int i = 1; i <= matcher.groupCount(); i++) {
+                String group = matcher.group(i);
+                if (group != null) {
+                    max = Math.max(max, Integer.parseInt(group));
+                }
+            }
+        }
+        return max > 0 ? max : null;
     }
 
     // ---------- 调度 ----------

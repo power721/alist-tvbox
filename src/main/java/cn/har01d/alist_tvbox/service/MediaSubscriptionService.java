@@ -19,6 +19,7 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionResourceRepository;
 import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.entity.UserPreference;
 import cn.har01d.alist_tvbox.entity.UserPreferenceRepository;
+import cn.har01d.alist_tvbox.domain.DriveId;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.metadata.DoubanMetadataProvider;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -790,7 +792,8 @@ public class MediaSubscriptionService {
         if (!parsePlayEntries(detail.getVod_play_url(), subscription.getSeason(), primary)) {
             return; // 主源列表解析失败不动原始输出
         }
-        List<MediaSubscriptionResource> gaps = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
+        List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId());
+        List<MediaSubscriptionResource> gaps = resources.stream()
                 .filter(r -> r.isGap() && r.getShareId() != null && StringUtils.isNotBlank(r.getMountPath()))
                 .toList();
         boolean transferMode = MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
@@ -800,28 +803,50 @@ public class MediaSubscriptionService {
             return;
         }
         TreeMap<Integer, String> merged = new TreeMap<>();
+        // 按网盘分线的各盘集清单(TVBox 备用线路:同盘内 转存>主源>补缺 按集合并),插入序即线路顺序
+        Map<String, TreeMap<Integer, String>> driveLines = new LinkedHashMap<>();
         // 1) 转存副本(自有盘,按目标顺序):已转存的集优先从自有盘播
         if (transferMode) {
             for (var target : transferService.transferredTargets(subscription.getUid(), subscription.getId())) {
-                mergePlaylistFrom(subscription, target.path(), merged);
+                mergePlaylistFrom(subscription, target.path(), ac, merged, driveLine(driveLines, target.drive()));
             }
         }
         // 2) 主源
-        primary.forEach(merged::putIfAbsent);
+        String primaryDrive = resources.stream()
+                .filter(r -> r.isActive() && !r.isGap() && r.getType() != null)
+                .findFirst()
+                .map(r -> DriveId.toDrive(r.getType()))
+                .orElse(null);
+        TreeMap<Integer, String> primaryLine = driveLine(driveLines, primaryDrive);
+        primary.forEach((episode, entry) -> {
+            merged.putIfAbsent(episode, entry);
+            primaryLine.putIfAbsent(episode, entry);
+        });
         // 3) 补缺源
         for (MediaSubscriptionResource gap : gaps) {
-            mergePlaylistFrom(subscription, gap.getMountPath(), merged);
+            mergePlaylistFrom(subscription, gap.getMountPath(), ac, merged,
+                    driveLine(driveLines, gap.getType() == null ? null : DriveId.toDrive(gap.getType())));
         }
         if (tvboxRequest) {
-            // TVBox/spider 请求:每集重写为逻辑链接 msubep-{subId}-{集},播放时实时选源并逐源回退,
-            // 换源/补缺/转存切换不影响续看进度(历史绑定逻辑 id 而非物理地址)。
-            detail.setVod_play_from("我的追剧");
-            detail.setVod_play_url(buildMsubepPlaylist(subscription.getId(), merged));
+            // TVBox/spider 请求:首条线路每集重写为逻辑链接 msubep-{subId}-{集},播放时实时选源并逐源回退,
+            // 换源/补缺/转存切换不影响续看进度(历史绑定逻辑 id 而非物理地址);
+            // 其余线路按网盘分线(百度/夸克/…,同盘聚合所有源)——逻辑线路失败或想固定某个盘时手动切换。
+            String[] lines = buildTvBoxPlayLines(subscription.getId(), merged, driveLines);
+            detail.setVod_play_from(lines[0]);
+            detail.setVod_play_url(lines[1]);
         } else if (transferMode || merged.size() != primary.size()) {
             // web 请求保留真实地址,与挂载目录播放一致
             detail.setVod_play_from("追更");
             detail.setVod_play_url(String.join("#", merged.values()));
         }
+    }
+
+    /** 盘线路懒建;盘类型未知(旧数据/未识别分享)返回丢弃容器——集仍并入合并线路,只是不单独出线。 */
+    private TreeMap<Integer, String> driveLine(Map<String, TreeMap<Integer, String>> driveLines, String drive) {
+        if (StringUtils.isBlank(drive)) {
+            return new TreeMap<>();
+        }
+        return driveLines.computeIfAbsent(drive, key -> new TreeMap<>());
     }
 
     /** TVBox 逻辑播放列表:集号 → `title$msubep-{subId}-{集}`(title 取自原条目,无 '$' 时退化为"第N集")。
@@ -840,14 +865,49 @@ public class MediaSubscriptionService {
         return playUrl.toString();
     }
 
-    private void mergePlaylistFrom(MediaSubscription subscription, String path, TreeMap<Integer, String> merged) {
+    /** 线路显示名:DriveId 盘 key → 中文名(未知 key 原样展示)。 */
+    private static final Map<String, String> DRIVE_NAMES = Map.ofEntries(
+            Map.entry("baidu", "百度网盘"), Map.entry("quark", "夸克网盘"), Map.entry("ali", "阿里云盘"),
+            Map.entry("115", "115网盘"), Map.entry("uc", "UC网盘"), Map.entry("189", "天翼云盘"),
+            Map.entry("123", "123云盘"), Map.entry("139", "移动云盘"), Map.entry("thunder", "迅雷云盘"),
+            Map.entry("pikpak", "PikPak"), Map.entry("duck", "广雅网盘"), Map.entry("local", "本地"),
+            Map.entry("strm", "STRM"));
+
+    /** TVBox 多线路装配:首条「我的追剧」为 msubep 逻辑线路(默认,续看绑定逻辑 id),
+     * 其余每个网盘一条线路(同盘聚合 转存>主源>补缺 的全部集)。返回 [vod_play_from, vod_play_url]。 */
+    static String[] buildTvBoxPlayLines(int subscriptionId, TreeMap<Integer, String> merged,
+                                        Map<String, TreeMap<Integer, String>> driveLines) {
+        List<String> from = new ArrayList<>();
+        from.add("我的追剧");
+        List<String> urls = new ArrayList<>();
+        urls.add(buildMsubepPlaylist(subscriptionId, merged));
+        for (var line : driveLines.entrySet()) {
+            if (line.getValue().isEmpty()) {
+                continue;
+            }
+            from.add(DRIVE_NAMES.getOrDefault(line.getKey(), line.getKey()));
+            urls.add(String.join("#", line.getValue().values()));
+        }
+        return new String[]{String.join("$$$", from), String.join("$$$", urls)};
+    }
+
+    /** 拉取挂载路径播放列表并按集合并进合并线路与盘线路。
+     * 显式 depth=3:getPlaylist 对 detail/web 默认 depth=1,嵌套目录结构的补缺/转存挂载会列空;
+     * ac 透传——TVBox 请求(空 ac)产出紧凑播放 id(备用线路可直连 /play),web 产出代理地址。 */
+    private void mergePlaylistFrom(MediaSubscription subscription, String path, String ac, TreeMap<Integer, String> merged,
+                                   TreeMap<Integer, String> driveLine) {
         try {
-            MovieList playlist = tvBoxService.getDetail("detail", "1$" + path + Constants.PLAYLIST,
-                    subscription.getName(), null, null);
+            MovieList playlist = tvBoxService.getDetail(StringUtils.defaultString(ac), "1$" + path + Constants.PLAYLIST,
+                    subscription.getName(), null, 3);
             if (playlist == null || playlist.getList().isEmpty()) {
                 return;
             }
-            parsePlayEntries(playlist.getList().get(0).getVod_play_url(), subscription.getSeason(), merged);
+            TreeMap<Integer, String> entries = new TreeMap<>();
+            parsePlayEntries(playlist.getList().get(0).getVod_play_url(), subscription.getSeason(), entries);
+            entries.forEach((episode, entry) -> {
+                merged.putIfAbsent(episode, entry);
+                driveLine.putIfAbsent(episode, entry);
+            });
         } catch (Exception e) {
             log.debug("load playlist from {} failed: {}", path, e.getMessage());
         }
@@ -875,7 +935,7 @@ public class MediaSubscriptionService {
                     continue;
                 }
                 String episodeTitle = entry.substring(0, index).replaceAll("\\([^)]*\\)$", ""); // 去掉体积后缀 (1.2G)
-                int episode = checkService.parseEpisode(episodeTitle, season);
+                int episode = checkService.parseEpisodeFromTitle(episodeTitle, season);
                 if (episode > 0) {
                     out.putIfAbsent(episode, entry);
                     any = true;

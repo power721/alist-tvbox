@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
+import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.IndexTemplateRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
@@ -19,8 +20,10 @@ import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -248,6 +251,124 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verify(fixture.resourceRepository, Mockito.never()).save(Mockito.any()); // 未标 BAD
     }
 
+    // ---------- 标题归属匹配(候选池过滤) ----------
+
+    @Test
+    void matchNamesCombinesNameKeywordAndAliases() {
+        List<String> names = MediaSubscriptionCheckService.matchNames("苍兰诀", "苍兰诀 夸克", "The Blue Whisper\n短");
+        assertEquals(List.of("苍兰诀", "苍兰诀 夸克", "The Blue Whisper"), names);
+    }
+
+    @Test
+    void matchesTitleAcceptsDecoratedAndAliasedTitles() {
+        List<String> names = MediaSubscriptionCheckService.matchNames("苍兰诀", null, "The Blue Whisper");
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "【4K高清】苍兰诀 第01-08集 1080P"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "苍.兰.诀.更至08 / 夸克"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "苍 兰 诀 4K 中字"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "The Blue Whisper S01E05 1080p WEB-DL"));
+    }
+
+    @Test
+    void matchesTitleRejectsIrrelevantTitles() {
+        List<String> names = MediaSubscriptionCheckService.matchNames("苍兰诀", null, null);
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "乘风破浪 全12集 4K"));
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "庆余年2 更新至06集"));
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "1080P 高清资源合集"));
+    }
+
+    @Test
+    void matchesTitleToleratesSingleCharObfuscation() {
+        List<String> names = List.of("漫长的季节");
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "漫氦的季节 全12集 4K")); // 1 字防审查变形
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "漫长的授夜 全12集")); // 2 字差:别剧
+    }
+
+    @Test
+    void matchesTitleWithoutNamesKeepsOldBehavior() {
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(List.of(), "随便什么标题"));
+    }
+
+    @Test
+    void parseTitleSeasonVariants() {
+        assertEquals(2, MediaSubscriptionCheckService.parseTitleSeason("剧名 第二季 全12集"));
+        assertEquals(2, MediaSubscriptionCheckService.parseTitleSeason("剧名 S02 更新至08"));
+        assertEquals(2, MediaSubscriptionCheckService.parseTitleSeason("Show S02E05 1080p"));
+        assertEquals(3, MediaSubscriptionCheckService.parseTitleSeason("Show Season 3"));
+        assertEquals(12, MediaSubscriptionCheckService.parseTitleSeason("第12季 全24集"));
+        assertNull(MediaSubscriptionCheckService.parseTitleSeason("剧名 第1-2季 合集")); // 跨季区间不判定
+        assertNull(MediaSubscriptionCheckService.parseTitleSeason("剧名 第一季+第二季 合集"));
+        assertNull(MediaSubscriptionCheckService.parseTitleSeason("剧名 更新至08集"));
+    }
+
+    @Test
+    void parseTitleProgressVariants() {
+        assertEquals(8, MediaSubscriptionCheckService.parseTitleProgress("剧名 更新至08集 4K"));
+        assertEquals(8, MediaSubscriptionCheckService.parseTitleProgress("剧名 更至08"));
+        assertEquals(24, MediaSubscriptionCheckService.parseTitleProgress("剧名 全24集 完结"));
+        assertEquals(12, MediaSubscriptionCheckService.parseTitleProgress("剧名 第01-12集"));
+        assertEquals(7, MediaSubscriptionCheckService.parseTitleProgress("剧名 第07集"));
+        assertEquals(6, MediaSubscriptionCheckService.parseTitleProgress("剧名 EP06"));
+        assertEquals(5, MediaSubscriptionCheckService.parseTitleProgress("Show S01E05 1080p"));
+        assertNull(MediaSubscriptionCheckService.parseTitleProgress("1080P.HEVC 中字"));
+    }
+
+    @Test
+    void chineseNumberConversion() {
+        assertEquals(1, MediaSubscriptionCheckService.parseChineseNumber("一"));
+        assertEquals(10, MediaSubscriptionCheckService.parseChineseNumber("十"));
+        assertEquals(11, MediaSubscriptionCheckService.parseChineseNumber("十一"));
+        assertEquals(21, MediaSubscriptionCheckService.parseChineseNumber("二十一"));
+        assertEquals(0, MediaSubscriptionCheckService.parseChineseNumber("百"));
+    }
+
+    @Test
+    void fillPoolFiltersIrrelevantResults() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        Mockito.when(fixture.telegramService.search(Mockito.anyString(), Mockito.anyInt(),
+                        Mockito.anyBoolean(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/other", "乘风破浪 全12集 4K"),
+                        message("https://pan.quark.cn/s/mine", "苍兰诀 第01-08集 4K")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(1, "https://pan.quark.cn/s/mine"))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository).save(captor.capture());
+        assertEquals("苍兰诀 第01-08集 4K", captor.getValue().getTitle());
+    }
+
+    @Test
+    void fillPoolRejectsWrongSeasonTitle() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        fixture.subscription.setSeason(2);
+        Mockito.when(fixture.telegramService.search(Mockito.anyString(), Mockito.anyInt(),
+                        Mockito.anyBoolean(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/s1", "苍兰诀 第一季 全36集"),
+                        message("https://pan.quark.cn/s/s2", "苍兰诀 第二季 更新至08集")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(1, "https://pan.quark.cn/s/s2"))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository).save(captor.capture());
+        assertEquals("苍兰诀 第二季 更新至08集", captor.getValue().getTitle());
+    }
+
+    private static Message message(String link, String name) {
+        Message message = new Message();
+        message.setLink(link);
+        message.setName(name);
+        message.setType("5"); // 夸克,在 PAN_TYPES 内
+        message.setTime(Instant.now());
+        return message;
+    }
+
     private MediaSubscription subscription() {
         MediaSubscription subscription = new MediaSubscription();
         subscription.setId(1);
@@ -269,6 +390,7 @@ class MediaSubscriptionCheckServiceTest {
         final SiteRepository siteRepository = Mockito.mock(SiteRepository.class);
         final SettingRepository settingRepository = Mockito.mock(SettingRepository.class);
         final AListService aListService = Mockito.mock(AListService.class);
+        final TelegramService telegramService = Mockito.mock(TelegramService.class);
         final MediaSubscriptionCheckService service;
         final MediaSubscription subscription = new MediaSubscription();
 
@@ -278,7 +400,7 @@ class MediaSubscriptionCheckServiceTest {
             service = new MediaSubscriptionCheckService(subscriptionRepository, resourceRepository, eventRepository,
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),
                     Mockito.mock(IndexTemplateRepository.class), settingRepository,
-                    Mockito.mock(ShareService.class), aListService, Mockito.mock(TelegramService.class),
+                    Mockito.mock(ShareService.class), aListService, telegramService,
                     Mockito.mock(MetadataService.class), Mockito.mock(AutoUpdateExecutor.class),
                     appProperties, new ObjectMapper());
             subscription.setId(1);

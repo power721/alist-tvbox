@@ -427,7 +427,27 @@ public class MediaSubscriptionTransferService {
         }
     }
 
-    public record TransferredTarget(String account, String path) {
+    public record TransferredTarget(String account, String path, String drive) {
+    }
+
+    /** 转存账号网盘 → DriveId 盘 key(与分享资源 type 同一命名空间,供播放列表按盘分线)。 */
+    static String driveKey(DriverAccount account) {
+        if (account == null || account.getType() == null) {
+            return null;
+        }
+        return switch (account.getType()) {
+            case QUARK, QUARK_TV -> "quark";
+            case UC, UC_TV -> "uc";
+            case PAN115, OPEN115 -> "115";
+            case PAN123, OPEN123 -> "123";
+            case PAN139 -> "139";
+            case CLOUD189 -> "189";
+            case THUNDER -> "thunder";
+            case BAIDU -> "baidu";
+            case ALI -> "ali";
+            case GUANGYA -> "duck";
+            default -> null;
+        };
     }
 
     /** 已配置转存目标(各账号)的 /追剧/{名称} 目录挂载路径,按目标顺序;供播放列表按集优先合并自有盘副本(§4.5 转存>主源>补缺)。 */
@@ -438,7 +458,8 @@ public class MediaSubscriptionTransferService {
         }
         List<TransferredTarget> result = new ArrayList<>();
         for (DriverAccount account : resolveTargets(subscription)) {
-            result.add(new TransferredTarget(StringUtils.defaultIfBlank(account.getName(), "账号#" + account.getId()), targetDir(subscription, account)));
+            result.add(new TransferredTarget(StringUtils.defaultIfBlank(account.getName(), "账号#" + account.getId()),
+                    targetDir(subscription, account), driveKey(account)));
         }
         return result;
     }

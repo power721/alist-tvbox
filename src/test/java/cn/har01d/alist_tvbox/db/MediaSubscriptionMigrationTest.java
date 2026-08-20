@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.db;
 import db.migration.current.V20__MediaSubscription;
 import db.migration.current.V21__MediaSubscriptionMeta;
 import db.migration.current.V22__MediaSubscriptionMetaFix;
+import db.migration.current.V27__MediaSubscriptionAliases;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,6 +95,23 @@ class MediaSubscriptionMigrationTest {
             assertEquals(12, rs.getInt(2));
             assertEquals("bangumi", rs.getString(3));
         }
+    }
+
+    @Test
+    void v27AddsAliasesColumn() throws Exception {
+        new V20__MediaSubscription().migrate(context());
+        new V21__MediaSubscriptionMeta().migrate(context());
+        new V22__MediaSubscriptionMetaFix().migrate(context());
+        new V27__MediaSubscriptionAliases().migrate(context());
+
+        execute("INSERT INTO media_subscription (id, uid, name, created_time, aliases)"
+                + " VALUES (3, 1, '别名剧', 0, 'The Blue Whisper\n蒼蘭訣')");
+        try (ResultSet rs = query("SELECT aliases FROM media_subscription WHERE id = 3")) {
+            assertTrue(rs.next());
+            assertEquals("The Blue Whisper\n蒼蘭訣", rs.getString(1)); // 不带引号可访问(Hibernate 形态)
+        }
+        // 幂等:重复执行不报错
+        new V27__MediaSubscriptionAliases().migrate(context());
     }
 
     private void execute(String sql) throws Exception {

@@ -74,6 +74,10 @@ public class MediaSubscription {
     @Column(name = "meta_sync_time")
     private Long metaSyncTime;
 
+    /** 元数据别名快照(换行分隔),搜索结果标题归属匹配用(§4.7) */
+    @Column(columnDefinition = "TEXT")
+    private String aliases;
+
     @Column(columnDefinition = "TEXT", name = "filter_config")
     private String filterConfig;
 
