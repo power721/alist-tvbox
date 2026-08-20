@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.dto.MediaSubscriptionResourceDto;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionTransferService;
+import cn.har01d.alist_tvbox.service.PianDanService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,13 +31,31 @@ public class MediaSubscriptionController {
     private final MediaSubscriptionService subscriptionService;
     private final MediaSubscriptionCheckService checkService;
     private final MediaSubscriptionTransferService transferService;
+    private final PianDanService pianDanService;
 
     public MediaSubscriptionController(MediaSubscriptionService subscriptionService,
                                        MediaSubscriptionCheckService checkService,
-                                       MediaSubscriptionTransferService transferService) {
+                                       MediaSubscriptionTransferService transferService,
+                                       PianDanService pianDanService) {
         this.subscriptionService = subscriptionService;
         this.checkService = checkService;
         this.transferService = transferService;
+        this.pianDanService = pianDanService;
+    }
+
+    /** 片单追更:片单导航分类(豆瓣/TMDB 榜单与筛选定义)。管理端代理,走登录态鉴权,免 vod token。 */
+    @GetMapping("/navigation")
+    public Object navigationCategories() {
+        return pianDanService.category();
+    }
+
+    /** 片单追更:分类条目列表。ac 固定 web(豆瓣封面走 /images 代理防盗链)。 */
+    @GetMapping("/navigation/list")
+    public Object navigationList(String t,
+                                 @RequestParam(required = false, defaultValue = "1") int pg,
+                                 @RequestParam(required = false, defaultValue = "24") int size,
+                                 @RequestParam Map<String, String> filters) {
+        return pianDanService.list(t, "web", pg, size, filters);
     }
 
     @GetMapping

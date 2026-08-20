@@ -506,8 +506,9 @@ onMounted(() => {
 const openNavigation = () => {
   navigationVisible.value = true
   if (!navCategories.value.length) {
-    axios.get('/pian-dan').then(response => {
-      navCategories.value = (response.data.categories || []).filter((c: any) => c.type_id && c.type_id !== '0')
+    axios.get('/api/media-subscriptions/navigation').then(response => {
+      // CategoryList 的分类字段经 @JsonProperty 序列化为 "class"
+      navCategories.value = ((response.data['class'] || []) as any[]).filter((c: any) => c.type_id && c.type_id !== '0')
       navAllFilters.value = response.data.filters || {}
       if (!navCategories.value.some(c => c.type_id === navType.value)) {
         navType.value = navCategories.value[0]?.type_id || ''
@@ -543,13 +544,13 @@ const onNavPageChange = (page: number) => {
 const loadNavList = () => {
   if (!navType.value) return
   navLoading.value = true
-  const params: any = {t: navType.value, ac: 'web', pg: navPage.value, size: 24}
+  const params: any = {t: navType.value, pg: navPage.value, size: 24}
   Object.entries(navFilters.value).forEach(([key, value]) => {
     if (value) {
       params[key] = value // 空串 = "全部"选项,不传参
     }
   })
-  axios.get('/pian-dan', {params}).then(response => {
+  axios.get('/api/media-subscriptions/navigation/list', {params}).then(response => {
     const data = response.data || {}
     navList.value = data.list || []
     navPageCount.value = data.pagecount || 1
