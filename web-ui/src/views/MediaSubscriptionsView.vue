@@ -51,8 +51,7 @@
           <el-table-column label="剧名" min-width="230">
             <template #default="scope">
               <div class="name-cell">
-                <el-image :src="scope.row.cover" fit="cover" class="cover" hide-on-click-modal
-                          :preview-src-list="scope.row.cover ? [scope.row.cover] : []">
+                <el-image :src="scope.row.cover" fit="cover" class="cover">
                   <template #error>
                     <div class="cover cover-placeholder">{{ scope.row.name.charAt(0) }}</div>
                   </template>
