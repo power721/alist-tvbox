@@ -39,8 +39,11 @@ public class TmdbMetadataProvider implements MetadataProvider {
     private final Cache<String, MetadataDetails> detailsCache = Caffeine.newBuilder()
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
 
-    public TmdbMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp) {
+    private final MetadataHealth health;
+
+    public TmdbMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp, MetadataHealth health) {
         this.settingRepository = settingRepository;
+        this.health = health;
         this.restTemplate = metadataHttp.create();
     }
 
@@ -57,7 +60,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
     @Override
     public List<MetadataSearchItem> search(String keyword) {
         List<MetadataSearchItem> result = new ArrayList<>();
-        if (StringUtils.isBlank(keyword)) {
+        if (StringUtils.isBlank(keyword) || health.isOpen(NAME)) {
             return result;
         }
         try {
@@ -82,7 +85,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
                     result.add(entry);
                 }
             }
+            health.record(NAME, true);
         } catch (Exception e) {
+            health.record(NAME, false);
             log.warn("tmdb search failed: {}", e.getMessage());
         }
         return result;
@@ -180,7 +185,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
                     details.setNextAirTime(airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
                 }
             }
+            health.record(NAME, true);
         } catch (Exception e) {
+            health.record(NAME, false);
             log.warn("tmdb details {} failed: {}", id, e.getMessage());
         }
         return details;

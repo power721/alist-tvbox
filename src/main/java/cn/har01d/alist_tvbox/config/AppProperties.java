@@ -107,6 +107,10 @@ public class AppProperties {
         private int maxTransfersPerDay = 20;
         /** 自动转存:单轮转存等待 AList copy 任务完成的超时(分钟) */
         private int transferTimeoutMinutes = 30;
+        /** 新集播放预热验证:发现新集时做链接解析探测,失败判损坏(被和谐)登记补源 */
+        private boolean preheatEnabled = true;
+        /** 新集播放预热验证:每轮最多探测的集数 */
+        private int preheatMaxPerRound = 5;
     }
 
     public static Map<String, Map<String, Object>> copyLocalProxyConfig(Map<String, Map<String, Object>> source) {

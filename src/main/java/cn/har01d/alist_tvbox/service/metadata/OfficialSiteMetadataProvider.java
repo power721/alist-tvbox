@@ -59,9 +59,12 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
             com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
                     .maximumSize(200).expireAfterWrite(java.time.Duration.ofHours(6)).build();
 
-    public OfficialSiteMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp) {
+    private final MetadataHealth health;
+
+    public OfficialSiteMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp, MetadataHealth health) {
         this.settingRepository = settingRepository;
         this.restTemplate = metadataHttp.create();
+        this.health = health;
     }
 
     @Override
@@ -72,7 +75,7 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
     @Override
     public List<MetadataSearchItem> search(String keyword) {
         List<MetadataSearchItem> result = new ArrayList<>();
-        if (StringUtils.isBlank(keyword)) {
+        if (StringUtils.isBlank(keyword) || health.isOpen(NAME)) {
             return result;
         }
         // 搜索条目只出腾讯本站结果(其他平台仅用于集数兜底,条目绑定优先豆瓣/TMDB/Bangumi)
@@ -88,7 +91,9 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
                 entry.setDescription("腾讯视频");
                 result.add(entry);
             }
+            health.record(NAME, true);
         } catch (Exception e) {
+            health.record(NAME, false);
             log.debug("official search failed: {}", e.getMessage());
         }
         return result;
@@ -101,6 +106,11 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
 
     private MetadataDetails fetchDetails(String id) {
         MetadataDetails details = new MetadataDetails();
+        if (health.isOpen(NAME)) {
+            details.setProvider(NAME);
+            details.setId(id);
+            return details;
+        }
         details.setProvider(NAME);
         details.setId(id);
         details.setName(id);
@@ -147,6 +157,7 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         }
         // 3) 可配置模板兜底(自建代理/渲染端点)
         applyTemplate(details, id);
+        health.record(NAME, details.getAiredEpisodes() != null || details.getNextAirTime() != null);
         return details;
     }
 

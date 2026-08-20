@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class OfficialSiteMetadataProviderTest {
 
     private final OfficialSiteMetadataProvider provider =
-            new OfficialSiteMetadataProvider(null, new MetadataHttp(null));
+            new OfficialSiteMetadataProvider(null, new MetadataHttp(null), new MetadataHealth());
 
     @Test
     void progressWithTotal() {

@@ -264,9 +264,10 @@ public class MediaSubscriptionCheckService {
             return;
         }
 
-        applyInventory(subscription, episodes);
+        List<Integer> added = applyInventory(subscription, episodes);
 
         // 缺集检测:官方已播集数是权威触发源(§4.8);无官方数据回退期望集数/观测范围
+        episodes.removeAll(preheatEpisodes(subscription, added));
         Set<Integer> missing = computeMissing(subscription, episodes);
         if (!missing.isEmpty()) {
             fillGaps(subscription, new TreeSet<>(missing));
@@ -953,8 +954,8 @@ public class MediaSubscriptionCheckService {
         return false;
     }
 
-    /** 对比快照:新集写事件、停滞计数/退避;官方状态完结且清集达标自动完结。 */
-    private void applyInventory(MediaSubscription subscription, Set<Integer> episodes) {
+    /** 对比快照:新集写事件、停滞计数/退避;官方状态完结且清集达标自动完结。@return 本轮新增的集(供预热验证)。 */
+    private List<Integer> applyInventory(MediaSubscription subscription, Set<Integer> episodes) {
         List<Integer> old = parseEpisodeList(subscription.getEpisodeList());
         boolean initial = old.isEmpty();
         List<Integer> added = episodes.stream().filter(e -> !old.contains(e)).sorted().toList();
@@ -981,6 +982,50 @@ public class MediaSubscriptionCheckService {
             subscription.setStatus(MediaSubscription.STATUS_ENDED);
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ENDED, "已完结(共 " + episodes.size() + " 集)");
         }
+        return added;
+    }
+
+    /** 新集播放预热验证(atv-player V82/V85 思想):对新增集做链接解析探测(getFile),
+     * 失败判损坏(如夸克分享单集被和谐:列表在、实际取不了)→ 登记待补源,补上 FOLLOW 模式的盲区。
+     * @return 本轮判定损坏的集(调用方需从清单中扣除,使缺集补源当轮生效) */
+    private Set<Integer> preheatEpisodes(MediaSubscription subscription, List<Integer> added) {
+        var config = appProperties.getSubscription();
+        Set<Integer> brokenNew = new TreeSet<>();
+        if (!config.isPreheatEnabled() || added == null || added.isEmpty()) {
+            return brokenNew;
+        }
+        TreeMap<Integer, EpisodeFile> files;
+        try {
+            files = walkEpisodeFiles(subscription, true);
+        } catch (Exception e) {
+            log.debug("preheat walk failed: {}", e.getMessage());
+            return brokenNew;
+        }
+        Map<Integer, String> broken = new java.util.LinkedHashMap<>();
+        int probed = 0;
+        for (Integer episode : added) {
+            if (probed >= config.getPreheatMaxPerRound()) {
+                break;
+            }
+            EpisodeFile file = files.get(episode);
+            if (file == null) {
+                continue;
+            }
+            probed++;
+            try {
+                aListService.getFile(site(), file.dir() + "/" + file.name());
+            } catch (Exception e) {
+                log.info("subscription {} episode {} preheat failed: {}", subscription.getId(), episode, e.getMessage());
+                broken.put(episode, file.dir());
+            }
+        }
+        if (!broken.isEmpty()) {
+            addBrokenEpisodes(subscription, broken);
+            brokenNew.addAll(broken.keySet());
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR,
+                    "第" + joinNumbers(new ArrayList<>(broken.keySet())) + " 集链接验证失败(疑似被和谐),已登记自动补源");
+        }
+        return brokenNew;
     }
 
     // ---------- 候选池与打分 ----------

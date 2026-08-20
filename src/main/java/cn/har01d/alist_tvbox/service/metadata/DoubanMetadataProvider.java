@@ -43,9 +43,12 @@ public class DoubanMetadataProvider implements MetadataProvider {
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
     private final Map<String, Instant> failures = new ConcurrentHashMap<>();
 
-    public DoubanMetadataProvider(MovieRepository movieRepository, MetadataHttp metadataHttp) {
+    private final MetadataHealth health;
+
+    public DoubanMetadataProvider(MovieRepository movieRepository, MetadataHttp metadataHttp, MetadataHealth health) {
         this.movieRepository = movieRepository;
         this.restTemplate = metadataHttp.create();
+        this.health = health;
     }
 
     @Override
@@ -61,6 +64,9 @@ public class DoubanMetadataProvider implements MetadataProvider {
         }
         // 在线 suggest(优先,覆盖本地库未同步的新剧);失败降级本地表
         Instant lastFailure = failures.get("suggest");
+        if (health.isOpen(NAME)) {
+            return result.isEmpty() ? localSearch(keyword) : result;
+        }
         if (lastFailure == null || Duration.between(lastFailure, Instant.now()).toMinutes() >= 30) {
             try {
                 HttpHeaders headers = new HttpHeaders();
@@ -89,26 +95,34 @@ public class DoubanMetadataProvider implements MetadataProvider {
                     }
                 }
                 failures.remove("suggest");
+                health.record(NAME, true);
             } catch (Exception e) {
+                health.record(NAME, false);
                 log.debug("douban suggest failed: {}", e.getMessage());
                 failures.put("suggest", Instant.now());
             }
         }
         // 本地表补充(在线无结果或被ban时仍是完整兜底)
         if (result.isEmpty()) {
-            var page = movieRepository.findByNameContains(keyword.trim(),
-                    org.springframework.data.domain.PageRequest.of(0, 20));
-            for (var movie : page.getContent()) {
-                MetadataSearchItem entry = new MetadataSearchItem();
-                entry.setProvider(NAME);
-                entry.setId(String.valueOf(movie.getId()));
-                entry.setName(movie.getName());
-                entry.setYear(movie.getYear() == null ? "" : String.valueOf(movie.getYear()));
-                entry.setCover(movie.getCover());
-                entry.setScore(movie.getDbScore());
-                entry.setDescription("本地库");
-                result.add(entry);
-            }
+            result.addAll(localSearch(keyword));
+        }
+        return result;
+    }
+
+    private List<MetadataSearchItem> localSearch(String keyword) {
+        List<MetadataSearchItem> result = new ArrayList<>();
+        var page = movieRepository.findByNameContains(keyword.trim(),
+                org.springframework.data.domain.PageRequest.of(0, 20));
+        for (var movie : page.getContent()) {
+            MetadataSearchItem entry = new MetadataSearchItem();
+            entry.setProvider(NAME);
+            entry.setId(String.valueOf(movie.getId()));
+            entry.setName(movie.getName());
+            entry.setYear(movie.getYear() == null ? "" : String.valueOf(movie.getYear()));
+            entry.setCover(movie.getCover());
+            entry.setScore(movie.getDbScore());
+            entry.setDescription("本地库");
+            result.add(entry);
         }
         return result;
     }
@@ -146,7 +160,9 @@ public class DoubanMetadataProvider implements MetadataProvider {
                     }
                     failures.remove(id);
                 }
+                health.record(NAME, true);
             } catch (Exception e) {
+                health.record(NAME, false);
                 log.debug("douban details {} failed: {}", id, e.getMessage());
                 failures.put(id, Instant.now());
             }

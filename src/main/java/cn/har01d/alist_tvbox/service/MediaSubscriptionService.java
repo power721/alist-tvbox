@@ -798,8 +798,12 @@ public class MediaSubscriptionService {
             base = Math.max(base, subscription.getExpectedEpisodes());
         }
         List<Map<String, Object>> result = new ArrayList<>();
+        Map<Integer, String> broken = checkService.parseBroken(subscription);
         for (int i = 1; i <= Math.min(base, 500); i++) {
             String source = sources.get(i);
+            if (source == null && broken.containsKey(i)) {
+                source = "源损坏(待补源)";
+            }
             result.add(Map.of("episode", i, "present", source != null, "source", source == null ? "" : source));
         }
         return result;

@@ -31,25 +31,25 @@ class MetaSearchDiagTest {
         String keyword = "凡人修仙传";
 
         try {
-            List<MetadataSearchItem> bangumi = new BangumiMetadataProvider(new MetadataHttp(null)).search(keyword);
+            List<MetadataSearchItem> bangumi = new BangumiMetadataProvider(new MetadataHttp(null), new MetadataHealth()).search(keyword);
             System.out.println("DIAG bangumi: " + bangumi.size() + (bangumi.isEmpty() ? "" : " 首条=" + bangumi.get(0).getName()));
         } catch (Exception e) {
             System.out.println("DIAG bangumi EX: " + e);
         }
         try {
-            List<MetadataSearchItem> tmdb = new TmdbMetadataProvider(settingRepository, new MetadataHttp(null)).search(keyword);
+            List<MetadataSearchItem> tmdb = new TmdbMetadataProvider(settingRepository, new MetadataHttp(null), new MetadataHealth()).search(keyword);
             System.out.println("DIAG tmdb: " + tmdb.size() + (tmdb.isEmpty() ? "" : " 首条=" + tmdb.get(0).getName()));
         } catch (Exception e) {
             System.out.println("DIAG tmdb EX: " + e);
         }
         try {
-            List<MetadataSearchItem> official = new OfficialSiteMetadataProvider(settingRepository, new MetadataHttp(null)).search(keyword);
+            List<MetadataSearchItem> official = new OfficialSiteMetadataProvider(settingRepository, new MetadataHttp(null), new MetadataHealth()).search(keyword);
             System.out.println("DIAG official: " + official.size() + (official.isEmpty() ? "" : " 首条=" + official.get(0).getName()));
         } catch (Exception e) {
             System.out.println("DIAG official EX: " + e);
         }
         try {
-            List<MetadataSearchItem> douban = new DoubanMetadataProvider(null, new MetadataHttp(null)).search(keyword);
+            List<MetadataSearchItem> douban = new DoubanMetadataProvider(null, new MetadataHttp(null), new MetadataHealth()).search(keyword);
             System.out.println("DIAG douban: " + douban.size());
         } catch (Exception e) {
             System.out.println("DIAG douban EX: " + e);

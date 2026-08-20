@@ -38,8 +38,11 @@ public class BangumiMetadataProvider implements MetadataProvider {
     private final RestTemplate restTemplate;
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
-    public BangumiMetadataProvider(MetadataHttp metadataHttp) {
+    private final MetadataHealth health;
+
+    public BangumiMetadataProvider(MetadataHttp metadataHttp, MetadataHealth health) {
         this.restTemplate = metadataHttp.create();
+        this.health = health;
     }
     private final Cache<String, MetadataDetails> detailsCache = Caffeine.newBuilder()
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
@@ -59,7 +62,7 @@ public class BangumiMetadataProvider implements MetadataProvider {
     @Override
     public List<MetadataSearchItem> search(String keyword) {
         List<MetadataSearchItem> result = new ArrayList<>();
-        if (StringUtils.isBlank(keyword)) {
+        if (StringUtils.isBlank(keyword) || health.isOpen(NAME)) {
             return result;
         }
         try {
@@ -89,7 +92,9 @@ public class BangumiMetadataProvider implements MetadataProvider {
                     result.add(entry);
                 }
             }
+            health.record(NAME, true);
         } catch (Exception e) {
+            health.record(NAME, false);
             log.warn("bangumi search failed: {}", e.getMessage());
         }
         return result;
@@ -168,7 +173,9 @@ public class BangumiMetadataProvider implements MetadataProvider {
                             ? MetadataDetails.STATUS_ENDED : MetadataDetails.STATUS_UNKNOWN);
                 }
             }
+            health.record(NAME, true);
         } catch (Exception e) {
+            health.record(NAME, false);
             log.warn("bangumi details {} failed: {}", id, e.getMessage());
         }
         return details;
