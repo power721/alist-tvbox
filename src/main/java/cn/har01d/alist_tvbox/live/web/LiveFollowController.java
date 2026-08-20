@@ -37,6 +37,13 @@ public class LiveFollowController {
         return Map.of("success", true, "followed", true);
     }
 
+    /** 通过官方直播间地址添加关注:平台/房间号解析与房间校验在后端完成,失败返回 400 与原因。 */
+    @PostMapping("/url")
+    public Map<String, Object> followByUrl(@RequestBody Map<String, String> body) {
+        liveFollowService.followByUrl(currentUid(), body.get("url"));
+        return Map.of("success", true, "followed", true);
+    }
+
     @DeleteMapping
     public Map<String, Object> unfollow(@RequestParam String platform, @RequestParam String roomId) {
         boolean deleted = liveFollowService.unfollow(currentUid(), platform, roomId);

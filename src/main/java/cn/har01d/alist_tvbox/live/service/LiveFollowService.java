@@ -49,6 +49,7 @@ public class LiveFollowService {
     private final UserService userService;
     private final AppProperties appProperties;
     private final List<LivePlatform> platforms;
+    private final LiveShortLinkResolver shortLinkResolver;
     private final Cache<String, Optional<MovieDetail>> statusCache = Caffeine.newBuilder()
             .maximumSize(500)
             .expireAfterWrite(Duration.ofMinutes(2))
@@ -59,11 +60,13 @@ public class LiveFollowService {
         return thread;
     });
 
-    public LiveFollowService(LiveFollowRepository followRepository, UserService userService, AppProperties appProperties, List<LivePlatform> platforms) {
+    public LiveFollowService(LiveFollowRepository followRepository, UserService userService, AppProperties appProperties,
+                             List<LivePlatform> platforms, LiveShortLinkResolver shortLinkResolver) {
         this.followRepository = followRepository;
         this.userService = userService;
         this.appProperties = appProperties;
         this.platforms = platforms;
+        this.shortLinkResolver = shortLinkResolver;
     }
 
     @PreDestroy
@@ -104,6 +107,40 @@ public class LiveFollowService {
         statusCache.invalidate(cacheKey(platform, roomId));
         log.info("live follow: uid={}, {}${}", uid, platform, roomId);
         return true;
+    }
+
+    /**
+     * 通过官方直播间地址关注:解析平台与房间号,并实时校验房间存在后才落库。
+     * 与 follow(uid, platform, roomId) 的静默降级不同——URL 是用户手输的,
+     * 解析失败或拉取不到房间信息必须报错,不能存进无效关注。
+     * 支持带文字包装的分享文案与 b23.tv/v.douyin.com 等分享短链(网络展开)。
+     */
+    @Transactional
+    public void followByUrl(int uid, String input) {
+        String url = LiveUrlParser.extractUrl(input);
+        String[] parsed = url == null ? null : LiveUrlParser.parse(url);
+        if (parsed == null && url != null && LiveUrlParser.isShareLink(url)) {
+            parsed = shortLinkResolver.resolve(url);
+        }
+        if (parsed == null) {
+            throw new BadRequestException("无法识别的直播间地址,支持虎牙/斗鱼/B站/网易CC/快手/抖音/Twitch/SOOP 直播间链接或 b23.tv/v.douyin.com 分享短链");
+        }
+        String platform = parsed[0];
+        String roomId = parsed[1];
+        if (followRepository.findByUidAndPlatformAndRoomId(uid, platform, roomId).isPresent()) {
+            throw new BadRequestException("已关注该直播间");
+        }
+        MovieDetail info = fetchRoomInfo(platform, roomId)
+                .orElseThrow(() -> new BadRequestException("未找到直播间,请检查地址"));
+        LiveFollow follow = new LiveFollow();
+        follow.setUid(uid);
+        follow.setPlatform(platform);
+        follow.setRoomId(roomId);
+        follow.setCreatedTime(System.currentTimeMillis());
+        applyRoomInfo(follow, info);
+        followRepository.save(follow);
+        statusCache.invalidate(cacheKey(platform, roomId));
+        log.info("live follow by url: uid={}, {}${}", uid, platform, roomId);
     }
 
     @Transactional
