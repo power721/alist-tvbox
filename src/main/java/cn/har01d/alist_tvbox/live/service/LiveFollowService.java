@@ -208,7 +208,7 @@ public class LiveFollowService {
         return followRepository.countByUid(uid);
     }
 
-    /** 关注列表(TVBox "关注"分类/首页插入用):并行刷新开播状态,开播在前,其余按关注时间倒序。 */
+    /** 关注列表(TVBox "关注"分类用):并行刷新开播状态,开播在前,其余按关注时间倒序。 */
     public MovieList list(int uid) {
         lastConsumedAt = System.currentTimeMillis();
         List<LiveFollow> follows = followRepository.findByUidOrderByCreatedTimeDesc(uid);
@@ -217,7 +217,7 @@ public class LiveFollowService {
             return result;
         }
 
-        Map<String, MovieDetail> refreshed = refreshAll(follows);
+        Map<String, MovieDetail> refreshed = refreshAll(follows, RequestContextHolder.getRequestAttributes());
         // 稳定排序:开播在前,同组保持关注时间倒序
         List<LiveFollow> sorted = follows.stream()
                 .sorted(Comparator.comparing(follow -> isLive(refreshed.get(cacheKey(follow.getPlatform(), follow.getRoomId()))) ? 0 : 1))
@@ -236,7 +236,7 @@ public class LiveFollowService {
     public List<LiveFollowDto> listDto(int uid) {
         lastConsumedAt = System.currentTimeMillis();
         List<LiveFollow> follows = followRepository.findByUidOrderByCreatedTimeDesc(uid);
-        Map<String, MovieDetail> refreshed = refreshAll(follows);
+        Map<String, MovieDetail> refreshed = refreshAll(follows, RequestContextHolder.getRequestAttributes());
 
         List<LiveFollowDto> result = new ArrayList<>();
         for (LiveFollow follow : follows) {
@@ -331,10 +331,6 @@ public class LiveFollowService {
      * 并行刷新各关注房间的实时信息;超时或失败的房间不出现在结果里(降级为已存元数据)。
      * 抖音等风控敏感平台按平台分组串行刷新,避免同平台瞬时并发触发封控。
      */
-    private Map<String, MovieDetail> refreshAll(List<LiveFollow> follows) {
-        return refreshAll(follows, RequestContextHolder.getRequestAttributes());
-    }
-
     private Map<String, MovieDetail> refreshAll(List<LiveFollow> follows, RequestAttributes attributes) {
         Map<String, MovieDetail> refreshed = new ConcurrentHashMap<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>();

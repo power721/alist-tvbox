@@ -54,18 +54,13 @@ public class LiveService {
     }
 
     public MovieList home() throws IOException {
-        MovieList result = huyaService.home();
-        // 首页推荐前插入关注的直播间(开播优先)
-        int uid = liveFollowService.resolveUid(subscriptionService.getCurrentToken());
-        MovieList follows = liveFollowService.list(uid);
-        if (!follows.getList().isEmpty()) {
-            List<MovieDetail> list = new ArrayList<>(follows.getList());
-            list.addAll(result.getList());
-            result.setList(list);
-            result.setTotal(list.size());
-            result.setLimit(list.size());
+        try {
+            return huyaService.home();
+        } catch (Exception e) {
+            // 首页推荐被风控/网络抖动时返回空列表,比抛 500 对播放器更友好
+            log.warn("虎牙首页推荐获取失败", e);
+            return new MovieList();
         }
-        return result;
     }
 
     public CategoryList category() throws IOException {
