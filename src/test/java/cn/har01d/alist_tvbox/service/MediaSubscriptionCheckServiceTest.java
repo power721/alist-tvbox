@@ -10,6 +10,7 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResourceRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
@@ -341,6 +342,37 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void fillPoolBoostsMainDriveCandidates() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        Setting mainDrives = new Setting();
+        mainDrives.setName(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES);
+        mainDrives.setValue("5,10"); // 全局主网盘:夸克/百度
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
+                .thenReturn(Optional.of(mainDrives));
+        Mockito.when(fixture.telegramService.search(Mockito.anyString(), Mockito.anyInt(),
+                        Mockito.anyBoolean(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/q", "苍兰诀 第01-08集 4K"),
+                        message("https://pan.baidu.com/s/b", "苍兰诀 第01-08集 4K", "10"),
+                        message("https://115.com/s/x", "苍兰诀 第01-08集 4K", "8")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository, Mockito.times(3)).save(captor.capture());
+        // 共同底分:近期+30 4K+25 归属+15 = 70;主网盘(夸克/百度)+15,百度另有免会员+15,115 追更弱-10
+        int quark = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/q")).findFirst().orElseThrow().getScore();
+        int baidu = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/b")).findFirst().orElseThrow().getScore();
+        int pan115 = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/x")).findFirst().orElseThrow().getScore();
+        assertEquals(85, quark, "主网盘夸克 = 70 + 主网盘15");
+        assertEquals(100, baidu, "主网盘百度 = 70 + 主网盘15 + 免会员15");
+        assertEquals(60, pan115, "非主网盘115 = 70 - 追更弱10(无主网盘加分)");
+    }
+
+    @Test
     void fillPoolRejectsWrongSeasonTitle() {
         Fixture fixture = new Fixture();
         fixture.subscription.setName("苍兰诀");
@@ -361,10 +393,14 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     private static Message message(String link, String name) {
+        return message(link, name, "5"); // 夸克,在 PAN_TYPES 内
+    }
+
+    private static Message message(String link, String name, String type) {
         Message message = new Message();
         message.setLink(link);
         message.setName(name);
-        message.setType("5"); // 夸克,在 PAN_TYPES 内
+        message.setType(type);
         message.setTime(Instant.now());
         return message;
     }

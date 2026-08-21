@@ -101,6 +101,8 @@ public class MediaSubscriptionCheckService {
     private final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
     /** 缺集补搜关键词轮次(0=整季,1+=单集),内存态即可 */
     private final Map<Integer, Integer> gapSearchRounds = new ConcurrentHashMap<>();
+    /** 主网盘补池搜索限频(订阅 id → 上次搜索时间):池内无该盘资源时主动搜索,至多每检查周期一次 */
+    private final Map<Integer, Long> mainDriveSearchTime = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "msub-check");
         thread.setDaemon(true);
@@ -689,6 +691,16 @@ public class MediaSubscriptionCheckService {
             if (!missing.isEmpty()) {
                 log.info("subscription {} main drive [{}] still missing episodes {} (pool has no covering candidate)",
                         subscription.getId(), drive, missing);
+                // 池内无该盘资源:主动搜索完整源(限频每检查周期一次,与补缺搜索叠加至多 2 次/轮)
+                long interval = Math.max(6, subscription.getCheckIntervalHours() == null
+                        ? appProperties.getSubscription().getCheckIntervalHours() : subscription.getCheckIntervalHours()) * 3600_000L;
+                long now = System.currentTimeMillis();
+                Long last = mainDriveSearchTime.get(subscription.getId());
+                if (last == null || now - last >= interval) {
+                    mainDriveSearchTime.put(subscription.getId(), now);
+                    log.info("subscription {} force search for main drive [{}] complete sources", subscription.getId(), drive);
+                    fillPool(subscription, true, seasonKeyword(subscription));
+                }
             }
         }
     }
@@ -1528,6 +1540,10 @@ public class MediaSubscriptionCheckService {
                 result += 15;
                 reasons.add("VIP账号+15");
             }
+        }
+        if (subscription != null && type >= 0 && mainDrives(subscription).contains(DriveId.toDrive(type))) {
+            result += 15; // 主网盘候选优先入池(主网盘要维持完整覆盖,池里得先有该盘资源)
+            reasons.add("主网盘+15");
         }
         if (type == 10 /* 百度,DriveId:分享本身免会员,人人可看 */) {
             result += 15;
