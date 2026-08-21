@@ -192,7 +192,11 @@
         </el-form-item>
         <el-form-item v-if="form.mode === 'TRANSFER'" label="转存网盘">
           <el-select v-model="form.accountIds" multiple placeholder="可多选,同时转存到多个网盘" style="width: 100%">
-            <el-option v-for="account in accounts" :key="account.id" :label="account.name + '(' + account.type + ')'" :value="account.id"/>
+            <el-option v-for="account in accounts" :key="'pan:' + account.id"
+                       :label="account.name + '(' + account.type + ')'" :value="'pan:' + account.id"/>
+            <el-option v-for="account in aliAccounts" :key="'ali:' + account.id"
+                       :label="(account.nickname || '阿里#' + account.id) + '(阿里)'"
+                       :value="'ali:' + account.id" :disabled="!aliSelectable(account)"/>
           </el-select>
           <span class="sub-text">转存到各网盘 /追剧/ 目录下;全部失败才降级挂载模式</span>
         </el-form-item>
@@ -403,7 +407,7 @@ interface SubscriptionDto {
   mode: string
   status: string
   accountId: number | null
-  accountIds: number[] | null
+  accountIds: string[] | null
   expectedEpisodes: number | null
   currentEpisodes: number | null
   lastEpisode: number | null
@@ -468,8 +472,12 @@ const driverTypeCodes: Record<string, number> = {
   CLOUD189: 9, BAIDU: 10, PAN123: 3, OPEN123: 3, THUNDER: 2, GUANGYA: 12, PAN139: 6,
 }
 
-const aliAccountCount = ref(0)
+const aliAccounts = ref<any[]>([])
 const pikpakAccountCount = ref(0)
+
+/** 与 enableMyAli 同规则:showMyAli/master 或唯一账号才挂载了"我的阿里云盘"(可转存) */
+const aliSelectable = (account: any) =>
+    account.showMyAli || account.master || aliAccounts.value.length === 1
 
 const accountDriveCodes = () => {
   const codes = new Set<number>()
@@ -477,7 +485,7 @@ const accountDriveCodes = () => {
     const code = driverTypeCodes[(account as any).type]
     if (code !== undefined) codes.add(code)
   }
-  if (aliAccountCount.value > 0) codes.add(0) // 阿里账号在独立表(/api/ali/accounts)
+  if (aliAccounts.value.length > 0) codes.add(0) // 阿里账号在独立表(/api/ali/accounts)
   if (pikpakAccountCount.value > 0) codes.add(1) // PikPak 账号在独立表(/api/pikpak/accounts)
   return codes
 }
@@ -565,7 +573,7 @@ onMounted(() => {
   })
   // 阿里/PikPak 账号在各自独立的表,不计入 /api/pan/accounts
   axios.get('/api/ali/accounts').then(response => {
-    aliAccountCount.value = (response.data || []).length
+    aliAccounts.value = response.data || []
   }).catch(() => {
   })
   axios.get('/api/pikpak/accounts').then(response => {
@@ -705,7 +713,7 @@ const handleAdd = () => {
     expectedEpisodes: null,
     mode: 'FOLLOW',
     accountId: null,
-    accountIds: [],
+    accountIds: [] as string[],
     crossDrive: false,
     checkIntervalHours: 6,
     mainDrives: [] as number[],
@@ -733,7 +741,7 @@ const handleEdit = (row: SubscriptionDto) => {
     expectedEpisodes: row.expectedEpisodes,
     mode: row.mode,
     accountId: null,
-    accountIds: row.accountIds || (row.accountId ? [row.accountId] : []),
+    accountIds: row.accountIds?.length ? row.accountIds : (row.accountId ? ['pan:' + row.accountId] : []),
     crossDrive: !!row.crossDrive,
     checkIntervalHours: row.checkIntervalHours ?? 6,
     mainDrives: row.mainDrives || [],

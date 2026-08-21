@@ -1,6 +1,9 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.DriveId;
+import cn.har01d.alist_tvbox.entity.Account;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
@@ -43,6 +46,7 @@ public class MediaSubscriptionTransferService {
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionResourceRepository resourceRepository;
     private final DriverAccountRepository accountRepository;
+    private final AccountRepository aliAccountRepository;
     private final SiteRepository siteRepository;
     private final SettingRepository settingRepository;
     private final cn.har01d.alist_tvbox.entity.ShareRepository shareRepository;
@@ -63,6 +67,7 @@ public class MediaSubscriptionTransferService {
     public MediaSubscriptionTransferService(MediaSubscriptionRepository subscriptionRepository,
                                             MediaSubscriptionResourceRepository resourceRepository,
                                             DriverAccountRepository accountRepository,
+                                            AccountRepository aliAccountRepository,
                                             SiteRepository siteRepository,
                                             SettingRepository settingRepository,
                                             cn.har01d.alist_tvbox.entity.ShareRepository shareRepository,
@@ -74,6 +79,7 @@ public class MediaSubscriptionTransferService {
         this.subscriptionRepository = subscriptionRepository;
         this.resourceRepository = resourceRepository;
         this.accountRepository = accountRepository;
+        this.aliAccountRepository = aliAccountRepository;
         this.siteRepository = siteRepository;
         this.settingRepository = settingRepository;
         this.shareRepository = shareRepository;
@@ -144,7 +150,7 @@ public class MediaSubscriptionTransferService {
             log.info("transfer quota exhausted, skip subscription {}", subscription.getId());
             return;
         }
-        List<DriverAccount> targets = resolveTargets(subscription);
+        List<TransferTarget> targets = resolveTargets(subscription);
         if (targets.isEmpty()) {
             checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "转存失败:未配置网盘账号");
             downgradeToFOLLOW(subscription, "账号不存在");
@@ -152,16 +158,16 @@ public class MediaSubscriptionTransferService {
         }
         boolean anySuccess = false;  // 含"无需转存"(返回 0)——账号本来就已补齐也算成功
         boolean anyFailure = false;
-        for (DriverAccount account : targets) {
+        for (TransferTarget target : targets) {
             try {
-                Integer transferred = transferToAccount(subscription, account);
+                Integer transferred = transferToAccount(subscription, target);
                 if (transferred != null) {
                     anySuccess = true;
                 } else {
                     anyFailure = true;
                 }
             } catch (Exception e) {
-                log.warn("transfer subscription {} to {} failed: {}", subscription.getId(), account.getName(), e.getMessage());
+                log.warn("transfer subscription {} to {} failed: {}", subscription.getId(), target.name(), e.getMessage());
                 anyFailure = true;
             }
         }
@@ -236,10 +242,10 @@ public class MediaSubscriptionTransferService {
                 .map(s -> s.getValue()).orElse("false"));
     }
 
-    private Integer transferToAccount(MediaSubscription subscription, DriverAccount account) {
+    private Integer transferToAccount(MediaSubscription subscription, TransferTarget target) {
         Site site = siteRepository.findById(1).orElseThrow();
-        migrateLegacyTransferDir(subscription, site, account);
-        String targetDir = targetDir(subscription, account);
+        migrateLegacyTransferDir(subscription, site, target);
+        String targetDir = targetDir(subscription, target);
 
         // 源覆盖(主源 + 补缺挂载)与目标已有集对比
         TreeMap<Integer, EpisodeFile> sources = checkService.walkEpisodeFiles(subscription, true);
@@ -256,7 +262,7 @@ public class MediaSubscriptionTransferService {
         });
         // 按盘路由:默认只转同盘(服务端保存式,快而稳);跨盘需显式开启或秒传配置允许,
         // 未路由的集继续走分享播放(合并列表不受影响)
-        int dstType = MediaSubscriptionCheckService.driveCode(account.getType());
+        int dstType = target.shareType() == null ? -1 : target.shareType();
         Map<String, Integer> sourceTypes = sourceTypesByDir(subscription);
         List<Integer> skippedCross = new ArrayList<>();
         missing.entrySet().removeIf(entry -> {
@@ -268,16 +274,16 @@ public class MediaSubscriptionTransferService {
         });
         if (!skippedCross.isEmpty()) {
             log.info("subscription {} skip {} cross-drive episodes to account {} (仅同盘转存;分享源继续播放)",
-                    subscription.getId(), skippedCross.size(), account.getName());
+                    subscription.getId(), skippedCross.size(), target.name());
         }
         if (missing.isEmpty()) {
             return 0;
         }
 
-        Task task = taskService.addSubscriptionTask("转存 " + subscription.getName() + " → " + account.getName());
+        Task task = taskService.addSubscriptionTask("转存 " + subscription.getName() + " → " + target.name());
         taskService.startTask(task.getId());
         todayCount.incrementAndGet();
-        log.info("transfer subscription {} to {}: {} -> {} ({} episodes)", subscription.getId(), account.getName(),
+        log.info("transfer subscription {} to {}: {} -> {} ({} episodes)", subscription.getId(), target.name(),
                 sources.firstKey() + "-" + sources.lastKey(), targetDir, missing.size());
         try {
             // 按源目录分组提交
@@ -295,13 +301,13 @@ public class MediaSubscriptionTransferService {
             if (done && transferred == missing.size()) {
                 taskService.completeTask(task.getId(), "转存 " + transferred + " 集", "");
                 checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_TRANSFER_DONE,
-                        "已转存 " + transferred + " 集到 " + account.getName() + "(共 " + after.size() + " 集)");
+                        "已转存 " + transferred + " 集到 " + target.name() + "(共 " + after.size() + " 集)");
                 return transferred;
             }
             int failed = missing.size() - transferred;
             taskService.failTask(task.getId(), "转存 " + transferred + "/" + missing.size() + " 集");
             checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_TRANSFER_FAILED,
-                    "转存不完整(" + account.getName() + "):成功 " + transferred + " / " + missing.size() + "(可能配额/空间不足)");
+                    "转存不完整(" + target.name() + "):成功 " + transferred + " / " + missing.size() + "(可能配额/空间不足)");
             if (done && transferred < missing.size()) {
                 // 任务已结束仍缺失 = 源里列得出、实际取不了(如夸克分享单集被和谐):
                 // 登记为该源损坏集,下轮集数统计/转存取源跳过,自动从其他分享补(7 天过期重试)
@@ -321,40 +327,72 @@ public class MediaSubscriptionTransferService {
         } catch (Exception e) {
             taskService.failTask(task.getId(), e.getMessage());
             checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_TRANSFER_FAILED,
-                    "转存失败(" + account.getName() + "):" + e.getMessage());
+                    "转存失败(" + target.name() + "):" + e.getMessage());
             return null;
         }
     }
 
-    private List<DriverAccount> resolveTargets(MediaSubscription subscription) {
-        List<DriverAccount> result = new ArrayList<>();
-        for (Integer id : accountIds(subscription)) {
-            DriverAccount account = accountRepository.findById(id == null ? -1 : id).orElse(null);
-            if (account != null) {
-                result.add(account);
+    private List<TransferTarget> resolveTargets(MediaSubscription subscription) {
+        List<TransferTarget> result = new ArrayList<>();
+        long aliCount = aliAccountRepository.count();
+        for (String id : accountIds(subscription)) {
+            try {
+                if (id.startsWith("ali:")) {
+                    Account account = aliAccountRepository.findById(Integer.parseInt(id.substring(4))).orElse(null);
+                    // 与 AccountService.enableMyAli 同规则:未挂载"我的阿里云盘"的账号不可作为转存目标
+                    if (account == null || !(account.isShowMyAli() || account.isMaster() || aliCount == 1)) {
+                        continue;
+                    }
+                    String name = StringUtils.defaultIfBlank(account.getNickname(), "阿里#" + account.getId());
+                    result.add(new TransferTarget("ali:" + account.getId(), name, aliMountPath(account), 0));
+                } else {
+                    DriverAccount account = accountRepository.findById(Integer.parseInt(id.startsWith("pan:") ? id.substring(4) : id)).orElse(null);
+                    if (account != null) {
+                        result.add(new TransferTarget("pan:" + account.getId(),
+                                StringUtils.defaultIfBlank(account.getName(), "账号#" + account.getId()),
+                                Storage.getMountPath(account),
+                                MediaSubscriptionCheckService.driveCode(account.getType())));
+                    }
+                }
+            } catch (NumberFormatException ignored) {
+                // 非法目标 id 跳过
             }
         }
         return result;
     }
 
-    private List<Integer> accountIds(MediaSubscription subscription) {
+    /** 转存目标 id:"pan:{id}"(网盘账号)/"ali:{id}"(阿里独立账号表);兼容旧整数 JSON(默认 pan)与单值 accountId。 */
+    private List<String> accountIds(MediaSubscription subscription) {
         if (StringUtils.isNotBlank(subscription.getAccountIds())) {
             try {
-                List<Integer> ids = new com.fasterxml.jackson.databind.ObjectMapper()
-                        .readValue(subscription.getAccountIds(), new com.fasterxml.jackson.core.type.TypeReference<List<Integer>>() {
-                        });
-                if (!ids.isEmpty()) {
-                    return ids;
+                var arr = new com.fasterxml.jackson.databind.ObjectMapper().readTree(subscription.getAccountIds());
+                if (arr.isArray() && !arr.isEmpty()) {
+                    List<String> ids = new ArrayList<>();
+                    arr.forEach(node -> {
+                        String value = node.isNumber() ? "pan:" + node.asInt() : node.asText();
+                        if (StringUtils.isNotBlank(value)) {
+                            ids.add(value);
+                        }
+                    });
+                    if (!ids.isEmpty()) {
+                        return ids;
+                    }
                 }
             } catch (Exception ignored) {
                 // 回退旧单值
             }
         }
-        return subscription.getAccountId() == null ? List.of() : List.of(subscription.getAccountId());
+        return subscription.getAccountId() == null ? List.of() : List.of("pan:" + subscription.getAccountId());
     }
 
-    private static String targetDir(MediaSubscription subscription, DriverAccount account) {
-        return Storage.getMountPath(account) + "/追剧/" + dirBaseName(subscription);
+    /** 阿里账号挂载根(与 Storage(Account,type) 同规则,转存进资源盘)。 */
+    private static String aliMountPath(Account account) {
+        String name = StringUtils.defaultIfBlank(account.getNickname(), String.valueOf(account.getId()));
+        return String.format("/\uD83D\uDCC0我的阿里云盘/%s/资源盘", name);
+    }
+
+    private static String targetDir(MediaSubscription subscription, TransferTarget target) {
+        return target.mountPath() + "/追剧/" + dirBaseName(subscription);
     }
 
     /** 转存目录名:剧名 + 季 + 元数据 id 标签(与挂载目录命名一致,刮削器可按 id 精准匹配)。 */
@@ -366,15 +404,15 @@ public class MediaSubscriptionTransferService {
     }
 
     /** 旧命名(无 id 标签)目录一次性原地 rename 迁移,避免带标签的新目录整季重拷。 */
-    private void migrateLegacyTransferDir(MediaSubscription subscription, Site site, DriverAccount account) {
+    private void migrateLegacyTransferDir(MediaSubscription subscription, Site site, TransferTarget target) {
         try {
             String tag = MediaSubscriptionService.metaIdTag(subscription);
             if (tag == null) {
                 return;
             }
-            String oldDir = Storage.getMountPath(account) + "/追剧/" + sanitize(subscription.getName())
+            String oldDir = target.mountPath() + "/追剧/" + sanitize(subscription.getName())
                     + (subscription.getSeason() != null && subscription.getSeason() > 1 ? "-第" + subscription.getSeason() + "季" : "");
-            String newDir = targetDir(subscription, account);
+            String newDir = targetDir(subscription, target);
             if (oldDir.equals(newDir)) {
                 return;
             }
@@ -430,6 +468,14 @@ public class MediaSubscriptionTransferService {
     public record TransferredTarget(String account, String path, String drive) {
     }
 
+    /** 转存目标:网盘账号(DriverAccount,"pan:{id}")或阿里独立账号表(Account,"ali:{id}");
+     * mountPath 为 AList 挂载根,shareType 为分享类型码(跨盘路由/盘线路用)。 */
+    public record TransferTarget(String key, String name, String mountPath, Integer shareType) {
+        public String drive() {
+            return shareType == null || shareType < 0 ? null : DriveId.toDrive(shareType);
+        }
+    }
+
     /** 转存账号网盘 → DriveId 盘 key(与分享资源 type 同一命名空间,供播放列表按盘分线)。 */
     static String driveKey(DriverAccount account) {
         if (account == null || account.getType() == null) {
@@ -457,9 +503,8 @@ public class MediaSubscriptionTransferService {
             throw new BadRequestException("订阅不存在: " + id);
         }
         List<TransferredTarget> result = new ArrayList<>();
-        for (DriverAccount account : resolveTargets(subscription)) {
-            result.add(new TransferredTarget(StringUtils.defaultIfBlank(account.getName(), "账号#" + account.getId()),
-                    targetDir(subscription, account), driveKey(account)));
+        for (TransferTarget target : resolveTargets(subscription)) {
+            result.add(new TransferredTarget(target.name(), targetDir(subscription, target), target.drive()));
         }
         return result;
     }
@@ -470,7 +515,7 @@ public class MediaSubscriptionTransferService {
         if (subscription == null || subscription.getUid() != uid) {
             throw new BadRequestException("订阅不存在: " + id);
         }
-        List<DriverAccount> targets = resolveTargets(subscription);
+        List<TransferTarget> targets = resolveTargets(subscription);
         if (targets.isEmpty()) {
             return Map.of("covered", 0, "accounts", List.of());
         }
@@ -482,9 +527,9 @@ public class MediaSubscriptionTransferService {
             covered = 0;
         }
         List<Map<String, Object>> accounts = new ArrayList<>();
-        for (DriverAccount account : targets) {
-            int transferred = listTargetEpisodes(site, subscription, targetDir(subscription, account)).size();
-            accounts.add(Map.of("account", StringUtils.defaultIfBlank(account.getName(), "账号#" + account.getId()), "transferred", transferred));
+        for (TransferTarget target : targets) {
+            int transferred = listTargetEpisodes(site, subscription, targetDir(subscription, target)).size();
+            accounts.add(Map.of("account", target.name(), "transferred", transferred));
         }
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("covered", covered);
@@ -514,9 +559,9 @@ public class MediaSubscriptionTransferService {
             }
             try {
                 Site site = siteRepository.findById(1).orElseThrow();
-                for (DriverAccount account : resolveTargets(subscription)) {
-                    migrateLegacyTransferDir(subscription, site, account); // 旧命名目录先归位,确保能删干净
-                    String targetDir = targetDir(subscription, account);
+                for (TransferTarget target : resolveTargets(subscription)) {
+                    migrateLegacyTransferDir(subscription, site, target); // 旧命名目录先归位,确保能删干净
+                    String targetDir = targetDir(subscription, target);
                     aListService.remove(site, targetDir);
                 }
                 subscription.setMode(MediaSubscription.MODE_FOLLOW);

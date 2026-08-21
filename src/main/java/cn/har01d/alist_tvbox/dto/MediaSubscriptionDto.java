@@ -21,7 +21,7 @@ public class MediaSubscriptionDto {
     private String cover;
     private String mode;
     private Integer accountId;
-    private List<Integer> accountIds;
+    private List<String> accountIds;
     private String mountPath;
     private boolean crossDrive;
     private String status;

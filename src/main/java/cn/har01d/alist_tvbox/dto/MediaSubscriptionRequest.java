@@ -17,7 +17,8 @@ public class MediaSubscriptionRequest {
     private String mode;
     private Integer accountId;
     /** 多网盘转存目标(TRANSFER 模式,可多选) */
-    private java.util.List<Integer> accountIds;
+    /** 转存目标 id:"pan:{id}"(网盘账号)/"ali:{id}"(阿里独立账号表);裸数字兼容为 pan */
+    private java.util.List<String> accountIds;
     /** 显式允许跨网盘转存(默认仅同盘,AList 秒传配置允许的方向除外) */
     private Boolean crossDrive;
     private Integer checkIntervalHours;

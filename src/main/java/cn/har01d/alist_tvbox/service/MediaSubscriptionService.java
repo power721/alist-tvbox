@@ -1278,26 +1278,37 @@ public class MediaSubscriptionService {
         }
     }
 
-    /** 转存目标账号列表:优先 account_ids(JSON),回退旧 accountId 单值。 */
-    List<Integer> parseAccountIds(MediaSubscription subscription) {
+    /** 转存目标账号列表("pan:{id}"/"ali:{id}"):优先 account_ids(JSON),兼容旧整数(默认 pan)与旧 accountId 单值。 */
+    List<String> parseAccountIds(MediaSubscription subscription) {
         if (StringUtils.isNotBlank(subscription.getAccountIds())) {
             try {
-                List<Integer> ids = objectMapper.readValue(subscription.getAccountIds(), new TypeReference<List<Integer>>() {
+                List<Object> raw = objectMapper.readValue(subscription.getAccountIds(), new TypeReference<List<Object>>() {
                 });
-                if (!ids.isEmpty()) {
-                    return ids;
+                if (!raw.isEmpty()) {
+                    List<String> ids = raw.stream()
+                            .filter(java.util.Objects::nonNull)
+                            .map(value -> value instanceof Number number ? "pan:" + number.intValue() : String.valueOf(value).trim())
+                            .filter(StringUtils::isNotBlank)
+                            .collect(Collectors.toList());
+                    if (!ids.isEmpty()) {
+                        return ids;
+                    }
                 }
             } catch (Exception e) {
                 log.debug("parse accountIds failed: {}", e.getMessage());
             }
         }
-        return subscription.getAccountId() == null ? List.of() : List.of(subscription.getAccountId());
+        return subscription.getAccountId() == null ? List.of() : List.of("pan:" + subscription.getAccountId());
     }
 
-    private String serializeAccountIds(List<Integer> accountIds, Integer fallbackAccountId) {
-        List<Integer> ids = accountIds == null || accountIds.isEmpty()
-                ? (fallbackAccountId == null ? List.of() : List.of(fallbackAccountId))
-                : accountIds;
+    /** 序列化转存目标 id:裸数字视为 pan 账号补前缀,空列表回退单值 accountId。 */
+    String serializeAccountIds(List<String> accountIds, Integer fallbackAccountId) {
+        List<String> ids = accountIds == null || accountIds.isEmpty()
+                ? (fallbackAccountId == null ? List.of() : List.of("pan:" + fallbackAccountId))
+                : accountIds.stream()
+                .filter(StringUtils::isNotBlank)
+                .map(value -> value.trim().matches("\\d+") ? "pan:" + value.trim() : value.trim())
+                .collect(Collectors.toList());
         try {
             return objectMapper.writeValueAsString(ids);
         } catch (Exception e) {

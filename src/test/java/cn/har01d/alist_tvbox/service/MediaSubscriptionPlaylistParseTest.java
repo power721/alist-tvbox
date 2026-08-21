@@ -192,4 +192,22 @@ class MediaSubscriptionPlaylistParseTest {
         subscription.setMainDrives("10"); // 覆盖全局
         assertEquals(List.of("baidu"), service.mainDrives(subscription));
     }
+
+    @Test
+    void accountIdsSupportPanAndAliTargets() throws Exception {
+        MediaSubscription subscription = new MediaSubscription();
+        assertEquals(List.of(), service.parseAccountIds(subscription));
+
+        subscription.setAccountId(7);
+        assertEquals(List.of("pan:7"), service.parseAccountIds(subscription), "旧单值兼容为 pan");
+
+        subscription.setAccountIds("[\"pan:5\",\"ali:3\"]");
+        assertEquals(List.of("pan:5", "ali:3"), service.parseAccountIds(subscription));
+
+        subscription.setAccountIds("[5,8]");
+        assertEquals(List.of("pan:5", "pan:8"), service.parseAccountIds(subscription), "旧整数 JSON 兼容为 pan");
+
+        assertEquals("[\"pan:5\",\"ali:3\"]", service.serializeAccountIds(List.of("5", "ali:3"), null), "裸数字补 pan 前缀");
+        assertEquals("[\"pan:9\"]", service.serializeAccountIds(List.of(), 9), "空列表回退单值");
+    }
 }
