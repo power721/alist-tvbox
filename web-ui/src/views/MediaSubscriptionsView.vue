@@ -468,12 +468,17 @@ const driverTypeCodes: Record<string, number> = {
   CLOUD189: 9, BAIDU: 10, PAN123: 3, OPEN123: 3, THUNDER: 2, GUANGYA: 12, PAN139: 6,
 }
 
+const aliAccountCount = ref(0)
+const pikpakAccountCount = ref(0)
+
 const accountDriveCodes = () => {
   const codes = new Set<number>()
   for (const account of accounts.value || []) {
     const code = driverTypeCodes[(account as any).type]
     if (code !== undefined) codes.add(code)
   }
+  if (aliAccountCount.value > 0) codes.add(0) // 阿里账号在独立表(/api/ali/accounts)
+  if (pikpakAccountCount.value > 0) codes.add(1) // PikPak 账号在独立表(/api/pikpak/accounts)
   return codes
 }
 
@@ -556,6 +561,15 @@ onMounted(() => {
   loadGlobalMainDrives()
   axios.get('/api/pan/accounts').then(response => {
     accounts.value = response.data || []
+  }).catch(() => {
+  })
+  // 阿里/PikPak 账号在各自独立的表,不计入 /api/pan/accounts
+  axios.get('/api/ali/accounts').then(response => {
+    aliAccountCount.value = (response.data || []).length
+  }).catch(() => {
+  })
+  axios.get('/api/pikpak/accounts').then(response => {
+    pikpakAccountCount.value = (response.data || []).length
   }).catch(() => {
   })
 })
