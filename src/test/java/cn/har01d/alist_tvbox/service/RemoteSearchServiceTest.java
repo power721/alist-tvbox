@@ -234,6 +234,82 @@ class RemoteSearchServiceTest {
     }
 
     @Test
+    void filterInvalidPanSouLinksChecksAllWhenUnderThreshold() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouLinkCheckEnabled(true);
+        appProperties.setPanCheckUrl("http://pc.example");
+        RemoteSearchService service = newService(appProperties, restTemplate);
+
+        server.expect(once(), requestTo("http://pc.example/api/v1/links/check"))
+                .andRespond(withSuccess("""
+                        {"valid_links":["https://pan.quark.cn/s/ok"],"invalid_links":["https://pan.baidu.com/s/bad"]}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        List<Message> result = service.filterInvalidPanSouLinks(List.of(
+                message("5", "https://pan.quark.cn/s/ok"),
+                message("10", "https://pan.baidu.com/s/bad")));
+
+        server.verify();
+        assertThat(result).extracting(Message::getLink)
+                .containsExactly("https://pan.quark.cn/s/ok");
+    }
+
+    @Test
+    void filterInvalidPanSouLinksSamplesTopLinksPerTypeWhenOverThreshold() throws Exception {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouLinkCheckEnabled(true);
+        appProperties.setPanCheckUrl("http://pc.example");
+        RemoteSearchService service = newService(appProperties, restTemplate);
+
+        // 408 条可检(150夸克+150百度+108阿里)超过阈值300:不再整体跳过,按类型各取前100送检
+        List<Message> messages = new java.util.ArrayList<>();
+        for (int i = 0; i < 150; i++) messages.add(message("5", "https://pan.quark.cn/s/q" + i));
+        for (int i = 0; i < 150; i++) messages.add(message("10", "https://pan.baidu.com/s/b" + i));
+        for (int i = 0; i < 108; i++) messages.add(message("0", "https://alipan.com/s/a" + i));
+
+        List<String> validLinks = new java.util.ArrayList<>();
+        for (int i = 1; i < 100; i++) validLinks.add("https://pan.quark.cn/s/q" + i); // q0 判失效
+        for (int i = 0; i < 100; i++) validLinks.add("https://pan.baidu.com/s/b" + i);
+        for (int i = 0; i < 100; i++) validLinks.add("https://alipan.com/s/a" + i);
+        String responseJson = objectMapper.writeValueAsString(Map.of(
+                "valid_links", validLinks,
+                "invalid_links", List.of("https://pan.quark.cn/s/q0")));
+
+        String[] requestBody = new String[1];
+        server.expect(once(), requestTo("http://pc.example/api/v1/links/check"))
+                .andRespond(request -> {
+                    requestBody[0] = ((org.springframework.mock.http.client.MockClientHttpRequest) request).getBodyAsString();
+                    return withSuccess(responseJson, org.springframework.http.MediaType.APPLICATION_JSON).createResponse(request);
+                });
+
+        List<Message> result = service.filterInvalidPanSouLinks(messages);
+
+        server.verify();
+        // 送检名单:夸克/百度/阿里各恰好前100条(q0..q99 / b0..b99 / a0..a99)
+        var links = objectMapper.readTree(requestBody[0]).get("links");
+        int quarkChecked = 0;
+        int baiduChecked = 0;
+        int aliyunChecked = 0;
+        for (var link : links) {
+            String url = link.asText();
+            if (url.contains("quark.cn")) quarkChecked++;
+            else if (url.contains("baidu.com")) baiduChecked++;
+            else aliyunChecked++;
+        }
+        assertThat(quarkChecked).isEqualTo(100);
+        assertThat(baiduChecked).isEqualTo(100);
+        assertThat(aliyunChecked).isEqualTo(100);
+        // 被检出的失效链接剔除,未送检的 108 条原样保留:408 - 1 = 407
+        assertThat(result).hasSize(407);
+        assertThat(result).extracting(Message::getLink).doesNotContain("https://pan.quark.cn/s/q0");
+        assertThat(result).extracting(Message::getLink).contains("https://pan.quark.cn/s/q149", "https://alipan.com/s/a107");
+    }
+
+    @Test
     void pansouGroupReturnsFolderPerDiskType() {
         RestTemplate restTemplate = new RestTemplate();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();

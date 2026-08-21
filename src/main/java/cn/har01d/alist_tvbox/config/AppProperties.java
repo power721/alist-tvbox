@@ -56,6 +56,8 @@ public class AppProperties {
     private List<String> panSouPlugins;
     private boolean panSouLinkCheckEnabled;
     private int panSouLinkCheckMaxCount = 300;
+    // 可检链接总数超过 maxCount 时不再整体跳过盘检,改为每种盘类型各取排序在前的前 N 条送检(总量仍受 maxCount 约束)
+    private int panSouLinkCheckMaxPerTypeCount = 100;
     private List<String> panSouLinkCheckTypes;
     private Integer panSouConc;
     private Boolean panSouRefresh = false;
