@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
@@ -176,23 +177,58 @@ public class DouyuService implements LivePlatform {
         String[] parts = tid.split("\\$");
         String id = parts[1];
         MovieList result = new MovieList();
-        String url = "http://open.douyucdn.cn/api/RoomApi/room/" + id;
-        var response = restTemplate.getForObject(url, DouyuRoomResponse.class);
-        var room = response.getData();
         MovieDetail detail = new MovieDetail();
         detail.setVod_id(tid);
-        detail.setVod_name(room.getRoom_name());
-        detail.setVod_pic(room.getRoom_thumb());
-        detail.setVod_actor(room.getOwner_name());
-        detail.setType_name(room.getCate_name());
-        detail.setVod_remarks(playCount(room.getOnline()));
-        parseUrl(detail, id);
+        if (getRoomDetailByBetard(detail, id)) {
+            // betard 官方接口:room.videoLoop==1 是轮播录播间,能取到流但不是真直播,须显式标注
+            parseUrl(detail, id);
+        } else {
+            getRoomDetailByOpenApi(detail, id);
+            parseUrl(detail, id);
+        }
         result.getList().add(detail);
 
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         log.debug("detail: {}", result);
         return result;
+    }
+
+    /** betard 元数据解析失败时回退的第三方开放接口(open.douyucdn.cn),无录播标记。 */
+    private void getRoomDetailByOpenApi(MovieDetail detail, String id) {
+        String url = "http://open.douyucdn.cn/api/RoomApi/room/" + id;
+        var response = restTemplate.getForObject(url, DouyuRoomResponse.class);
+        var room = response.getData();
+        detail.setVod_name(room.getRoom_name());
+        detail.setVod_pic(room.getRoom_thumb());
+        detail.setVod_actor(room.getOwner_name());
+        detail.setType_name(room.getCate_name());
+        detail.setVod_remarks(playCount(room.getOnline()));
+    }
+
+    /** 官方 web 端 betard 接口,唯一带 videoLoop 轮播标记的元数据源;解析不到有效房间返回 false。 */
+    private boolean getRoomDetailByBetard(MovieDetail detail, String id) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.USER_AGENT, Constants.USER_AGENT);
+            headers.set(HttpHeaders.REFERER, "https://www.douyu.com/" + id);
+            String body = restTemplate.exchange("https://www.douyu.com/betard/" + id, HttpMethod.GET,
+                    new HttpEntity<>(headers), String.class).getBody();
+            JsonNode room = objectMapper.readTree(body).path("room");
+            if (!room.isObject() || room.path("room_id").asLong(0) == 0) {
+                return false;
+            }
+            detail.setVod_name(room.path("room_name").asText());
+            detail.setVod_pic(room.path("room_pic").asText(room.path("room_src").asText()));
+            detail.setVod_actor(room.path("nickname").asText());
+            detail.setType_name(room.path("second_lvl_name").asText());
+            boolean replay = room.path("videoLoop").asInt(0) == 1;
+            detail.setVod_remarks(replay ? "录播中" : "直播中");
+            return true;
+        } catch (Exception e) {
+            log.warn("斗鱼betard获取失败,回退开放接口: {}", id, e);
+            return false;
+        }
     }
 
     private void parseUrl(MovieDetail movieDetail, String id) throws IOException {
