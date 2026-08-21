@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionResource;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -209,5 +210,34 @@ class MediaSubscriptionPlaylistParseTest {
 
         assertEquals("[\"pan:5\",\"ali:3\"]", service.serializeAccountIds(List.of("5", "ali:3"), null), "裸数字补 pan 前缀");
         assertEquals("[\"pan:9\"]", service.serializeAccountIds(List.of(), 9), "空列表回退单值");
+    }
+
+    @Test
+    void singleEpisodeLinkDetection() {
+        // 线上形态:115 每集一链("S01E16"/"第16集"/"EP16"),区别于整季包
+        assertEquals(16, checkService.singleEpisodeOf("📺 悬案 (2026) S01E16 ✨4K WEB-DL AAC"));
+        assertEquals(16, checkService.singleEpisodeOf("悬案 第16集 4K"));
+        assertEquals(16, checkService.singleEpisodeOf("悬案 EP16"));
+        assertNull(checkService.singleEpisodeOf("悬案 更新至16集"));
+        assertNull(checkService.singleEpisodeOf("悬案 (2026) 4K [17集全]"));
+        assertNull(checkService.singleEpisodeOf("悬案 第1-17集 合集"));
+        assertNull(checkService.singleEpisodeOf("悬案 4K 高码率"), "无进度标记不判单集");
+    }
+
+    @Test
+    void singleEpisodeResourceNotUsableAsPrimary() {
+        MediaSubscriptionResource single = new MediaSubscriptionResource();
+        single.setTitle("📺 悬案 (2026) S01E16 ✨4K WEB-DL AAC");
+        assertFalse(checkService.usableAsPrimary(single, 17), "本地 17 集时单集链接不得挂主源");
+        assertTrue(checkService.usableAsPrimary(single, 1), "新剧首集/单集剧不受限");
+
+        MediaSubscriptionResource known = new MediaSubscriptionResource(); // 标题无标记但探测已知仅 1 集
+        known.setTitle("悬案 16");
+        known.setEpisodeList("[16]");
+        assertFalse(checkService.usableAsPrimary(known, 17));
+
+        MediaSubscriptionResource pack = new MediaSubscriptionResource();
+        pack.setTitle("悬案 (2026) 4K 高码率 [HQ.DV.60fps] [17集全]");
+        assertTrue(checkService.usableAsPrimary(pack, 17));
     }
 }

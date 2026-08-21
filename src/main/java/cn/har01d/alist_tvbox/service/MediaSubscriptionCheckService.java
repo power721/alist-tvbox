@@ -864,8 +864,9 @@ public class MediaSubscriptionCheckService {
 
     /** 按分数依次尝试候选,失败标记 BAD 换下一个;成功则重挂到同一固定路径。 */
     private boolean activateNextCandidate(MediaSubscription subscription) {
+        int current = subscription.getCurrentEpisodes() != null ? subscription.getCurrentEpisodes() : 0;
         for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
-            if (!resource.isActive()) {
+            if (!resource.isActive() && usableAsPrimary(resource, current)) {
                 try {
                     activate(subscription, resource);
                     return true;
@@ -878,6 +879,18 @@ public class MediaSubscriptionCheckService {
             }
         }
         return false;
+    }
+
+    /** 单集资源(每集一链)不挂主源:主源承载整季清单与固定挂载,换单集会把观测集数打回 1、
+     * 触发全量缺集误判;单集链接只配做补缺。本地不足 2 集(新剧首集/电影)时不限制。 */
+    boolean usableAsPrimary(MediaSubscriptionResource resource, int currentEpisodes) {
+        if (currentEpisodes < 2) {
+            return true;
+        }
+        if (parseEpisodeList(resource.getEpisodeList()).size() == 1) {
+            return false;
+        }
+        return singleEpisodeOf(resource.getTitle()) == null;
     }
 
     /** 换源核心:删旧挂载 → 同路径挂新分享 → 重列验证。mount_path 不变,播放历史不断链。 */
@@ -1380,9 +1393,14 @@ public class MediaSubscriptionCheckService {
 
         int poolSize = appProperties.getSubscription().getCandidatePoolSize();
         int added = 0;
+        Set<Integer> takenEpisodes = new java.util.HashSet<>();
         for (Scored candidate : scored) {
             if (added >= poolSize) {
                 break;
+            }
+            Integer bareEpisode = singleEpisodeOf(candidate.title);
+            if (bareEpisode != null && takenEpisodes.contains(bareEpisode)) {
+                continue; // 同集单集链接一席:席位留给不同集/整季资源,防 115 每集一链刷满池
             }
             String link = candidate.message.getLink();
             if (resourceRepository.findBySubscriptionIdAndLink(subscription.getId(), link).isPresent()) {
@@ -1403,6 +1421,9 @@ public class MediaSubscriptionCheckService {
             resource.setActive(false);
             resource.setCreatedTime(System.currentTimeMillis());
             resourceRepository.save(resource);
+            if (bareEpisode != null) {
+                takenEpisodes.add(bareEpisode);
+            }
             added++;
         }
         if (added > 0) {
@@ -1558,6 +1579,10 @@ public class MediaSubscriptionCheckService {
                     result -= 8;
                     reasons.add("集数落后-8");
                 }
+            }
+            if (current >= 2 && singleEpisodeOf(title) != null) {
+                result -= 40; // 单集链接只配补缺,VIP/4K 加分不能把它抬成主源候选
+                reasons.add("单集链接-40");
             }
         }
         return new Scored(message, title, result, reasons);
@@ -1809,6 +1834,23 @@ public class MediaSubscriptionCheckService {
             }
         }
         return max > 0 ? max : null;
+    }
+
+    /** 标题为"单集链接"(每集一链的分享,115 常见)时返回其集号,否则 null:
+     * 进度信号仅来自裸 第N集/EPn/SxxEyy 标记(组5/6);含 更新至N/全N集/第A-B集 等整季形态(组1/2/3)按整季资源论。 */
+    static Integer singleEpisodeOf(String title) {
+        if (StringUtils.isBlank(title)) {
+            return null;
+        }
+        Integer episode = null;
+        Matcher matcher = TITLE_PROGRESS.matcher(title);
+        while (matcher.find()) {
+            if (matcher.group(5) == null && matcher.group(6) == null) {
+                return null; // 整季形态,非单集链接
+            }
+            episode = Integer.valueOf(matcher.group(5) != null ? matcher.group(5) : matcher.group(6));
+        }
+        return episode;
     }
 
     // ---------- 调度 ----------
