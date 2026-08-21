@@ -49,7 +49,7 @@ class MetaSearchDiagTest {
             System.out.println("DIAG official EX: " + e);
         }
         try {
-            List<MetadataSearchItem> douban = new DoubanMetadataProvider(null, new MetadataHttp(null), new MetadataHealth()).search(keyword);
+            List<MetadataSearchItem> douban = new DoubanMetadataProvider(null, new MetadataHttp(null), new MetadataHealth(), null, null).search(keyword);
             System.out.println("DIAG douban: " + douban.size());
         } catch (Exception e) {
             System.out.println("DIAG douban EX: " + e);

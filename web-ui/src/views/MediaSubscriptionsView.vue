@@ -327,6 +327,11 @@
           <el-input-number v-model="notifyForm.archiveDays" :min="0" :max="3650"/>
           <span class="sub-text" style="margin-left:8px">完结 N 天后自动释放转存文件,0=关闭</span>
         </el-form-item>
+        <el-form-item label="豆瓣 Cookie">
+          <el-input v-model="notifyForm.doubanCookie" type="textarea" :rows="2"
+                    placeholder="登录 movie.douban.com 后复制 Cookie,留空关闭;用于解析详情页又名/单集播出时间(限速抓取)"/>
+          <span class="sub-text">豆瓣条目自动补"又名"提高搜索匹配,并经 IMDb 桥接 TMDB 获取单集播出日程</span>
+        </el-form-item>
         <el-form-item label="VIP 账号">
           <el-select v-model="notifyForm.vipAccounts" multiple placeholder="勾选 SVIP/会员账号,资源评分加权" style="width: 100%">
             <el-option v-for="account in accounts" :key="account.id" :label="account.name + '(' + account.type + ')'" :value="account.id"/>
@@ -527,6 +532,7 @@ const notifyVisible = ref(false)
 const notifyForm = ref({
   botToken: '',
   chatId: '',
+  doubanCookie: '',
   archiveDays: 0,
   vipAccounts: [] as number[],
   mainDrives: [] as number[],
@@ -1014,6 +1020,7 @@ const openNotify = () => {
     const settings = response.data || {}
     notifyForm.value.botToken = settings['msub_telegram_bot_token'] || ''
     notifyForm.value.chatId = settings['msub_telegram_chat_id'] || ''
+    notifyForm.value.doubanCookie = settings['douban_cookie'] || ''
     notifyForm.value.archiveDays = parseInt(settings['msub_archive_days'] || '0') || 0
     notifyForm.value.vipAccounts = (settings['msub_vip_accounts'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
@@ -1029,6 +1036,7 @@ const saveNotify = () => {
   const saves = [
     axios.post('/api/settings', {name: 'msub_telegram_bot_token', value: notifyForm.value.botToken}),
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
+    axios.post('/api/settings', {name: 'douban_cookie', value: notifyForm.value.doubanCookie}),
     axios.post('/api/settings', {name: 'msub_archive_days', value: String(notifyForm.value.archiveDays)}),
     axios.post('/api/settings', {name: 'msub_vip_accounts', value: notifyForm.value.vipAccounts.join(',')}),
     axios.post('/api/settings', {

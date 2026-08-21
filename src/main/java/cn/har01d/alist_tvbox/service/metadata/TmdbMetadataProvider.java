@@ -99,6 +99,27 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return detailsCache.get(id + ":" + seasonNumber, key -> fetchDetails(id, seasonNumber));
     }
 
+    /** IMDb id 定位 TMDB 剧集并复用全量详情(豆瓣详情页 IMDb 桥接:分集播出日程/状态/别名);未命中返回 null。 */
+    public MetadataDetails detailsByImdb(String imdbId, Integer season) {
+        if (StringUtils.isBlank(imdbId) || health.isOpen(NAME)) {
+            return null;
+        }
+        try {
+            JsonNode find = get("https://api.themoviedb.org/3/find/" + imdbId
+                    + "?api_key=" + apiKey() + "&external_source=imdb_id&language=zh-CN");
+            JsonNode tv = find == null ? null : find.path("tv_results").path(0);
+            if (!tv.isObject() || !tv.hasNonNull("id")) {
+                return null;
+            }
+            health.record(NAME, true);
+            return details(tv.get("id").asText(), season);
+        } catch (Exception e) {
+            health.record(NAME, false);
+            log.debug("tmdb find by imdb {} failed: {}", imdbId, e.getMessage());
+            return null;
+        }
+    }
+
     private MetadataDetails fetchDetails(String id, int season) {
         MetadataDetails details = new MetadataDetails();
         details.setProvider(NAME);
