@@ -12,28 +12,36 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Expiry;
 import jakarta.annotation.PreDestroy;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 关注直播间。数据按用户(uid)落库,关注/取关由 TVBox 详情页"关注/取消关注"轨道或 web 管理端触发;
@@ -44,21 +52,61 @@ import java.util.concurrent.TimeUnit;
 public class LiveFollowService {
     public static final String CATEGORY_ID = "follow";
     private static final long REFRESH_TIMEOUT_SECONDS = 8;
+    /**
+     * 风控敏感平台:并发轰炸会按设备/IP 维度封禁,整组关注串行刷新并加间隔。
+     * 抖音按 ttwid 维度风控;虎牙 detail 是 m.huya.com 页面解析(比 API 重得多),
+     * 6 并发批量抓取会触发验证页导致正则全失配,同样需要串行。
+     */
+    private static final Set<String> THROTTLED_PLATFORMS = Set.of("douyin", "huya");
+    private static final long THROTTLE_INTERVAL_MS = 300;
+    /**
+     * 关注状态后台定时预热(pure_live 收藏自动刷新的服务端对应物):TVBox 打开关注列表时
+     * 大概率直接命中缓存,不再打开瞬间集中放量打平台接口。缓存有效期略大于预热周期,
+     * 保证任意时刻打开都有预热结果可用;miss 时仍会现刷兜底(冷启动场景)。
+     * 服务端与客户端的本质差异:客户端跟随 App 生命周期,服务端 7×24 运行——
+     * 无人观看时持续刷平台接口纯属浪费且徒增风控暴露,故空闲超时后暂停预热,
+     * 直到有人再次消费关注列表;预热任务异步执行,不占用共享的 @Scheduled 线程。
+     */
+    private static final long PREWARM_INTERVAL_MS = 15 * 60 * 1000L;
+    private static final long PREWARM_IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000L;
 
     private final LiveFollowRepository followRepository;
     private final UserService userService;
     private final AppProperties appProperties;
     private final List<LivePlatform> platforms;
     private final LiveShortLinkResolver shortLinkResolver;
+    /** 成功状态缓存到下一轮预热,失败结果(状态未知)只短缓存:不能把临时故障放大成持续"未知"。 */
     private final Cache<String, Optional<MovieDetail>> statusCache = Caffeine.newBuilder()
             .maximumSize(500)
-            .expireAfterWrite(Duration.ofMinutes(2))
+            .expireAfter(new Expiry<String, Optional<MovieDetail>>() {
+                @Override
+                public long expireAfterCreate(String key, Optional<MovieDetail> value, long currentTime) {
+                    return ttlFor(value);
+                }
+
+                @Override
+                public long expireAfterUpdate(String key, Optional<MovieDetail> value, long currentTime, long currentDuration) {
+                    return ttlFor(value);
+                }
+
+                @Override
+                public long expireAfterRead(String key, Optional<MovieDetail> value, long currentTime, long currentDuration) {
+                    return currentDuration;
+                }
+            })
             .build();
+
+    private static long ttlFor(Optional<MovieDetail> value) {
+        return (value.isPresent() ? Duration.ofMillis(PREWARM_INTERVAL_MS + 5 * 60 * 1000L) : Duration.ofMinutes(3)).toNanos();
+    }
     private final ExecutorService executor = Executors.newFixedThreadPool(6, r -> {
         Thread thread = new Thread(r, "live-follow-refresh");
         thread.setDaemon(true);
         return thread;
     });
+    /** 最近一次有人消费关注列表(list/listDto)的时间,空闲超时后预热自动暂停。 */
+    private volatile long lastConsumedAt = System.currentTimeMillis();
+    private final AtomicBoolean prewarming = new AtomicBoolean();
 
     public LiveFollowService(LiveFollowRepository followRepository, UserService userService, AppProperties appProperties,
                              List<LivePlatform> platforms, LiveShortLinkResolver shortLinkResolver) {
@@ -162,6 +210,7 @@ public class LiveFollowService {
 
     /** 关注列表(TVBox "关注"分类/首页插入用):并行刷新开播状态,开播在前,其余按关注时间倒序。 */
     public MovieList list(int uid) {
+        lastConsumedAt = System.currentTimeMillis();
         List<LiveFollow> follows = followRepository.findByUidOrderByCreatedTimeDesc(uid);
         MovieList result = new MovieList();
         if (follows.isEmpty()) {
@@ -185,6 +234,7 @@ public class LiveFollowService {
 
     /** 关注列表(web 管理端用):含开播状态。 */
     public List<LiveFollowDto> listDto(int uid) {
+        lastConsumedAt = System.currentTimeMillis();
         List<LiveFollow> follows = followRepository.findByUidOrderByCreatedTimeDesc(uid);
         Map<String, MovieDetail> refreshed = refreshAll(follows);
 
@@ -203,7 +253,8 @@ public class LiveFollowService {
                     dto.setRoomName(info.getVod_name());
                 }
                 if (StringUtils.isNotBlank(info.getVod_pic())) {
-                    dto.setCover(cleanUrl(info.getVod_pic()));
+                    // 预热详情的封面可能带 mock host,先归一再按当前请求重建
+                    dto.setCover(absoluteCover(normalizeCover(info.getVod_pic())));
                 }
                 dto.setLive(isLive(info));
             }
@@ -244,7 +295,8 @@ public class LiveFollowService {
         // 列表标题显示主播名,播放器列表不展示 vod_actor,拿不到主播名时才回退房间名
         String roomName = info != null && StringUtils.isNotBlank(info.getVod_name()) ? info.getVod_name() : follow.getRoomName();
         detail.setVod_name(StringUtils.isNotBlank(anchor) ? anchor : roomName);
-        detail.setVod_pic(info != null && StringUtils.isNotBlank(info.getVod_pic()) ? cleanUrl(info.getVod_pic()) : absoluteCover(follow.getCover()));
+        // 预热写入的详情可能带 mock host 的代理封面,统一先归一为相对路径再按当前请求重建
+        detail.setVod_pic(info != null && StringUtils.isNotBlank(info.getVod_pic()) ? absoluteCover(normalizeCover(info.getVod_pic())) : absoluteCover(follow.getCover()));
         String platformName = platformName(follow.getPlatform());
         if (isLive(info)) {
             String remarks = StringUtils.isNotBlank(info.getVod_remarks()) ? info.getVod_remarks() : "直播中";
@@ -275,29 +327,32 @@ public class LiveFollowService {
         return detail;
     }
 
-    /** 并行刷新各关注房间的实时信息;超时或失败的房间不出现在结果里(降级为已存元数据)。 */
+    /**
+     * 并行刷新各关注房间的实时信息;超时或失败的房间不出现在结果里(降级为已存元数据)。
+     * 抖音等风控敏感平台按平台分组串行刷新,避免同平台瞬时并发触发封控。
+     */
     private Map<String, MovieDetail> refreshAll(List<LiveFollow> follows) {
-        // 平台 detail 可能基于当前请求构造代理 URL(如虎牙),把请求上下文带进工作线程
-        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        return refreshAll(follows, RequestContextHolder.getRequestAttributes());
+    }
+
+    private Map<String, MovieDetail> refreshAll(List<LiveFollow> follows, RequestAttributes attributes) {
         Map<String, MovieDetail> refreshed = new ConcurrentHashMap<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>();
+        Map<String, List<LiveFollow>> byPlatform = new LinkedHashMap<>();
         for (LiveFollow follow : follows) {
             if (findPlatform(follow.getPlatform()) == null) {
                 continue;
             }
-            futures.add(CompletableFuture.runAsync(() -> {
-                if (attributes != null) {
-                    RequestContextHolder.setRequestAttributes(attributes);
+            byPlatform.computeIfAbsent(follow.getPlatform(), key -> new ArrayList<>()).add(follow);
+        }
+        for (List<LiveFollow> group : byPlatform.values()) {
+            if (THROTTLED_PLATFORMS.contains(group.get(0).getPlatform())) {
+                futures.add(CompletableFuture.runAsync(() -> refreshGroupSerially(group, attributes, refreshed), executor));
+            } else {
+                for (LiveFollow follow : group) {
+                    futures.add(CompletableFuture.runAsync(() -> refreshOne(follow, attributes, refreshed), executor));
                 }
-                try {
-                    MovieDetail info = fetchRoomInfoCached(follow.getPlatform(), follow.getRoomId());
-                    if (info != null) {
-                        refreshed.put(cacheKey(follow.getPlatform(), follow.getRoomId()), info);
-                    }
-                } finally {
-                    RequestContextHolder.resetRequestAttributes();
-                }
-            }, executor));
+            }
         }
         try {
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(REFRESH_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -305,6 +360,125 @@ public class LiveFollowService {
             log.debug("live follow refresh timeout or interrupted: {}", e.getMessage());
         }
         return refreshed;
+    }
+
+    /** 敏感平台整组一个任务排队刷新:单平台并发降为 1,房间之间留间隔;命中缓存(无网络请求)不占间隔预算。 */
+    private void refreshGroupSerially(List<LiveFollow> group, RequestAttributes attributes, Map<String, MovieDetail> refreshed) {
+        for (int i = 0; i < group.size(); i++) {
+            LiveFollow follow = group.get(i);
+            if (i > 0 && statusCache.getIfPresent(cacheKey(follow.getPlatform(), follow.getRoomId())) == null) {
+                try {
+                    Thread.sleep(THROTTLE_INTERVAL_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+            refreshOne(follow, attributes, refreshed);
+        }
+    }
+
+    private void refreshOne(LiveFollow follow, RequestAttributes attributes, Map<String, MovieDetail> refreshed) {
+        if (attributes != null) {
+            RequestContextHolder.setRequestAttributes(attributes);
+        }
+        try {
+            MovieDetail info = fetchRoomInfoCached(follow.getPlatform(), follow.getRoomId());
+            if (info != null) {
+                refreshed.put(cacheKey(follow.getPlatform(), follow.getRoomId()), info);
+            }
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
+    /**
+     * 关注状态定时预热:遍历全部用户的关注房间刷新开播状态写入缓存。
+     * 服务端长期运行的代价控制:①空闲(无人消费关注列表)超过 2 小时即跳过,
+     * 避免无人观看时持续请求平台接口;②整体提交到自有线程池异步执行,
+     * 不阻塞共享的 @Scheduled 单线程调度器(其他定时任务不受影响);
+     * ③防重入:上一轮未完成时跳过本轮。调度线程无请求上下文,传入最小 mock
+     * 支撑平台 detail 内部的封面代理 URL 构造(fromCurrentRequest),缓存中的封面
+     * 已归一为相对路径,展示时由真实请求重建 host。
+     */
+    @Scheduled(initialDelay = 30_000, fixedDelay = PREWARM_INTERVAL_MS)
+    public void prewarmFollowStatus() {
+        long idle = System.currentTimeMillis() - lastConsumedAt;
+        if (idle > PREWARM_IDLE_TIMEOUT_MS) {
+            log.debug("skip follow prewarm: idle for {}ms", idle);
+            return;
+        }
+        if (!prewarming.compareAndSet(false, true)) {
+            log.debug("skip follow prewarm: previous round still running");
+            return;
+        }
+        CompletableFuture.runAsync(this::doPrewarmFollowStatus, executor);
+    }
+
+    private void doPrewarmFollowStatus() {
+        try {
+            List<Integer> uids = followRepository.findDistinctUids();
+            if (uids.isEmpty()) {
+                return;
+            }
+            RequestAttributes attributes = mockRequestAttributes();
+            int rooms = 0;
+            int failed = 0;
+            for (int uid : uids) {
+                List<LiveFollow> follows = followRepository.findByUidOrderByCreatedTimeDesc(uid);
+                if (follows.isEmpty()) {
+                    continue;
+                }
+                rooms += follows.size();
+                Map<String, MovieDetail> refreshed = refreshAll(follows, attributes);
+                // 平台限流后逐房间可能超时,但整平台全失败(一个都没刷出来)通常意味着接口异常,显式告警
+                for (LiveFollow follow : follows) {
+                    if (findPlatform(follow.getPlatform()) != null && !refreshed.containsKey(cacheKey(follow.getPlatform(), follow.getRoomId()))) {
+                        failed++;
+                    }
+                }
+            }
+            if (failed > 0) {
+                log.warn("prewarmed {} followed rooms for {} users, {} failed to refresh (platform API error or timeout)", rooms, uids.size(), failed);
+            } else {
+                log.info("prewarmed {} followed rooms for {} users", rooms, uids.size());
+            }
+        } catch (Exception e) {
+            log.warn("prewarm follow status failed", e);
+        } finally {
+            prewarming.set(false);
+        }
+    }
+
+    private static RequestAttributes mockRequestAttributes() {
+        HttpServletRequest request = (HttpServletRequest) Proxy.newProxyInstance(
+                HttpServletRequest.class.getClassLoader(),
+                new Class<?>[]{HttpServletRequest.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getRequestURL" -> new StringBuffer("http://127.0.0.1");
+                    case "getRequestURI" -> "/live";
+                    case "getScheme" -> "http";
+                    case "getServerName" -> "127.0.0.1";
+                    case "getServerPort" -> 80;
+                    case "getQueryString" -> "";
+                    case "isSecure" -> false;
+                    default -> defaultValue(method.getReturnType());
+                });
+        return new ServletRequestAttributes(request);
+    }
+
+    /** fromCurrentRequest 等还会调其他方法:原生类型返回 null 会拆箱 NPE,必须按类型给默认值。 */
+    private static Object defaultValue(Class<?> type) {
+        if (type == boolean.class) {
+            return Boolean.FALSE;
+        }
+        if (type == int.class) {
+            return 0;
+        }
+        if (type == long.class) {
+            return 0L;
+        }
+        return null;
     }
 
     private boolean isLive(MovieDetail info) {

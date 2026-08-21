@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.live.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.live.danmaku.DouyinDanmakuClient;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
@@ -29,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Service
@@ -37,8 +41,17 @@ public class DouyinService implements LivePlatform {
     private final AppProperties appProperties;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final SettingRepository settingRepository;
 
-    private String cookie = "ttwid=1%7CB1qls3GdnZhUov9o2NxOMxxYS2ff6OSvEWbv0ytbES4%7C1680522049%7C280d802d6d478e3e78d0c807f7c487e7ffec0ae4e5fdd6a0fe74c3c6af149511";
+    /** ttwid 惰性获取(pure_live 同款匿名获取逻辑);被风控后置空重取。 */
+    private volatile String cookie;
+    /** enter 接口与房间页均无数据视为风控,冷却期内不再请求抖音,避免越点越封;连续风控指数退避。 */
+    private final AtomicLong blockedUntil = new AtomicLong();
+    private final AtomicInteger blockCount = new AtomicInteger();
+    private static final long RISK_CONTROL_COOLDOWN_MS = 5 * 60 * 1000L;
+    private static final int MAX_BLOCK_COUNT = 4;
+    /** web 管理端配置的用户 cookie 存储键,优先于匿名 ttwid。 */
+    public static final String COOKIE_SETTING = "douyin_cookie";
 
     private static final String BASE_URL = "https://live.douyin.com";
     private static final String PARTITION_ROOM_API = "https://live.douyin.com/webcast/web/partition/detail/room/v2/";
@@ -51,14 +64,26 @@ public class DouyinService implements LivePlatform {
     // 抖音签名API地址，可通过环境变量配置
     private final String signApiUrl;
 
-    public DouyinService(AppProperties appProperties, RestTemplateBuilder builder, ObjectMapper objectMapper) {
+    public DouyinService(AppProperties appProperties, RestTemplateBuilder builder, ObjectMapper objectMapper, SettingRepository settingRepository) {
         this.appProperties = appProperties;
         this.signApiUrl = System.getenv().getOrDefault("DOUYIN_SIGN_API", "http://dy.har01d.cn/abogus");
         this.restTemplate = builder
                 .defaultHeader("User-Agent", USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
+        this.settingRepository = settingRepository;
         log.info("抖音签名API地址: {}", signApiUrl);
+    }
+
+    /** web 端保存/清除用户 cookie 后调用:丢弃内存态并解除风控冷却,立即用新身份重试。 */
+    public void invalidateCookie() {
+        cookie = null;
+        blockedUntil.set(0);
+    }
+
+    /** 用户在 web 管理端配置的 cookie,未配置返回 null。 */
+    private String userCookie() {
+        return settingRepository.findById(COOKIE_SETTING).map(Setting::getValue).filter(v -> !v.isBlank()).orElse(null);
     }
 
     @Override
@@ -369,18 +394,30 @@ public class DouyinService implements LivePlatform {
         MovieDetail detail = new MovieDetail();
         detail.setVod_id(tid);
 
+        if (isBlocked()) {
+            // 冷却期返回空列表:调用方(LiveFollowService)视为状态未知走短缓存,
+            // 不能返回"有元素但无播放地址"的详情——那会被当作正常结果长缓存,固化成假"未开播"
+            log.debug("抖音风控冷却中,跳过房间详情: {}", roomId);
+            return result;
+        }
+
         try {
             ensureCookie();
 
             // 先尝试通过API获取
             JsonNode roomData = getRoomDataByApi(roomId);
             if (roomData != null) {
+                clearBlocked();
                 parseRoomDetail(detail, roomData, roomId, true);
             } else {
                 // API失败则通过HTML解析
                 JsonNode pageData = getRoomDataByHtml(roomId);
                 if (pageData != null) {
+                    clearBlocked();
                     parseRoomDetailFromHtml(detail, pageData, roomId);
+                } else {
+                    // enter 接口与房间页均拿不到数据,典型风控特征:进入冷却并丢弃旧 ttwid
+                    markBlocked();
                 }
             }
         } catch (Exception e) {
@@ -400,6 +437,10 @@ public class DouyinService implements LivePlatform {
      */
     public DouyinDanmakuClient.DouyinDanmakuArgs getDanmakuArgs(String webRid) {
         try {
+            if (isBlocked()) {
+                log.debug("抖音风控冷却中,跳过弹幕参数: {}", webRid);
+                return null;
+            }
             ensureCookie();
             String roomId = "";
             JsonNode roomData = getRoomDataByApi(webRid);
@@ -410,12 +451,17 @@ public class DouyinService implements LivePlatform {
                 // enter 接口经常被风控挡回(detail 同样靠 HTML 兜底),弹幕不能只依赖它
                 JsonNode state = getRoomDataByHtml(webRid);
                 if (state != null) {
+                    clearBlocked();
                     JsonNode roomInfo = state.path("roomStore").path("roomInfo");
                     roomId = roomInfo.path("room").path("id_str").asText("");
                     if (roomId.isEmpty()) {
                         roomId = roomInfo.path("roomId").asText("");
                     }
+                } else if (roomData == null) {
+                    markBlocked();
                 }
+            } else {
+                clearBlocked();
             }
             if (roomId.isEmpty()) {
                 log.warn("抖音弹幕房间号获取失败: {}", webRid);
@@ -480,6 +526,8 @@ public class DouyinService implements LivePlatform {
     private JsonNode getRoomDataByHtml(String webRid) {
         try {
             String url = BASE_URL + "/" + webRid;
+            // 实测新鲜 ttwid 或空 cookie 都能拿到完整 state,无需 __ac_nonce 握手
+            // (抖音对 HEAD 请求直接 404,且多一次握手徒增请求量)
             ResponseEntity<String> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -716,14 +764,26 @@ public class DouyinService implements LivePlatform {
                 .toUriString();
     }
 
+    /**
+     * cookie 优先级:web 管理端配置的用户 cookie > 匿名 ttwid(UIFID_TEMP)(pure_live 同款:
+     * live.douyin.com/?from_nav=1) > 空。注意不能用内置的陈旧 ttwid 兜底:抖音按 ttwid
+     * 可信度返回不同页面,2023 年的老 ttwid 只能拿到精简 state(无 room.status),
+     * 会把在播房间误判成"未开播";空 cookie 反而能拿到完整数据(已实测)。
+     */
     private synchronized void ensureCookie() {
         if (cookie != null && !cookie.isEmpty()) {
             return;
         }
 
+        String userCookie = userCookie();
+        if (userCookie != null) {
+            cookie = userCookie;
+            return;
+        }
+
         try {
             ResponseEntity<String> response = restTemplate.exchange(
-                    BASE_URL,
+                    BASE_URL + "/?from_nav=1",
                     HttpMethod.GET,
                     new HttpEntity<>(createBasicHeaders()),
                     String.class
@@ -732,15 +792,51 @@ public class DouyinService implements LivePlatform {
             HttpHeaders headers = response.getHeaders();
             List<String> setCookies = headers.get("set-cookie");
             if (setCookies != null) {
+                StringBuilder builder = new StringBuilder();
                 for (String c : setCookies) {
-                    String cookieValue = c.split(";")[0];
-                    if (cookieValue.contains("ttwid")) {
-                        cookie += cookieValue + "; ";
+                    String cookieValue = c.split(";")[0].trim();
+                    if (cookieValue.startsWith("ttwid=") || cookieValue.startsWith("UIFID_TEMP=")) {
+                        builder.append(cookieValue).append("; ");
                     }
+                }
+                if (builder.length() > 0) {
+                    cookie = builder.toString();
+                    log.info("已获取抖音匿名Cookie");
                 }
             }
         } catch (Exception e) {
             log.error("获取抖音Cookie失败", e);
+        }
+        if (cookie == null) {
+            cookie = "";
+        }
+    }
+
+    private boolean isBlocked() {
+        return System.currentTimeMillis() < blockedUntil.get();
+    }
+
+    /**
+     * 风控冷却:期间不再请求抖音详情/弹幕参数,并丢弃匿名 ttwid(用户配置的 cookie 保留),
+     * 冷却结束后换新身份重试。连续风控按 5/10/20/40 分钟指数退避,避免"失败-冷却-再全量打"循环
+     * 不断骚扰平台反而延长封禁。
+     */
+    private void markBlocked() {
+        int count = Math.min(blockCount.incrementAndGet(), MAX_BLOCK_COUNT);
+        long cooldown = RISK_CONTROL_COOLDOWN_MS << (count - 1);
+        blockedUntil.set(System.currentTimeMillis() + cooldown);
+        String userCookie = userCookie();
+        if (userCookie == null || !userCookie.equals(cookie)) {
+            cookie = null;
+        }
+        log.warn("抖音接口疑似被风控(enter接口与房间页均无数据),冷却{}分钟后自动重试(第{}次)", cooldown / 60000, count);
+    }
+
+    /** 任一数据源(enter 接口或房间页)拿到数据即视为风控解除,重置退避计数。 */
+    private void clearBlocked() {
+        if (blockCount.get() != 0) {
+            blockCount.set(0);
+            log.info("抖音接口已恢复正常");
         }
     }
 
