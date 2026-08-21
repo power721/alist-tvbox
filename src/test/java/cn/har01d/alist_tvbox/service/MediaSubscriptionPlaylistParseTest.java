@@ -1,10 +1,12 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.dto.MediaSubscriptionFilter;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,6 +16,7 @@ import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -23,7 +26,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MediaSubscriptionPlaylistParseTest {
 
     private final MediaSubscriptionCheckService checkService = new MediaSubscriptionCheckService(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+            null, null, null, null, null, null, null, emptySettings(),
+            null, null, null, null, null, new AppProperties(), new ObjectMapper());
+
+    /** 全局 Setting 空 stub:未配置 msub_main_drives */
+    private static SettingRepository emptySettings() {
+        SettingRepository repository = Mockito.mock(SettingRepository.class);
+        Mockito.when(repository.findById(Mockito.anyString())).thenReturn(java.util.Optional.empty());
+        return repository;
+    }
 
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             null, null, null, null, null, null, null, null, null, checkService, null, null, null, new ObjectMapper());
@@ -148,13 +159,37 @@ class MediaSubscriptionPlaylistParseTest {
     }
 
     @Test
-    void mainDrivesTakeFirstTwoDriveTypePreferences() throws Exception {
+    void mainDrivesPreferSubscriptionOverrideOverGlobalSetting() {
         MediaSubscription subscription = new MediaSubscription();
-        assertEquals(List.of(), checkService.mainDrives(subscription), "无筛选配置时无主网盘");
+        assertEquals(List.of(), checkService.mainDrives(subscription), "订阅与全局均未配置时无主网盘");
 
-        MediaSubscriptionFilter filter = new MediaSubscriptionFilter();
-        filter.setDriveTypes(List.of(10, 5, 0)); // 百度/夸克/阿里 → 前 2 个为主网盘
-        subscription.setFilterConfig(new ObjectMapper().writeValueAsString(filter));
+        // 订阅级覆盖(逗号分隔分享类型码,去重取前 2)
+        subscription.setMainDrives("10,5,0"); // 百度/夸克/阿里 → 前 2 个
         assertEquals(List.of("baidu", "quark"), checkService.mainDrives(subscription));
+
+        // 序列化辅助:类型码列表 ↔ 存储 CSV,空清空(回归全局)
+        assertEquals("10,5", MediaSubscriptionService.serializeMainDrives(List.of(10, 5, 10, 0)));
+        assertNull(MediaSubscriptionService.serializeMainDrives(List.of()));
+        assertEquals(List.of(10, 5), MediaSubscriptionService.parseMainDrives("10, 5"));
+        assertEquals(List.of(), MediaSubscriptionService.parseMainDrives(null));
+    }
+
+    @Test
+    void mainDrivesFallBackToGlobalSetting() {
+        SettingRepository settingRepository = Mockito.mock(SettingRepository.class);
+        Setting global = new Setting();
+        global.setName(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES);
+        global.setValue("5,8"); // 夸克/115
+        Mockito.when(settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
+                .thenReturn(java.util.Optional.of(global));
+        MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
+                null, null, null, null, null, null, null, settingRepository,
+                null, null, null, null, null, new AppProperties(), new ObjectMapper());
+
+        MediaSubscription subscription = new MediaSubscription();
+        assertEquals(List.of("quark", "115"), service.mainDrives(subscription), "订阅未覆盖时用全局配置");
+
+        subscription.setMainDrives("10"); // 覆盖全局
+        assertEquals(List.of("baidu"), service.mainDrives(subscription));
     }
 }

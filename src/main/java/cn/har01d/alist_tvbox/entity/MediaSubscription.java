@@ -78,6 +78,10 @@ public class MediaSubscription {
     @Column(columnDefinition = "TEXT")
     private String aliases;
 
+    /** 主网盘覆盖(逗号分隔分享类型码,如 "10,5" = 百度/夸克;空 = 跟随全局 Setting msub_main_drives) */
+    @Column(name = "main_drives", length = 64)
+    private String mainDrives;
+
     @Column(columnDefinition = "TEXT", name = "filter_config")
     private String filterConfig;
 

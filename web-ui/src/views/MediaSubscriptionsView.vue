@@ -204,11 +204,16 @@
           <el-input-number v-model="form.checkIntervalHours" :min="1" :max="168"/>
           <span class="sub-text" style="margin-left:8px">绑定元数据后按播出日程自动调度</span>
         </el-form-item>
-        <el-form-item label="主网盘/盘类型偏好">
-          <el-select v-model="form.driveTypes" multiple placeholder="多选,按优先级排序">
+        <el-form-item label="主网盘(覆盖)">
+          <el-select v-model="form.mainDrives" multiple clearable :placeholder="`跟随全局${globalMainDrivesLabel}`">
             <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
           </el-select>
-          <span class="sub-text" style="margin-left:8px">前2个为主网盘:巡检保证该盘剧集完整并固定播放线路,其余仅偏好加分;分享挂载均免登录,标注"已加账号"的盘更稳且可转存</span>
+          <span class="sub-text" style="margin-left:8px">巡检保证该盘剧集完整并固定播放线路,选 1-2 个;清空 = 跟随全局</span>
+        </el-form-item>
+        <el-form-item label="盘类型偏好">
+          <el-select v-model="form.driveTypes" multiple placeholder="多选,按优先级排序(候选打分)">
+            <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
+          </el-select>
         </el-form-item>
         <el-form-item label="清晰度">
           <el-select v-model="form.qualities" multiple allow-create placeholder="如 4K / 1080P">
@@ -304,8 +309,14 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="notifyVisible" title="Telegram 通知设置" width="520">
+    <el-dialog v-model="notifyVisible" title="追剧设置" width="520">
       <el-form label-width="140">
+        <el-form-item label="全局主网盘">
+          <el-select v-model="notifyForm.mainDrives" multiple placeholder="选 1-2 个,按优先级排序" style="width: 100%">
+            <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
+          </el-select>
+          <span class="sub-text">巡检保证主网盘剧集完整并固定播放线路;订阅可单独覆盖;分享挂载免登录,标注"已加账号"的盘更稳</span>
+        </el-form-item>
         <el-form-item label="Bot Token">
           <el-input v-model="notifyForm.botToken" placeholder="123456:ABC-...,留空关闭通知"/>
         </el-form-item>
@@ -366,13 +377,14 @@
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
+import {computed, onMounted, ref} from 'vue'
 import axios from 'axios'
 import {ElMessage, ElMessageBox} from 'element-plus'
 
 interface SubscriptionDto {
   id: number
   name: string
+  mainDrives: number[] | null
   keyword: string
   season: number | null
   doubanId: number | null
@@ -463,6 +475,21 @@ const accountDriveCodes = () => {
 const driveLabel = (drive: { value: number, label: string }) =>
     accountDriveCodes().has(drive.value) ? `${drive.label}(已加账号)` : drive.label
 
+const globalMainDrives = ref<number[]>([])
+
+const loadGlobalMainDrives = () => {
+  axios.get('/api/settings').then(response => {
+    const raw = (response.data || {})['msub_main_drives'] || ''
+    globalMainDrives.value = raw.split(',').map((v: string) => parseInt(v.trim()))
+        .filter((v: number) => v > 0).slice(0, 2)
+  }).catch(() => {
+  })
+}
+
+const globalMainDrivesLabel = computed(() => globalMainDrives.value.length
+    ? `(${globalMainDrives.value.map(code => driveOptions.find(d => d.value === code)?.label || code).join('/')})`
+    : '(未配置)')
+
 const subscriptions = ref<SubscriptionDto[]>([])
 const stats = ref<any>(null)
 const inboxItems = ref<any[]>([])
@@ -497,7 +524,13 @@ const importVisible = ref(false)
 const importText = ref('')
 const importing = ref(false)
 const notifyVisible = ref(false)
-const notifyForm = ref({botToken: '', chatId: '', archiveDays: 0, vipAccounts: [] as number[]})
+const notifyForm = ref({
+  botToken: '',
+  chatId: '',
+  archiveDays: 0,
+  vipAccounts: [] as number[],
+  mainDrives: [] as number[],
+})
 const navigationVisible = ref(false)
 const navCategories = ref<{ type_id: string, type_name: string }[]>([])
 const navAllFilters = ref<Record<string, any[]>>({})
@@ -514,6 +547,7 @@ const navSubscribing = ref('')
 
 onMounted(() => {
   loadAll()
+  loadGlobalMainDrives()
   axios.get('/api/pan/accounts').then(response => {
     accounts.value = response.data || []
   }).catch(() => {
@@ -654,6 +688,7 @@ const handleAdd = () => {
     accountIds: [],
     crossDrive: false,
     checkIntervalHours: 6,
+    mainDrives: [] as number[],
     driveTypes: [],
     qualities: [],
     includeKeywords: [],
@@ -681,6 +716,7 @@ const handleEdit = (row: SubscriptionDto) => {
     accountIds: row.accountIds || (row.accountId ? [row.accountId] : []),
     crossDrive: !!row.crossDrive,
     checkIntervalHours: row.checkIntervalHours ?? 6,
+    mainDrives: row.mainDrives || [],
     driveTypes: row.filter?.driveTypes || [],
     qualities: row.filter?.qualities || [],
     includeKeywords: row.filter?.includeKeywords || [],
@@ -766,6 +802,7 @@ const buildBody = () => ({
   accountIds: form.value.accountIds,
   crossDrive: form.value.crossDrive,
   checkIntervalHours: form.value.checkIntervalHours,
+  mainDrives: [...new Set(form.value.mainDrives || [])].slice(0, 2),
   filter: {
     driveTypes: form.value.driveTypes,
     qualities: form.value.qualities,
@@ -980,6 +1017,8 @@ const openNotify = () => {
     notifyForm.value.archiveDays = parseInt(settings['msub_archive_days'] || '0') || 0
     notifyForm.value.vipAccounts = (settings['msub_vip_accounts'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
+    notifyForm.value.mainDrives = (settings['msub_main_drives'] || '')
+        .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0).slice(0, 2)
     notifyVisible.value = true
   }).catch(() => {
     notifyVisible.value = true
@@ -992,9 +1031,13 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
     axios.post('/api/settings', {name: 'msub_archive_days', value: String(notifyForm.value.archiveDays)}),
     axios.post('/api/settings', {name: 'msub_vip_accounts', value: notifyForm.value.vipAccounts.join(',')}),
+    axios.post('/api/settings', {
+      name: 'msub_main_drives',
+      value: [...new Set(notifyForm.value.mainDrives)].slice(0, 2).join(','),
+    }),
   ]
   Promise.all(saves).then(() => {
-    ElMessage.success('已保存(评分加权下轮巡检生效)')
+    ElMessage.success('已保存(下轮巡检生效)')
     notifyVisible.value = false
   })
 }

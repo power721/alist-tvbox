@@ -4,6 +4,7 @@ import db.migration.current.V20__MediaSubscription;
 import db.migration.current.V21__MediaSubscriptionMeta;
 import db.migration.current.V22__MediaSubscriptionMetaFix;
 import db.migration.current.V27__MediaSubscriptionAliases;
+import db.migration.current.V28__MediaSubscriptionMainDrives;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -112,6 +113,21 @@ class MediaSubscriptionMigrationTest {
         }
         // 幂等:重复执行不报错
         new V27__MediaSubscriptionAliases().migrate(context());
+    }
+
+    @Test
+    void v28AddsMainDrivesColumn() throws Exception {
+        new V20__MediaSubscription().migrate(context());
+        new V28__MediaSubscriptionMainDrives().migrate(context());
+
+        execute("INSERT INTO media_subscription (id, uid, name, created_time, main_drives)"
+                + " VALUES (4, 1, '主盘剧', 0, '10,5')");
+        try (ResultSet rs = query("SELECT main_drives FROM media_subscription WHERE id = 4")) {
+            assertTrue(rs.next());
+            assertEquals("10,5", rs.getString(1)); // 不带引号可访问(Hibernate 形态)
+        }
+        // 幂等:重复执行不报错
+        new V28__MediaSubscriptionMainDrives().migrate(context());
     }
 
     private void execute(String sql) throws Exception {

@@ -59,6 +59,8 @@ public class MediaSubscriptionCheckService {
     private static final Set<String> PAN_TYPES = Set.of("0", "1", "2", "3", "5", "6", "7", "8", "9", "10", "12");
     private static final Pattern SEASON_EPISODE = Pattern.compile("[Ss](\\d{1,2})[Ee](\\d{1,3})");
     private static final Pattern NUMBER = Pattern.compile("(\\d{1,4})");
+    /** 全局主网盘 Setting key(逗号分隔分享类型码;订阅级 main_drives 覆盖) */
+    public static final String MSUB_MAIN_DRIVES = "msub_main_drives";
     /** 预告/花絮等非正片 */
     private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost)");
     /** 完结资源包形态:对追更中的订阅不会持续更新 */
@@ -576,13 +578,25 @@ public class MediaSubscriptionCheckService {
                 .toList();
     }
 
-    /** 主网盘:筛选盘类型偏好前 2 个(DriveId 盘 key)。巡检保证该盘完整剧集覆盖,播放列表固定出该盘线路。 */
+    /** 主网盘:订阅级 main_drives 覆盖 > 全局 Setting msub_main_drives(均为逗号分隔分享类型码,取前 2)。
+     * 巡检保证该盘完整剧集覆盖,播放列表固定出该盘线路。 */
     List<String> mainDrives(MediaSubscription subscription) {
-        MediaSubscriptionFilter filter = parseFilter(subscription);
-        if (filter == null || filter.getDriveTypes() == null || filter.getDriveTypes().isEmpty()) {
+        String raw = subscription.getMainDrives();
+        if (StringUtils.isBlank(raw)) {
+            raw = settingRepository.findById(MSUB_MAIN_DRIVES).map(s -> s.getValue()).orElse("");
+        }
+        if (StringUtils.isBlank(raw)) {
             return List.of();
         }
-        return filter.getDriveTypes().stream().limit(2).map(DriveId::toDrive).toList();
+        return java.util.Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(StringUtils::isNotBlank)
+                .map(DriveId::toTypeOrNull)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .limit(2)
+                .map(DriveId::toDrive)
+                .toList();
     }
 
     /** 当前主源所在盘(active 资源行的分享类型;旧数据无 type 返回 null)。 */

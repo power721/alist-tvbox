@@ -36,6 +36,8 @@ public class MediaSubscriptionDto {
     private int resourceCount;
     private int gapCount;
     private String activeResourceTitle;
+    /** 主网盘覆盖(分享类型码,null/空 = 跟随全局) */
+    private List<Integer> mainDrives;
     private MediaSubscriptionFilter filter;
     private long createdTime;
 }

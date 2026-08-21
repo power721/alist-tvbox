@@ -19,3 +19,4 @@ db.migration.current.V24__MediaSubscriptionBrokenEpisodes
 db.migration.current.V25__MediaSubscriptionSchedule
 db.migration.current.V26__MediaSubscriptionCrossDrive
 db.migration.current.V27__MediaSubscriptionAliases
+db.migration.current.V28__MediaSubscriptionMainDrives

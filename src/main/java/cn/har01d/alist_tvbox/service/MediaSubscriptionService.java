@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * 追剧订阅(自动追更)CRUD 与内容接口。巡检/换源/候选池逻辑见 {@link MediaSubscriptionCheckService}。
@@ -141,6 +142,7 @@ public class MediaSubscriptionService {
         subscription.setCheckIntervalHours(request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0
                 ? request.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours());
         subscription.setFilterConfig(serializeFilter(resolveFilter(uid, request.getFilter())));
+        subscription.setMainDrives(serializeMainDrives(request.getMainDrives()));
         subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
         long now = System.currentTimeMillis();
         subscription.setCreatedTime(now);
@@ -203,6 +205,9 @@ public class MediaSubscriptionService {
         if (request.getFilter() != null) {
             subscription.setFilterConfig(serializeFilter(request.getFilter()));
             searchRelevant = true;
+        }
+        if (request.getMainDrives() != null) {
+            subscription.setMainDrives(serializeMainDrives(request.getMainDrives())); // 空列表 = 清除覆盖,回归全局
         }
         if (searchRelevant) {
             subscription.setNextCheckTime(System.currentTimeMillis());
@@ -1300,6 +1305,32 @@ public class MediaSubscriptionService {
         }
     }
 
+    /** 主网盘覆盖存储:去重取前 2 个分享类型码,逗号分隔;空 → null(跟随全局 msub_main_drives)。 */
+    static String serializeMainDrives(List<Integer> mainDrives) {
+        if (mainDrives == null || mainDrives.isEmpty()) {
+            return null;
+        }
+        return mainDrives.stream().filter(java.util.Objects::nonNull).distinct().limit(2)
+                .map(String::valueOf).collect(Collectors.joining(","));
+    }
+
+    static List<Integer> parseMainDrives(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(raw.split(","))
+                .map(String::trim).filter(StringUtils::isNotBlank)
+                .map(value -> {
+                    try {
+                        return Integer.valueOf(value);
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
     private MediaSubscription getOwned(int uid, int id) {
         MediaSubscription subscription = subscriptionRepository.findById(id)
                 .orElseThrow(() -> new BadRequestException("订阅不存在: " + id));
@@ -1428,6 +1459,7 @@ public class MediaSubscriptionService {
         dto.setAccountIds(parseAccountIds(subscription));
         dto.setMountPath(subscription.getMountPath());
         dto.setCrossDrive(subscription.isCrossDrive());
+        dto.setMainDrives(parseMainDrives(subscription.getMainDrives()));
         dto.setStatus(subscription.getStatus());
         dto.setExpectedEpisodes(subscription.getExpectedEpisodes());
         dto.setCurrentEpisodes(subscription.getCurrentEpisodes());

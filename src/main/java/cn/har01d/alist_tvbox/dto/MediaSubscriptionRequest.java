@@ -21,5 +21,7 @@ public class MediaSubscriptionRequest {
     /** 显式允许跨网盘转存(默认仅同盘,AList 秒传配置允许的方向除外) */
     private Boolean crossDrive;
     private Integer checkIntervalHours;
+    /** 主网盘覆盖(分享类型码,空 = 跟随全局 msub_main_drives) */
+    private java.util.List<Integer> mainDrives;
     private MediaSubscriptionFilter filter;
 }
