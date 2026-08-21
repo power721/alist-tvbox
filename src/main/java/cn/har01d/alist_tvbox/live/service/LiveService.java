@@ -6,11 +6,13 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -116,6 +118,7 @@ public class LiveService {
                     if ("folder".equals(mode)) {
                         MovieDetail hot = new MovieDetail();
                         hot.setVod_id(platform.getType() + "-" + HOT_CATEGORY_ID);
+                        hot.setVod_pic(getUrl("/hot_live.webp"));
                         hot.setVod_name("热门直播间");
                         hot.setVod_tag(FOLDER);
                         list.add(hot);
@@ -147,6 +150,20 @@ public class LiveService {
             }
         }
         return result;
+    }
+
+    private String getUrl(String path) {
+        try {
+            return ServletUriComponentsBuilder.fromCurrentRequest()
+                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                    .replacePath(path)
+                    .replaceQuery(null)
+                    .build()
+                    .toUriString();
+        } catch (IllegalStateException e) {
+            // 无请求上下文(单元测试/非 HTTP 线程)时封面缺省,不影响列表数据本身
+            return null;
+        }
     }
 
     /** 平台热门/推荐直播间(platform.home() 数据源),点"热门直播间"文件夹或混排时取用,带 15 分钟缓存。 */
