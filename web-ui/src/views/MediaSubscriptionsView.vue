@@ -4,7 +4,7 @@
       <h1 class="page-title">追剧订阅</h1>
       <div class="page-actions">
         <el-button @click="loadAll">刷新</el-button>
-        <el-button @click="openNotify">通知</el-button>
+        <el-button @click="openNotify">设置</el-button>
         <el-button @click="exportSubs">导出</el-button>
         <el-button @click="importVisible = true">导入</el-button>
         <el-button @click="openNavigation">片单追更</el-button>
