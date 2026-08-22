@@ -171,6 +171,15 @@ class FileNameComparatorTest {
     }
 
     @Test
+    void sort12() {
+        List<String> list = new ArrayList<>(List.of("下集.mkv", "上集.mkv", "中集.mkv"));
+        list.sort(Comparator.comparing(FileNameInfo::new));
+        List<String> expected = List.of("上集.mkv", "中集.mkv", "下集.mkv");
+        Assertions.assertEquals(expected, list);
+        System.out.println(list);
+    }
+
+    @Test
     void sort11() {
         List<String> list = new ArrayList<>(List.of("假面骑士加布 普通话 第1集.mp4", "假面骑士加布 普通话 第2集.mp4", "假面骑士加布 普通话 第3集.mp4", "假面骑士加布普通话 第36集.mp4", "假面骑士加布普通话 第37集.mp4", "假面骑士加布普通话 第38集.mp4", "假面骑士加布普通话 第39集.mp4", "假面骑士加布普通话 第40集.mp4", "假面骑士加布普通话 第41集.mp4", "假面骑士加布普通话 第43集.mp4", "假面骑士加布普通话 第44集.mp4", "假面骑士加布普通话 第45集.mp4"));
         List<FileNameInfo> files = list.stream().map(FileNameInfo::new).collect(Collectors.toList());
