@@ -40,6 +40,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1497,19 +1498,28 @@ public class MediaSubscriptionCheckService {
         }
         scored.sort((a, b) -> Integer.compare(b.score, a.score));
 
-        int poolSize = appProperties.getSubscription().getCandidatePoolSize();
+        // 分层配额:主网盘的打分领先是结构性的(主网盘+15、百度免会员+15、盘偏好+20/-10),
+        // 全局 top-N 必被主网盘包圆,把 N 调大也一样 —— 排序问题要用配额解,不是用加量解。
+        // 每个主网盘保底若干席,其余盘共享一档席位,保证备用盘任何时候都有候选可换。
+        PoolQuota quota = new PoolQuota(mainDrives(subscription), appProperties.getSubscription());
         int added = 0;
         Set<Integer> takenEpisodes = new java.util.HashSet<>();
         for (Scored candidate : scored) {
-            if (added >= poolSize) {
+            if (quota.exhausted()) {
                 break;
+            }
+            String drive = driveKeyOf(candidate.message);
+            if (!quota.take(drive)) {
+                continue; // 该盘席位已满:让位给还没有候选的盘
             }
             Integer bareEpisode = singleEpisodeOf(candidate.title);
             if (bareEpisode != null && takenEpisodes.contains(bareEpisode)) {
+                quota.giveBack(drive);
                 continue; // 同集单集链接一席:席位留给不同集/整季资源,防 115 每集一链刷满池
             }
             String link = candidate.message.getLink();
             if (resourceRepository.findBySubscriptionIdAndLink(subscription.getId(), link).isPresent()) {
+                quota.giveBack(drive);
                 continue;
             }
             MediaSubscriptionResource resource = new MediaSubscriptionResource();
@@ -1541,8 +1551,63 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** dry-run 预览(§10.2):按关键词+偏好即时搜索,返回候选与打分明细,不落库。 */
-    public List<Map<String, Object>> preview(String keyword, Integer season, MediaSubscriptionFilter filter) {
+    /** 候选消息的盘 key(用于配额分档);类型不可识别时归入"其它盘"档。 */
+    private static String driveKeyOf(Message message) {
+        try {
+            return DriveId.toDrive(Integer.parseInt(StringUtils.defaultString(message.getType())));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 候选池的分层席位:每个主网盘一档独立配额,其余盘共享一档。
+     * <p>
+     * 纯按分数取 top-N 会让主网盘包圆全部席位(它们有 25~45 分的结构性领先),备用盘永远进不了池,
+     * 主网盘一挂就无源可换。配额把"谁更优"和"谁有资格占位"拆开:排序仍按分数,但每档满了就让位。
+     * 未配置主网盘时退化为单一全局档位(= 旧的 candidatePoolSize 行为)。
+     */
+    static final class PoolQuota {
+        private final Map<String, Integer> remaining = new LinkedHashMap<>();
+        private static final String OTHERS = "";
+
+        PoolQuota(List<String> mainDrives, AppProperties.Subscription config) {
+            if (mainDrives == null || mainDrives.isEmpty()) {
+                remaining.put(OTHERS, config.getCandidatePoolSize());
+                return;
+            }
+            for (String drive : mainDrives) {
+                remaining.put(drive, config.getMainDrivePoolSize());
+            }
+            remaining.put(OTHERS, config.getOtherDrivePoolSize());
+        }
+
+        private String bucket(String drive) {
+            return drive != null && remaining.containsKey(drive) ? drive : OTHERS;
+        }
+
+        boolean take(String drive) {
+            String key = bucket(drive);
+            int left = remaining.getOrDefault(key, 0);
+            if (left <= 0) {
+                return false;
+            }
+            remaining.put(key, left - 1);
+            return true;
+        }
+
+        /** 席位已扣但候选最终没入池(重复链接/单集去重)时归还,否则会白白浪费配额。 */
+        void giveBack(String drive) {
+            String key = bucket(drive);
+            remaining.put(key, remaining.getOrDefault(key, 0) + 1);
+        }
+
+        boolean exhausted() {
+            return remaining.values().stream().allMatch(left -> left <= 0);
+        }
+    }
+
+    /** dry-run 预览(§10.2):按关键词+偏好即时搜索,返回候选与打分明细,不落库。 */    public List<Map<String, Object>> preview(String keyword, Integer season, MediaSubscriptionFilter filter) {
         List<Message> messages;
         try {
             messages = searchAllSources(keyword, 50, true);

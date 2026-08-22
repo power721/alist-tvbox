@@ -97,6 +97,10 @@ public class AppProperties {
         private int checkIntervalHours = 6;
         private int maxChecksPerRound = 10;
         private int candidatePoolSize = 5;
+        /** 分层配额:每个主网盘保底席位(主网盘打分领先是结构性的,不给保底则备用盘永远进不了池) */
+        private int mainDrivePoolSize = 3;
+        /** 分层配额:非主网盘共享的席位数,保证主网盘全挂时仍有别盘可换 */
+        private int otherDrivePoolSize = 3;
         private int stallRoundsBeforeSearch = 3;
         private int minEpisodeSizeMb = 20;
         private int maxListDepth = 3;

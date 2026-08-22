@@ -290,6 +290,38 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(MediaSubscriptionCheckService.matchesTitle(List.of(), "随便什么标题"));
     }
 
+    // ---------- 缺陷 5 回归:剧名带季号后缀时的归属匹配 ----------
+    // 线上事故:订阅名/关键词均为"诛仙 第四季",搜索召回 31 条,全部被判不相关。
+    // 根因 ①"最长片段"启发式按字符长度取到了"第四季"(3字)而非"诛仙"(2字);
+    //      ② 裸剧名从未进入匹配名单,匹配退化为"标题必须含连续的『诛仙第四季』五字"。
+
+    @Test
+    void matchNamesIncludesBareShowNameWhenNameCarriesSeason() {
+        List<String> names = MediaSubscriptionCheckService.matchNames("诛仙 第四季", "诛仙 第四季", null);
+        assertTrue(names.contains("诛仙"), "裸剧名必须进入匹配名单");
+    }
+
+    @Test
+    void matchNamesRejectsBareSeasonWordAsMatchName() {
+        // "第四季"作为匹配名会命中任意一部第四季的剧,必须排除
+        List<String> names = MediaSubscriptionCheckService.matchNames("诛仙 第四季", "诛仙 第四季", null);
+        assertFalse(names.contains("第四季"), "纯季号词不得作为匹配名");
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "斗罗大陆 第四季 全26集"),
+                "别剧不得因共享季号词而入池");
+    }
+
+    @Test
+    void matchesTitleAcceptsRealWorldSeasonVariants() {
+        // 线上召回结果的真实形态:季号写法五花八门,归属匹配不该为此背锅
+        List<String> names = MediaSubscriptionCheckService.matchNames("诛仙 第四季", "诛仙 第四季", null);
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙 第四季 全10集 4K"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙 第4季 1080P 国语"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙 S04 2160p WEB-DL"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙4 全10集"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙动画 第四季 更新至05"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "【4K】诛仙 全集 夸克"));
+    }
+
     @Test
     void parseTitleProgressVariants() {
         assertEquals(8, MediaSubscriptionCheckService.parseTitleProgress("剧名 更新至08集 4K"));
@@ -395,6 +427,65 @@ class MediaSubscriptionCheckServiceTest {
 
     private static void assertClose(long expected, long actual) {
         assertTrue(Math.abs(expected - actual) < 60_000L, "expected ~" + expected + " but was " + actual);
+    }
+
+    // ---------- 候选池分层配额:备用盘必须有保底席位 ----------
+    // 主网盘打分领先是结构性的(主网盘+15、百度免会员+15、盘偏好+20/-10),
+    // 纯 top-N 会被主网盘包圆 → 主网盘一挂就无源可换。
+
+    @Test
+    void poolQuotaReservesSeatsForNonMainDrives() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("测试剧");
+        Setting mainDrives = new Setting();
+        mainDrives.setName(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES);
+        mainDrives.setValue("5,10"); // 主网盘:夸克/百度
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
+                .thenReturn(Optional.of(mainDrives));
+        // 10 条百度 + 10 条夸克(高分,足以占满全池) + 2 条 115(低分,旧实现永远进不来)
+        List<Message> results = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            results.add(message("https://pan.baidu.com/s/b" + i, "测试剧 第01-08集 4K", "10"));
+            results.add(message("https://pan.quark.cn/s/q" + i, "测试剧 第01-08集 4K", "5"));
+        }
+        results.add(message("https://115.com/s/x0", "测试剧 第01-08集", "8"));
+        results.add(message("https://115.com/s/x1", "测试剧 第01-08集", "8"));
+        Mockito.when(fixture.telegramService.search(Mockito.anyString(), Mockito.anyInt(),
+                Mockito.anyBoolean(), Mockito.anyBoolean())).thenReturn(results);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository, Mockito.atLeastOnce()).save(captor.capture());
+        long baidu = captor.getAllValues().stream().filter(r -> r.getType() == 10).count();
+        long quark = captor.getAllValues().stream().filter(r -> r.getType() == 5).count();
+        long others = captor.getAllValues().stream().filter(r -> r.getType() == 8).count();
+        assertEquals(3, baidu, "主网盘百度保底 3 席");
+        assertEquals(3, quark, "主网盘夸克保底 3 席");
+        assertEquals(2, others, "非主网盘必须拿到席位(旧实现为 0 —— 备用盘永远进不了池)");
+    }
+
+    @Test
+    void poolQuotaFallsBackToGlobalSizeWithoutMainDrives() {
+        // 未配置主网盘:退化为单一全局档位,行为与旧的 candidatePoolSize 一致
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("测试剧");
+        List<Message> results = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            results.add(message("https://pan.quark.cn/s/q" + i, "测试剧 第01-08集 4K"));
+        }
+        Mockito.when(fixture.telegramService.search(Mockito.anyString(), Mockito.anyInt(),
+                Mockito.anyBoolean(), Mockito.anyBoolean())).thenReturn(results);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        Mockito.verify(fixture.resourceRepository, Mockito.times(5)).save(Mockito.any());
     }
 
     // ---------- 缺陷 4 回归:死掉的补缺挂载不得再"冒领"集数 ----------
