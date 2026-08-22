@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.live.service;
 
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -11,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -43,8 +46,13 @@ public class SoopService implements LivePlatform {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final LiveProxyService liveProxyService;
+    private final SettingRepository settingRepository;
 
-    public SoopService(RestTemplateBuilder builder, ObjectMapper objectMapper, LiveProxyService liveProxyService) {
+    /** web 管理端配置的用户 cookie 存储键:部分房间(成人/会员)必须登录态才能取流。 */
+    public static final String COOKIE_SETTING = "soop_cookie";
+
+    public SoopService(RestTemplateBuilder builder, ObjectMapper objectMapper, LiveProxyService liveProxyService,
+                       SettingRepository settingRepository) {
         this.restTemplate = builder
                 .defaultHeader("User-Agent", Constants.USER_AGENT)
                 .defaultHeader("Origin", "https://play.sooplive.com")
@@ -52,6 +60,12 @@ public class SoopService implements LivePlatform {
                 .build();
         this.objectMapper = objectMapper;
         this.liveProxyService = liveProxyService;
+        this.settingRepository = settingRepository;
+    }
+
+    /** 用户在 web 管理端配置的 cookie,未配置返回 null。 */
+    public String userCookie() {
+        return settingRepository.findById(COOKIE_SETTING).map(Setting::getValue).filter(v -> !v.isBlank()).orElse(null);
     }
 
     @Override
@@ -284,17 +298,30 @@ public class SoopService implements LivePlatform {
     }
 
     // SOOP 部分接口(watch/player_live_api)的 body 是 JSON 却标 Content-Type: text/html,
-    // 不能让 RestTemplate 按 JsonNode 反序列化,统一按 String 拉取后手动解析
+    // 不能让 RestTemplate 按 JsonNode 反序列化,统一按 String 拉取后手动解析;用户 cookie 存在时随行带上
     private JsonNode getJson(String url, Map<String, String> params) throws IOException {
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(url);
         params.forEach(builder::queryParam);
-        return objectMapper.readTree(restTemplate.getForObject(builder.encode().build().toUri(), String.class));
+        return objectMapper.readTree(restTemplate.exchange(builder.encode().build().toUri(), HttpMethod.GET,
+                new HttpEntity<>(cookieHeaders(null)), String.class).getBody());
     }
 
     private JsonNode postForm(String url, MultiValueMap<String, String> form) throws IOException {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        HttpHeaders headers = cookieHeaders(MediaType.APPLICATION_FORM_URLENCODED);
         return objectMapper.readTree(restTemplate.postForObject(url, new HttpEntity<>(form, headers), String.class));
+    }
+
+    /** 带 web 管理端配置的用户 cookie(如有);content type 为 null 时不设置。 */
+    private HttpHeaders cookieHeaders(MediaType contentType) {
+        HttpHeaders headers = new HttpHeaders();
+        if (contentType != null) {
+            headers.setContentType(contentType);
+        }
+        String cookie = userCookie();
+        if (cookie != null) {
+            headers.set(HttpHeaders.COOKIE, cookie);
+        }
+        return headers;
     }
 
     /** view_cnt 可能是数字或数字串,解析失败原样返回 */

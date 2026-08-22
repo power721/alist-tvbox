@@ -13,6 +13,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.io.IOException;
 import java.util.List;
@@ -200,5 +202,31 @@ class LiveFollowServiceTest {
         when(platform.detail(eq("huya$11342412"), isNull())).thenReturn(empty);
         assertThrows(BadRequestException.class, () -> service.followByUrl(1, "https://www.huya.com/11342412"));
         verify(followRepository, never()).save(any());
+    }
+
+    /**
+     * 预热线程的 mock 请求上下文必须能支撑 ServletUriComponentsBuilder.fromCurrentRequest():
+     * 平台 detail(B站/虎牙/CC 的封面代理 URL)依赖它,原生类型方法(如 getServerPort 返回 int)
+     * 若拆箱 null 会 NPE,导致预热写入的失败结果被长缓存放大成"状态全部未知"。
+     */
+    @Test
+    void mockRequestAttributesSupportsCurrentRequestBuilder() throws Exception {
+        java.lang.reflect.Method method = LiveFollowService.class.getDeclaredMethod("mockRequestAttributes");
+        method.setAccessible(true);
+        Object attributes = method.invoke(null);
+
+        RequestContextHolder.setRequestAttributes((RequestAttributes) attributes);
+        try {
+            var uri = org.springframework.web.servlet.support.ServletUriComponentsBuilder
+                    .fromCurrentRequest()
+                    .replacePath("/images")
+                    .replaceQuery("url=https://example.com/a.jpg")
+                    .build()
+                    .toUriString();
+            assertTrue(uri.startsWith("http://127.0.0.1"));
+            assertTrue(uri.contains("/images"));
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
     }
 }
