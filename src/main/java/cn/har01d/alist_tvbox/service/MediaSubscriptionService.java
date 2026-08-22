@@ -119,7 +119,14 @@ public class MediaSubscriptionService {
     }
 
     public List<MediaSubscriptionDto> list(int uid) {
-        return subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid).stream().map(this::toDto).toList();
+        List<MediaSubscription> subscriptions = subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid);
+        // 封面快照缺失(新订阅/升级存量)时后台预热:本轮先出占位/豆瓣库封面,回填后下次刷新可见。列表自身不等待任何外部调用
+        for (MediaSubscription subscription : subscriptions) {
+            if (StringUtils.isBlank(subscription.getCoverUrl())) {
+                checkService.prewarmCoverAsync(subscription);
+            }
+        }
+        return subscriptions.stream().map(this::toDto).toList();
     }
 
     @Transactional
@@ -192,6 +199,7 @@ public class MediaSubscriptionService {
         if (request.getMetaId() != null) {
             subscription.setMetaId(StringUtils.defaultIfBlank(request.getMetaId(), null));
             subscription.setMetaSyncTime(null); // 换条目立即重拉元数据
+            subscription.setCoverUrl(null); // 封面快照随条目走,不留旧剧封面
         }
         if (request.getExpectedEpisodes() != null) {
             subscription.setExpectedEpisodes(request.getExpectedEpisodes());
@@ -1492,12 +1500,14 @@ public class MediaSubscriptionService {
                 : subscription.getName();
     }
 
+    /**
+     * 封面只读本地(订阅行快照 → 豆瓣库),绝不在此发起外部请求:
+     * 列表页 N 个订阅 × provider 冷缓存(重启后)曾是 N×3 次串行外部调用,把接口拖到几十秒。
+     * 快照由巡检 refreshMetadata / 异步预热(prewarmCoverAsync)回填。
+     */
     private String coverOf(MediaSubscription subscription) {
-        if (StringUtils.isNotBlank(subscription.getMetaProvider()) && StringUtils.isNotBlank(subscription.getMetaId())) {
-            MetadataDetails details = metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
-            if (details != null && StringUtils.isNotBlank(details.getCover())) {
-                return details.getCover();
-            }
+        if (StringUtils.isNotBlank(subscription.getCoverUrl())) {
+            return subscription.getCoverUrl();
         }
         if (subscription.getDoubanId() != null) {
             var movie = movieRepository.findById(subscription.getDoubanId()).orElse(null);

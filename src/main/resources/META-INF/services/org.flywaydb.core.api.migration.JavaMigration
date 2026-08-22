@@ -22,3 +22,4 @@ db.migration.current.V27__MediaSubscriptionAliases
 db.migration.current.V28__MediaSubscriptionMainDrives
 db.migration.current.V29__MediaSubscriptionMaxEpisode
 db.migration.current.V30__MediaSubscriptionEpisodeSource
+db.migration.current.V31__MediaSubscriptionCover

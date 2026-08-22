@@ -47,10 +47,10 @@ class MsubSchemaContractTest {
 
     @Test
     void migratedSchemaCoversEveryEntityColumn() throws Exception {
-        // MediaSubscription:episode_list/broken_episodes 已 drop,max_episode/schedule 保留
+        // MediaSubscription:episode_list/broken_episodes 已 drop,max_episode/schedule/cover_url 保留
         assertColumns("media_subscription", "id", "uid", "name", "keyword", "season", "douban_id",
                 "meta_provider", "meta_id", "official_episodes", "official_total", "official_status",
-                "next_air_time", "meta_sync_time", "aliases", "main_drives", "filter_config", "mode",
+                "next_air_time", "meta_sync_time", "cover_url", "aliases", "main_drives", "filter_config", "mode",
                 "account_id", "account_ids", "mount_path", "share_id", "expected_episodes",
                 "current_episodes", "max_episode", "schedule", "cross_drive", "status", "stall_count",
                 "check_interval_hours", "next_check_time", "last_check_time", "created_time", "updated_time");

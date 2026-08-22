@@ -74,6 +74,10 @@ public class MediaSubscription {
     @Column(name = "meta_sync_time")
     private Long metaSyncTime;
 
+    /** 封面快照(元数据详情页图床直链)。列表接口只读此列 —— 实时查 provider 在缓存冷(重启后)时是 N×3 次串行外部请求,曾把列表页拖到 50s。 */
+    @Column(name = "cover_url", length = 512)
+    private String coverUrl;
+
     /** 元数据别名快照(换行分隔),搜索结果标题归属匹配用(§4.7) */
     @Column(columnDefinition = "TEXT")
     private String aliases;

@@ -6,6 +6,7 @@ import db.migration.current.V22__MediaSubscriptionMetaFix;
 import db.migration.current.V27__MediaSubscriptionAliases;
 import db.migration.current.V28__MediaSubscriptionMainDrives;
 import db.migration.current.V30__MediaSubscriptionEpisodeSource;
+import db.migration.current.V31__MediaSubscriptionCover;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -179,6 +180,21 @@ class MediaSubscriptionMigrationTest {
         }
         // 幂等:重复执行不报错
         new V28__MediaSubscriptionMainDrives().migrate(context());
+    }
+
+    @Test
+    void v31AddsCoverUrlColumn() throws Exception {
+        new V20__MediaSubscription().migrate(context());
+        new V31__MediaSubscriptionCover().migrate(context());
+
+        execute("INSERT INTO media_subscription (id, uid, name, created_time, cover_url)"
+                + " VALUES (5, 1, '封面剧', 0, 'https://media.themoviedb.org/t/p/w300_and_h450_bestv2/abc.jpg')");
+        try (ResultSet rs = query("SELECT cover_url FROM media_subscription WHERE id = 5")) {
+            assertTrue(rs.next());
+            assertEquals("https://media.themoviedb.org/t/p/w300_and_h450_bestv2/abc.jpg", rs.getString(1)); // 不带引号可访问(Hibernate 形态)
+        }
+        // 幂等:重复执行不报错
+        new V31__MediaSubscriptionCover().migrate(context());
     }
 
     private void execute(String sql) throws Exception {

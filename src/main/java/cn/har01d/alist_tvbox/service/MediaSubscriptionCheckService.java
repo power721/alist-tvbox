@@ -163,6 +163,8 @@ public class MediaSubscriptionCheckService {
     private final ObjectMapper objectMapper;
 
     private final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
+    /** 封面预热去重(订阅 id):列表接口发现快照缺失时后台补拉,同订阅不堆积重复任务 */
+    private final Set<Integer> coverPrewarmInFlight = ConcurrentHashMap.newKeySet();
     /** 缺集补搜关键词轮次(0=整季,1+=单集),内存态即可 */
     private final Map<Integer, Integer> gapSearchRounds = new ConcurrentHashMap<>();
     /** 主网盘补池搜索限频(订阅 id → 上次搜索时间):池内无该盘资源时主动搜索,至多每检查周期一次 */
@@ -304,6 +306,38 @@ public class MediaSubscriptionCheckService {
             throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
         }
         executor.submit(() -> check(id));
+    }
+
+    /**
+     * 封面快照后台预热:列表接口只读本地(coverOf),缺失时由此异步拉一次 details 回填 cover_url,
+     * 下次刷新即可见。不受 refreshMetadata 的 24h 节流限制 —— 冷启动(metaSyncTime 尚新但快照从未写过)也要能补。
+     */
+    public void prewarmCoverAsync(MediaSubscription subscription) {
+        if (subscription == null || subscription.getId() == null
+                || StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
+            return;
+        }
+        int id = subscription.getId();
+        if (!coverPrewarmInFlight.add(id)) {
+            return;
+        }
+        executor.submit(() -> {
+            try {
+                MediaSubscription current = subscriptionRepository.findById(id).orElse(null);
+                if (current == null || StringUtils.isNotBlank(current.getCoverUrl())) {
+                    return;
+                }
+                MetadataDetails details = metadataService.details(
+                        current.getMetaProvider(), current.getMetaId(), current.getSeason());
+                if (details != null && StringUtils.isNotBlank(details.getCover())) {
+                    subscriptionRepository.updateCoverUrl(id, details.getCover());
+                }
+            } catch (Exception e) {
+                log.debug("cover prewarm {} failed: {}", id, e.getMessage());
+            } finally {
+                coverPrewarmInFlight.remove(id);
+            }
+        });
     }
 
     /** 手动激活候选池中的指定资源(异步换源)。 */
