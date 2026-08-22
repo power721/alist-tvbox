@@ -26,6 +26,7 @@ import cn.har01d.alist_tvbox.service.metadata.MetadataService;
 import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -99,6 +100,7 @@ public class MediaSubscriptionCheckService {
     private final WanouSearchService wanouSearchService;
     private final PanLianSearchService panLianSearchService;
     private final GuanYingSearchService guanYingSearchService;
+    private final WoniuSearchService woniuSearchService;
     private final MetadataService metadataService;
     private final AutoUpdateExecutor autoUpdateExecutor;
     private final AppProperties appProperties;
@@ -129,6 +131,7 @@ public class MediaSubscriptionCheckService {
                                          WanouSearchService wanouSearchService,
                                          PanLianSearchService panLianSearchService,
                                          GuanYingSearchService guanYingSearchService,
+                                         WoniuSearchService woniuSearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          AppProperties appProperties,
@@ -147,6 +150,7 @@ public class MediaSubscriptionCheckService {
         this.wanouSearchService = wanouSearchService;
         this.panLianSearchService = panLianSearchService;
         this.guanYingSearchService = guanYingSearchService;
+        this.woniuSearchService = woniuSearchService;
         this.metadataService = metadataService;
         this.autoUpdateExecutor = autoUpdateExecutor;
         this.appProperties = appProperties;
@@ -1361,7 +1365,7 @@ public class MediaSubscriptionCheckService {
 
     /**
      * 多源聚合搜索:TG 三级回退(PanSou → TG-Search → 网页)结果之上,并入玩偶聚合站源
-     * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接)、盘链源与观影源(后两者需用户
+     * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接)与盘链/观影/蜗牛源(需用户
      * 自配账号/Cookie,未配置时静默关闭),按 link 天然去重;任一新源失败不影响其它源结果。
      */
     private List<Message> searchAllSources(String keyword, int size, boolean cached) {
@@ -1378,6 +1382,9 @@ public class MediaSubscriptionCheckService {
         }
         if (guanYingSearchService != null) {
             mergeSource(messages, links, guanYingSearchService.search(keyword), "guanying", keyword);
+        }
+        if (woniuSearchService != null) {
+            mergeSource(messages, links, woniuSearchService.search(keyword), "woniu", keyword);
         }
         return messages;
     }

@@ -370,6 +370,20 @@
           <el-input v-model="notifyForm.guanyingCookie" type="textarea" :rows="2"
                     placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
         </el-form-item>
+        <el-divider content-position="left">蜗牛搜索源(可选)</el-divider>
+        <el-form-item label="蜗牛站点">
+          <el-input v-model="notifyForm.woniuHost" placeholder="留空自动测速双线路(wn4k/zmi);自定义填 https://..."/>
+        </el-form-item>
+        <el-form-item label="蜗牛账号">
+          <el-input v-model="notifyForm.woniuUsername" placeholder="推荐账号密码(Cookie 过期自动续期)"/>
+        </el-form-item>
+        <el-form-item label="蜗牛密码">
+          <el-input v-model="notifyForm.woniuPassword" type="password" show-password placeholder="与账号配套"/>
+        </el-form-item>
+        <el-form-item label="蜗牛 Cookie">
+          <el-input v-model="notifyForm.woniuCookie" type="textarea" :rows="2"
+                    placeholder="须含 user_check(登录后复制);未登录网盘链接会被打码,无凭证时该搜索源自动关闭"/>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="notifyVisible = false">取消</el-button>
@@ -585,6 +599,10 @@ const notifyForm = ref({
   guanyingUsername: '',
   guanyingPassword: '',
   guanyingCookie: '',
+  woniuHost: '',
+  woniuUsername: '',
+  woniuPassword: '',
+  woniuCookie: '',
 })
 const navigationVisible = ref(false)
 const navCategories = ref<{ type_id: string, type_name: string }[]>([])
@@ -1092,6 +1110,10 @@ const openNotify = () => {
     notifyForm.value.guanyingUsername = settings['guanying_username'] || ''
     notifyForm.value.guanyingPassword = settings['guanying_password'] || ''
     notifyForm.value.guanyingCookie = settings['guanying_cookie'] || ''
+    notifyForm.value.woniuHost = settings['woniu_host'] || ''
+    notifyForm.value.woniuUsername = settings['woniu_username'] || ''
+    notifyForm.value.woniuPassword = settings['woniu_password'] || ''
+    notifyForm.value.woniuCookie = settings['woniu_cookie'] || ''
     notifyVisible.value = true
   }).catch(() => {
     notifyVisible.value = true
@@ -1117,6 +1139,10 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'guanying_username', value: notifyForm.value.guanyingUsername.trim()}),
     axios.post('/api/settings', {name: 'guanying_password', value: notifyForm.value.guanyingPassword}),
     axios.post('/api/settings', {name: 'guanying_cookie', value: notifyForm.value.guanyingCookie.trim()}),
+    axios.post('/api/settings', {name: 'woniu_host', value: notifyForm.value.woniuHost.trim()}),
+    axios.post('/api/settings', {name: 'woniu_username', value: notifyForm.value.woniuUsername.trim()}),
+    axios.post('/api/settings', {name: 'woniu_password', value: notifyForm.value.woniuPassword}),
+    axios.post('/api/settings', {name: 'woniu_cookie', value: notifyForm.value.woniuCookie.trim()}),
   ]
   Promise.all(saves).then(() => {
     ElMessage.success('已保存(下轮巡检生效)')

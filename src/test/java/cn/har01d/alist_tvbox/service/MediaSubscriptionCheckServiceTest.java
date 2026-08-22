@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MediaSubscriptionCheckServiceTest {
 
     private final MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
     @Test
     void seasonEpisodePattern() {
@@ -289,7 +289,6 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(MediaSubscriptionCheckService.matchesTitle(List.of(), "随便什么标题"));
     }
 
-    // ---------- 缺陷 5 回归:剧名带季号后缀时的归属匹配 ----------
     @Test
     void parseTitleProgressVariants() {
         assertEquals(8, MediaSubscriptionCheckService.parseTitleProgress("剧名 更新至08集 4K"));
@@ -425,7 +424,7 @@ class MediaSubscriptionCheckServiceTest {
             service = new MediaSubscriptionCheckService(subscriptionRepository, resourceRepository, eventRepository,
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),
                     Mockito.mock(IndexTemplateRepository.class), settingRepository,
-                    Mockito.mock(ShareService.class), aListService, telegramService, null, null, null,
+                    Mockito.mock(ShareService.class), aListService, telegramService, null, null, null, null,
                     Mockito.mock(MetadataService.class), Mockito.mock(AutoUpdateExecutor.class),
                     appProperties, new ObjectMapper());
             subscription.setId(1);
