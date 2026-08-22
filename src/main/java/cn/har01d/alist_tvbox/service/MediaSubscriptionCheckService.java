@@ -77,6 +77,8 @@ public class MediaSubscriptionCheckService {
     /** 网盘限流/风控(非资源失效):百度 errno -62 = 验证次数过多;其余为通用限流措辞 */
     private static final Pattern THROTTLE_ERROR = Pattern.compile(
             "(?i)errno\"?\\s*:\\s*-62|验证次数过多|请稍[后候]|访问频繁|操作频繁|too many (requests|attempts)|rate.?limit|\\b429\\b");
+    /** 搜索源判定失效的原始状态词(各源大小写/措辞不一,入池时统一归一化) */
+    private static final Set<String> INVALID_STATES = Set.of("BAD", "INVALID", "FAILED", "EXPIRED", "DEAD", "ERROR");
     /** 池枯竭释放 BAD 冷却的最小年龄:本轮刚判死的不参与释放 */
     private static final long BAD_RELEASE_MIN_AGE_MS = 30 * 60_000L;
     /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
@@ -979,6 +981,24 @@ public class MediaSubscriptionCheckService {
         return message != null && THROTTLE_ERROR.matcher(message).find();
     }
 
+    /**
+     * 入池时归一化搜索源返回的有效性状态。
+     * <p>
+     * 各搜索源的状态词大小写与措辞都不统一(盘检返回小写 "ok"),直接存原值会让
+     * {@code VALIDITY_OK.equals(...)} 这类比较静默失配。更重要的是语义:盘检只证明
+     * <b>链接可达</b>,不证明<b>挂得上</b>——线上就有盘检 ok 而实际"分享地址已失效"的夸克源。
+     * 因此只有明确判失效的才落 BAD,其余一律 UNKNOWN,把"已验证可用"这个结论留给真正挂载成功的那一刻。
+     */
+    static String normalizeValidity(String state) {
+        if (StringUtils.isBlank(state)) {
+            return MediaSubscriptionResource.VALIDITY_UNKNOWN;
+        }
+        String upper = state.trim().toUpperCase(java.util.Locale.ROOT);
+        return INVALID_STATES.contains(upper)
+                ? MediaSubscriptionResource.VALIDITY_BAD
+                : MediaSubscriptionResource.VALIDITY_UNKNOWN;
+    }
+
     private static String driveOf(MediaSubscriptionResource resource) {
         return resource.getType() == null ? "" : StringUtils.defaultString(DriveId.toDrive(resource.getType()));
     }
@@ -1612,8 +1632,7 @@ public class MediaSubscriptionCheckService {
             }
             resource.setTitle(StringUtils.abbreviate(candidate.title, 250)); // 列 VARCHAR(255),TG 消息名可超长
             resource.setScore(candidate.score);
-            resource.setValidity(StringUtils.isNotBlank(candidate.message.getValidityState())
-                    ? candidate.message.getValidityState() : MediaSubscriptionResource.VALIDITY_UNKNOWN);
+            resource.setValidity(normalizeValidity(candidate.message.getValidityState()));
             resource.setActive(false);
             resource.setCreatedTime(System.currentTimeMillis());
             resourceRepository.save(resource);

@@ -451,6 +451,19 @@ class MediaSubscriptionCheckServiceTest {
         assertFalse(MediaSubscriptionCheckService.isThrottleError(null));
     }
 
+    @Test
+    void searchSourceValidityIsNormalizedOnAdmission() {
+        // 各源状态词大小写不一(盘检返回小写 ok),直接存原值会让 VALIDITY_OK.equals 静默失配
+        assertEquals(MediaSubscriptionResource.VALIDITY_BAD, MediaSubscriptionCheckService.normalizeValidity("bad"));
+        assertEquals(MediaSubscriptionResource.VALIDITY_BAD, MediaSubscriptionCheckService.normalizeValidity("Invalid"));
+        assertEquals(MediaSubscriptionResource.VALIDITY_BAD, MediaSubscriptionCheckService.normalizeValidity(" EXPIRED "));
+        // 盘检 ok 只证明链接可达,不证明挂得上 —— 不许冒充"已验证可用"
+        assertEquals(MediaSubscriptionResource.VALIDITY_UNKNOWN, MediaSubscriptionCheckService.normalizeValidity("ok"));
+        assertEquals(MediaSubscriptionResource.VALIDITY_UNKNOWN, MediaSubscriptionCheckService.normalizeValidity("OK"));
+        assertEquals(MediaSubscriptionResource.VALIDITY_UNKNOWN, MediaSubscriptionCheckService.normalizeValidity(null));
+        assertEquals(MediaSubscriptionResource.VALIDITY_UNKNOWN, MediaSubscriptionCheckService.normalizeValidity(""));
+    }
+
     // ---------- 候选池分层配额:备用盘必须有保底席位 ----------
     // 主网盘打分领先是结构性的(主网盘+15、百度免会员+15、盘偏好+20/-10),
     // 纯 top-N 会被主网盘包圆 → 主网盘一挂就无源可换。
