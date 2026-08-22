@@ -93,6 +93,7 @@ public class MediaSubscriptionCheckService {
     private final ShareService shareService;
     private final AListService aListService;
     private final TelegramService telegramService;
+    private final WanouSearchService wanouSearchService;
     private final MetadataService metadataService;
     private final AutoUpdateExecutor autoUpdateExecutor;
     private final AppProperties appProperties;
@@ -120,6 +121,7 @@ public class MediaSubscriptionCheckService {
                                          ShareService shareService,
                                          AListService aListService,
                                          TelegramService telegramService,
+                                         WanouSearchService wanouSearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          AppProperties appProperties,
@@ -135,6 +137,7 @@ public class MediaSubscriptionCheckService {
         this.shareService = shareService;
         this.aListService = aListService;
         this.telegramService = telegramService;
+        this.wanouSearchService = wanouSearchService;
         this.metadataService = metadataService;
         this.autoUpdateExecutor = autoUpdateExecutor;
         this.appProperties = appProperties;
@@ -1348,7 +1351,32 @@ public class MediaSubscriptionCheckService {
     // ---------- 候选池与打分 ----------
 
     /**
-     * 填充候选池:复用 TelegramService 三级搜索(PanSou → TG-Search → t.me 网页),按偏好打分取 TopN。
+     * 多源聚合搜索:TG 三级回退(PanSou → TG-Search → 网页)结果之上,并入玩偶聚合站源
+     * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接),按 link 天然去重;
+     * 玩偶源失败不影响 TG 结果(仅告警),反之亦然。
+     */
+    private List<Message> searchAllSources(String keyword, int size, boolean cached) {
+        List<Message> messages = new ArrayList<>(telegramService.search(keyword, size, false, cached));
+        if (wanouSearchService != null && appProperties.getSubscription().isWanouEnabled()) {
+            try {
+                Set<String> links = new java.util.HashSet<>();
+                for (Message message : messages) {
+                    links.add(message.getLink());
+                }
+                for (Message message : wanouSearchService.search(keyword)) {
+                    if (StringUtils.isNotBlank(message.getLink()) && links.add(message.getLink())) {
+                        messages.add(message);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("wanou search failed for [{}]: {}", keyword, e.getMessage());
+            }
+        }
+        return messages;
+    }
+
+    /**
+     * 填充候选池:多源聚合搜索(TG 三级回退 + 玩偶聚合站),按偏好打分取 TopN。
      *
      * @param keywordOverride 缺集补搜的单集关键词(空 = 默认订阅关键词)
      */
@@ -1365,7 +1393,7 @@ public class MediaSubscriptionCheckService {
                 StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()));
         List<Message> messages;
         try {
-            messages = telegramService.search(keyword, 50, false, false);
+            messages = searchAllSources(keyword, 50, false);
         } catch (Exception e) {
             log.warn("subscription {} search failed: {}", subscription.getId(), e.getMessage());
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "搜索失败:" + e.getMessage());
@@ -1451,7 +1479,7 @@ public class MediaSubscriptionCheckService {
     public List<Map<String, Object>> preview(String keyword, Integer season, MediaSubscriptionFilter filter) {
         List<Message> messages;
         try {
-            messages = telegramService.search(keyword, 50, false, true);
+            messages = searchAllSources(keyword, 50, true);
         } catch (Exception e) {
             return List.of(Map.of("error", StringUtils.defaultString(e.getMessage())));
         }

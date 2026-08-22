@@ -119,6 +119,14 @@ public class AppProperties {
         private int returningBackoffCapHours = 12;
         /** BAD 候选冷却(天):超期允许重探一次(误标自愈),再失败重新计时 */
         private int badCooldownDays = 7;
+        /** 玩偶聚合搜索源(玩偶/多多/木偶等 11 站聚合,搜索+详情页提取分享链接):追剧候选池补充来源 */
+        private boolean wanouEnabled = true;
+        /** 玩偶聚合:站点最新域名监控接口(空=只用内置静态域名) */
+        private String wanouMonitorUrl = "https://pan-site-monitor.douer.me/api/data";
+        /** 玩偶聚合:单站每次搜索最多抓取的详情页数 */
+        private int wanouMaxDetailPages = 3;
+        /** 玩偶聚合:整源搜索总超时(秒) */
+        private int wanouTimeoutSeconds = 45;
     }
 
     public static Map<String, Map<String, Object>> copyLocalProxyConfig(Map<String, Map<String, Object>> source) {

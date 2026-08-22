@@ -241,7 +241,7 @@ public class Message {
         return false;
     }
 
-    private static String parseType(String link) {
+    public static String parseType(String link) {
         if (link.startsWith("magnet:")) {
             return "magnet";
         }
