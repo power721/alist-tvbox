@@ -16,4 +16,13 @@ public interface MetadataProvider {
 
     /** @param season 目标季(可空,空按第 1 季处理) */
     MetadataDetails details(String id, Integer season);
+
+    /**
+     * 强制刷新:穿透内存缓存直取外网(详情页"刷新元数据"按钮用)。
+     * 默认退化为 {@link #details}(无缓存的实现无需 override);有缓存的实现应 override
+     * 并把新结果写回缓存,否则刷新后 6h 内旧值仍占位。
+     */
+    default MetadataDetails refreshDetails(String id, Integer season) {
+        return details(id, season);
+    }
 }

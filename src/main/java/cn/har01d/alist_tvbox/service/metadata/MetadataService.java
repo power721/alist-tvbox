@@ -123,6 +123,26 @@ public class MetadataService {
         return readPersisted(provider.getName(), id, seasonNumber, true);
     }
 
+    /**
+     * 强制刷新:穿透持久层与 provider 内存缓存直取外网,结果回写两层(表 + provider 缓存由其自行更新)。
+     * 详情页"刷新元数据"按钮用,异步调用;同步路径别用(慢)。
+     */
+    public MetadataDetails refreshDetails(String providerName, String id, Integer season) {
+        MetadataProvider provider = getProvider(providerName);
+        if (provider == null) {
+            return null;
+        }
+        int seasonNumber = season == null || season < 1 ? 1 : season;
+        try {
+            MetadataDetails details = provider.refreshDetails(id, seasonNumber);
+            persist(provider.getName(), id, seasonNumber, details);
+            return details;
+        } catch (Exception e) {
+            log.warn("metadata refresh {} {} failed: {}", providerName, id, e.getMessage());
+            return null;
+        }
+    }
+
     private MetadataDetails readPersisted(String providerName, String id, int season, boolean allowStale) {
         return metadataRepository.findByProviderAndMetaIdAndSeason(providerName, id, season)
                 .map(row -> {
@@ -139,6 +159,10 @@ public class MetadataService {
     }
 
     private boolean isStale(MetadataDetails details, long fetchTime) {
+        // 旧版快照(扩展字段全缺)视为过期:即使完结剧也重拉一次,升级后即恢复常规节奏
+        if (details.getOriginalName() == null && details.getGenres() == null && details.getRating() == null) {
+            return true;
+        }
         if (!MetadataDetails.STATUS_RETURNING.equals(details.getStatus())) {
             return false;
         }

@@ -1129,13 +1129,23 @@ public class MediaSubscriptionService {
         media.put("season", subscription.getSeason() == null ? 1 : subscription.getSeason());
         if (details != null) {
             media.put("name", details.getName());
+            media.put("originalName", details.getOriginalName());
             media.put("year", details.getYear());
             media.put("cover", proxiedCover(details.getCover()));
+            media.put("backdrop", proxiedCover(details.getBackdrop()));
             media.put("status", details.getStatus());
             media.put("totalSeasons", details.getTotalSeasons());
             media.put("runtimeMinutes", details.getRuntimeMinutes());
             media.put("overview", details.getOverview());
             media.put("aliases", details.getAliases() == null ? List.of() : details.getAliases());
+            media.put("genres", details.getGenres() == null ? List.of() : details.getGenres());
+            media.put("countries", details.getCountries() == null ? List.of() : details.getCountries());
+            media.put("languages", details.getLanguages() == null ? List.of() : details.getLanguages());
+            media.put("firstAirDate", details.getFirstAirDate());
+            media.put("rating", details.getRating());
+            media.put("directors", details.getDirectors() == null ? List.of() : details.getDirectors());
+            media.put("writers", details.getWriters() == null ? List.of() : details.getWriters());
+            media.put("cast", details.getCast() == null ? List.of() : details.getCast());
         }
         // 订阅侧快照兜底:元数据未拉到/字段缺时详情页仍有官方集数与下集播出时间
         media.put("officialEpisodes", subscription.getOfficialEpisodes());
@@ -1196,6 +1206,7 @@ public class MediaSubscriptionService {
             item.put("airTime", airTime);
             item.put("aired", airTime != null && airTime <= now
                     || row != null && Boolean.TRUE.equals(row.getAired()));
+            item.put("runtime", info == null ? null : info.getRuntime());
             item.put("present", local != null && Boolean.TRUE.equals(local.get("present")));
             item.put("source", local == null ? "" : StringUtils.defaultString((String) local.get("source")));
             if (info != null) {

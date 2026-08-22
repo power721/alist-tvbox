@@ -666,6 +666,99 @@ public class MediaSubscriptionCheckService {
         if (details == null) {
             return;
         }
+        applyMetadataSnapshot(subscription, details);
+    }
+
+    /** 详情页"刷新元数据":穿透缓存直取外网,无视节流立即重写订阅快照与 media_metadata 表。 */
+    public void refreshMetadataAsync(int uid, int id) {
+        MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
+        if (subscription == null || subscription.getUid() != uid) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
+        }
+        executor.submit(() -> {
+            try {
+                MediaSubscription current = subscriptionRepository.findById(id).orElse(null);
+                if (current == null || StringUtils.isBlank(current.getMetaProvider())
+                        || StringUtils.isBlank(current.getMetaId())) {
+                    return;
+                }
+                MetadataDetails details = metadataService.refreshDetails(
+                        current.getMetaProvider(), current.getMetaId(), current.getSeason());
+                if (details == null) {
+                    return;
+                }
+                current.setMetaSyncTime(System.currentTimeMillis());
+                applyMetadataSnapshot(current, details);
+                subscriptionRepository.save(current);
+                log.info("media subscription {} metadata refreshed by user", id);
+            } catch (Exception e) {
+                log.warn("refresh metadata {} failed: {}", id, e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * 详情页"检查更新"(轻量,atv-player check_record 语义):刷新元数据 → 官方已播 vs 本地已有 → 结论进事件流。
+     * 不做资源搜索/挂载(那是列表"检查"完整巡检的事),秒级完成。
+     */
+    public void checkUpdateAsync(int uid, int id) {
+        MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
+        if (subscription == null || subscription.getUid() != uid) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
+        }
+        executor.submit(() -> {
+            try {
+                MediaSubscription current = subscriptionRepository.findById(id).orElse(null);
+                if (current == null) {
+                    return;
+                }
+                if (StringUtils.isBlank(current.getMetaProvider()) || StringUtils.isBlank(current.getMetaId())) {
+                    addEvent(id, MediaSubscriptionEvent.TYPE_UPDATE_CHECK, "未绑定元数据条目,无法检查官方更新");
+                    return;
+                }
+                MetadataDetails details = metadataService.refreshDetails(
+                        current.getMetaProvider(), current.getMetaId(), current.getSeason());
+                if (details == null) {
+                    addEvent(id, MediaSubscriptionEvent.TYPE_UPDATE_CHECK, "检查更新失败:元数据源不可用,稍后重试");
+                    return;
+                }
+                current.setMetaSyncTime(System.currentTimeMillis());
+                applyMetadataSnapshot(current, details);
+                subscriptionRepository.save(current);
+
+                int official = details.getAiredEpisodes() == null ? 0 : details.getAiredEpisodes();
+                if (official <= 0) {
+                    addEvent(id, MediaSubscriptionEvent.TYPE_UPDATE_CHECK,
+                            "官方暂无已播集数信息(" + current.getMetaProvider() + "未提供)");
+                    return;
+                }
+                Set<Integer> local = liveEpisodeNumbers(current);
+                List<Integer> missing = new ArrayList<>();
+                for (int i = 1; i <= Math.min(official, 500); i++) {
+                    if (!local.contains(i)) {
+                        missing.add(i);
+                    }
+                }
+                if (missing.isEmpty()) {
+                    addEvent(id, MediaSubscriptionEvent.TYPE_UPDATE_CHECK,
+                            "官方已播至第 " + official + " 集,本地已全部同步");
+                } else {
+                    String summary = missing.size() <= 8
+                            ? missing.stream().map(String::valueOf).reduce((a, b) -> a + "," + b).orElse("")
+                            : missing.get(0) + "-" + missing.get(missing.size() - 1) + " 等 " + missing.size() + " 集";
+                    addEvent(id, MediaSubscriptionEvent.TYPE_UPDATE_CHECK,
+                            "官方已播至第 " + official + " 集,本地缺第 " + summary + " 集(点列表「检查」立即搜索挂载)");
+                }
+                log.info("media subscription {} update checked by user: official={} missing={}",
+                        id, official, missing.size());
+            } catch (Exception e) {
+                log.warn("check update {} failed: {}", id, e.getMessage());
+            }
+        });
+    }
+
+    /** 元数据 → 订阅行快照(封面/官方集数/状态/日程/别名),refreshMetadata 与手动刷新共用。 */
+    private void applyMetadataSnapshot(MediaSubscription subscription, MetadataDetails details) {
         if (StringUtils.isNotBlank(details.getCover())) {
             subscription.setCoverUrl(details.getCover()); // 封面快照:列表接口纯读库,不再实时查 provider
         }

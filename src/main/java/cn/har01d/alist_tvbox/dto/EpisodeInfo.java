@@ -11,6 +11,8 @@ public class EpisodeInfo {
     private Long airTime;
     private String overview;
     private String still;
+    /** 单集时长(分钟) */
+    private Integer runtime;
 
     public EpisodeInfo() {
     }

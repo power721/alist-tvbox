@@ -35,6 +35,8 @@ public class MediaSubscriptionEvent {
     public static final String TYPE_ERROR = "ERROR";
     public static final String TYPE_ENDED = "ENDED";
     public static final String TYPE_RESUMED = "RESUMED";
+    /** 详情页"检查更新"(轻量):刷新元数据后官方已播 vs 本地已有的结论,不含资源搜索/挂载 */
+    public static final String TYPE_UPDATE_CHECK = "UPDATE_CHECK";
 
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")

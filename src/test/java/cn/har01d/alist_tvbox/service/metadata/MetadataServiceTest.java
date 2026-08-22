@@ -62,6 +62,7 @@ class MetadataServiceTest {
         details.setName(name);
         details.setStatus(status);
         details.setTotalEpisodes(12);
+        details.setGenres(List.of("剧情")); // 新版快照形态(扩展字段在场);全缺 = 旧版,视为过期
         return details;
     }
 
@@ -120,8 +121,37 @@ class MetadataServiceTest {
     }
 
     @Test
+    void refreshDetailsBypassesPersistedLayerAndRewrites() throws Exception {
+        // DB 里已有 fresh 快照,refreshDetails 仍要直取 provider 并回写
+        when(repository.findByProviderAndMetaIdAndSeason("tmdb", "123", 1))
+                .thenReturn(Optional.of(row(MetadataDetails.STATUS_RETURNING, 1000, details(MetadataDetails.STATUS_RETURNING, "旧值"))));
+        MetadataDetails fresh = details(MetadataDetails.STATUS_RETURNING, "新值");
+        when(provider.refreshDetails("123", 1)).thenReturn(fresh);
+        MetadataDetails result = service.refreshDetails("tmdb", "123", 1);
+        assertEquals("新值", result.getName());
+        verify(provider).refreshDetails("123", 1);
+        verify(repository).save(any(MediaMetadata.class));
+    }
+
+    @Test
     void unknownProviderReturnsNull() {
         assertNull(service.details("nope", "123", 1));
+    }
+
+    @Test
+    void legacySnapshotWithoutExtendedFieldsRefreshesEvenWhenEnded() throws Exception {
+        MetadataDetails legacy = new MetadataDetails(); // V32 扩展前的快照形态:无 genres/rating/originalName
+        legacy.setProvider("tmdb");
+        legacy.setId("123");
+        legacy.setName("完结剧");
+        legacy.setStatus(MetadataDetails.STATUS_ENDED);
+        when(repository.findByProviderAndMetaIdAndSeason("tmdb", "123", 1))
+                .thenReturn(Optional.of(row(MetadataDetails.STATUS_ENDED, 1000, legacy)));
+        MetadataDetails fresh = details(MetadataDetails.STATUS_ENDED, "完结剧");
+        when(provider.details("123", 1)).thenReturn(fresh);
+        MetadataDetails result = service.details("tmdb", "123", 1);
+        assertEquals("完结剧", result.getName());
+        verify(repository).save(any(MediaMetadata.class)); // 升级后回写新形态快照,下次不再触发
     }
 
     @Test

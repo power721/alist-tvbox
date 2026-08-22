@@ -105,6 +105,15 @@ public class BangumiMetadataProvider implements MetadataProvider {
         return detailsCache.get(id, key -> fetchDetails(key));
     }
 
+    @Override
+    public MetadataDetails refreshDetails(String id, Integer season) {
+        MetadataDetails details = fetchDetails(id);
+        if (details != null) {
+            detailsCache.put(id, details);
+        }
+        return details;
+    }
+
     private MetadataDetails fetchDetails(String id) {
         MetadataDetails details = new MetadataDetails();
         details.setProvider(NAME);
@@ -119,6 +128,10 @@ public class BangumiMetadataProvider implements MetadataProvider {
             }
             details.setName(firstNonBlank(subject.path("name_cn").asText(), subject.path("name").asText()));
             details.setOverview(subject.path("summary").asText(""));
+            double score = subject.path("rating").path("score").asDouble(0);
+            if (score > 0) {
+                details.setRating(String.valueOf(score));
+            }
             details.setYear(subject.path("date").asText(""));
             if (details.getYear() != null && details.getYear().length() > 4) {
                 details.setYear(details.getYear().substring(0, 4));

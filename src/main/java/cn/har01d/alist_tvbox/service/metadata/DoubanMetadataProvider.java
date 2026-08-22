@@ -160,6 +160,16 @@ public class DoubanMetadataProvider implements MetadataProvider {
         return detailsCache.get(id + ":" + seasonNumber, key -> fetchDetails(id, seasonNumber));
     }
 
+    @Override
+    public MetadataDetails refreshDetails(String id, Integer season) {
+        int seasonNumber = season == null || season < 1 ? 1 : season;
+        MetadataDetails details = fetchDetails(id, seasonNumber);
+        if (details != null) {
+            detailsCache.put(id + ":" + seasonNumber, details);
+        }
+        return details;
+    }
+
     private MetadataDetails fetchDetails(String id, int season) {
         MetadataDetails details = new MetadataDetails();
         details.setProvider(NAME);
@@ -189,6 +199,12 @@ public class DoubanMetadataProvider implements MetadataProvider {
                     if (StringUtils.isBlank(details.getYear()) && body.hasNonNull("year")) {
                         details.setYear(String.valueOf(body.get("year").asInt()));
                     }
+                    if (StringUtils.isBlank(details.getRating())) {
+                        double rating = body.path("rating").path("value").asDouble(0);
+                        if (rating > 0) {
+                            details.setRating(String.valueOf(rating));
+                        }
+                    }
                     // rexxar aka:名称桥接的匹配素材(也是标题归属别名,详情页又名缺失时补上)
                     if (body.hasNonNull("aka") && body.get("aka").isArray()) {
                         List<String> akas = new ArrayList<>();
@@ -211,7 +227,7 @@ public class DoubanMetadataProvider implements MetadataProvider {
                 failures.put(id, Instant.now());
             }
         }
-        // 本地表兜底(数字主键时可用,补名称/封面)
+        // 本地表兜底(数字主键时可用,补名称/封面/类型/地区/演职/评分 —— 豆瓣同步库字段全)
         try {
             Integer movieId = Integer.parseInt(id);
             var movie = movieRepository.findById(movieId).orElse(null);
@@ -223,6 +239,32 @@ public class DoubanMetadataProvider implements MetadataProvider {
                     details.setCover(movie.getCover());
                 }
                 details.setYear(movie.getYear() == null ? "" : String.valueOf(movie.getYear()));
+                if (StringUtils.isBlank(details.getRating()) && StringUtils.isNotBlank(movie.getDbScore())) {
+                    details.setRating(movie.getDbScore());
+                }
+                if (details.getGenres() == null) {
+                    details.setGenres(splitNames(movie.getGenre(), 8));
+                }
+                if (details.getCountries() == null) {
+                    details.setCountries(splitNames(movie.getCountry(), 4));
+                }
+                if (details.getLanguages() == null) {
+                    details.setLanguages(splitNames(movie.getLanguage(), 4));
+                }
+                if (details.getDirectors() == null) {
+                    details.setDirectors(splitNames(movie.getDirectors(), 5));
+                }
+                if (details.getWriters() == null) {
+                    details.setWriters(splitNames(movie.getEditors(), 5));
+                }
+                if (details.getCast() == null) {
+                    List<String> actors = splitNames(movie.getActors(), 15);
+                    if (!actors.isEmpty()) {
+                        details.setCast(actors.stream()
+                                .map(name -> new cn.har01d.alist_tvbox.dto.CastMember(name, null, null))
+                                .toList());
+                    }
+                }
             }
         } catch (NumberFormatException ignored) {
             // 在线 subject id 非数字,本地表兜底不适用
@@ -504,6 +546,36 @@ public class DoubanMetadataProvider implements MetadataProvider {
         if (StringUtils.isBlank(douban.getYear()) && StringUtils.isNotBlank(tmdb.getYear())) {
             douban.setYear(tmdb.getYear());
         }
+        if (StringUtils.isBlank(douban.getFirstAirDate()) && StringUtils.isNotBlank(tmdb.getFirstAirDate())) {
+            douban.setFirstAirDate(tmdb.getFirstAirDate());
+        }
+        if (douban.getGenres() == null && tmdb.getGenres() != null) {
+            douban.setGenres(tmdb.getGenres());
+        }
+        if (douban.getCountries() == null && tmdb.getCountries() != null) {
+            douban.setCountries(tmdb.getCountries());
+        }
+        if (douban.getLanguages() == null && tmdb.getLanguages() != null) {
+            douban.setLanguages(tmdb.getLanguages());
+        }
+        if (StringUtils.isBlank(douban.getRating()) && StringUtils.isNotBlank(tmdb.getRating())) {
+            douban.setRating(tmdb.getRating()); // 豆瓣评分优先,缺失时 TMDB 评分兜底
+        }
+        if (douban.getDirectors() == null && tmdb.getDirectors() != null) {
+            douban.setDirectors(tmdb.getDirectors());
+        }
+        if (douban.getWriters() == null && tmdb.getWriters() != null) {
+            douban.setWriters(tmdb.getWriters());
+        }
+        if (douban.getCast() == null && tmdb.getCast() != null) {
+            douban.setCast(tmdb.getCast());
+        }
+        if (StringUtils.isBlank(douban.getBackdrop()) && StringUtils.isNotBlank(tmdb.getBackdrop())) {
+            douban.setBackdrop(tmdb.getBackdrop());
+        }
+        if (douban.getEpisodes() == null && tmdb.getEpisodes() != null) {
+            douban.setEpisodes(tmdb.getEpisodes()); // 分集标题/播出时间/剧照/简介(豆瓣无分集数据)
+        }
         if (tmdb.getAliases() != null && !tmdb.getAliases().isEmpty()) {
             List<String> merged = new ArrayList<>(douban.getAliases() == null ? List.of() : douban.getAliases());
             for (String alias : tmdb.getAliases()) {
@@ -513,6 +585,20 @@ public class DoubanMetadataProvider implements MetadataProvider {
             }
             douban.setAliases(merged);
         }
+    }
+
+    /** 豆瓣库字段以 " / " 分隔(演员/类型/地区等),拆为列表并限长。 */
+    private static List<String> splitNames(String raw, int limit) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+        List<String> names = new ArrayList<>();
+        for (String name : raw.split("\\s*/\\s*")) {
+            if (StringUtils.isNotBlank(name) && names.size() < limit) {
+                names.add(name.trim());
+            }
+        }
+        return names.isEmpty() ? null : names;
     }
 
     /** Setting douban_cookie:详情页抓取开关+凭据,空=关闭。 */

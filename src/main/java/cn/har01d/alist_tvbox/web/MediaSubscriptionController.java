@@ -87,6 +87,20 @@ public class MediaSubscriptionController {
         return Map.of("started", true);
     }
 
+    /** 详情页"刷新元数据":穿透缓存直取外网,重写订阅快照与 media_metadata 表(异步)。 */
+    @PostMapping("/{id}/refresh-meta")
+    public Map<String, Object> refreshMeta(@PathVariable int id) {
+        checkService.refreshMetadataAsync(currentUid(), id);
+        return Map.of("started", true);
+    }
+
+    /** 详情页"检查更新"(轻量):刷新元数据后官方已播 vs 本地已有的结论进事件流,不做资源搜索/挂载。 */
+    @PostMapping("/{id}/check-update")
+    public Map<String, Object> checkUpdate(@PathVariable int id) {
+        checkService.checkUpdateAsync(currentUid(), id);
+        return Map.of("started", true);
+    }
+
     @PostMapping("/{id}/pause")
     public MediaSubscriptionDto pause(@PathVariable int id) {
         return subscriptionService.pause(currentUid(), id);

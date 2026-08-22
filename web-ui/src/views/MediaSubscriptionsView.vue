@@ -327,30 +327,72 @@
 
     <el-drawer v-model="detailVisible" :title="'媒体详情 - ' + (current?.name || '')" size="58%">
       <div v-loading="detailLoading">
-        <div v-if="detailData" class="detail-head">
-          <el-image :src="detailData.media.cover" fit="cover" class="detail-poster">
-            <template #error>
-              <div class="detail-poster cover-placeholder">{{ (detailData.media.name || current?.name || '?').charAt(0) }}</div>
-            </template>
-          </el-image>
-          <div class="detail-info">
-            <div class="detail-title">
-              {{ detailData.media.name || current?.name }}
-              <span v-if="detailData.media.year" class="sub-text">({{ detailData.media.year }})</span>
-              <el-tag size="small" :type="detailData.media.status === 'RETURNING' ? 'success' : detailData.media.status === 'ENDED' ? 'info' : 'warning'">
-                {{ detailData.media.status === 'RETURNING' ? '在播' : detailData.media.status === 'ENDED' ? '已完结' : '状态未知' }}
-              </el-tag>
-              <el-tag size="small" type="info">第{{ detailData.media.season }}季</el-tag>
+        <div class="detail-actions">
+          <el-button size="small" type="primary" :disabled="!current?.metaProvider" @click="refreshMeta">
+            刷新元数据
+          </el-button>
+          <el-button size="small" @click="checkFromDetail">检查更新</el-button>
+          <span v-if="!current?.metaProvider" class="sub-text">未绑定元数据条目,刷新不可用</span>
+        </div>
+        <div v-if="detailData" class="detail-hero">
+          <div v-if="detailData.media.backdrop" class="detail-backdrop">
+            <el-image :src="detailData.media.backdrop" fit="cover" class="detail-backdrop-img">
+              <template #error><div class="detail-backdrop"></div></template>
+            </el-image>
+          </div>
+          <div class="detail-head">
+            <el-image :src="detailData.media.cover" fit="cover" class="detail-poster">
+              <template #error>
+                <div class="detail-poster cover-placeholder">{{ (detailData.media.name || current?.name || '?').charAt(0) }}</div>
+              </template>
+            </el-image>
+            <div class="detail-info">
+              <div class="detail-title">
+                {{ detailData.media.name || current?.name }}
+                <span v-if="detailData.media.year" class="sub-text">({{ detailData.media.year }})</span>
+                <el-tag size="small" :type="detailData.media.status === 'RETURNING' ? 'success' : detailData.media.status === 'ENDED' ? 'info' : 'warning'">
+                  {{ detailData.media.status === 'RETURNING' ? '在播' : detailData.media.status === 'ENDED' ? '已完结' : '状态未知' }}
+                </el-tag>
+                <el-tag size="small" type="info">第{{ detailData.media.season }}季</el-tag>
+                <el-tag v-if="detailData.media.rating" size="small" type="warning">
+                  {{ providerName(detailData.media.provider || '') }} {{ detailData.media.rating }}
+                </el-tag>
+              </div>
+              <div v-if="detailData.media.originalName && detailData.media.originalName !== detailData.media.name"
+                   class="sub-text">{{ detailData.media.originalName }}</div>
+              <div v-if="detailData.media.genres?.length" class="detail-genres">
+                <el-tag v-for="genre in detailData.media.genres" :key="genre" size="small" effect="plain">{{ genre }}</el-tag>
+              </div>
+              <div class="sub-text">
+                <template v-if="detailData.media.firstAirDate">首播 {{ detailData.media.firstAirDate }} · </template>
+                <template v-if="detailData.media.countries?.length">{{ detailData.media.countries.join(' / ') }} · </template>
+                <template v-if="detailData.media.languages?.length">{{ detailData.media.languages.join(' / ') }} · </template>
+                已播 {{ detailData.media.airedEpisodes ?? 0 }} / 共 {{ detailData.media.totalEpisodes ?? '?' }} 集
+                <template v-if="detailData.media.runtimeMinutes"> · 每集约{{ detailData.media.runtimeMinutes }}分钟</template>
+                <template v-if="detailData.media.totalSeasons"> · 全剧{{ detailData.media.totalSeasons }}季</template>
+              </div>
+              <div class="sub-text">本地已有 {{ detailData.subscription?.currentEpisodes ?? 0 }} 集</div>
+              <div v-if="detailData.media.nextAirTime" class="sub-text">下集播出:{{ formatTime(detailData.media.nextAirTime) }}</div>
+              <div v-if="detailData.media.directors?.length" class="sub-text">
+                导演:{{ detailData.media.directors.join(' / ') }}
+              </div>
+              <div v-if="detailData.media.writers?.length" class="sub-text">
+                编剧:{{ detailData.media.writers.join(' / ') }}
+              </div>
+              <div v-if="detailData.media.aliases?.length" class="sub-text">别名:{{ detailData.media.aliases.join(' / ') }}</div>
+              <div v-if="detailData.media.overview" class="detail-overview">{{ detailData.media.overview }}</div>
             </div>
-            <div class="sub-text">
-              已播 {{ detailData.media.airedEpisodes ?? 0 }} / 共 {{ detailData.media.totalEpisodes ?? '?' }} 集
-              <template v-if="detailData.media.runtimeMinutes"> · 每集约{{ detailData.media.runtimeMinutes }}分钟</template>
-              <template v-if="detailData.media.totalSeasons"> · 全剧{{ detailData.media.totalSeasons }}季</template>
-              · 本地已有 {{ detailData.subscription?.currentEpisodes ?? 0 }} 集
+          </div>
+          <div v-if="detailData.media.cast?.length" class="detail-cast">
+            <div v-for="(person, i) in detailData.media.cast" :key="i" class="cast-card">
+              <el-image :src="person.avatar" fit="cover" class="cast-avatar">
+                <template #error>
+                  <div class="cast-avatar cast-placeholder">{{ (person.name || '?').charAt(0) }}</div>
+                </template>
+              </el-image>
+              <div class="cast-name">{{ person.name }}</div>
+              <div v-if="person.role" class="cast-role">{{ person.role }}</div>
             </div>
-            <div v-if="detailData.media.nextAirTime" class="sub-text">下集播出:{{ formatTime(detailData.media.nextAirTime) }}</div>
-            <div v-if="detailData.media.aliases?.length" class="sub-text">别名:{{ detailData.media.aliases.join(' / ') }}</div>
-            <div v-if="detailData.media.overview" class="detail-overview">{{ detailData.media.overview }}</div>
           </div>
         </div>
         <el-table :data="detailData?.episodes || []" border max-height="560" row-key="episode">
@@ -369,8 +411,11 @@
           <el-table-column label="标题" min-width="170" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.title || '—' }}</template>
           </el-table-column>
-          <el-table-column label="播出时间" width="150">
+          <el-table-column label="播出时间" width="180">
             <template #default="scope">{{ scope.row.airTime ? formatTime(scope.row.airTime) : '—' }}</template>
+          </el-table-column>
+          <el-table-column label="时长" width="70">
+            <template #default="scope">{{ scope.row.runtime ? scope.row.runtime + '分' : '—' }}</template>
           </el-table-column>
           <el-table-column label="播出" width="80">
             <template #default="scope">
@@ -606,13 +651,23 @@ interface MediaDetailData {
     provider: string | null
     season: number
     name?: string
+    originalName?: string | null
     year?: string
     cover?: string
+    backdrop?: string | null
     status?: string
     totalSeasons?: number
     runtimeMinutes?: number
     overview?: string
     aliases?: string[]
+    genres?: string[]
+    countries?: string[]
+    languages?: string[]
+    firstAirDate?: string | null
+    rating?: string | null
+    directors?: string[]
+    writers?: string[]
+    cast?: { name: string, role: string | null, avatar: string | null }[]
     officialEpisodes?: number | null
     officialTotal?: number | null
     officialStatus?: string | null
@@ -625,6 +680,7 @@ interface MediaDetailData {
     title: string | null
     airTime: number | null
     aired: boolean
+    runtime?: number | null
     present: boolean
     source: string
     overview?: string
@@ -1185,6 +1241,36 @@ const showDetail = (row: SubscriptionDto) => {
   })
 }
 
+const reloadDetail = () => {
+  if (detailVisible.value && current.value) {
+    showDetail(current.value)
+  }
+}
+
+/** 刷新元数据:异步任务(TMDB 4 请求/豆瓣桥接),数秒后自动重开详情看新数据 */
+const refreshMeta = () => {
+  if (!current.value) return
+  axios.post(`/api/media-subscriptions/${current.value.id}/refresh-meta`).then(() => {
+    ElMessage.success('已开始刷新元数据,稍后自动更新详情')
+    setTimeout(() => {
+      reloadDetail()
+      loadAll()
+    }, 6000)
+  })
+}
+
+/** 检查更新(轻量,atv-player 语义):刷新元数据对比官方已播 vs 本地,结论进"动态";不搜资源不挂载 */
+const checkFromDetail = () => {
+  if (!current.value) return
+  axios.post(`/api/media-subscriptions/${current.value.id}/check-update`).then(() => {
+    ElMessage.success('已开始检查更新,结论见本页数据与「动态」')
+    setTimeout(() => {
+      reloadDetail()
+      loadAll()
+    }, 6000)
+  })
+}
+
 const showEvents = (row: SubscriptionDto) => {
   current.value = row
   eventsVisible.value = true
@@ -1434,6 +1520,7 @@ const eventTypeName = (type: string) => {
     ERROR: '异常',
     ENDED: '完结',
     RESUMED: '自动重开',
+    UPDATE_CHECK: '更新检查',
   }
   return names[type] || type
 }
@@ -1582,10 +1669,34 @@ const formatClock = (time: number) => {
   color: var(--el-text-color-secondary);
 }
 
+.detail-hero {
+  margin-bottom: 16px;
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.detail-backdrop {
+  height: 140px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: -60px;
+  background: var(--el-fill-color-dark);
+}
+
+.detail-backdrop-img {
+  width: 100%;
+  height: 100%;
+}
+
 .detail-head {
   display: flex;
   gap: 16px;
-  margin-bottom: 16px;
+  position: relative;
 }
 
 .detail-poster {
@@ -1594,11 +1705,64 @@ const formatClock = (time: number) => {
   border-radius: 6px;
   flex-shrink: 0;
   font-size: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .detail-info {
   flex: 1;
   min-width: 0;
+  padding-top: 4px;
+}
+
+.detail-genres {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+}
+
+.detail-cast {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 12px 0 4px;
+}
+
+.cast-card {
+  width: 92px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.cast-avatar {
+  width: 80px;
+  height: 110px;
+  border-radius: 6px;
+  background: var(--el-fill-color-dark);
+}
+
+.cast-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: var(--el-text-color-secondary);
+}
+
+.cast-name {
+  font-size: 13px;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cast-role {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detail-title {

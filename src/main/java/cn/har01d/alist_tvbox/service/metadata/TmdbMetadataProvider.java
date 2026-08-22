@@ -99,6 +99,16 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return detailsCache.get(id + ":" + seasonNumber, key -> fetchDetails(id, seasonNumber));
     }
 
+    @Override
+    public MetadataDetails refreshDetails(String id, Integer season) {
+        int seasonNumber = season == null || season < 1 ? 1 : season;
+        MetadataDetails details = fetchDetails(id, seasonNumber);
+        if (details != null) {
+            detailsCache.put(id + ":" + seasonNumber, details); // 新值占位,后续 details() 不再吃旧缓存
+        }
+        return details;
+    }
+
     /** IMDb id 定位 TMDB 剧集并复用全量详情(豆瓣详情页 IMDb 桥接:分集播出日程/状态/别名);未命中返回 null。 */
     public MetadataDetails detailsByImdb(String imdbId, Integer season) {
         if (StringUtils.isBlank(imdbId) || health.isOpen(NAME)) {
@@ -131,7 +141,48 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 return details;
             }
             details.setName(tv.path("name").asText());
+            details.setOriginalName(tv.path("original_name").asText());
             details.setYear(yearOf(tv.path("first_air_date").asText()));
+            details.setFirstAirDate(tv.path("first_air_date").asText(""));
+            details.setRating(ratingOf(tv.path("vote_average").asDouble(0)));
+            List<String> genres = new ArrayList<>();
+            if (tv.has("genres") && tv.get("genres").isArray()) {
+                for (JsonNode genre : tv.get("genres")) {
+                    String name = genre.path("name").asText();
+                    if (StringUtils.isNotBlank(name)) {
+                        genres.add(name);
+                    }
+                }
+            }
+            details.setGenres(genres);
+            List<String> countries = new ArrayList<>();
+            if (tv.has("origin_country") && tv.get("origin_country").isArray()) {
+                for (JsonNode country : tv.get("origin_country")) {
+                    countries.add(country.asText());
+                }
+            }
+            details.setCountries(countries);
+            String language = tv.path("original_language").asText("");
+            if (StringUtils.isNotBlank(language)) {
+                details.setLanguages(List.of(language));
+            }
+            // 主创(created_by =剧集创作者,编剧/导演混列;细分职务在 credits)
+            if (tv.has("created_by") && tv.get("created_by").isArray()) {
+                List<String> creators = new ArrayList<>();
+                for (JsonNode person : tv.get("created_by")) {
+                    String name = person.path("name").asText();
+                    if (StringUtils.isNotBlank(name)) {
+                        creators.add(name);
+                    }
+                }
+                if (!creators.isEmpty()) {
+                    details.setWriters(creators);
+                }
+            }
+            String backdrop = tv.path("backdrop_path").asText("");
+            if (StringUtils.isNotBlank(backdrop)) {
+                details.setBackdrop("https://media.themoviedb.org/t/p/w780" + backdrop);
+            }
             String poster = tv.path("poster_path").asText("");
             if (StringUtils.isNotBlank(poster)) {
                 details.setCover("https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + poster);
@@ -162,6 +213,50 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 }
             }
             details.setAliases(aliases);
+
+            // 演职人员(详情页演员卡):cast=主演饰演角色,crew=导演/编剧职务
+            JsonNode credits = get("https://api.themoviedb.org/3/tv/" + id + "/credits?api_key=" + apiKey()
+                    + "&language=zh-CN");
+            if (credits != null) {
+                List<cn.har01d.alist_tvbox.dto.CastMember> cast = new ArrayList<>();
+                if (credits.has("cast") && credits.get("cast").isArray()) {
+                    for (JsonNode person : credits.get("cast")) {
+                        if (cast.size() >= 15) {
+                            break;
+                        }
+                        String name = person.path("name").asText();
+                        if (StringUtils.isBlank(name)) {
+                            continue;
+                        }
+                        String profile = person.path("profile_path").asText("");
+                        cast.add(new cn.har01d.alist_tvbox.dto.CastMember(name,
+                                person.path("character").asText(""),
+                                StringUtils.isNotBlank(profile)
+                                        ? "https://media.themoviedb.org/t/p/w185" + profile : null));
+                    }
+                }
+                details.setCast(cast);
+                List<String> directors = new ArrayList<>();
+                List<String> writers = new ArrayList<>(details.getWriters() == null ? List.of() : details.getWriters());
+                if (credits.has("crew") && credits.get("crew").isArray()) {
+                    for (JsonNode person : credits.get("crew")) {
+                        String name = person.path("name").asText();
+                        if (StringUtils.isBlank(name)) {
+                            continue;
+                        }
+                        String job = person.path("job").asText("");
+                        if ("Director".equals(job) && directors.size() < 5) {
+                            directors.add(name);
+                        } else if ("Writer".equals(job) && writers.size() < 8) {
+                            writers.add(name);
+                        }
+                    }
+                }
+                details.setDirectors(directors.isEmpty() ? null : directors);
+                if (!writers.isEmpty()) {
+                    details.setWriters(writers);
+                }
+            }
 
             // 目标季集数与播出日程
             JsonNode seasonNode = get("https://api.themoviedb.org/3/tv/" + id + "/season/" + season
@@ -197,6 +292,10 @@ public class TmdbMetadataProvider implements MetadataProvider {
                             firstNonBlank(episode.path("name").asText(""), ""),
                             airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
                     info.setOverview(episode.path("overview").asText(""));
+                    int runtime = episode.path("runtime").asInt(0);
+                    if (runtime > 0) {
+                        info.setRuntime(runtime);
+                    }
                     String still = episode.path("still_path").asText("");
                     if (StringUtils.isNotBlank(still)) {
                         info.setStill("https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + still);
@@ -255,6 +354,11 @@ public class TmdbMetadataProvider implements MetadataProvider {
 
     private static String yearOf(String date) {
         return StringUtils.isBlank(date) ? "" : date.substring(0, Math.min(4, date.length()));
+    }
+
+    /** TMDB 评分为 10 分制小数,一位小数展示。 */
+    private static String ratingOf(double vote) {
+        return vote > 0 ? String.format("%.1f", vote) : null;
     }
 
     private static LocalDate localDate(String date) {

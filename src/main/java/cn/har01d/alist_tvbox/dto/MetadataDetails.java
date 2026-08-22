@@ -32,4 +32,24 @@ public class MetadataDetails {
     private String overview;
     /** 分集详情(标题/播出时间/简介/剧照),provider 未提供时为空 */
     private List<EpisodeInfo> episodes;
+    /** 原始标题(与译名不同时展示,如英剧原名) */
+    private String originalName;
+    /** 类型(剧情/科幻/动画…) */
+    private List<String> genres;
+    /** 地区(美国/中国大陆/日本…) */
+    private List<String> countries;
+    /** 语言 */
+    private List<String> languages;
+    /** 首播/上映日期(yyyy-MM-dd) */
+    private String firstAirDate;
+    /** 评分(展示形态如 "8.5";来源 = provider 名) */
+    private String rating;
+    /** 导演 */
+    private List<String> directors;
+    /** 编剧 */
+    private List<String> writers;
+    /** 演员(头像+饰演角色,前 N 位主演) */
+    private List<CastMember> cast;
+    /** 背景图(详情页头部横幅) */
+    private String backdrop;
 }

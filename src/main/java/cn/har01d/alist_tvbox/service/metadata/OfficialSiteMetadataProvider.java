@@ -104,6 +104,15 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         return detailsCache.get(StringUtils.defaultString(id), key -> fetchDetails(key));
     }
 
+    @Override
+    public MetadataDetails refreshDetails(String id, Integer season) {
+        MetadataDetails details = fetchDetails(StringUtils.defaultString(id));
+        if (details != null) {
+            detailsCache.put(StringUtils.defaultString(id), details);
+        }
+        return details;
+    }
+
     private MetadataDetails fetchDetails(String id) {
         MetadataDetails details = new MetadataDetails();
         if (health.isOpen(NAME)) {
