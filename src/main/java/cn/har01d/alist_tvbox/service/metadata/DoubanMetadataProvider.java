@@ -522,6 +522,10 @@ public class DoubanMetadataProvider implements MetadataProvider {
         if (douban == null || tmdb == null) {
             return;
         }
+        if (StringUtils.isNotBlank(tmdb.getCover())) {
+            // 豆瓣封面(rexxar pic 的 view/photo 图床)防盗链/风控频发,代理也常 403;TMDB 海报可用性稳定,优先
+            douban.setCover(tmdb.getCover());
+        }
         if (!MetadataDetails.STATUS_UNKNOWN.equals(tmdb.getStatus())) {
             douban.setStatus(tmdb.getStatus());
         }
@@ -587,13 +591,13 @@ public class DoubanMetadataProvider implements MetadataProvider {
         }
     }
 
-    /** 豆瓣库字段以 " / " 分隔(演员/类型/地区等),拆为列表并限长。 */
-    private static List<String> splitNames(String raw, int limit) {
+    /** 豆瓣库字段分隔符不统一:类型/演员逗号(中/英文),地区/语言/导演多值 " / " —— 兼容拆分并限长。 */
+    static List<String> splitNames(String raw, int limit) {
         if (StringUtils.isBlank(raw)) {
             return null;
         }
         List<String> names = new ArrayList<>();
-        for (String name : raw.split("\\s*/\\s*")) {
+        for (String name : raw.split("\\s*[/,，]\\s*")) {
             if (StringUtils.isNotBlank(name) && names.size() < limit) {
                 names.add(name.trim());
             }

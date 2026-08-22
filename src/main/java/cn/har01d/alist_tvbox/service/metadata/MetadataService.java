@@ -159,8 +159,9 @@ public class MetadataService {
     }
 
     private boolean isStale(MetadataDetails details, long fetchTime) {
-        // 旧版快照(扩展字段全缺)视为过期:即使完结剧也重拉一次,升级后即恢复常规节奏
-        if (details.getOriginalName() == null && details.getGenres() == null && details.getRating() == null) {
+        // 旧版/坏形态快照视为过期(完结剧也重拉一次,回写后恢复常规节奏):
+        // ① 扩展字段全缺 = 分集详情扩展前写入;② genres/cast 粘连成串 = 豆瓣分隔符修复前写入
+        if (isLegacySnapshot(details)) {
             return true;
         }
         if (!MetadataDetails.STATUS_RETURNING.equals(details.getStatus())) {
@@ -168,6 +169,19 @@ public class MetadataService {
         }
         long ttl = Math.max(1, appProperties.getSubscription().getAiringRefreshHours()) * 3600_000L;
         return System.currentTimeMillis() - fetchTime > ttl;
+    }
+
+    private boolean isLegacySnapshot(MetadataDetails details) {
+        if (details.getOriginalName() == null && details.getGenres() == null && details.getRating() == null) {
+            return true;
+        }
+        if (details.getGenres() != null && details.getGenres().stream()
+                .anyMatch(g -> g.contains(",") || g.contains("，"))) {
+            return true;
+        }
+        return details.getCast() != null && details.getCast().size() == 1
+                && details.getCast().get(0).getName() != null
+                && (details.getCast().get(0).getName().contains(",") || details.getCast().get(0).getName().contains("，"));
     }
 
     /** 网络结果回写;失败产出的空对象(name/封面/集数全空)不覆盖已有快照 —— 宁用旧值不写白板。 */

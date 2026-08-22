@@ -155,6 +155,17 @@ class MetadataServiceTest {
     }
 
     @Test
+    void gluedDoubanSnapshotRefreshesEvenWhenEnded() throws Exception {
+        MetadataDetails glued = details(MetadataDetails.STATUS_ENDED, "九门");
+        glued.setGenres(List.of("剧情,奇幻,冒险")); // 豆瓣分隔符修复前的粘连形态(整串未拆)
+        when(repository.findByProviderAndMetaIdAndSeason("tmdb", "123", 1))
+                .thenReturn(Optional.of(row(MetadataDetails.STATUS_ENDED, 1000, glued)));
+        when(provider.details("123", 1)).thenReturn(details(MetadataDetails.STATUS_ENDED, "九门"));
+        service.details("tmdb", "123", 1);
+        verify(repository).save(any(MediaMetadata.class)); // 坏形态视为过期,重拉回写拆分后的快照
+    }
+
+    @Test
     void searchReportSkipsNullProviderTarget() {
         MetadataService.SearchResult result = service.searchReport("nope", "kw");
         assertEquals(0, result.items().size());

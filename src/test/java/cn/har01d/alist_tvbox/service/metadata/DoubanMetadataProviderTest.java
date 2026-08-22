@@ -97,6 +97,33 @@ class DoubanMetadataProviderTest {
     }
 
     @Test
+    void mergeTmdbCoverWinsOverDoubanImageHost() {
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("九门");
+        douban.setCover("https://img9.doubanio.com/view/photo/m_ratio_poster/public/p1.jpg");
+        MetadataDetails tmdb = new MetadataDetails();
+        tmdb.setCover("https://media.themoviedb.org/t/p/w300_and_h450_bestv2/tmdb.jpg");
+        DoubanMetadataProvider.mergeTmdbDetails(douban, tmdb);
+        assertEquals("https://media.themoviedb.org/t/p/w300_and_h450_bestv2/tmdb.jpg", douban.getCover(),
+                "豆瓣 view/photo 图床防盗链频发,桥接命中时 TMDB 封面优先");
+
+        // 桥接未提供封面时保持豆瓣(无 TMDB 可选)
+        douban.setCover("https://img9.doubanio.com/view/photo/m_ratio_poster/public/p1.jpg");
+        DoubanMetadataProvider.mergeTmdbDetails(douban, new MetadataDetails());
+        assertEquals("https://img9.doubanio.com/view/photo/m_ratio_poster/public/p1.jpg", douban.getCover());
+    }
+
+    @Test
+    void splitNamesHandlesCommaAndSlashSeparators() {
+        // 豆瓣库分隔符混杂:类型/演员逗号(中/英文),地区/语言 " / "
+        assertEquals(List.of("剧情", "奇幻", "冒险"), DoubanMetadataProvider.splitNames("剧情,奇幻,冒险", 8));
+        assertEquals(List.of("陈伟霆", "陈瑶", "曾舜晞"), DoubanMetadataProvider.splitNames("陈伟霆,陈瑶,曾舜晞", 8));
+        assertEquals(List.of("中国大陆", "中国香港"), DoubanMetadataProvider.splitNames("中国大陆 / 中国香港", 8));
+        assertNull(DoubanMetadataProvider.splitNames(null, 8));
+        assertNull(DoubanMetadataProvider.splitNames("  ", 8));
+    }
+
+    @Test
     void pageRateLimiterEnforcesMinimumInterval() throws Exception {
         DoubanMetadataProvider.PageRateLimiter limiter = new DoubanMetadataProvider.PageRateLimiter(120);
         long start = System.currentTimeMillis();
