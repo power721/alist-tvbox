@@ -13,8 +13,10 @@ public class MediaSubscriptionResourceDto {
     private String title;
     private Integer episodesFound;
     private Integer score;
-    private String validity;
-    private boolean active;
+    /** 挂载生命周期:CANDIDATE(池内)/MOUNTED(已挂载)/RETIRED(已退役)/REJECTED(盘检判死) */
+    private String state;
+    /** 是否主源(挂在订阅固定路径上的那个 MOUNTED 资源) */
+    private boolean primary;
     private Long checkedTime;
     private long createdTime;
 }

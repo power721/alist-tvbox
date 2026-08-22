@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.dto.MediaSubscriptionResourceDto;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
@@ -54,12 +55,12 @@ import java.util.stream.Collectors;
 public class MediaSubscriptionService {
     public static final String CATEGORY_ID = "msub";
     public static final String VOD_ID_PREFIX = "msub:";
-    /** 播放取链失败对资源的降分幅度:够把它挤到同类候选之后,又不至于一次失败就永久出局 */
-    private static final int PLAY_FAILURE_PENALTY = 20;
 
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionResourceRepository resourceRepository;
     private final MediaSubscriptionEventRepository eventRepository;
+    private final cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository episodeRepository;
+    private final cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository episodeSourceRepository;
     private final UserPreferenceRepository preferenceRepository;
     private final MovieRepository movieRepository;
     private final UserService userService;
@@ -75,6 +76,8 @@ public class MediaSubscriptionService {
     public MediaSubscriptionService(MediaSubscriptionRepository subscriptionRepository,
                                     MediaSubscriptionResourceRepository resourceRepository,
                                     MediaSubscriptionEventRepository eventRepository,
+                                    cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository episodeRepository,
+                                    cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository episodeSourceRepository,
                                     UserPreferenceRepository preferenceRepository,
                                     MovieRepository movieRepository,
                                     UserService userService,
@@ -89,6 +92,8 @@ public class MediaSubscriptionService {
         this.subscriptionRepository = subscriptionRepository;
         this.resourceRepository = resourceRepository;
         this.eventRepository = eventRepository;
+        this.episodeRepository = episodeRepository;
+        this.episodeSourceRepository = episodeSourceRepository;
         this.preferenceRepository = preferenceRepository;
         this.movieRepository = movieRepository;
         this.userService = userService;
@@ -225,8 +230,9 @@ public class MediaSubscriptionService {
     @Transactional
     public void delete(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
-        // 主源 + 所有补缺挂载(gap mounts,-补N 路径)都要删,否则 temp=false 且清理豁免的挂载会永久泄漏
-        for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(id)) {
+        // 主源 + 所有补缺挂载都要删,否则 temp=false 且清理豁免的挂载会永久泄漏
+        List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(id);
+        for (MediaSubscriptionResource resource : resources) {
             if (resource.getShareId() != null) {
                 try {
                     shareService.deleteShare(resource.getShareId());
@@ -242,6 +248,8 @@ public class MediaSubscriptionService {
                 log.warn("delete subscription share failed: {} {}", subscription.getShareId(), e.getMessage());
             }
         }
+        episodeSourceRepository.deleteByResourceIdIn(resources.stream().map(MediaSubscriptionResource::getId).toList());
+        episodeRepository.deleteBySubscriptionId(id);
         resourceRepository.deleteBySubscriptionId(id);
         eventRepository.deleteBySubscriptionId(id);
         subscriptionRepository.delete(subscription);
@@ -280,7 +288,7 @@ public class MediaSubscriptionService {
     }
 
     public List<MediaSubscriptionResourceDto> resources(int uid, int id) {
-        getOwned(uid, id);
+        MediaSubscription subscription = getOwned(uid, id);
         return resourceRepository.findBySubscriptionIdOrderByScoreDesc(id).stream().map(r -> {
             MediaSubscriptionResourceDto dto = new MediaSubscriptionResourceDto();
             dto.setId(r.getId());
@@ -291,8 +299,9 @@ public class MediaSubscriptionService {
             dto.setTitle(r.getTitle());
             dto.setEpisodesFound(r.getEpisodesFound());
             dto.setScore(r.getScore());
-            dto.setValidity(r.getValidity());
-            dto.setActive(r.isActive());
+            dto.setState(r.getState());
+            dto.setPrimary(MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
+                    && subscription.getMountPath() != null && subscription.getMountPath().equals(r.getMountPath()));
             dto.setCheckedTime(r.getCheckedTime());
             dto.setCreatedTime(r.getCreatedTime());
             return dto;
@@ -748,71 +757,62 @@ public class MediaSubscriptionService {
         return "/images?url=" + java.net.URLEncoder.encode(cover, java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /** 播放逻辑集 msubep-{订阅}-{集}:实时选源并回退(转存>主源>补缺),某源解析失败登记损坏并落下一个,用户无感知。 */
+    /**
+     * 播放逻辑集 msubep-{订阅}-{集}:实时选源并回退(转存>VERIFIED>LISTED),用户无感知。
+     * 资源侧候选走集源行索引直查(rel_path + mount_path 一次取链),不再逐挂载点递归列目录 ——
+     * 旧实现每次播放要对每个挂载点做最多 maxListDepth 层列举;索引后是 1 次库查 + 1 次取链。
+     */
     public Map<String, Object> playEpisode(int uid, int subscriptionId, int episode, String client, String type) {
         MediaSubscription subscription = getOwned(uid, subscriptionId);
-        Map<Integer, java.util.Set<String>> broken = checkService.parseBroken(subscription);
-        // 逐源清单(不去重合并):转存各账号盘 → 主源 → 补缺挂载(按分序)
-        List<MediaSubscriptionCheckService.EpisodeFile> candidates = new ArrayList<>();
+        // 候选清单:转存各账号盘(实时列目录,自有盘无集源行) → 集源行索引(VERIFIED 优先、资源分序)
+        List<MediaSubscriptionCheckService.EpisodeFile> transferFiles = new ArrayList<>();
         if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
             for (var target : transferService.transferredTargets(uid, subscriptionId)) {
                 var file = checkService.episodeFilesAt(target.path(), subscription).get(episode);
                 if (file != null) {
-                    candidates.add(file);
+                    transferFiles.add(file);
                 }
             }
         }
-        var primaryFile = checkService.episodeFilesAt(subscription.getMountPath(), subscription).get(episode);
-        if (primaryFile != null) {
-            candidates.add(primaryFile);
-        }
-        for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscriptionId)) {
-            if (resource.isGap() && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
-                var file = checkService.episodeFilesAt(resource.getMountPath(), subscription).get(episode);
-                if (file != null) {
-                    candidates.add(file);
-                }
-            }
-        }
+        List<MediaSubscriptionCheckService.PlayCandidate> rows = checkService.playCandidates(subscription, episode);
         List<String> errors = new ArrayList<>();
-        for (MediaSubscriptionCheckService.EpisodeFile file : candidates) {
-            if (MediaSubscriptionCheckService.isBroken(broken, episode, file.dir())) {
-                continue; // 该源此集已登记损坏
-            }
+        int attempted = 0;
+        for (MediaSubscriptionCheckService.EpisodeFile file : transferFiles) {
+            attempted++;
             try {
                 return tvBoxService.getPlayUrl(1, file.dir() + "/" + file.name(), true, client, type);
             } catch (Exception e) {
                 log.info("subscription {} episode {} via {} failed: {}", subscriptionId, episode, file.dir(), e.getMessage());
                 errors.add(file.dir() + ": " + e.getMessage());
-                checkService.addBrokenEpisodes(subscription, Map.of(episode, file.dir()));
-                demoteFailedSource(subscriptionId, file.dir());
             }
         }
-        // 全部候选都播不了:播放期是信噪比最高的失效信号,不能只记个损坏就完事——
+        for (MediaSubscriptionCheckService.PlayCandidate candidate : rows) {
+            if (!MediaSubscriptionResource.STATE_MOUNTED.equals(candidate.resource().getState())) {
+                continue; // 前一个候选的失败传染已把整源判死(同对象就地变更)
+            }
+            attempted++;
+            String path = candidate.resource().getMountPath() + "/" + candidate.source().getRelPath();
+            try {
+                Map<String, Object> result = tvBoxService.getPlayUrl(1, path, true, client, type);
+                checkService.recordPlaySuccess(candidate.source());
+                return result;
+            } catch (Exception e) {
+                log.info("subscription {} episode {} via {} failed: {}", subscriptionId, episode, path, e.getMessage());
+                errors.add(path + ": " + e.getMessage());
+                checkService.recordPlayFailure(subscription, candidate);
+            }
+        }
+        // 全部候选都播不了:播放期是信噪比最高的失效信号,不能只记个失败就完事——
         // 立刻异步补救(先查池换源,池空才搜索),否则用户重试多少次都是同一个死源。
-        if (!candidates.isEmpty()) {
+        if (attempted > 0) {
             try {
                 checkService.checkAsync(uid, subscriptionId);
             } catch (Exception e) {
                 log.warn("trigger recovery for subscription {} failed: {}", subscriptionId, e.getMessage());
             }
         }
-        throw new BadRequestException("第 " + episode + " 集暂无可用播放源(已尝试 " + candidates.size() + " 个源"
+        throw new BadRequestException("第 " + episode + " 集暂无可用播放源(已尝试 " + attempted + " 个源"
                 + (errors.isEmpty() ? "" : ";" + String.join("; ", errors)) + ")");
-    }
-
-    /** 播放取链失败 → 该挂载对应的资源降分,让下一轮选源/换源自然避开它。 */
-    private void demoteFailedSource(int subscriptionId, String dir) {
-        for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscriptionId)) {
-            if (StringUtils.isBlank(resource.getMountPath()) || !dir.startsWith(resource.getMountPath())) {
-                continue;
-            }
-            resource.setScore((resource.getScore() == null ? 0 : resource.getScore()) - PLAY_FAILURE_PENALTY);
-            resource.setCheckedTime(System.currentTimeMillis());
-            resourceRepository.save(resource);
-            log.info("subscription {} demoted resource {} after play failure", subscriptionId, resource.getId());
-            return;
-        }
     }
 
     /** 多源合并播放(§4.5,需求 1):按集号合并,优先级 转存副本(自有盘)> 主源 > 补缺源,排序成单一播放列表。
@@ -827,10 +827,7 @@ public class MediaSubscriptionService {
         if (!parsePlayEntries(detail.getVod_play_url(), subscription.getSeason(), primary)) {
             return; // 主源列表解析失败不动原始输出
         }
-        List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId());
-        List<MediaSubscriptionResource> gaps = resources.stream()
-                .filter(r -> r.isGap() && r.getShareId() != null && StringUtils.isNotBlank(r.getMountPath()))
-                .toList();
+        List<MediaSubscriptionResource> gaps = checkService.auxMounts(subscription);
         boolean transferMode = MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
                 && !parseAccountIds(subscription).isEmpty();
         boolean tvboxRequest = StringUtils.isBlank(ac);
@@ -847,11 +844,9 @@ public class MediaSubscriptionService {
             }
         }
         // 2) 主源
-        String primaryDrive = resources.stream()
-                .filter(r -> r.isActive() && !r.isGap() && r.getType() != null)
-                .findFirst()
-                .map(r -> DriveId.toDrive(r.getType()))
-                .orElse(null);
+        MediaSubscriptionResource primaryResource = checkService.primaryResource(subscription);
+        String primaryDrive = primaryResource != null && primaryResource.getType() != null
+                ? DriveId.toDrive(primaryResource.getType()) : null;
         TreeMap<Integer, String> primaryLine = driveLine(driveLines, primaryDrive);
         primary.forEach((episode, entry) -> {
             merged.putIfAbsent(episode, entry);
@@ -986,10 +981,10 @@ public class MediaSubscriptionService {
         return any;
     }
 
-    /** 集数清单(详情页集数页签):每集是否已有、来源(转存>主源>补缺)。 */
+    /** 集数清单(详情页集数页签):每集是否已有、来源(转存>主源>补缺),全部来自集源行聚合 —— 不再列目录。 */
     public List<Map<String, Object>> episodes(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
-        TreeMap<Integer, String> sources = new TreeMap<>();
+        Map<Integer, String> sources = new TreeMap<>();
         // 1) 转存副本(自有盘)
         if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
             for (var target : transferService.transferredTargets(uid, id)) {
@@ -997,16 +992,47 @@ public class MediaSubscriptionService {
                         .forEach(e -> sources.putIfAbsent(e, "转存:" + target.account()));
             }
         }
-        // 2) 主源
-        checkService.parseEpisodeList(subscription.getEpisodeList()).forEach(e -> sources.putIfAbsent(e, "主源"));
-        // 3) 补缺
+        // 2) 集源行聚合:主源行 → "主源",补缺挂载行 → "补缺:{标题}"
+        Map<Integer, MediaSubscriptionResource> resources = new java.util.HashMap<>();
         for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(id)) {
-            if (resource.isGap() || resource.isActive()) {
-                checkService.parseEpisodeList(resource.getEpisodeList())
-                        .forEach(e -> sources.putIfAbsent(e, "补缺:" + StringUtils.defaultIfBlank(resource.getTitle(), "候选源")));
+            resources.put(resource.getId(), resource);
+        }
+        boolean primarySeen = false;
+        Map<Integer, java.util.List<Integer>> deadByEpisode = new java.util.TreeMap<>();
+        for (Object[] pair : episodeSourceRepository.findResourceIdAndNumber(id,
+                Set.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED,
+                        MediaSubscriptionEpisodeSource.STATE_FAILED))) {
+            Integer resourceId = (Integer) pair[0];
+            Integer number = (Integer) pair[1];
+            MediaSubscriptionResource resource = resources.get(resourceId);
+            if (resource == null) {
+                continue;
+            }
+            boolean primary = MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
+                    && subscription.getMountPath() != null && subscription.getMountPath().equals(resource.getMountPath());
+            if (primary) {
+                primarySeen = true;
+                sources.putIfAbsent(number, "主源");
+            } else if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
+                    && StringUtils.isNotBlank(resource.getMountPath())) {
+                sources.putIfAbsent(number, "补缺:" + StringUtils.defaultIfBlank(resource.getTitle(), "候选源"));
             }
         }
-        int base = sources.isEmpty() ? 0 : sources.lastKey();
+        if (!primarySeen) {
+            // 主源行还没同步出来(首轮巡检前):退回 currentEpisodes 显示,避免页签全灰
+            for (int i = 1; i <= (subscription.getCurrentEpisodes() == null ? 0 : subscription.getCurrentEpisodes()); i++) {
+                sources.putIfAbsent(i, "主源");
+            }
+        }
+        // 全源判死的集:行在、LIVE 不在 —— 展示为损坏待补(旧 broken_episodes 登记表的行级替代品)
+        for (Object[] pair : episodeSourceRepository.findResourceIdAndNumber(id,
+                Set.of(MediaSubscriptionEpisodeSource.STATE_FAILED))) {
+            deadByEpisode.computeIfAbsent((Integer) pair[1], k -> new ArrayList<>()).add((Integer) pair[0]);
+        }
+        int base = sources.isEmpty() ? 0 : sources.keySet().stream().max(Integer::compareTo).orElse(0);
+        if (!deadByEpisode.isEmpty()) {
+            base = Math.max(base, deadByEpisode.keySet().stream().max(Integer::compareTo).orElse(0));
+        }
         if (subscription.getOfficialEpisodes() != null) {
             base = Math.max(base, subscription.getOfficialEpisodes());
         }
@@ -1014,10 +1040,9 @@ public class MediaSubscriptionService {
             base = Math.max(base, subscription.getExpectedEpisodes());
         }
         List<Map<String, Object>> result = new ArrayList<>();
-        Map<Integer, java.util.Set<String>> broken = checkService.parseBroken(subscription);
         for (int i = 1; i <= Math.min(base, 500); i++) {
             String source = sources.get(i);
-            if (source == null && broken.containsKey(i)) {
+            if (source == null && deadByEpisode.containsKey(i)) {
                 source = "源损坏(待补源)";
             }
             result.add(Map.of("episode", i, "present", source != null, "source", source == null ? "" : source));
@@ -1091,9 +1116,10 @@ public class MediaSubscriptionService {
         long resourcesBad = 0;
         for (MediaSubscription subscription : subscriptions) {
             for (var resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId())) {
-                if (MediaSubscriptionResource.VALIDITY_OK.equals(resource.getValidity())) {
+                if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())) {
                     resourcesOk++;
-                } else if (MediaSubscriptionResource.VALIDITY_BAD.equals(resource.getValidity())) {
+                } else if (MediaSubscriptionResource.STATE_RETIRED.equals(resource.getState())
+                        || MediaSubscriptionResource.STATE_REJECTED.equals(resource.getState())) {
                     resourcesBad++;
                 }
             }
@@ -1213,7 +1239,7 @@ public class MediaSubscriptionService {
                     resource.setLink(link.trim());
                     resource.setTitle(StringUtils.abbreviate(name.trim(), 250));
                     resource.setScore(1000); // 订阅即所见:当前源优先
-                    resource.setValidity(MediaSubscriptionResource.VALIDITY_UNKNOWN);
+                    resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
                     resource.setCreatedTime(System.currentTimeMillis());
                     resourceRepository.save(resource);
                     checkService.activateAsync(uid, dto.getId(), resource.getId());
@@ -1239,7 +1265,7 @@ public class MediaSubscriptionService {
                 int id = intValue(body.get("id"));
                 getOwned(uid, id);
                 List<MediaSubscriptionResource> candidates = resourceRepository.findBySubscriptionIdOrderByScoreDesc(id).stream()
-                        .filter(r -> !r.isActive() && !MediaSubscriptionResource.VALIDITY_BAD.equals(r.getValidity()))
+                        .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()))
                         .toList();
                 if (candidates.isEmpty()) {
                     throw new BadRequestException("无可用候选源");
@@ -1512,9 +1538,15 @@ public class MediaSubscriptionService {
         dto.setCreatedTime(subscription.getCreatedTime());
         List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId());
         dto.setResourceCount(resources.size());
-        dto.setGapCount((int) resources.stream().filter(MediaSubscriptionResource::isGap).count());
-        dto.setActiveResourceTitle(resources.stream().filter(MediaSubscriptionResource::isActive).findFirst()
-                .map(MediaSubscriptionResource::getTitle).orElse(null));
+        dto.setGapCount((int) resources.stream()
+                .filter(r -> MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
+                        && StringUtils.isNotBlank(r.getMountPath())
+                        && !r.getMountPath().equals(subscription.getMountPath()))
+                .count());
+        dto.setActiveResourceTitle(resources.stream()
+                .filter(r -> MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
+                        && subscription.getMountPath() != null && subscription.getMountPath().equals(r.getMountPath()))
+                .findFirst().map(MediaSubscriptionResource::getTitle).orElse(null));
         if (StringUtils.isNotBlank(subscription.getFilterConfig())) {
             try {
                 dto.setFilter(objectMapper.readValue(subscription.getFilterConfig(), MediaSubscriptionFilter.class));
@@ -1530,7 +1562,15 @@ public class MediaSubscriptionService {
         if (expected == null || expected <= 0) {
             return List.of();
         }
-        List<Integer> present = parseEpisodeList(subscription.getEpisodeList());
+        // 本地已有集来自集源行聚合(LIVE 并集);无行(首轮巡检前)按 currentEpisodes 计
+        Set<Integer> present = episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(subscription.getId(),
+                Set.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED))
+                .stream().collect(java.util.stream.Collectors.toSet());
+        if (present.isEmpty() && subscription.getCurrentEpisodes() != null) {
+            for (int i = 1; i <= subscription.getCurrentEpisodes(); i++) {
+                present.add(i);
+            }
+        }
         List<Integer> missing = new ArrayList<>();
         for (int i = 1; i <= expected; i++) {
             if (!present.contains(i)) {
@@ -1538,17 +1578,5 @@ public class MediaSubscriptionService {
             }
         }
         return missing;
-    }
-
-    private List<Integer> parseEpisodeList(String json) {
-        if (StringUtils.isBlank(json)) {
-            return List.of();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<Integer>>() {
-            });
-        } catch (Exception e) {
-            return List.of();
-        }
     }
 }

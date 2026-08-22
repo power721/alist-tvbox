@@ -5,6 +5,7 @@ import db.migration.current.V21__MediaSubscriptionMeta;
 import db.migration.current.V22__MediaSubscriptionMetaFix;
 import db.migration.current.V27__MediaSubscriptionAliases;
 import db.migration.current.V28__MediaSubscriptionMainDrives;
+import db.migration.current.V30__MediaSubscriptionEpisodeSource;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +74,56 @@ class MediaSubscriptionMigrationTest {
             assertTrue(rs.next());
             assertEquals("[1,2]", rs.getString(1));
             assertTrue(rs.getBoolean(2));
+        }
+    }
+
+    @Test
+    void v30DerivesResourceStateDropsLegacyColumnsAndCreatesTables() throws Exception {
+        new V20__MediaSubscription().migrate(context());
+        new V21__MediaSubscriptionMeta().migrate(context());
+        new V22__MediaSubscriptionMetaFix().migrate(context());
+        execute("INSERT INTO media_subscription (id, uid, name, created_time, mount_path, share_id)"
+                + " VALUES (1, 1, '测试剧', 0, '/追剧/1-测试剧', 100)");
+        execute("INSERT INTO media_subscription_resource (id, subscription_id, link, created_time, validity, active, gap, episode_list, mount_path, share_id)"
+                + " VALUES (1, 1, 'https://example.com/active', 0, 'OK', TRUE, FALSE, '[1]', NULL, 100)"); // 主源
+        execute("INSERT INTO media_subscription_resource (id, subscription_id, link, created_time, validity, active, gap, episode_list, mount_path, share_id)"
+                + " VALUES (2, 1, 'https://example.com/gap', 0, 'OK', FALSE, TRUE, '[2]', '/追剧/.sources/1-测试剧-补1', 101)"); // 补缺挂载
+        execute("INSERT INTO media_subscription_resource (id, subscription_id, link, created_time, validity, active, gap, episode_list)"
+                + " VALUES (3, 1, 'https://example.com/bad', 0, 'BAD', FALSE, FALSE, NULL)"); // 判死候选
+        execute("INSERT INTO media_subscription_resource (id, subscription_id, link, created_time, validity, active, gap, episode_list)"
+                + " VALUES (4, 1, 'https://example.com/fresh', 0, 'UNKNOWN', FALSE, FALSE, NULL)"); // 普通候选
+
+        new V30__MediaSubscriptionEpisodeSource().migrate(context());
+        new V30__MediaSubscriptionEpisodeSource().migrate(context()); // 幂等:重复执行不炸
+
+        try (ResultSet rs = query("SELECT id, state, mount_path FROM media_subscription_resource ORDER BY id")) {
+            assertTrue(rs.next());
+            assertEquals("MOUNTED", rs.getString(2));
+            assertEquals("/追剧/1-测试剧", rs.getString(3), "主源行回填订阅固定路径(旧代码从不写该字段)");
+            assertTrue(rs.next());
+            assertEquals("MOUNTED", rs.getString(2));
+            assertEquals("/追剧/.sources/1-测试剧-补1", rs.getString(3));
+            assertTrue(rs.next());
+            assertEquals("RETIRED", rs.getString(2), "旧 BAD → RETIRED");
+            assertTrue(rs.next());
+            assertEquals("CANDIDATE", rs.getString(2));
+        }
+        // 旧列已 drop:再引用必须报错
+        try (Statement ignored = connection.createStatement()) {
+            ignored.execute("SELECT validity FROM media_subscription_resource");
+            org.junit.jupiter.api.Assertions.fail("validity 应已删除");
+        } catch (Exception expected) {
+            assertTrue(expected.getMessage().toLowerCase().contains("column"), expected.getMessage());
+        }
+        // 新表可用(Hibernate 形态的不带引号访问)
+        execute("INSERT INTO msub_episode (id, subscription_id, season, number, title, air_time, aired) VALUES (10, 1, 1, 3, '第三集', 456000, TRUE)");
+        execute("INSERT INTO msub_episode_source (id, episode_id, resource_id, rel_path, file_size, state, success_count, fail_count, last_verified_time)"
+                + " VALUES (20, 10, 1, 'S01E03.mkv', 524288000, 'VERIFIED', 2, 0, 456000)");
+        execute("INSERT INTO dead_link (id, link, reason, fail_count, time) VALUES (30, 'https://example.com/dead', '分享地址已失效', 1, 456000)");
+        try (ResultSet rs = query("SELECT e.number, s.state FROM msub_episode_source s JOIN msub_episode e ON s.episode_id = e.id WHERE s.resource_id = 1")) {
+            assertTrue(rs.next());
+            assertEquals(3, rs.getInt(1));
+            assertEquals("VERIFIED", rs.getString(2));
         }
     }
 

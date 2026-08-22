@@ -3,9 +3,14 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.entity.DeadLinkRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.IndexTemplateRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisode;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSource;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResource;
@@ -27,8 +32,10 @@ import org.mockito.Mockito;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,12 +44,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 追剧订阅巡检:集数解析启发式、调度(短轮窗口/退避封顶)、补搜节制、ENDED 重开判定、BAD 冷却、主源失效确认。
+ * 追剧订阅巡检:集数解析启发式、调度(短轮窗口/退避封顶)、补搜节制、ENDED 重开判定、
+ * 退役冷却、主源失效确认、集源行生命周期(LISTED/VERIFIED/FAILED/MISSING)与失败传染。
  */
 class MediaSubscriptionCheckServiceTest {
 
     private final MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            new AppProperties(), new ObjectMapper());
 
     @Test
     void seasonEpisodePattern() {
@@ -203,33 +212,35 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals("测试剧 第5集", service.gapSearchKeyword(subscription, Set.of(5), 2));
     }
 
-    // ---------- ENDED 重开判定 ----------
+    // ---------- ENDED 重开判定(本地集数 = 集源行 LIVE 并集) ----------
 
     @Test
     void shouldReopenWhenOfficialOrExpectedRaised() {
-        MediaSubscription subscription = subscription();
-        subscription.setCurrentEpisodes(24);
-        subscription.setOfficialEpisodes(26);
-        assertTrue(service.shouldReopen(subscription));
-        subscription.setOfficialEpisodes(24);
-        assertFalse(service.shouldReopen(subscription));
-        subscription.setExpectedEpisodes(30);
-        assertTrue(service.shouldReopen(subscription));
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(numbers(1, 24));
+        fixture.subscription.setCurrentEpisodes(24);
+        fixture.subscription.setOfficialEpisodes(26);
+        assertTrue(fixture.service.shouldReopen(fixture.subscription));
+        fixture.subscription.setOfficialEpisodes(24);
+        assertFalse(fixture.service.shouldReopen(fixture.subscription));
+        fixture.subscription.setExpectedEpisodes(30);
+        assertTrue(fixture.service.shouldReopen(fixture.subscription));
     }
 
     @Test
     void shouldReopenFalseWithoutData() {
-        MediaSubscription subscription = subscription();
-        subscription.setCurrentEpisodes(24);
-        assertFalse(service.shouldReopen(subscription));
+        Fixture fixture = new Fixture();
+        fixture.subscription.setCurrentEpisodes(24);
+        assertFalse(fixture.service.shouldReopen(fixture.subscription));
     }
 
-    // ---------- BAD 冷却重探 ----------
+    // ---------- 退役/拒绝冷却重探 ----------
 
     @Test
     void badCooldownAllowsReprobeAfter7Days() {
         MediaSubscriptionResource resource = new MediaSubscriptionResource();
-        resource.setValidity(MediaSubscriptionResource.VALIDITY_BAD);
+        resource.setState(MediaSubscriptionResource.STATE_RETIRED);
         long now = System.currentTimeMillis();
         resource.setCheckedTime(now - 8L * 24 * 3600_000);
         assertTrue(service.isBadCooled(resource, now));
@@ -237,11 +248,13 @@ class MediaSubscriptionCheckServiceTest {
         assertFalse(service.isBadCooled(resource, now));
         resource.setCheckedTime(null);
         assertTrue(service.isBadCooled(resource, now));
-        resource.setValidity(MediaSubscriptionResource.VALIDITY_OK);
+        resource.setState(MediaSubscriptionResource.STATE_MOUNTED);
         assertFalse(service.isBadCooled(resource, now));
+        resource.setState(MediaSubscriptionResource.STATE_REJECTED);
+        assertTrue(service.isBadCooled(resource, now), "REJECTED 与 RETIRED 同享冷却重探");
     }
 
-    // ---------- 主源失效确认:AList 整体故障不误杀 ----------
+    // ---------- 主源失效确认:AList 整体故障/限流不误杀 ----------
 
     @Test
     void invalidNotConfirmedWhenAListDown() {
@@ -258,12 +271,13 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
-    void invalidConfirmedAfterRetryMarksBad() {
+    void invalidConfirmedAfterRetryRetiresPrimary() {
         Fixture fixture = new Fixture();
         MediaSubscriptionResource active = new MediaSubscriptionResource();
         active.setSubscriptionId(1);
-        active.setActive(true);
-        active.setValidity(MediaSubscriptionResource.VALIDITY_OK);
+        active.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        active.setMountPath("/追剧/1-测试剧");
+        active.setLink("https://pan.quark.cn/s/dead-primary");
         Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(active));
         Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
                         Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
@@ -274,27 +288,36 @@ class MediaSubscriptionCheckServiceTest {
         fixture.service.check(1);
         Mockito.verify(fixture.aListService, Mockito.times(2)).listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
                 Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()); // 静默重试了一次
-        assertEquals(MediaSubscriptionResource.VALIDITY_BAD, active.getValidity()); // 确认失效才标 BAD
+        assertEquals(MediaSubscriptionResource.STATE_RETIRED, active.getState()); // 确认失效才退役
+        assertNull(active.getMountPath());
         assertEquals(MediaSubscription.STATUS_ERROR, fixture.subscription.getStatus()); // 池空且搜索无果
+    }
+
+    @Test
+    void throttledListingFailureDoesNotInvalidate() {
+        // 限流(百度 errno -62)不是主源的错:退避重试,不判失效不换源
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new RuntimeException("{\"errno\":-62}"));
+        long now = System.currentTimeMillis();
+        fixture.service.check(1);
+        assertEquals(MediaSubscription.STATUS_ACTIVE, fixture.subscription.getStatus());
+        assertClose(now + 15 * 60_000L, fixture.subscription.getNextCheckTime());
+        Mockito.verify(fixture.resourceRepository, Mockito.never())
+                .findBySubscriptionIdOrderByScoreDesc(Mockito.anyInt());
     }
 
     @Test
     void transientListingFailureDoesNotInvalidate() {
         Fixture fixture = new Fixture();
-        FsResponse response = new FsResponse();
-        FsInfo file = new FsInfo();
-        file.setName("第01集.mkv");
-        file.setType(0);
-        file.setSize(500L * 1024 * 1024);
-        response.setFiles(List.of(file));
         Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
                         Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
                 .thenThrow(new RuntimeException("timeout"))
-                .thenReturn(response);
+                .thenReturn(files("测试剧.第01集.mkv"));
         fixture.service.check(1);
         assertEquals(MediaSubscription.STATUS_ACTIVE, fixture.subscription.getStatus());
-        assertEquals(1, fixture.subscription.getCurrentEpisodes()); // 重试成功继续本轮
-        Mockito.verify(fixture.resourceRepository, Mockito.never()).save(Mockito.any()); // 未标 BAD
+        Mockito.verify(fixture.resourceRepository, Mockito.never()).save(Mockito.any()); // 未判死
     }
 
     // ---------- 标题归属匹配(候选池过滤) ----------
@@ -397,6 +420,27 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void fillPoolSkipsBlacklistedLinks() {
+        // 失效黑名单(dead_link):其它订阅已用取链事实判死过的分享不再入池
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/dead", "苍兰诀 第01-08集 4K"),
+                        message("https://pan.quark.cn/s/alive", "苍兰诀 第01-08集 4K")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+        Mockito.when(fixture.deadLinkRepository.findByLink("https://pan.quark.cn/s/dead"))
+                .thenReturn(Optional.of(new cn.har01d.alist_tvbox.entity.DeadLink()));
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository).save(captor.capture());
+        assertEquals("https://pan.quark.cn/s/alive", captor.getValue().getLink(), "黑名单链接不得入池");
+    }
+
+    @Test
     void fillPoolBoostsMainDriveCandidates() {
         Fixture fixture = new Fixture();
         fixture.subscription.setName("苍兰诀");
@@ -470,52 +514,12 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(Math.abs(expected - actual) < 60_000L, "expected ~" + expected + " but was " + actual);
     }
 
-    // ---------- 缺陷 1 回归:同集多个失效源必须各自累积,不能互相覆盖 ----------
-    // 旧版每集只存一个源目录且覆盖写,playEpisode 的候选循环里"试 A 失败记 A,试 B 失败记 B
-    // 把 A 覆盖掉",下次播放 A 不被跳过、重蹈覆辙 —— 两个以上失效源时永不收敛。
-
-    @Test
-    void brokenRegistryAccumulatesMultipleSourcesPerEpisode() {
-        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                new AppProperties(), new ObjectMapper());
-        MediaSubscription subscription = subscription();
-
-        svc.addBrokenEpisodes(subscription, java.util.Map.of(17, "/追剧/剧-补1"));
-        svc.addBrokenEpisodes(subscription, java.util.Map.of(17, "/追剧/剧-补2"));
-
-        var broken = svc.parseBroken(subscription);
-        assertEquals(java.util.Set.of("/追剧/剧-补1", "/追剧/剧-补2"), broken.get(17),
-                "同集两个失效源都要记住 —— 旧版第二个会覆盖第一个");
-        assertTrue(MediaSubscriptionCheckService.isBroken(broken, 17, "/追剧/剧-补1"));
-        assertTrue(MediaSubscriptionCheckService.isBroken(broken, 17, "/追剧/剧-补2"));
-        assertFalse(MediaSubscriptionCheckService.isBroken(broken, 17, "/追剧/剧-主源"));
-        assertFalse(MediaSubscriptionCheckService.isBroken(broken, 16, "/追剧/剧-补1"));
-    }
-
-    @Test
-    void brokenRegistryReadsLegacyScalarFormat() {
-        // 旧数据是 {集号: "源目录|时间戳"} 标量,升级后必须还读得出来
-        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                new AppProperties(), new ObjectMapper());
-        MediaSubscription subscription = subscription();
-        subscription.setBrokenEpisodes("{\"17\":\"/追剧/剧-补1|" + System.currentTimeMillis() + "\"}");
-
-        var broken = svc.parseBroken(subscription);
-        assertEquals(java.util.Set.of("/追剧/剧-补1"), broken.get(17));
-    }
-
-    @Test
-    void brokenRegistryDropsExpiredEntries() {
-        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                new AppProperties(), new ObjectMapper());
-        MediaSubscription subscription = subscription();
-        long old = System.currentTimeMillis() - 8L * 24 * 3600_000; // 8 天前,超 7 天保留期
-        subscription.setBrokenEpisodes("{\"17\":[\"/追剧/剧-补1|" + old + "\"]}");
-
-        assertTrue(svc.parseBroken(subscription).isEmpty(), "过期登记应释放,给源一次重试机会");
+    private static List<Integer> numbers(int from, int to) {
+        List<Integer> list = new ArrayList<>();
+        for (int i = from; i <= to; i++) {
+            list.add(i);
+        }
+        return list;
     }
 
     // ---------- 缺陷 9 回归:网盘限流不是资源失效 ----------
@@ -533,7 +537,7 @@ class MediaSubscriptionCheckServiceTest {
 
     @Test
     void realShareFailureIsStillTreatedAsBad() {
-        // 夸克「分享地址已失效」是真失效,必须继续判 BAD —— 别把限流保护扩大成"什么都不判死"
+        // 夸克「分享地址已失效」是真失效,必须继续判死 —— 别把限流保护扩大成"什么都不判死"
         assertFalse(MediaSubscriptionCheckService.isThrottleError("/追剧/悬案 [dbid-36624136]: 分享地址已失效"));
         assertFalse(MediaSubscriptionCheckService.isThrottleError("资源无可识别的剧集文件:某标题"));
         assertFalse(MediaSubscriptionCheckService.isThrottleError("挂载失败:https://pan.quark.cn/s/x"));
@@ -542,15 +546,15 @@ class MediaSubscriptionCheckServiceTest {
 
     @Test
     void searchSourceValidityIsNormalizedOnAdmission() {
-        // 各源状态词大小写不一(盘检返回小写 ok),直接存原值会让 VALIDITY_OK.equals 静默失配
-        assertEquals(MediaSubscriptionResource.VALIDITY_BAD, MediaSubscriptionCheckService.normalizeValidity("bad"));
-        assertEquals(MediaSubscriptionResource.VALIDITY_BAD, MediaSubscriptionCheckService.normalizeValidity("Invalid"));
-        assertEquals(MediaSubscriptionResource.VALIDITY_BAD, MediaSubscriptionCheckService.normalizeValidity(" EXPIRED "));
-        // 盘检 ok 只证明链接可达,不证明挂得上 —— 不许冒充"已验证可用"
-        assertEquals(MediaSubscriptionResource.VALIDITY_UNKNOWN, MediaSubscriptionCheckService.normalizeValidity("ok"));
-        assertEquals(MediaSubscriptionResource.VALIDITY_UNKNOWN, MediaSubscriptionCheckService.normalizeValidity("OK"));
-        assertEquals(MediaSubscriptionResource.VALIDITY_UNKNOWN, MediaSubscriptionCheckService.normalizeValidity(null));
-        assertEquals(MediaSubscriptionResource.VALIDITY_UNKNOWN, MediaSubscriptionCheckService.normalizeValidity(""));
+        // 各源状态词大小写不一(盘检返回小写 ok),明确判失效的 → REJECTED(保留行防重复入池)
+        assertEquals(MediaSubscriptionResource.STATE_REJECTED, MediaSubscriptionCheckService.admissionState("bad"));
+        assertEquals(MediaSubscriptionResource.STATE_REJECTED, MediaSubscriptionCheckService.admissionState("Invalid"));
+        assertEquals(MediaSubscriptionResource.STATE_REJECTED, MediaSubscriptionCheckService.admissionState(" EXPIRED "));
+        // 盘检 ok 只证明链接可达,不证明挂得上 —— 不许冒充任何更强结论,落 CANDIDATE 等探测
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, MediaSubscriptionCheckService.admissionState("ok"));
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, MediaSubscriptionCheckService.admissionState("OK"));
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, MediaSubscriptionCheckService.admissionState(null));
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, MediaSubscriptionCheckService.admissionState(""));
     }
 
     // ---------- 候选池分层配额:备用盘必须有保底席位 ----------
@@ -610,67 +614,285 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verify(fixture.resourceRepository, Mockito.times(5)).save(Mockito.any());
     }
 
-    // ---------- 缺陷 4 回归:死掉的补缺挂载不得再"冒领"集数 ----------
-    // 线上事故:补缺源标题「10集全」,分享已死(取链 参数错误),但旧覆盖快照仍声称覆盖 1~10 集。
-    // 刷新时 walkEpisodes 抛异常被静默吞掉、快照保持不变,随后 missingStill 被这份陈旧快照扣光
-    // → 不触发补搜 → 池永远补不上 → 播放时"已尝试 1 个源"失败。系统自认健康,用户一集都播不了。
+    // ---------- 缺陷 4 回归(v2):死掉的补缺挂载就地退役,行全部判死 ----------
+    // 线上事故:补缺源标题「10集全」,分享已死(取链 参数错误),但旧覆盖快照仍声称覆盖 1~10 集,
+    // 缺口被陈旧快照扣光 → 不触发补搜 → 播放时"已尝试 1 个源"失败。
+    // v2 里覆盖快照 = 集源行;退役把行统一翻 FAILED,liveEpisodeNumbers 自然不再被死源冒领。
 
     @Test
-    void deadGapMountStopsClaimingEpisodesAndIsRetired() {
+    void deadAuxMountIsRetiredAndItsRowsKilled() {
         Fixture fixture = new Fixture();
-        MediaSubscriptionResource gap = new MediaSubscriptionResource();
-        gap.setId(9);
-        gap.setSubscriptionId(1);
-        gap.setLink("https://pan.quark.cn/s/dead");
-        gap.setTitle("测试剧 10集全");
-        gap.setType(5);
-        gap.setGap(true);
-        gap.setShareId(7);
-        gap.setMountPath("/追剧/.sources/1-测试剧-补1");
-        gap.setEpisodeList("[1,2,3,4,5,6,7,8,9,10]"); // 陈旧快照:声称覆盖全 10 集
-        gap.setValidity(MediaSubscriptionResource.VALIDITY_OK);
-        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(gap));
+        MediaSubscriptionResource aux = new MediaSubscriptionResource();
+        aux.setId(9);
+        aux.setSubscriptionId(1);
+        aux.setLink("https://pan.quark.cn/s/dead");
+        aux.setTitle("测试剧 10集全");
+        aux.setType(5);
+        aux.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        aux.setShareId(7);
+        aux.setMountPath("/追剧/.sources/1-测试剧-补1");
+        // 旧快照声称覆盖 1~10 集(现在体现为 LISTED 行)
+        List<MediaSubscriptionEpisodeSource> rows = new ArrayList<>();
+        for (int i = 1; i <= 10; i++) {
+            rows.add(sourceRow(20 + i, 100 + i, 9, MediaSubscriptionEpisodeSource.STATE_LISTED, "第" + i + "集.mkv"));
+        }
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(aux));
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(9)).thenReturn(rows);
         // 分享已死:列目录抛错
         Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
                         Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
                 .thenThrow(new IllegalStateException("failed get link: 参数错误"));
 
-        Set<Integer> missing = new TreeSet<>(Set.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
-        fixture.service.fillGaps(fixture.subscription, missing);
+        fixture.service.refreshAuxMounts(fixture.subscription);
 
-        assertEquals(Set.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), missing,
-                "死源不得从缺口里扣掉任何一集 —— 扣掉就不会触发补搜");
-        assertEquals(MediaSubscriptionResource.VALIDITY_BAD, gap.getValidity(), "列不出内容的源必须标 BAD");
         Mockito.verify(fixture.shareService).deleteShare(7); // 退役,腾出 maxGapMounts 名额
-        assertFalse(gap.isGap());
-        assertNull(gap.getShareId());
+        assertEquals(MediaSubscriptionResource.STATE_RETIRED, aux.getState(), "列不出内容的挂载必须退役");
+        assertNull(aux.getShareId());
+        assertNull(aux.getMountPath());
+        assertTrue(rows.stream().allMatch(r -> MediaSubscriptionEpisodeSource.STATE_FAILED.equals(r.getState())),
+                "退役资源的全部行判 FAILED —— 它不再向任何缺口/播放候选供集");
+        ArgumentCaptor<cn.har01d.alist_tvbox.entity.DeadLink> dead =
+                ArgumentCaptor.forClass(cn.har01d.alist_tvbox.entity.DeadLink.class);
+        Mockito.verify(fixture.deadLinkRepository).save(dead.capture());
+        assertEquals("https://pan.quark.cn/s/dead", dead.getValue().getLink(), "判死要写失效黑名单(跨订阅共享)");
     }
 
     @Test
-    void liveGapMountStillCoversItsEpisodes() {
-        // 对照组:分享活着就照常扣减缺口,不能因为修缺陷 4 把正常补缺源也误杀
+    void liveAuxMountRefreshesRowsInPlace() {
+        // 对照组:分享活着就原位刷新行,不能因为修缺陷 4 把正常补缺源也误杀
         Fixture fixture = new Fixture();
-        MediaSubscriptionResource gap = new MediaSubscriptionResource();
-        gap.setId(9);
-        gap.setSubscriptionId(1);
-        gap.setLink("https://pan.quark.cn/s/live");
-        gap.setType(5);
-        gap.setGap(true);
-        gap.setShareId(7);
-        gap.setMountPath("/追剧/.sources/1-测试剧-补1");
-        gap.setEpisodeList("[1,2]");
-        gap.setValidity(MediaSubscriptionResource.VALIDITY_OK);
-        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(gap));
+        MediaSubscriptionResource aux = new MediaSubscriptionResource();
+        aux.setId(9);
+        aux.setSubscriptionId(1);
+        aux.setLink("https://pan.quark.cn/s/live");
+        aux.setType(5);
+        aux.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        aux.setShareId(7);
+        aux.setMountPath("/追剧/.sources/1-测试剧-补1");
+        MediaSubscriptionEpisode ep1 = episode(101, 1);
+        MediaSubscriptionEpisode ep2 = episode(102, 2);
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1)).thenReturn(List.of(ep1, ep2));
+        MediaSubscriptionEpisodeSource row1 = sourceRow(21, ep1.getId(), 9, MediaSubscriptionEpisodeSource.STATE_LISTED, "第01集.mkv");
+        MediaSubscriptionEpisodeSource row2 = sourceRow(22, ep2.getId(), 9, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(aux));
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(9)).thenReturn(List.of(row1, row2));
         Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
                         Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
                 .thenReturn(files("测试剧.第01集.mkv", "测试剧.第02集.mkv"));
 
-        Set<Integer> missing = new TreeSet<>(Set.of(1, 2, 3));
-        fixture.service.fillGaps(fixture.subscription, missing);
+        fixture.service.refreshAuxMounts(fixture.subscription);
 
-        assertEquals(Set.of(3), missing, "活着的补缺源正常扣减它覆盖的集");
-        assertEquals(MediaSubscriptionResource.VALIDITY_OK, gap.getValidity());
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, aux.getState());
         Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
+        assertTrue(row1.getState().equals(MediaSubscriptionEpisodeSource.STATE_LISTED)
+                || row1.getState().equals(MediaSubscriptionEpisodeSource.STATE_VERIFIED));
+        assertEquals(2, aux.getEpisodesFound(), "行数与目录观测一致");
+    }
+
+    // ---------- 集源行生命周期:syncInventory ----------
+
+    @Test
+    void syncInventoryCreatesListedRowsAndMarksMissing() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(2);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        MediaSubscriptionEpisode ep1 = episode(10, 1);
+        MediaSubscriptionEpisode ep2 = episode(11, 2);
+        MediaSubscriptionEpisode ep3 = episode(12, 3);
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1)).thenReturn(List.of(ep1, ep2, ep3));
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdAndSeasonAndNumber(Mockito.eq(1), Mockito.anyInt(), Mockito.anyInt()))
+                .thenReturn(Optional.of(ep1));
+        MediaSubscriptionEpisodeSource row2 = sourceRow(21, ep2.getId(), 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+        MediaSubscriptionEpisodeSource row3 = sourceRow(22, ep3.getId(), 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第03集.mkv");
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(2)).thenReturn(List.of(row2, row3));
+        Mockito.when(fixture.episodeSourceRepository.findByEpisodeIdAndResourceId(Mockito.anyInt(), Mockito.anyInt()))
+                .thenReturn(Optional.empty());
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
+        files.put(1, new MediaSubscriptionCheckService.EpisodeFile(1, "/追剧/1-测试剧", "第01集.mkv", 500L));
+        files.put(2, new MediaSubscriptionCheckService.EpisodeFile(2, "/追剧/1-测试剧", "第02集.mkv", 500L));
+
+        fixture.service.syncInventory(fixture.subscription, primary, "/追剧/1-测试剧", files);
+
+        ArgumentCaptor<MediaSubscriptionEpisodeSource> captor = ArgumentCaptor.forClass(MediaSubscriptionEpisodeSource.class);
+        Mockito.verify(fixture.episodeSourceRepository, Mockito.atLeastOnce()).save(captor.capture());
+        // 新文件 → 新 LISTED 行,rel_path 是挂载点内相对路径
+        MediaSubscriptionEpisodeSource created = captor.getAllValues().stream()
+                .filter(r -> r.getEpisodeId() == 10).findFirst().orElseThrow();
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_LISTED, created.getState());
+        assertEquals("第01集.mkv", created.getRelPath());
+        // 目录里消失的文件 → MISSING(不再供集)
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_MISSING, row3.getState());
+    }
+
+    @Test
+    void failedRowRecoversOnNewFileOrAfterCooldown() {
+        // FAILED 行的翻案路径:换了文件(路径变化)= 新事实立即重试;同路径判决过 7 天也重试
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(2);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        MediaSubscriptionEpisode ep17 = episode(10, 17);
+        MediaSubscriptionEpisode ep18 = episode(11, 18);
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1)).thenReturn(List.of(ep17, ep18));
+        MediaSubscriptionEpisodeSource freshFailed = sourceRow(21, ep17.getId(), 2, MediaSubscriptionEpisodeSource.STATE_FAILED, "第17集-old.mkv");
+        freshFailed.setLastVerifiedTime(System.currentTimeMillis());
+        MediaSubscriptionEpisodeSource staleFailed = sourceRow(22, ep18.getId(), 2, MediaSubscriptionEpisodeSource.STATE_FAILED, "第18集.mkv");
+        staleFailed.setLastVerifiedTime(System.currentTimeMillis() - 8L * 24 * 3600_000);
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(2)).thenReturn(List.of(freshFailed, staleFailed));
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
+        files.put(17, new MediaSubscriptionCheckService.EpisodeFile(17, "/追剧/1-测试剧", "第17集-new.mkv", 500L));
+        files.put(18, new MediaSubscriptionCheckService.EpisodeFile(18, "/追剧/1-测试剧", "第18集.mkv", 500L));
+
+        fixture.service.syncInventory(fixture.subscription, primary, "/追剧/1-测试剧", files);
+
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_LISTED, freshFailed.getState(), "文件被换过 = 新事实,回 LISTED 重探");
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_LISTED, staleFailed.getState(), "判决超 7 天 = 过期重试(对齐旧损坏登记语义)");
+    }
+
+    // ---------- 失败传染(Q11):区分单集损坏与整源失效 ----------
+
+    @Test
+    void contagionRetiresWholeShareOnSecondFailure() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource resource = mountedPrimary(2, 9);
+        MediaSubscriptionEpisodeSource liveRow = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(2)).thenReturn(List.of(liveRow));
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
+                .thenThrow(new RuntimeException("failed get link: 参数错误"));
+
+        boolean dead = fixture.service.contagion(fixture.subscription, resource, 99);
+
+        assertTrue(dead, "二次探测仍失败 = 整源死");
+        assertEquals(MediaSubscriptionResource.STATE_RETIRED, resource.getState());
+        Mockito.verify(fixture.shareService).deleteShare(9);
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_FAILED, liveRow.getState());
+    }
+
+    @Test
+    void contagionSingleEpisodeDamageKeepsResource() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource resource = mountedPrimary(2, 9);
+        MediaSubscriptionEpisodeSource liveRow = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(2)).thenReturn(List.of(liveRow));
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(new cn.har01d.alist_tvbox.model.FsDetail());
+
+        boolean dead = fixture.service.contagion(fixture.subscription, resource, 99);
+
+        assertFalse(dead, "另一集取链成功 = 仅单集损坏");
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, resource.getState());
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_VERIFIED, liveRow.getState(), "探测成功顺带升 VERIFIED");
+    }
+
+    @Test
+    void contagionThrottleDoesNotRetire() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource resource = mountedPrimary(2, 9);
+        MediaSubscriptionEpisodeSource liveRow = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(2)).thenReturn(List.of(liveRow));
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
+                .thenThrow(new RuntimeException("{\"errno\":-62}"));
+
+        assertFalse(fixture.service.contagion(fixture.subscription, resource, 99), "限流期间不下结论");
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, resource.getState());
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
+    }
+
+    // ---------- 播放选源:集源行索引 + VERIFIED 优先 ----------
+
+    @Test
+    void playCandidatesPreferVerifiedRowOverHigherScoredListed() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource listed = mountedPrimary(3, 9);
+        listed.setScore(90);
+        MediaSubscriptionResource verified = mountedPrimary(4, 10);
+        verified.setScore(10);
+        MediaSubscriptionEpisodeSource listedRow = sourceRow(21, 100, 3, MediaSubscriptionEpisodeSource.STATE_LISTED, "第17集.mkv");
+        MediaSubscriptionEpisodeSource verifiedRow = sourceRow(22, 100, 4, MediaSubscriptionEpisodeSource.STATE_VERIFIED, "第17集.mkv");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(listed, verified));
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndNumber(1, 17))
+                .thenReturn(List.of(listedRow, verifiedRow));
+
+        List<MediaSubscriptionCheckService.PlayCandidate> candidates = fixture.service.playCandidates(fixture.subscription, 17);
+
+        assertEquals(2, candidates.size());
+        assertEquals(4, candidates.getFirst().resource().getId(), "VERIFIED 行先于高分 LISTED 行");
+    }
+
+    @Test
+    void playCandidatesExcludeFailedRowsAndUnmountedResources() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource mounted = mountedPrimary(3, 9);
+        MediaSubscriptionResource retired = mountedPrimary(4, 10);
+        retired.setState(MediaSubscriptionResource.STATE_RETIRED);
+        retired.setMountPath(null);
+        MediaSubscriptionEpisodeSource live = sourceRow(21, 100, 3, MediaSubscriptionEpisodeSource.STATE_LISTED, "第17集.mkv");
+        MediaSubscriptionEpisodeSource failed = sourceRow(22, 100, 3, MediaSubscriptionEpisodeSource.STATE_FAILED, "第17集.old.mkv");
+        MediaSubscriptionEpisodeSource retiredRow = sourceRow(23, 100, 4, MediaSubscriptionEpisodeSource.STATE_LISTED, "第17集.mkv");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(mounted, retired));
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndNumber(1, 17))
+                .thenReturn(List.of(live, failed, retiredRow));
+
+        List<MediaSubscriptionCheckService.PlayCandidate> candidates = fixture.service.playCandidates(fixture.subscription, 17);
+
+        assertEquals(1, candidates.size(), "FAILED 行与未挂载资源的行都不参与选源");
+        assertEquals(3, candidates.getFirst().resource().getId());
+    }
+
+    // ---------- 转存校验回灌:列得出、拷不过去 → 行级 FAILED(旧 broken_episodes 的替代品) ----------
+
+    @Test
+    void markTransferBrokenMarksOnlyOwningResourceRow() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = mountedPrimary(3, 9); // /追剧/1-测试剧
+        MediaSubscriptionResource aux = mountedPrimary(4, 10);
+        aux.setMountPath("/追剧/.sources/1-测试剧-补1");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(primary, aux));
+        MediaSubscriptionEpisodeSource primaryRow = sourceRow(21, 100, 3, MediaSubscriptionEpisodeSource.STATE_LISTED, "第17集.mkv");
+        MediaSubscriptionEpisodeSource auxRow = sourceRow(22, 100, 4, MediaSubscriptionEpisodeSource.STATE_LISTED, "第17集.mkv");
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndNumber(1, 17))
+                .thenReturn(List.of(primaryRow, auxRow));
+
+        fixture.service.markTransferBroken(fixture.subscription, Map.of(17, "/追剧/.sources/1-测试剧-补1/第17集.mkv"));
+
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_FAILED, auxRow.getState(), "拷不过去的行判 FAILED");
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_LISTED, primaryRow.getState(), "其它资源的同集行不受牵连");
+    }
+
+    // ---------- 工具 ----------
+
+    private static MediaSubscriptionResource mountedPrimary(int id, int shareId) {
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(id);
+        resource.setSubscriptionId(1);
+        resource.setLink("https://pan.quark.cn/s/r" + id);
+        resource.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        resource.setMountPath("/追剧/1-测试剧");
+        resource.setShareId(shareId);
+        return resource;
+    }
+
+    private static MediaSubscriptionEpisode episode(int id, int number) {
+        MediaSubscriptionEpisode episode = new MediaSubscriptionEpisode();
+        episode.setId(id);
+        episode.setSubscriptionId(1);
+        episode.setSeason(1);
+        episode.setNumber(number);
+        return episode;
+    }
+
+    private static MediaSubscriptionEpisodeSource sourceRow(int id, int episodeId, int resourceId, String state, String relPath) {
+        MediaSubscriptionEpisodeSource row = new MediaSubscriptionEpisodeSource();
+        row.setId(id);
+        row.setEpisodeId(episodeId);
+        row.setResourceId(resourceId);
+        row.setState(state);
+        row.setRelPath(relPath);
+        return row;
     }
 
     /** 构造一个 AList 目录响应:全部按视频文件计,体积过 minEpisodeSizeMb 下限。 */
@@ -688,11 +910,14 @@ class MediaSubscriptionCheckServiceTest {
         return response;
     }
 
-    /** 失效确认分支的 mock 夹具:订阅已挂主源(shareId=5),AList 列目录行为由各测试定制。 */
+    /** 失效确认/集源行分支的 mock 夹具:订阅已挂主源(shareId=5),仓储行为由各测试定制。 */
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
         final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
         final MediaSubscriptionEventRepository eventRepository = Mockito.mock(MediaSubscriptionEventRepository.class);
+        final MediaSubscriptionEpisodeRepository episodeRepository = Mockito.mock(MediaSubscriptionEpisodeRepository.class);
+        final MediaSubscriptionEpisodeSourceRepository episodeSourceRepository = Mockito.mock(MediaSubscriptionEpisodeSourceRepository.class);
+        final DeadLinkRepository deadLinkRepository = Mockito.mock(DeadLinkRepository.class);
         final ShareRepository shareRepository = Mockito.mock(ShareRepository.class);
         final SiteRepository siteRepository = Mockito.mock(SiteRepository.class);
         final SettingRepository settingRepository = Mockito.mock(SettingRepository.class);
@@ -706,10 +931,12 @@ class MediaSubscriptionCheckServiceTest {
             AppProperties appProperties = new AppProperties();
             appProperties.setFormats(Set.of("mkv", "mp4")); // 生产由 yaml 绑定,裸实例需手动补
             service = new MediaSubscriptionCheckService(subscriptionRepository, resourceRepository, eventRepository,
+                    episodeRepository, episodeSourceRepository, deadLinkRepository,
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),
                     Mockito.mock(IndexTemplateRepository.class), settingRepository,
                     shareService, aListService, telegramService, null, null, null, null,
-                    Mockito.mock(MetadataService.class), Mockito.mock(AutoUpdateExecutor.class), Mockito.mock(cn.har01d.alist_tvbox.entity.HistoryRepository.class),
+                    Mockito.mock(MetadataService.class), Mockito.mock(AutoUpdateExecutor.class),
+                    Mockito.mock(cn.har01d.alist_tvbox.entity.HistoryRepository.class),
                     appProperties, new ObjectMapper());
             subscription.setId(1);
             subscription.setName("测试剧");
@@ -719,6 +946,9 @@ class MediaSubscriptionCheckServiceTest {
             Mockito.when(subscriptionRepository.findById(1)).thenReturn(Optional.of(subscription));
             Mockito.when(shareRepository.findById(5)).thenReturn(Optional.of(new Share()));
             Mockito.when(siteRepository.findById(1)).thenReturn(Optional.of(new Site()));
+            Mockito.when(deadLinkRepository.findByLink(Mockito.anyString())).thenReturn(Optional.empty());
+            Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
+                    .thenReturn(List.of());
         }
     }
 }

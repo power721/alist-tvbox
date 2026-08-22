@@ -393,13 +393,15 @@ Episode 17
 
 **铁律：`mount_path` 与 `share_id` 一个字节都不能变** —— 那是不断链设计的地基。
 
-**V30 内容（第二段）**
+**V30 内容（已落地）**
 
 1. 建表 `msub_episode` / `msub_episode_source` / `dead_link`
-2. `media_subscription_resource` 加 `state` 列，按 `active`/`gap`/`validity` 推导初值
-3. 回填**仅 `msub_episode` 骨架**（集号 + 播出时间，取自 `schedule` 快照）
-4. **`msub_episode_source` 一行都不建**，由首次巡检按真实目录重建
-5. **直接 drop 旧列**：`episode_list` / `broken_episodes` / `validity` / `active` / `gap`
+2. `media_subscription_resource` 加 `state` 列，按 `active`/`gap`/`validity` 推导初值；主源行回填 `mount_path`（旧代码从不给主源写该字段）
+3. **`msub_episode_source` 一行都不建**，由首次巡检按真实目录重建
+4. **直接 drop 旧列**：resource 的 `episode_list`/`validity`/`active`/`gap`，subscription 的 `episode_list`/`broken_episodes`
+5. `schedule` 列保留 —— 分集实体建行时（`ensureEpisode`）从这里取播出时间
+
+**对原方案的偏离：分集骨架不做迁移期回填**。原计划在 V30 里把 schedule 快照回填成 `msub_episode` 行；实现改为**运行时惰性**：`ensureEpisode` 建行时读 schedule 快照，数据同样落进新模型，而迁移里不用手写 id_generator 序列分配（TableGenerator 的 id 表在裸 SQL 里分配极易与 Hibernate 错位）。时间轴 UI 仍直读 schedule 快照，无行为差异。
 
 **为什么不回填 `episode_source`**：`episode_list` 本身就可能是缺陷 4 那样的陈旧脏数据（死资源仍声称覆盖 1–10 集）。回填等于把脏状态固化进新模型，而新模型正是为消灭这类脏状态而建。
 
@@ -445,15 +447,27 @@ Episode 17
 
 **顺带修复**：`MediaSubscriptionCheckServiceTest` 的 `Fixture` 少传构造参数导致测试模块编译失败（`529e42b9` 新增 `GuanYingSearchService` 时漏改，后在 amend 中修正）。
 
-### 第二段：模型重构
+### 第二段：模型重构（已完成，全量 705 测试通过）
 
-**前置条件：先跑通一轮真实巡检**（缺陷 10、11 的教训）。观察三个信号确认第一段生效：
+**前置条件已满足**：真实巡检确认第一段生效（《诛仙》挂载 3 集正常解析播放）后开工。
 
-1. 事件流出现「百度限流,本轮跳过该网盘候选」而不是三条 BAD
-2. 候选池里出现**非主网盘**条目
-3. `过滤 M 条不相关结果` 中的 M **明显小于**总数
+落地内容：
 
-V30 迁移 + `msub_episode` / `msub_episode_source` / `dead_link` + 资源两级状态机 + 选源算法走索引 + 取消 primary/gap 二分 + 失败传染二次探测与主动抽检。
+| 项 | 实现 |
+|---|---|
+| V30 迁移 | 三新表 + resource `state` 列（初值由 active/gap/validity 推导）+ 主源行回填 mount_path + drop 六个旧列；幂等（回归测试抓过一次 H2 大写表名导致的索引重复创建） |
+| 资源两级状态机 | resource 只表达生命周期（CANDIDATE/MOUNTED/RETIRED/REJECTED）；可用性由 `episode_source` 聚合派生，不落列 |
+| 取消 primary/gap 二分 | 主源 = 挂在订阅固定路径的 MOUNTED 资源；补缺 = 挂在 `.sources/` 下的 MOUNTED 资源；主源行丢失时按 shareId 收养自愈 |
+| 集源行生命周期 | `syncInventory` 列目录只写弱信号 LISTED；VERIFIED/FAILED 只由取链事实写入（preheat/抽样/播放/转存校验）；文件消失 → MISSING；FAILED 翻案 = 换文件或判决满 7 天（对齐旧损坏登记的过期重试） |
+| 播放选源走索引 | `playCandidates` 一次库查 + 一次取链，替代旧的逐挂载点递归列目录（最多 7 次列举）；排序 VERIFIED > LISTED > 资源分 > 成功率 |
+| 失败传染 | 取链失败 → 同资源另一集再取链：也失败 = 整源死（退役 + dead_link + 行全 FAILED）；成功 = 仅单集损坏；限流期间不下结论 |
+| 主动抽检 | 每轮对每个挂载源抽 1 集 LISTED 行取链 —— 补上缺陷 4 那类"从未被播的集永远停在 LISTED"的盲区 |
+| 失效黑名单 | `dead_link` 跨订阅共享：任何订阅判死即写入，入池前先查 |
+| 主源限流保护 | 主源列目录撞限流（errno -62）只退避不判死（原保护只覆盖激活路径） |
+| 候选行不冒充已有集 | `liveEpisodeNumbers` 只统计 MOUNTED 资源的行 —— 候选探测留下的 LISTED 行不算本地已有 |
+| schema 契约测试 | `MsubSchemaContractTest` 按应用真实配置跑完整 Flyway 链，钉死 5 张表的全部实体列 + 唯一约束（ddl-auto=validate 无上下文测试可跑，契约在这里守） |
+
+**测试变化**：`broken_episodes` 登记表的 3 个 JSON 测试由行级生命周期测试取代（syncInventory 建行/MISSING、FAILED 翻案、传染三分支、播放候选排序、转存损坏只标记所属资源行）；`normalizeValidity` 测试改为 `admissionState`；BAD 冷却测试改 state 语义。
 
 ### 第三段：体验层
 

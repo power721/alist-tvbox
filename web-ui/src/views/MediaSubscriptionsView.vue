@@ -261,21 +261,21 @@
         <el-table-column prop="title" label="资源" min-width="240" show-overflow-tooltip/>
         <el-table-column prop="driveName" label="盘" width="90"/>
         <el-table-column prop="score" label="评分" width="70" sortable/>
-        <el-table-column label="有效性" width="90">
+        <el-table-column label="状态" width="90">
           <template #default="scope">
-            <el-tag size="small" :type="validityType(scope.row.validity)">{{ scope.row.validity }}</el-tag>
+            <el-tag size="small" :type="stateType(scope.row.state)">{{ stateLabel(scope.row.state) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="episodesFound" label="集数" width="70"/>
         <el-table-column label="角色" width="90">
           <template #default="scope">
-            <el-tag v-if="scope.row.active" size="small" type="success">主源</el-tag>
-            <el-tag v-else-if="scope.row.gap" size="small" type="warning">补缺</el-tag>
+            <el-tag v-if="scope.row.primary" size="small" type="success">主源</el-tag>
+            <el-tag v-else-if="scope.row.state === 'MOUNTED'" size="small" type="warning">补缺</el-tag>
           </template>
         </el-table-column>
         <el-table-column fixed="right" label="操作" width="90">
           <template #default="scope">
-            <el-button v-if="!scope.row.active && scope.row.validity !== 'BAD'" link type="primary" size="small"
+            <el-button v-if="scope.row.state === 'CANDIDATE'" link type="primary" size="small"
                        @click="activateResource(scope.row)">启用</el-button>
           </template>
         </el-table-column>
@@ -491,9 +491,9 @@ interface ResourceDto {
   title: string | null
   episodesFound: number | null
   score: number | null
-  validity: string | null
-  active: boolean
-  gap: boolean
+  /** 挂载生命周期:CANDIDATE/MOUNTED/RETIRED/REJECTED(可用性由集源行聚合,不再落在资源上) */
+  state: string | null
+  primary: boolean
 }
 
 interface EventDto {
@@ -1190,10 +1190,20 @@ const statusType = (status: string) => {
   }
 }
 
-const validityType = (validity: string | null) => {
-  if (validity === 'OK') return 'success'
-  if (validity === 'BAD') return 'danger'
+const stateType = (state: string | null) => {
+  if (state === 'MOUNTED') return 'success'
+  if (state === 'RETIRED') return 'danger'
+  if (state === 'REJECTED') return 'danger'
   return 'info'
+}
+
+const stateLabel = (state: string | null) => {
+  switch (state) {
+    case 'MOUNTED': return '已挂载'
+    case 'RETIRED': return '已退役'
+    case 'REJECTED': return '已拒绝'
+    default: return '候选'
+  }
 }
 
 const eventType = (type: string) => {

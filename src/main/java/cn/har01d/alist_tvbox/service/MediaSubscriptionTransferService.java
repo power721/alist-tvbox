@@ -188,7 +188,7 @@ public class MediaSubscriptionTransferService {
                 result.put(subscription.getMountPath(), primary.getType());
             }
             for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId())) {
-                if (resource.isGap() && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
+                if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState()) && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
                     shareRepository.findById(resource.getShareId())
                             .filter(share -> share.getType() != null)
                             .ifPresent(share -> result.put(resource.getMountPath(), share.getType()));
@@ -318,7 +318,7 @@ public class MediaSubscriptionTransferService {
                     }
                 });
                 if (!broken.isEmpty()) {
-                    checkService.addBrokenEpisodes(subscription, broken);
+                    checkService.markTransferBroken(subscription, broken);
                     subscriptionRepository.save(subscription);
                     log.info("subscription {} marked {} broken episodes (listed but not copyable)", subscription.getId(), broken.size());
                 }

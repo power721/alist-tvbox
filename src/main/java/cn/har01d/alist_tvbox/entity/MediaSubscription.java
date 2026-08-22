@@ -111,14 +111,10 @@ public class MediaSubscription {
     @Column(name = "max_episode")
     private Integer maxEpisode;
 
-    @Column(columnDefinition = "TEXT", name = "episode_list")
-    private String episodeList;
-
-    /** 损坏集登记(JSON {集号: "源目录|时间戳"}):分享有效但某集被和谐,转存校验发现后登记,7 天过期 */
-    @Column(columnDefinition = "TEXT", name = "broken_episodes")
-    private String brokenEpisodes;
-
-    /** 播出日程快照(JSON [{episode,airTime}]),provider 分集播出日期,昨日~+14 天窗口 */
+    /**
+     * 播出日程快照(JSON [{episode,airTime}]),provider 分集播出日期,昨日~+14 天窗口。
+     * 分集实体(msub_episode)建行时从这里取播出时间;时间轴 UI 也直读此快照。
+     */
     @Column(columnDefinition = "TEXT", name = "schedule")
     private String schedule;
 

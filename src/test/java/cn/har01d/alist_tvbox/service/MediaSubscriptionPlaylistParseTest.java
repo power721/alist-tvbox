@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MediaSubscriptionPlaylistParseTest {
 
     private final MediaSubscriptionCheckService checkService = new MediaSubscriptionCheckService(
-            null, null, null, null, null, null, null, emptySettings(),
+            null, null, null, null, null, null, null, null, null, null, emptySettings(),
             null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
     /** 全局 Setting 空 stub:未配置 msub_main_drives */
@@ -38,7 +38,8 @@ class MediaSubscriptionPlaylistParseTest {
     }
 
     private final MediaSubscriptionService service = new MediaSubscriptionService(
-            null, null, null, null, null, null, null, null, null, checkService, null, null, null, new ObjectMapper());
+            null, null, null, null, null, null, null, null, null, null, null, checkService, null, null,
+            new AppProperties(), new ObjectMapper());
 
     @Test
     void urlWithStorageIdFragmentNotSplit() {
@@ -184,7 +185,7 @@ class MediaSubscriptionPlaylistParseTest {
         Mockito.when(settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
                 .thenReturn(java.util.Optional.of(global));
         MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
-                null, null, null, null, null, null, null, settingRepository,
+                null, null, null, null, null, null, null, null, null, null, settingRepository,
                 null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
         MediaSubscription subscription = new MediaSubscription();
@@ -226,18 +227,31 @@ class MediaSubscriptionPlaylistParseTest {
 
     @Test
     void singleEpisodeResourceNotUsableAsPrimary() {
+        // 探测覆盖来自集源行(coverageOf);未探测的资源无行,靠标题标记兜底
+        cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository rows =
+                Mockito.mock(cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository.class);
+        Mockito.when(rows.findNumbersByResourceIdAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
+                .thenReturn(List.of());
+        MediaSubscriptionCheckService probed = new MediaSubscriptionCheckService(
+                null, null, null, null, rows, null, null, null, null, null, emptySettings(),
+                null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
         MediaSubscriptionResource single = new MediaSubscriptionResource();
+        single.setId(4);
         single.setTitle("📺 悬案 (2026) S01E16 ✨4K WEB-DL AAC");
-        assertFalse(checkService.usableAsPrimary(single, 17), "本地 17 集时单集链接不得挂主源");
-        assertTrue(checkService.usableAsPrimary(single, 1), "新剧首集/单集剧不受限");
+        assertFalse(probed.usableAsPrimary(single, 17), "本地 17 集时单集链接不得挂主源");
+        assertTrue(probed.usableAsPrimary(single, 1), "新剧首集/单集剧不受限");
 
-        MediaSubscriptionResource known = new MediaSubscriptionResource(); // 标题无标记但探测已知仅 1 集
+        // 标题无标记但探测已知仅 1 集(集源行覆盖 = {16})
+        Mockito.when(rows.findNumbersByResourceIdAndStatesIn(Mockito.eq(5), Mockito.anyCollection()))
+                .thenReturn(List.of(16));
+        MediaSubscriptionResource known = new MediaSubscriptionResource();
+        known.setId(5);
         known.setTitle("悬案 16");
-        known.setEpisodeList("[16]");
-        assertFalse(checkService.usableAsPrimary(known, 17));
+        assertFalse(probed.usableAsPrimary(known, 17));
 
         MediaSubscriptionResource pack = new MediaSubscriptionResource();
+        pack.setId(6);
         pack.setTitle("悬案 (2026) 4K 高码率 [HQ.DV.60fps] [17集全]");
-        assertTrue(checkService.usableAsPrimary(pack, 17));
+        assertTrue(probed.usableAsPrimary(pack, 17));
     }
 }
