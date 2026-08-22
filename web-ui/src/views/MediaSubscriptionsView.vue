@@ -313,8 +313,10 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="notifyVisible" title="追剧设置" width="520">
+    <el-dialog v-model="notifyVisible" title="追剧设置" width="600">
       <el-form label-width="140">
+        <el-tabs>
+          <el-tab-pane label="通用" name="general">
         <el-form-item label="全局主网盘">
           <el-select v-model="notifyForm.mainDrives" multiple placeholder="选 1-2 个,按优先级排序" style="width: 100%">
             <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
@@ -342,48 +344,54 @@
           </el-select>
           <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
         </el-form-item>
-        <el-divider content-position="left">盘链搜索源(可选)</el-divider>
-        <el-form-item label="盘链站点">
+        <span class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关);盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
+          </el-tab-pane>
+          <el-tab-pane label="盘链" name="panlian">
+        <el-form-item label="站点">
           <el-input v-model="notifyForm.panlianHost" placeholder="留空用内置地址;自定义镜像站填 https://..."/>
         </el-form-item>
-        <el-form-item label="盘链账号">
+        <el-form-item label="账号">
           <el-input v-model="notifyForm.panlianUsername" placeholder="注册邮箱;账号密码或 Cookie 至少配一样"/>
         </el-form-item>
-        <el-form-item label="盘链密码">
+        <el-form-item label="密码">
           <el-input v-model="notifyForm.panlianPassword" type="password" show-password placeholder="与账号配套"/>
         </el-form-item>
-        <el-form-item label="盘链 Cookie">
+        <el-form-item label="Cookie">
           <el-input v-model="notifyForm.panlianCookie" type="textarea" :rows="2"
                     placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
         </el-form-item>
-        <el-divider content-position="left">观影搜索源(可选)</el-divider>
-        <el-form-item label="观影站点">
+          </el-tab-pane>
+          <el-tab-pane label="观影" name="guanying">
+        <el-form-item label="站点">
           <el-input v-model="notifyForm.guanyingHost" placeholder="留空用内置 8 个镜像;多个地址逗号/竖线/换行分隔"/>
         </el-form-item>
-        <el-form-item label="观影账号">
+        <el-form-item label="账号">
           <el-input v-model="notifyForm.guanyingUsername" placeholder="账号密码或 Cookie 至少配一样"/>
         </el-form-item>
-        <el-form-item label="观影密码">
+        <el-form-item label="密码">
           <el-input v-model="notifyForm.guanyingPassword" type="password" show-password placeholder="与账号配套"/>
         </el-form-item>
-        <el-form-item label="观影 Cookie">
+        <el-form-item label="Cookie">
           <el-input v-model="notifyForm.guanyingCookie" type="textarea" :rows="2"
                     placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
         </el-form-item>
-        <el-divider content-position="left">蜗牛搜索源(可选)</el-divider>
-        <el-form-item label="蜗牛站点">
+          </el-tab-pane>
+          <el-tab-pane label="蜗牛" name="woniu">
+        <el-form-item label="站点">
           <el-input v-model="notifyForm.woniuHost" placeholder="留空自动测速双线路(wn4k/zmi);自定义填 https://..."/>
         </el-form-item>
-        <el-form-item label="蜗牛账号">
+        <el-form-item label="账号">
           <el-input v-model="notifyForm.woniuUsername" placeholder="推荐账号密码(Cookie 过期自动续期)"/>
         </el-form-item>
-        <el-form-item label="蜗牛密码">
+        <el-form-item label="密码">
           <el-input v-model="notifyForm.woniuPassword" type="password" show-password placeholder="与账号配套"/>
         </el-form-item>
-        <el-form-item label="蜗牛 Cookie">
+        <el-form-item label="Cookie">
           <el-input v-model="notifyForm.woniuCookie" type="textarea" :rows="2"
                     placeholder="须含 user_check(登录后复制);未登录网盘链接会被打码,无凭证时该搜索源自动关闭"/>
         </el-form-item>
+          </el-tab-pane>
+        </el-tabs>
       </el-form>
       <template #footer>
         <el-button @click="notifyVisible = false">取消</el-button>
