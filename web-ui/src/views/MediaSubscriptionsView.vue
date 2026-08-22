@@ -356,6 +356,20 @@
           <el-input v-model="notifyForm.panlianCookie" type="textarea" :rows="2"
                     placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
         </el-form-item>
+        <el-divider content-position="left">观影搜索源(可选)</el-divider>
+        <el-form-item label="观影站点">
+          <el-input v-model="notifyForm.guanyingHost" placeholder="留空用内置 8 个镜像;多个地址逗号/竖线/换行分隔"/>
+        </el-form-item>
+        <el-form-item label="观影账号">
+          <el-input v-model="notifyForm.guanyingUsername" placeholder="账号密码或 Cookie 至少配一样"/>
+        </el-form-item>
+        <el-form-item label="观影密码">
+          <el-input v-model="notifyForm.guanyingPassword" type="password" show-password placeholder="与账号配套"/>
+        </el-form-item>
+        <el-form-item label="观影 Cookie">
+          <el-input v-model="notifyForm.guanyingCookie" type="textarea" :rows="2"
+                    placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="notifyVisible = false">取消</el-button>
@@ -567,6 +581,10 @@ const notifyForm = ref({
   panlianUsername: '',
   panlianPassword: '',
   panlianCookie: '',
+  guanyingHost: '',
+  guanyingUsername: '',
+  guanyingPassword: '',
+  guanyingCookie: '',
 })
 const navigationVisible = ref(false)
 const navCategories = ref<{ type_id: string, type_name: string }[]>([])
@@ -1070,6 +1088,10 @@ const openNotify = () => {
     notifyForm.value.panlianUsername = settings['panlian_username'] || ''
     notifyForm.value.panlianPassword = settings['panlian_password'] || ''
     notifyForm.value.panlianCookie = settings['panlian_cookie'] || ''
+    notifyForm.value.guanyingHost = settings['guanying_host'] || ''
+    notifyForm.value.guanyingUsername = settings['guanying_username'] || ''
+    notifyForm.value.guanyingPassword = settings['guanying_password'] || ''
+    notifyForm.value.guanyingCookie = settings['guanying_cookie'] || ''
     notifyVisible.value = true
   }).catch(() => {
     notifyVisible.value = true
@@ -1091,6 +1113,10 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'panlian_username', value: notifyForm.value.panlianUsername.trim()}),
     axios.post('/api/settings', {name: 'panlian_password', value: notifyForm.value.panlianPassword}),
     axios.post('/api/settings', {name: 'panlian_cookie', value: notifyForm.value.panlianCookie.trim()}),
+    axios.post('/api/settings', {name: 'guanying_host', value: notifyForm.value.guanyingHost.trim()}),
+    axios.post('/api/settings', {name: 'guanying_username', value: notifyForm.value.guanyingUsername.trim()}),
+    axios.post('/api/settings', {name: 'guanying_password', value: notifyForm.value.guanyingPassword}),
+    axios.post('/api/settings', {name: 'guanying_cookie', value: notifyForm.value.guanyingCookie.trim()}),
   ]
   Promise.all(saves).then(() => {
     ElMessage.success('已保存(下轮巡检生效)')

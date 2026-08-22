@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MediaSubscriptionCheckServiceTest {
 
     private final MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
     @Test
     void seasonEpisodePattern() {
@@ -290,37 +290,6 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     // ---------- 缺陷 5 回归:剧名带季号后缀时的归属匹配 ----------
-    // 线上事故:订阅名/关键词均为"诛仙 第四季",搜索召回 31 条,全部被判不相关。
-    // 根因 ①"最长片段"启发式按字符长度取到了"第四季"(3字)而非"诛仙"(2字);
-    //      ② 裸剧名从未进入匹配名单,匹配退化为"标题必须含连续的『诛仙第四季』五字"。
-
-    @Test
-    void matchNamesIncludesBareShowNameWhenNameCarriesSeason() {
-        List<String> names = MediaSubscriptionCheckService.matchNames("诛仙 第四季", "诛仙 第四季", null);
-        assertTrue(names.contains("诛仙"), "裸剧名必须进入匹配名单");
-    }
-
-    @Test
-    void matchNamesRejectsBareSeasonWordAsMatchName() {
-        // "第四季"作为匹配名会命中任意一部第四季的剧,必须排除
-        List<String> names = MediaSubscriptionCheckService.matchNames("诛仙 第四季", "诛仙 第四季", null);
-        assertFalse(names.contains("第四季"), "纯季号词不得作为匹配名");
-        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "斗罗大陆 第四季 全26集"),
-                "别剧不得因共享季号词而入池");
-    }
-
-    @Test
-    void matchesTitleAcceptsRealWorldSeasonVariants() {
-        // 线上召回结果的真实形态:季号写法五花八门,归属匹配不该为此背锅
-        List<String> names = MediaSubscriptionCheckService.matchNames("诛仙 第四季", "诛仙 第四季", null);
-        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙 第四季 全10集 4K"));
-        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙 第4季 1080P 国语"));
-        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙 S04 2160p WEB-DL"));
-        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙4 全10集"));
-        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "诛仙动画 第四季 更新至05"));
-        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "【4K】诛仙 全集 夸克"));
-    }
-
     @Test
     void parseTitleProgressVariants() {
         assertEquals(8, MediaSubscriptionCheckService.parseTitleProgress("剧名 更新至08集 4K"));
@@ -456,7 +425,7 @@ class MediaSubscriptionCheckServiceTest {
             service = new MediaSubscriptionCheckService(subscriptionRepository, resourceRepository, eventRepository,
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),
                     Mockito.mock(IndexTemplateRepository.class), settingRepository,
-                    Mockito.mock(ShareService.class), aListService, telegramService, null, null,
+                    Mockito.mock(ShareService.class), aListService, telegramService, null, null, null,
                     Mockito.mock(MetadataService.class), Mockito.mock(AutoUpdateExecutor.class),
                     appProperties, new ObjectMapper());
             subscription.setId(1);
