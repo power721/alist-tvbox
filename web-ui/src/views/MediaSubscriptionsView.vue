@@ -25,7 +25,7 @@
         <div v-for="day in scheduleDays" :key="day.date" class="schedule-day" :class="{today: day.today}">
           <div class="schedule-day-header">{{ day.label }} <span class="sub-text">{{ day.date }}</span></div>
           <div v-for="(item, idx) in day.items" :key="idx" class="schedule-item" :class="{paused: item.paused}">
-            <span class="schedule-clock">{{ formatClock(item.airTime) }}</span>{{ item.name }}<template v-if="item.episode"> 第{{ item.episode }}集</template>
+            <span class="schedule-clock">{{ formatClock(item.airTime) }}</span>{{ item.name }}<template v-if="item.episodes"> 第{{ item.episodes }}集</template>
           </div>
           <div v-if="!day.items.length" class="schedule-empty">—</div>
         </div>

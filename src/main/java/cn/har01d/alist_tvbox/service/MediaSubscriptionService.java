@@ -669,9 +669,61 @@ public class MediaSubscriptionService {
             }
         }
         for (int i = 0; i < days.size(); i++) {
-            days.get(i).put("items", dayItems.get(i));
+            days.get(i).put("items", mergeDayItems(dayItems.get(i)));
         }
         return days;
+    }
+
+    /**
+     * 同订阅同日同时段的多集合并为一行(20:00 重器 第29-33集):囤剧平台常一天放出整周排播,
+     * 逐集一行会把时间轴挤爆。集数压缩为区间(连续 29-33)/逗号(离散 10,12);单集/无集数保持原样。
+     */
+    static List<Map<String, Object>> mergeDayItems(List<Map<String, Object>> items) {
+        java.time.ZoneId zone = java.time.ZoneId.of(Constants.ZONE_ID);
+        Map<String, Map<String, Object>> groups = new java.util.LinkedHashMap<>();
+        Map<String, List<Integer>> numbers = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> item : items) {
+            String clock = java.time.Instant.ofEpochMilli((long) item.get("airTime"))
+                    .atZone(zone).toLocalTime().withSecond(0).toString();
+            String key = item.get("subscriptionId") + "@" + clock;
+            int episode = (int) item.getOrDefault("episode", 0);
+            if (episode > 0) {
+                numbers.computeIfAbsent(key, k -> new ArrayList<>()).add(episode);
+            }
+            Map<String, Object> group = groups.get(key);
+            if (group == null) {
+                groups.put(key, new java.util.LinkedHashMap<>(item));
+            } else if (group.get("airTime") instanceof Long first && (long) item.get("airTime") < first) {
+                group.put("airTime", item.get("airTime")); // 同段取最早时间
+            }
+        }
+        List<Map<String, Object>> merged = new ArrayList<>();
+        for (var entry : groups.entrySet()) {
+            Map<String, Object> item = entry.getValue();
+            List<Integer> list = numbers.getOrDefault(entry.getKey(), List.of());
+            item.put("episodes", list.isEmpty() ? null
+                    : list.size() == 1 ? String.valueOf(list.get(0)) : compactEpisodes(list));
+            merged.add(item);
+        }
+        return merged;
+    }
+
+    /** 排序后按连续段压缩:29..33 → "29-33";混杂 → "10,12-14,20"。 */
+    static String compactEpisodes(List<Integer> numbers) {
+        List<Integer> sorted = new ArrayList<>(numbers);
+        java.util.Collections.sort(sorted);
+        List<String> parts = new ArrayList<>();
+        int start = sorted.get(0);
+        int prev = start;
+        for (int i = 1; i <= sorted.size(); i++) {
+            int current = i < sorted.size() ? sorted.get(i) : Integer.MIN_VALUE;
+            if (current != prev + 1) {
+                parts.add(start == prev ? String.valueOf(start) : start + "-" + prev);
+                start = current;
+            }
+            prev = current;
+        }
+        return String.join(",", parts);
     }
 
     /** 粘贴链接解析:豆瓣 subject / TMDB tv(含 season) / Bangumi subject / 腾讯 cover /

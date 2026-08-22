@@ -20,6 +20,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -187,5 +188,39 @@ class MediaSubscriptionRemarksTest {
         Map<String, Object> episode17 = result.stream().filter(e -> e.get("episode").equals(17)).findFirst().orElseThrow();
         assertFalse((Boolean) episode17.get("present"));
         assertEquals("源损坏(待补源)", episode17.get("source"));
+    }
+
+    /** 时间轴同日多集合并:同订阅同时段一行(区间/离散压缩),不同订阅/不同时段不混。 */
+    @Test
+    void scheduleDayItemsMergeSameSubscriptionSameSlot() {
+        long t20 = java.time.LocalDate.of(2026, 8, 23).atTime(20, 0)
+                .atZone(java.time.ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli();
+        long t21 = t20 + 3600_000;
+        java.util.List<Map<String, Object>> items = new java.util.ArrayList<>(java.util.Arrays.asList(
+                item(1, "重器", 29, t20), item(1, "重器", 33, t20), item(1, "重器", 30, t20),
+                item(1, "重器", 32, t20), item(1, "重器", 31, t20),
+                item(2, "师兄太稳健", 10, t20), item(2, "师兄太稳健", 11, t20),
+                item(3, "午夜档", 5, t21), item(4, "待定", 0, t20)));
+
+        List<Map<String, Object>> merged = MediaSubscriptionService.mergeDayItems(items);
+
+        assertEquals(4, merged.size(), "5连集+2连集+2单条 → 4 行");
+        assertEquals("29-33", merged.get(0).get("episodes"));
+        assertEquals("重器", merged.get(0).get("name"));
+        assertEquals("10-11", merged.get(1).get("episodes"));
+        assertEquals("5", merged.get(2).get("episodes"));
+        assertNull(merged.get(3).get("episodes"), "集数未知(episode=0)不显示集数");
+        assertEquals("10,12-14,20", MediaSubscriptionService.compactEpisodes(java.util.Arrays.asList(12, 10, 20, 13, 14)));
+        assertEquals("7", MediaSubscriptionService.compactEpisodes(List.of(7)));
+    }
+
+    private static Map<String, Object> item(int subscriptionId, String name, int episode, long airTime) {
+        Map<String, Object> item = new java.util.LinkedHashMap<>();
+        item.put("subscriptionId", subscriptionId);
+        item.put("name", name);
+        item.put("episode", episode);
+        item.put("airTime", airTime);
+        item.put("paused", false);
+        return item;
     }
 }
