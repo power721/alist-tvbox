@@ -105,6 +105,8 @@ public class AppProperties {
         private int searchSize = 50;
         /** 追更搜索聚合模式:盘搜/TG-Search/电报网页同时跑并合并(而非回退链"够用即停") */
         private boolean aggregateSearch = true;
+        /** 站点源(玩偶/盘链/观影/蜗牛)加分:标题结构化,归属匹配与集数解析比 TG 自由文本可靠 */
+        private int siteSourceBonus = 12;
         /** 池枯竭(无任何可用候选)时的搜索条数:把召回面拉宽,别守着一池死判定 */
         private int exhaustedSearchSize = 150;
         /** 网盘限流后的退避(分钟):期内不再试挂该盘候选 */

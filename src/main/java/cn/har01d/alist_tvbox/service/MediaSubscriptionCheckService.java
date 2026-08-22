@@ -86,6 +86,16 @@ public class MediaSubscriptionCheckService {
     private static final long BAD_RELEASE_MIN_AGE_MS = 30 * 60_000L;
     /** 播放历史里的逻辑链接 msubep-{订阅}-{集},集号即观看进度 */
     private static final Pattern MSUBEP_EPISODE = Pattern.compile("msubep-\\d+-(\\d{1,4})");
+    /**
+     * 文件名里的发布日期戳。必须在扫集号之前剥掉 —— 末号规则取"最后一个 1~999 的数字",
+     * 而 {@code 01 [4K][HEVC.AAC][2026.08.21].mp4} 里的月(08)和日(21)都在这个区间且排在集号之后,
+     * 会把真正的集号 01 覆盖成 21。线上后果:同一目录三集全部解析成第 21 集(集数清单塌成 1 集),
+     * 播放请求第 1 集时清单里根本没有这个 key,报"已尝试 0 个源"。
+     */
+    private static final Pattern DATE_STAMP = Pattern.compile(
+            "(?:19|20)\\d{2}\\s*[.\\-/年]\\s*\\d{1,2}\\s*[.\\-/月]\\s*\\d{1,2}\\s*日?|\\b(?:19|20)\\d{6}\\b");
+    /** 目录名声明的季区间 第A-B季 / 第A~B季(单季由 TextUtils.parseTitleSeason 处理) */
+    private static final Pattern SEASON_RANGE = Pattern.compile("第\\s*(\\d{1,2})\\s*[-~至]\\s*(\\d{1,2})\\s*季");
     /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
     private static final Pattern TITLE_PROGRESS = Pattern.compile(
             "(?i)更新?至\\s*(\\d{1,3})|全\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*[-~至]\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,3})(?!\\d)");
@@ -1402,7 +1412,8 @@ public class MediaSubscriptionCheckService {
         }
         for (FsInfo file : files) {
             if (file.getType() == 1 && depth < appProperties.getSubscription().getMaxListDepth()
-                    && !EXTRA.matcher(file.getName()).find()) {
+                    && !EXTRA.matcher(file.getName()).find()
+                    && !otherSeasonDir(file.getName(), season)) {
                 collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, maxEpisodeBytes, refresh);
             }
         }
@@ -1438,10 +1449,35 @@ public class MediaSubscriptionCheckService {
         }
         for (FsInfo file : files) {
             if (file.getType() == 1 && depth < appProperties.getSubscription().getMaxListDepth()
-                    && !EXTRA.matcher(file.getName()).find()) {
+                    && !EXTRA.matcher(file.getName()).find()
+                    && !otherSeasonDir(file.getName(), season)) {
                 walk(site, season, path + "/" + file.getName(), depth + 1, episodes, maxEpisodeBytes);
             }
         }
+    }
+
+    /**
+     * 子目录名声明了别的季 → 整棵子树跳过。
+     * <p>
+     * 多季合集很常见(线上案例:第四季分享里带一个 {@code 第1-3季/} 目录,内含 52+26 集)。
+     * 那些文件名多半只写"第01集"、不写 SxxEyy,靠 {@link #parseEpisode} 的文件名级季过滤挡不住,
+     * 会直接冒充成目标季的集数。目录名是这里唯一可靠的季信号。
+     * <p>
+     * 只在<b>明确冲突</b>时跳过:目录声明单季且不等于目标季,或声明区间且目标季不在区间内。
+     * 无季标记的目录一律进入(常见的"剧名/4K/"这类结构不能误伤)。
+     */
+    static boolean otherSeasonDir(String name, Integer season) {
+        if (season == null || season <= 0 || StringUtils.isBlank(name)) {
+            return false;
+        }
+        Matcher range = SEASON_RANGE.matcher(name);
+        if (range.find()) {
+            int from = Integer.parseInt(range.group(1));
+            int to = Integer.parseInt(range.group(2));
+            return season < Math.min(from, to) || season > Math.max(from, to);
+        }
+        Integer declared = TextUtils.parseTitleSeason(name);
+        return declared != null && !declared.equals(season);
     }
 
     int parseEpisode(String name, Integer season) {
@@ -1461,6 +1497,7 @@ public class MediaSubscriptionCheckService {
             return ep >= 1 && ep <= 999 ? ep : -1;
         }
         String cleaned = TECH_TAGS.matcher(base).replaceAll(" ");
+        cleaned = DATE_STAMP.matcher(cleaned).replaceAll(" "); // 日期戳的月/日会被末号规则当成集号
         int episode = -1;
         Matcher numbers = NUMBER.matcher(cleaned);
         while (numbers.find()) {
@@ -1631,6 +1668,7 @@ public class MediaSubscriptionCheckService {
         try {
             for (Message message : extra) {
                 if (StringUtils.isNotBlank(message.getLink()) && links.add(message.getLink())) {
+                    message.setSourceKind(source); // 站点源标记,供打分加权
                     messages.add(message);
                 }
             }
@@ -1912,6 +1950,12 @@ public class MediaSubscriptionCheckService {
         if (type == 10 /* 百度,DriveId:分享本身免会员,人人可看 */) {
             result += 15;
             reasons.add("百度分享免会员+15");
+        }
+        // 站点源(玩偶/盘链/观影/蜗牛)的标题来自结构化卡片/详情页,剧名、季集、清晰度字段规整;
+        // TG 频道消息是自由文本,防审查变形、装饰前缀、夹带广告都多,归属匹配与集数解析的误判率更高。
+        if (StringUtils.isNotBlank(message.getSourceKind())) {
+            result += appProperties.getSubscription().getSiteSourceBonus();
+            reasons.add(message.getSourceKind() + "站点源+" + appProperties.getSubscription().getSiteSourceBonus());
         }
         if (ongoing) {
             if (type == 8 /* 115 分享码,见 DriveId */) {

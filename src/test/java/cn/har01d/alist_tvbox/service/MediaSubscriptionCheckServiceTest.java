@@ -73,6 +73,50 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(6, service.parseEpisode("剧名.2024.1080p.第06集.mkv", null));
     }
 
+    // ---------- 缺陷 10 回归:文件名里的日期戳不得被当成集号 ----------
+    // 线上事故(诛仙 第四季):目录里三个文件 01/02/03,全部解析成第 21 集 —— 末号规则取到了
+    // [2026.08.21] 里的"21"。集数清单从 3 集塌成 1 集,而播放请求第 1 集时清单里没有这个 key,
+    // 报"第 1 集暂无可用播放源(已尝试 0 个源)"。一个日期后缀同时造成漏集与全盘不可播。
+
+    @Test
+    void dateStampInFileNameIsNotMistakenForEpisode() {
+        assertEquals(1, service.parseEpisode("01 [4K][HEVC.AAC][2026.08.21].mp4", null));
+        assertEquals(2, service.parseEpisode("02~[4K][HEVC.AAC][2026.08.21].mp4", null));
+        assertEquals(3, service.parseEpisode("03~[4K][HEVC.AAC][2026.08.21].mp4", null));
+        // 其它常见日期写法
+        assertEquals(7, service.parseEpisode("剧名 第07集 2026-08-21.mkv", null));
+        assertEquals(7, service.parseEpisode("剧名 第07集 2026年08月21日.mkv", null));
+        assertEquals(7, service.parseEpisode("剧名 第07集 20260821.mkv", null));
+    }
+
+    @Test
+    void dateStampStrippingKeepsRealEpisodeNumbers() {
+        // 不能矫枉过正:日期之外的数字仍按末号规则取
+        assertEquals(12, service.parseEpisode("剧名.2024.1080p.第12集.mkv", null));
+        assertEquals(5, service.parseEpisode("Show.S01E05.2160p.mkv", 1));
+    }
+
+    // ---------- 缺陷 11 回归:多季合集目录必须按季隔离 ----------
+    // 同一分享里带 第1-3季/ 目录(52+26 集),那些文件多半只写"第01集"不写 SxxEyy,
+    // 文件名级季过滤挡不住,会直接冒充目标季的集数。目录名是唯一可靠的季信号。
+
+    @Test
+    void subdirectoryDeclaringAnotherSeasonIsSkipped() {
+        assertTrue(MediaSubscriptionCheckService.otherSeasonDir("第1-3季", 4));
+        assertTrue(MediaSubscriptionCheckService.otherSeasonDir("第1-2季.4K.全52集", 4));
+        assertTrue(MediaSubscriptionCheckService.otherSeasonDir("第3季 (2025)4K.全26集", 4));
+        assertTrue(MediaSubscriptionCheckService.otherSeasonDir("第一季", 4));
+    }
+
+    @Test
+    void subdirectoryOfTargetOrUnknownSeasonIsKept() {
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("第四季 (最终季)", 4));
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("第1-4季 合集", 4)); // 区间包含目标季
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("4K", 4));          // 无季标记不误伤
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("【Z】诛丨仙 第四季 (最终季)", 4));
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("第一季", null));    // 未指定季不过滤
+    }
+
     // ---------- 调度:播出短轮窗口与退避封顶 ----------
 
     @Test
