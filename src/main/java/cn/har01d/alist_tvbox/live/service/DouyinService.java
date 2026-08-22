@@ -50,6 +50,12 @@ public class DouyinService implements LivePlatform {
     private final AtomicInteger blockCount = new AtomicInteger();
     private static final long RISK_CONTROL_COOLDOWN_MS = 5 * 60 * 1000L;
     private static final int MAX_BLOCK_COUNT = 4;
+    /** enter 接口空 body 是风控典型特征(签名成功仍返回空)。连续空响应达到阈值后,冷却窗口内
+     *  跳过 enter 直接走房间页 HTML,省掉每房间一次注定失败的签名请求;窗口结束自动探测,恢复即回到 API 优先。 */
+    private final AtomicInteger apiEmptyCount = new AtomicInteger();
+    private final AtomicLong apiSkipUntil = new AtomicLong();
+    private static final int API_EMPTY_THRESHOLD = 3;
+    private static final long API_SKIP_COOLDOWN_MS = 30 * 60 * 1000L;
     /** web 管理端配置的用户 cookie 存储键,优先于匿名 ttwid。 */
     public static final String COOKIE_SETTING = "douyin_cookie";
 
@@ -75,10 +81,12 @@ public class DouyinService implements LivePlatform {
         log.info("抖音签名API地址: {}", signApiUrl);
     }
 
-    /** web 端保存/清除用户 cookie 后调用:丢弃内存态并解除风控冷却,立即用新身份重试。 */
+    /** web 端保存/清除用户 cookie 后调用:丢弃内存态并解除风控与 enter 跳过冷却,立即用新身份重试。 */
     public void invalidateCookie() {
         cookie = null;
         blockedUntil.set(0);
+        apiEmptyCount.set(0);
+        apiSkipUntil.set(0);
     }
 
     /** 用户在 web 管理端配置的 cookie,未配置返回 null。 */
@@ -475,6 +483,10 @@ public class DouyinService implements LivePlatform {
     }
 
     private JsonNode getRoomDataByApi(String webRid) {
+        if (isApiSkipped()) {
+            log.debug("抖音enter接口跳过冷却中,直接走房间页: {}", webRid);
+            return null;
+        }
         try {
             UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(ROOM_ENTER_API)
                     .queryParam("aid", "6383")
@@ -506,12 +518,14 @@ public class DouyinService implements LivePlatform {
             String body = response.getBody();
             if (body == null || body.isEmpty()) {
                 log.debug("抖音房间API返回空响应: {}", webRid);
+                markApiEmpty();
                 return null;
             }
 
             JsonNode root = objectMapper.readTree(body);
             JsonNode dataList = root.path("data");
             if (dataList.isArray() && !dataList.isEmpty()) {
+                clearApiSkip();
                 var result = objectMapper.createObjectNode();
                 result.set("room", dataList.get(0));
                 result.set("user", root.path("data").path("user"));
@@ -838,6 +852,25 @@ public class DouyinService implements LivePlatform {
             blockCount.set(0);
             log.info("抖音接口已恢复正常");
         }
+    }
+
+    private boolean isApiSkipped() {
+        return System.currentTimeMillis() < apiSkipUntil.get();
+    }
+
+    /** 计数封顶在阈值:跳过窗口过期后的首次探测若仍空响应立即续期,每个窗口只浪费一次探测。 */
+    private void markApiEmpty() {
+        int count = Math.min(apiEmptyCount.incrementAndGet(), API_EMPTY_THRESHOLD);
+        if (count == API_EMPTY_THRESHOLD && apiSkipUntil.get() <= System.currentTimeMillis()) {
+            apiSkipUntil.set(System.currentTimeMillis() + API_SKIP_COOLDOWN_MS);
+            log.info("抖音enter接口连续{}次空响应,{}分钟内跳过enter直接走房间页HTML", API_EMPTY_THRESHOLD, API_SKIP_COOLDOWN_MS / 60000);
+        }
+    }
+
+    /** enter 接口重新拿到数据即解除跳过冷却,恢复 API 优先。 */
+    private void clearApiSkip() {
+        apiEmptyCount.set(0);
+        apiSkipUntil.set(0);
     }
 
     private HttpHeaders createHeaders() {
