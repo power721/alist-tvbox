@@ -124,6 +124,8 @@ public class MediaSubscriptionCheckService {
     /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
     private static final Pattern TITLE_PROGRESS = Pattern.compile(
             "(?i)更新?至\\s*(\\d{1,3})|全\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*[-~至]\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,3})(?!\\d)");
+    /** 标题/元数据里的年份(前后无数字边界,防 1080p/60fps/长数字段误配) */
+    private static final Pattern YEAR_MARK = Pattern.compile("(?<!\\d)(19[89]\\d|20[0-2]\\d)(?!\\d)");
     private static final String INDEX_TEMPLATE_NAME = "追剧";
     /** 补缺源内部目录(藏于 /追剧/ 下的点目录,用户视角每部剧只有一个文件夹入口) */
     private static final String GAP_SOURCES_ROOT = cn.har01d.alist_tvbox.util.Constants.SUBSCRIPTION_MOUNT_ROOT + ".sources/";
@@ -758,6 +760,72 @@ public class MediaSubscriptionCheckService {
                 .findNumbersByResourceIdAndStatesIn(resource.getId(), LIVE_STATES));
     }
 
+    /** 候选池统一视图(探测/补缺/主盘/线路/换源全走这里):非挂载候选按分数降序;
+     * 附年份门禁 —— 标题明确标注其它年份的资源在这里就出局,同名/前缀异剧
+     * (「悬案」2026 vs「悬案解码 Dept. Q (2025)」)不再被逐个试挂。 */
+    List<MediaSubscriptionResource> candidatesOrdered(MediaSubscription subscription) {
+        long now = System.currentTimeMillis();
+        Integer metaYear = metaYear(subscription);
+        List<String> names = matchNames(subscription);
+        return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
+                .filter(r -> !MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState()))
+                .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()) || isBadCooled(r, now))
+                .filter(r -> titleYearMatches(metaYear, names, r.getTitle()))
+                .toList();
+    }
+
+    /** 订阅元数据年份(门禁基准):provider 侧有缓存,取不到/未绑元数据返回 null(门禁关闭)。 */
+    Integer metaYear(MediaSubscription subscription) {
+        if (StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
+            return null;
+        }
+        try {
+            MetadataDetails details = metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(),
+                    subscription.getSeason());
+            if (details == null) {
+                return null;
+            }
+            Matcher matcher = YEAR_MARK.matcher(StringUtils.defaultString(details.getYear()));
+            return matcher.find() ? Integer.parseInt(matcher.group(1)) : null;
+        } catch (Exception e) {
+            log.debug("meta year for subscription {} unavailable: {}", subscription.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 年份门禁:元数据年份缺失,或标题不标注年份 → 放行(零误伤);标题标注了年份但无一相符 →
+     * 再看剧名命中方式 —— <b>整词命中</b>(归一化标题的独立词 == 剧名/别名)放行:动漫全系列包常标
+     * 第一季年代(「鬼灭之刃 (2019)」装全部季),同名作年代歧义交给季过滤/探测定夺;
+     * 仅<b>子串嵌在更长词里</b>(「悬案」⊂「悬案解码」)才是前缀异剧,拒。
+     */
+    static boolean titleYearMatches(Integer expected, List<String> names, String title) {
+        if (expected == null || StringUtils.isBlank(title)) {
+            return true;
+        }
+        Matcher matcher = YEAR_MARK.matcher(title);
+        boolean anyYear = false;
+        while (matcher.find()) {
+            anyYear = true;
+            if (Integer.parseInt(matcher.group(1)) == expected) {
+                return true;
+            }
+        }
+        if (!anyYear) {
+            return true;
+        }
+        if (names != null) {
+            Set<String> tokens = new TreeSet<>(List.of(normalizeForMatch(title).split(" ")));
+            for (String name : names) {
+                String n = normalizeForMatch(name);
+                if (n.length() >= 2 && tokens.contains(n)) {
+                    return true; // 同名作整词命中:年份标的是首季/系列年代,放行
+                }
+            }
+        }
+        return false;
+    }
+
     /** 主源资源:挂在订阅固定路径上的 MOUNTED 资源;行丢失但 share 还在时按 shareId 收养自愈。 */
     MediaSubscriptionResource primaryResource(MediaSubscription subscription) {
         if (StringUtils.isBlank(subscription.getMountPath())) {
@@ -1278,14 +1346,6 @@ public class MediaSubscriptionCheckService {
         Integer aired = subscription.getOfficialEpisodes();
         return aired != null && aired > 0 && !missing.isEmpty()
                 && missing.stream().allMatch(episode -> episode.equals(aired));
-    }
-
-    private List<MediaSubscriptionResource> candidatesOrdered(MediaSubscription subscription) {
-        long now = System.currentTimeMillis();
-        return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
-                .filter(r -> !MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState()))
-                .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()) || isBadCooled(r, now))
-                .toList();
     }
 
     /** 主网盘:订阅级 main_drives 覆盖 > 全局 Setting msub_main_drives(均为逗号分隔分享类型码,取前 2)。
@@ -2384,6 +2444,7 @@ public class MediaSubscriptionCheckService {
 
         MediaSubscriptionFilter filter = parseFilter(subscription);
         List<String> names = matchNames(subscription);
+        Integer metaYear = metaYear(subscription);
         int irrelevant = 0;
         List<Scored> scored = new ArrayList<>();
         String activeLink = existing.stream()
@@ -2403,6 +2464,10 @@ public class MediaSubscriptionCheckService {
             }
             if (!names.isEmpty() && !matchesTitle(names, title)) {
                 irrelevant++; // 标题与剧名/别名均不沾边,大概率是同名召回噪声,挡在池外省去挂载试错
+                continue;
+            }
+            if (!titleYearMatches(metaYear, names, title)) {
+                irrelevant++; // 标题标注年份与元数据年份全不符,且剧名仅子串嵌入(前缀异剧)
                 continue;
             }
             Integer titleSeason = parseTitleSeason(title);

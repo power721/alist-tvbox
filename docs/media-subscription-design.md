@@ -49,6 +49,8 @@
 
 > **多源搜索五路并发(2026-08-22 同日)**:线上观测 fillPool 37s —— TG 聚合(PanSou/TG-Search/网页,内部已并行)返回后,玩偶→盘链→观影→蜗牛四个站点源**逐个串行排队**,总时长=各源之和。`searchAllSources` 改五路 `CompletableFuture` 并发(专用 5 线程池 `msub-search`,@PreDestroy 关闭):总时长=最慢一路;各源内部超时之外加 90s `orTimeout` 硬顶;单源失败静默为空不影响其它源;合并顺序与去重语义不变(TG 在前先见先得)。preview 路径(50 条、cached)同步受益。
 
+> **标题归属年份门禁(2026-08-22 20:31 续,同日按动漫形态修正)**:误杀事故的次生灾害 —— 主源被判死后 `ensureSource` 自动换源,顶上固定路径的是「悬案解码 第一季 Dept. Q (2025)」(英剧 9 集):标题「悬案**解码**」包含关键词「悬案」,`matchesTitle` 归一化包含(≥2 字)被子串命中骗过,季过滤也拦不住(都是第一季)。修复:**年份门禁 + 词边界豁免** —— `metaYear()` 从已绑元数据(`MetadataDetails.year`,provider 缓存)取基准年;标题提取年份(`(?<!\d)(19[89]\d|20[0-2]\d)(?!\d)`,边界防 1080p/60fps 误配),**年份全不符时看剧名命中方式**:整词命中(归一化标题独立词 == 剧名/别名)放行 —— 动漫全系列包常标**第一季年代**(「鬼灭之刃 (2019)」装全部季),同名作年代歧义交给季过滤/探测定夺;仅子串嵌在更长词里(悬案⊂悬案解码)才是前缀异剧,拒。元数据未绑/无年份、或标题不标注年份 → 放行,零误伤。落点:①fillPool 入池;②`candidatesOrdered` 统一过滤(补缺/主盘/线路/换源共用视图,错资源连探测都不进)。score() 软加分不动。单测:门禁六形态/动漫首季年代全系列包放行/同名翻拍放行/候选过滤(2025 前缀异剧出局)。限制:未绑元数据无门禁;空格分词的「悬案 解码」写法可绕过(罕见,接受);标题谎标年份的整词命中资源放行(名字层面无法区分)。
+
 > 关键类:`MediaSubscriptionService`(CRUD/内容/合并播放/收件箱/导出导入/动作)、`MediaSubscriptionCheckService`(巡检/换源/补缺/探测/打分/通知)、`MediaSubscriptionTransferService`(转存/归档)、`web/MediaSubscriptionController`、`web/TelegramController`(msub 分支/操作组端点/首页分类)、`service/metadata/*`、迁移 `V20__MediaSubscription` + `V21__MediaSubscriptionMeta` + `V22__MediaSubscriptionMetaFix`(V21 曾因带引号小写列名在 H2 上导致 Column not found,V22 自愈,详见 `MediaSubscriptionMigrationTest`)。
 > 留待:集→源映射仅动态计算+接口固化展示(未落表,设计标注条件性);搜索成功率等指标在追剧页 `/stats`(未嵌入 SystemInfo 页);转存空间水位依赖事后校验发现(未做转存前预估)。
 >

@@ -1129,7 +1129,6 @@ class MediaSubscriptionCheckServiceTest {
         return response;
     }
 
-    /** 失效确认/集源行分支的 mock 夹具:订阅已挂主源(shareId=5),仓储行为由各测试定制。 */
     // ---------- 画质标记惩罚(线上「悬案」主源:Season 1（HQ.DV.60fps）14 集 + Season 1（SDR.50fps）17 集,
     // 两个季文件夹、文件名不带标记,先到先得选中 DV 版 → 整屏泛绿) ----------
 
@@ -1287,6 +1286,87 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verify(fixture.shareService).deleteShare(77); // 临时挂载窗口用后即删
     }
 
+    // ---------- 年份门禁(2026-08-22 20:31):「悬案」2026 的池子被「悬案解码 Dept. Q (2025)」
+    // 以子串包含骗过归属校验并挂成主源 —— 标题标注年份与元数据年份全不符即拒 ----------
+
+    @Test
+    void titleYearGateForms() {
+        Integer expected = 2026;
+        List<String> names = List.of("悬案");
+        assertTrue(MediaSubscriptionCheckService.titleYearMatches(null, names, "随便什么 2025"), "未绑元数据年份:门禁关闭");
+        assertTrue(MediaSubscriptionCheckService.titleYearMatches(expected, names, "悬案 4K 高码率 17集全"), "标题无年份:放行");
+        assertTrue(MediaSubscriptionCheckService.titleYearMatches(expected, names, "悬案 (2026) 4K [17集全]"), "年份相符:放行");
+        assertTrue(MediaSubscriptionCheckService.titleYearMatches(expected, names, "2025年度盘点 悬案 (2026) 4K"),
+                "标题含多个年份且其一相符:放行");
+        assertFalse(MediaSubscriptionCheckService.titleYearMatches(expected, names,
+                "【悬疑迷必看】2025悬疑剧大赏（4K收藏！）[英剧]悬案解码 第一季 Dept. Q Season 1 (2025) 4k中字百度"),
+                "年份全不符且剧名仅子串嵌入更长词(悬案⊂悬案解码):拒");
+        assertTrue(MediaSubscriptionCheckService.titleYearMatches(expected, names, "悬案 1080p 60fps 2160p"),
+                "分辨率/帧率数字不得误配为年份");
+    }
+
+    @Test
+    void titleYearGateAllowsFranchisePackWithFirstSeasonYear() {
+        // 动漫多季:全系列包常标第一季年代,剧名整词命中 = 同名作,放行(交给季过滤/探测定夺)
+        List<String> names = List.of("鬼灭之刃 锻刀村篇", "鬼灭之刃");
+        assertTrue(MediaSubscriptionCheckService.titleYearMatches(2023, names, "鬼灭之刃 (2019) 1-26季 合集 4K"),
+                "整词命中剧名+首季年代:放行");
+        assertTrue(MediaSubscriptionCheckService.titleYearMatches(2023, names, "鬼灭之刃 (2019) 全集"),
+                "无季标记的全系列包:放行");
+        // 同名翻拍/异版(整词命中但年代不符)也放行:名字层面无法区分,季过滤/探测兜底
+        assertTrue(MediaSubscriptionCheckService.titleYearMatches(2026, List.of("悬案"), "悬案 (1999) 国产老版 全20集"));
+        // 反例:整词命中不了(嵌在更长词里)且年份不符 → 仍拒
+        assertFalse(MediaSubscriptionCheckService.titleYearMatches(2023, List.of("鬼灭之刃 锻刀村篇"),
+                "鬼灭之刃花街篇 (2021) 4K"), "别名未收录的花街篇+年代不符:拒");
+    }
+
+    @Test
+    void candidatesOrderedFiltersWrongYearResources() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setMetaProvider("douban");
+        fixture.subscription.setMetaId("36624136");
+        MetadataDetails details = new MetadataDetails();
+        details.setYear("2026");
+        Mockito.when(fixture.metadataService.details(Mockito.anyString(), Mockito.anyString(), Mockito.any()))
+                .thenReturn(details);
+        MediaSubscriptionResource wrongYear = new MediaSubscriptionResource();
+        wrongYear.setId(31);
+        wrongYear.setSubscriptionId(1);
+        wrongYear.setTitle("[英剧]悬案解码 第一季 Dept. Q Season 1 (2025) 4k中字");
+        wrongYear.setType(10);
+        wrongYear.setScore(120);
+        wrongYear.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource rightYear = new MediaSubscriptionResource();
+        rightYear.setId(32);
+        rightYear.setSubscriptionId(1);
+        rightYear.setTitle("悬案 (2026) 4K 高码率 [17集全]");
+        rightYear.setType(10);
+        rightYear.setScore(108);
+        rightYear.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource noYear = new MediaSubscriptionResource();
+        noYear.setId(33);
+        noYear.setSubscriptionId(1);
+        noYear.setTitle("悬案 4K 高码率 更17集");
+        noYear.setType(5);
+        noYear.setScore(100);
+        noYear.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource franchisePack = new MediaSubscriptionResource();
+        franchisePack.setId(34);
+        franchisePack.setSubscriptionId(1);
+        franchisePack.setTitle("测试剧 (2015) 1-3季 合集 4K"); // 动漫全系列包:首季年代+剧名整词命中
+        franchisePack.setType(10);
+        franchisePack.setScore(95);
+        franchisePack.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(wrongYear, rightYear, noYear, franchisePack));
+
+        List<MediaSubscriptionResource> candidates = fixture.service.candidatesOrdered(fixture.subscription);
+
+        assertEquals(List.of(32, 33, 34), candidates.stream().map(MediaSubscriptionResource::getId).toList(),
+                "前缀异剧(2025 悬案解码)被挡,年份相符/无年份/首季年代全系列包照常入列");
+    }
+
+    /** 失效确认/集源行分支的 mock 夹具:订阅已挂主源(shareId=5),仓储行为由各测试定制。 */
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
         final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
@@ -1300,6 +1380,7 @@ class MediaSubscriptionCheckServiceTest {
         final AListService aListService = Mockito.mock(AListService.class);
         final TelegramService telegramService = Mockito.mock(TelegramService.class);
         final ShareService shareService = Mockito.mock(ShareService.class);
+        final MetadataService metadataService = Mockito.mock(MetadataService.class);
         final MediaSubscriptionCheckService service;
         final MediaSubscription subscription = new MediaSubscription();
 
@@ -1311,7 +1392,7 @@ class MediaSubscriptionCheckServiceTest {
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),
                     Mockito.mock(IndexTemplateRepository.class), settingRepository,
                     shareService, aListService, telegramService, null, null, null, null,
-                    Mockito.mock(MetadataService.class), Mockito.mock(AutoUpdateExecutor.class),
+                    metadataService, Mockito.mock(AutoUpdateExecutor.class),
                     Mockito.mock(cn.har01d.alist_tvbox.entity.HistoryRepository.class),
                     appProperties, new ObjectMapper());
             subscription.setId(1);
