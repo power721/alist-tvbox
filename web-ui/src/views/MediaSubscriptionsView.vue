@@ -344,7 +344,7 @@
 
     <el-dialog v-model="notifyVisible" title="追剧设置" width="600">
       <el-form label-width="140">
-        <el-tabs>
+        <el-tabs v-model="notifyTab">
           <el-tab-pane label="通用" name="general">
         <el-form-item label="全局主网盘">
           <el-select v-model="notifyForm.mainDrives" multiple placeholder="选 1-2 个,按优先级排序" style="width: 100%">
@@ -623,6 +623,7 @@ const importVisible = ref(false)
 const importText = ref('')
 const importing = ref(false)
 const notifyVisible = ref(false)
+const notifyTab = ref('general')
 const notifyForm = ref({
   botToken: '',
   chatId: '',
@@ -1137,6 +1138,7 @@ const importSubs = () => {
 }
 
 const openNotify = () => {
+  notifyTab.value = 'general'
   axios.get('/api/settings').then(response => {
     const settings = response.data || {}
     notifyForm.value.botToken = settings['msub_telegram_bot_token'] || ''
