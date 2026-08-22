@@ -6,4 +6,6 @@ import java.util.List;
 
 public interface IndexTemplateRepository extends JpaRepository<IndexTemplate, Integer> {
     List<IndexTemplate> findByScheduledTrue();
+
+    boolean existsByName(String name);
 }

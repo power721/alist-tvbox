@@ -64,13 +64,14 @@ public class PlaybackSyncService {
     private static final Set<String> TELEGRAM_SITE_KEYS = Set.of(
             "csp_TgDouBan", "csp_TgSearch", "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup");
     private static final Set<String> BROWSE_SITE_KEYS = Set.of("csp_AList", "csp_XiaoYa");
-    // 网页端可直接播放的站点 key:电报系 + 浏览系 + atv-player(TvBox)/电报频道。供「网页播放」筛选。
+    // 网页端可直接播放的站点 key:电报系 + 浏览系 + 追剧媒体库 + atv-player(TvBox)/电报频道。供「网页播放」筛选。
     private static final Set<String> WEB_PLAYABLE_SITE_KEYS;
     static {
         Set<String> keys = new HashSet<>(TELEGRAM_SITE_KEYS);
         keys.addAll(BROWSE_SITE_KEYS);
         keys.add("TvBox");
         keys.add("csp_TgChannel");
+        keys.add("csp_Media");
         WEB_PLAYABLE_SITE_KEYS = Set.copyOf(keys);
     }
 

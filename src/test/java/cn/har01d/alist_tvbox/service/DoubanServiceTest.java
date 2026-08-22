@@ -116,6 +116,28 @@ class DoubanServiceTest {
     }
 
     @Test
+    void getByNameResolvesDbidTagDirectly() {
+        Movie tagged = movie("一念永恒", 2020);
+        when(movieRepository.findById(37448094)).thenReturn(Optional.of(tagged));
+
+        // 转存目录自带的 [dbid-x] 标记:精确命中,不再走名称匹配
+        assertThat(doubanService.getByName("一念永恒-完结季 [dbid-37448094]")).isSameAs(tagged);
+        verify(movieRepository, never()).getByName(anyString());
+    }
+
+    @Test
+    void getByNameStripsMetaTagWhenIdMissesLocally() {
+        when(movieRepository.findById(37448094)).thenReturn(Optional.empty());
+        when(aliasRepository.findById(anyString())).thenReturn(Optional.empty());
+        Movie movie = movie("一念永恒", 2020);
+        when(movieRepository.getByName(anyString())).thenReturn(List.of(movie));
+
+        // 本地库无该豆瓣 id:剥离标记后按名称匹配,搜索词不再被 dbid 污染
+        assertThat(doubanService.getByName("一念永恒-完结季 [dbid-37448094]", 2020)).isSameAs(movie);
+        verify(movieRepository).getByName(org.mockito.ArgumentMatchers.argThat(n -> n != null && !n.contains("dbid")));
+    }
+
+    @Test
     void getByNameUsesEmbeddedYearAfterCleaningSourceTitle() {
         Movie old = movie("天才，女友", 2018);
         Movie current = movie("天才，女友", 2026);

@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +53,26 @@ class TmdbServiceTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void getByNameResolvesTmdbIdTagFromLocalLibrary() {
+        TmdbService service = new TmdbService(
+                tmdbRepository,
+                tmdbMetaRepository,
+                metaRepository,
+                settingRepository,
+                siteService,
+                taskService,
+                new RestTemplateBuilder(),
+                new ObjectMapper()
+        );
+        Tmdb tagged = movie("一念永恒");
+        when(tmdbRepository.findByTypeAndTmdbId("tv", 456)).thenReturn(java.util.Optional.of(tagged));
+
+        // 追剧转存目录 [tmdbid-x] / 削刮命名 {tmdbid-x}:本地库直读命中
+        assertEquals(tagged, service.getByName("一念永恒 [tmdbid-456]"));
+        verify(tmdbRepository, never()).getByName(anyString());
+    }
 
     @Test
     void getByNameCleansAlternateTitleAndCastSuffix() {

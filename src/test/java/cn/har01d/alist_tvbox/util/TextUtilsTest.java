@@ -17,6 +17,29 @@ import static org.junit.jupiter.api.Assertions.*;
 class TextUtilsTest {
 
     @Test
+    void parseMetaIdTagSupportsBracketAndBraceForms() {
+        // 追剧转存目录方括号格式
+        assertEquals("37448094", TextUtils.parseMetaIdTag("一念永恒-完结季 [dbid-37448094]", "dbid"));
+        assertEquals("123", TextUtils.parseMetaIdTag("剧名 [tmdbid-123]", "tmdbid"));
+        assertEquals("456", TextUtils.parseMetaIdTag("番剧[bgmid-456]", "bgmid"));
+        // 削刮命名花括号格式
+        assertEquals("123", TextUtils.parseMetaIdTag("剧名 {tmdbid-123}", "tmdbid"));
+        // key 不匹配 / 无标记 / 空输入
+        assertNull(TextUtils.parseMetaIdTag("剧名 [dbid-1]", "tmdbid"));
+        assertNull(TextUtils.parseMetaIdTag("剧名 无标记", "dbid"));
+        assertNull(TextUtils.parseMetaIdTag(null, "dbid"));
+    }
+
+    @Test
+    void stripMetaIdTagsRemovesAllMarkers() {
+        assertEquals("一念永恒-完结季  ", TextUtils.stripMetaIdTags("一念永恒-完结季 [dbid-37448094]"));
+        String stripped = TextUtils.stripMetaIdTags("剧 [dbid-1][tmdbid-2]");
+        assertFalse(stripped.contains("dbid"));
+        assertFalse(stripped.contains("tmdbid"));
+        assertNull(TextUtils.stripMetaIdTags(null));
+    }
+
+    @Test
     public void test() {
         String name = TextUtils.updateName("2010.虹猫蓝兔勇者归来.99集全.720p");
         log.info("{}", name);
@@ -127,5 +150,58 @@ class TextUtilsTest {
         System.out.println(TextUtils.minDistance("03", "02"));
         System.out.println(TextUtils.minDistance("03", "03"));
         System.out.println(TextUtils.minDistance("03", "04"));
+    }
+
+    // ---------- 季号解析与兜底(自 MediaSubscriptionCheckService 迁入) ----------
+
+    @Test
+    void parseTitleSeasonVariants() {
+        assertEquals(2, TextUtils.parseTitleSeason("剧名 第二季 全12集"));
+        assertEquals(2, TextUtils.parseTitleSeason("剧名 S02 更新至08"));
+        assertEquals(2, TextUtils.parseTitleSeason("Show S02E05 1080p"));
+        assertEquals(3, TextUtils.parseTitleSeason("Show Season 3"));
+        assertEquals(12, TextUtils.parseTitleSeason("第12季 全24集"));
+        assertEquals(4, TextUtils.parseTitleSeason("诛仙 第四季"));
+        assertNull(TextUtils.parseTitleSeason("剧名 第1-2季 合集")); // 跨季区间不判定
+        assertNull(TextUtils.parseTitleSeason("剧名 第一季+第二季 合集"));
+        assertNull(TextUtils.parseTitleSeason("剧名 更新至08集"));
+        assertNull(TextUtils.parseTitleSeason(null));
+    }
+
+    @Test
+    void parseChineseNumberConversion() {
+        assertEquals(1, TextUtils.parseChineseNumber("一"));
+        assertEquals(4, TextUtils.parseChineseNumber("四"));
+        assertEquals(10, TextUtils.parseChineseNumber("十"));
+        assertEquals(11, TextUtils.parseChineseNumber("十一"));
+        assertEquals(21, TextUtils.parseChineseNumber("二十一"));
+        assertEquals(0, TextUtils.parseChineseNumber("百"));
+    }
+
+    @Test
+    void stripSeasonSuffixYieldsBareShowName() {
+        // 缺陷 5:剧名带季号后缀时,裸剧名必须能被还原出来参与匹配
+        assertEquals("诛仙", TextUtils.stripSeasonSuffix("诛仙 第四季"));
+        assertEquals("苍兰诀", TextUtils.stripSeasonSuffix("苍兰诀 第2季"));
+        assertEquals("Show", TextUtils.stripSeasonSuffix("Show Season 3"));
+        assertEquals("Show", TextUtils.stripSeasonSuffix("Show S02"));
+        // 无季号标记:原样返回
+        assertEquals("诛仙", TextUtils.stripSeasonSuffix("诛仙"));
+        // 剥完为空:不返回空串(否则会变成"匹配一切")
+        assertEquals("第四季", TextUtils.stripSeasonSuffix("第四季"));
+        assertNull(TextUtils.stripSeasonSuffix(null));
+    }
+
+    @Test
+    void resolveSeasonFallsBackToNameWhenDefaulted() {
+        // 缺陷 8:片单追更硬编码 season=1,剧名却写着第四季 —— 以剧名为准
+        assertEquals(4, TextUtils.resolveSeason(1, "诛仙 第四季"));
+        assertEquals(4, TextUtils.resolveSeason(null, "诛仙 第四季"));
+        // 用户显式指定的非默认值优先(不猜测用户意图)
+        assertEquals(2, TextUtils.resolveSeason(2, "诛仙 第四季"));
+        // 剧名无季号标记:保持原值
+        assertEquals(1, TextUtils.resolveSeason(1, "诛仙"));
+        assertNull(TextUtils.resolveSeason(null, "诛仙"));
+        assertNull(TextUtils.resolveSeason(null, null));
     }
 }

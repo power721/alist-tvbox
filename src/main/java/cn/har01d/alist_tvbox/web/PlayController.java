@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.entity.PlayUrl;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
+import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.ProxyService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
@@ -29,15 +30,18 @@ public class PlayController {
     private final BiliBiliService biliBiliService;
     private final SubscriptionService subscriptionService;
     private final ProxyService proxyService;
+    private final MediaSubscriptionService mediaSubscriptionService;
 
     public PlayController(TvBoxService tvBoxService,
                           BiliBiliService biliBiliService,
                           SubscriptionService subscriptionService,
-                          ProxyService proxyService) {
+                          ProxyService proxyService,
+                          MediaSubscriptionService mediaSubscriptionService) {
         this.tvBoxService = tvBoxService;
         this.biliBiliService = biliBiliService;
         this.subscriptionService = subscriptionService;
         this.proxyService = proxyService;
+        this.mediaSubscriptionService = mediaSubscriptionService;
     }
 
     @RequestMapping(value = "/p/{token}/{id}")
@@ -77,6 +81,20 @@ public class PlayController {
 
         if (StringUtils.isNotBlank(bvid)) {
             return biliBiliService.getPlayUrl(bvid, dash, client);
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith("msubep-")) {
+            // 追剧逻辑集 msubep-{subId}-{集}:实时选源(转存>主源>补缺)并自动回退,用户无感知
+            String[] parts = id.split("-");
+            if (parts.length < 3) {
+                throw new BadRequestException("播放参数格式不正确");
+            }
+            int uid = mediaSubscriptionService.resolveUid(token);
+            try {
+                return mediaSubscriptionService.playEpisode(uid, Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), client, type);
+            } catch (NumberFormatException e) {
+                throw new BadRequestException("播放参数格式不正确", e);
+            }
         }
 
         if (StringUtils.isNotBlank(id)) {

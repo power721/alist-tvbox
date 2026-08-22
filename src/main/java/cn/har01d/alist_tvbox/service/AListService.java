@@ -276,6 +276,63 @@ public class AListService {
         logError(response);
     }
 
+    /** 创建目录(已存在时 AList 返回 500,调用方自行容忍)。 */
+    public void mkdir(Site site, String path) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("path", path);
+        String url = getUrl(site) + "/api/fs/mkdir";
+        log.debug("call api: {} request: {}", url, data);
+        LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
+        logError(response);
+    }
+
+    /** 提交跨存储复制任务(异步,AList copy task);成功返回 true。 */
+    public boolean copy(Site site, String srcDir, String dstDir, List<String> names) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("src_dir", srcDir);
+        data.put("dst_dir", dstDir);
+        data.put("names", names);
+        data.put("overwrite", false);
+        String url = getUrl(site) + "/api/fs/copy";
+        log.info("submit copy task: {} -> {} ({} files)", srcDir, dstDir, names.size());
+        LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
+        logError(response);
+        return true;
+    }
+
+    /**
+     * 轮询 AList copy 任务直至全部完成或超时。
+     *
+     * @return true = 无未完成任务(视为完成;失败靠调用方事后校验目标文件发现)
+     */
+    public boolean awaitCopyTasks(Site site, long timeoutMillis) {
+        String url = getUrl(site) + "/api/admin/task/copy/undone";
+        String token = login(site); // 轮询期间复用同一 token,避免每 3s 登录一次
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                HttpHeaders headers = new HttpHeaders();
+                headers.set(HttpHeaders.AUTHORIZATION, token);
+                ResponseEntity<com.fasterxml.jackson.databind.JsonNode> response =
+                        restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(null, headers),
+                                com.fasterxml.jackson.databind.JsonNode.class);
+                var content = response.getBody() == null ? null : response.getBody().path("data").path("content");
+                if (content == null || !content.isArray() || content.isEmpty()) {
+                    return true;
+                }
+                log.info("copy tasks running: {}", content.size());
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (Exception e) {
+                log.warn("poll copy tasks failed: {}", e.getMessage());
+                return false;
+            }
+        }
+        return false;
+    }
+
     public FsDetail getFile(Site site, String path) {
         int version = getVersion(site);
         if (version == 2) {

@@ -49,7 +49,8 @@ public class WebSecurityConfiguration {
                                 "/live/follow",
                                 "/live/unfollow",
                                 "/live/*/follow",
-                                "/live/*/unfollow"
+                                "/live/*/unfollow",
+                                "/tg-search/*/msub/*"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(
@@ -67,6 +68,8 @@ public class WebSecurityConfiguration {
                                 "/api/playback/tombstones/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/live/follows", "/api/live/follows/**")
+                        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        .requestMatchers("/api/media-subscriptions", "/api/media-subscriptions/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/users/**", "/api/tenants/**", "/api/files/**", "/api/alist/alias/**")
                         .hasAuthority(Role.ADMIN.name())

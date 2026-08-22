@@ -99,10 +99,13 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90">
+      <el-table-column label="操作" width="140">
         <template #default="scope">
           <el-button link type="primary" :disabled="!isCheckSupportedRow(scope.row)" :loading="scope.row.validity_checking" @click="checkLink(scope.row)">
             检测
+          </el-button>
+          <el-button link type="success" @click="followSearch(scope.row)">
+            追更
           </el-button>
         </template>
       </el-table-column>
@@ -235,6 +238,17 @@ const getValidityTagType = (state: string) => {
 
 const isCheckSupportedRow = (row: any) => {
   return !!diskTypeMap[row.vod_remarks]
+}
+
+const followSearch = (row: any) => {
+  const link = decodeURIComponent(row.vod_id || '')
+  if (!link.startsWith('http')) {
+    ElMessage.warning('该结果不是网盘分享链接,请在追剧页手动订阅')
+    return
+  }
+  axios.post('/api/media-subscriptions/follow', {name: row.vod_name, link: link}).then(() => {
+    ElMessage.success(`已订阅追更「${row.vod_name}」,当前资源直接作为主源,稍后到追剧页查看`)
+  })
 }
 
 const formatDisplayLink = (vodId: string) => {

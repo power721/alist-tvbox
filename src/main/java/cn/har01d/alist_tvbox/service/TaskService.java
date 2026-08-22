@@ -120,6 +120,14 @@ public class TaskService {
         return taskRepository.save(task);
     }
 
+    public Task addSubscriptionTask(String name) {
+        Task task = new Task();
+        task.setType(TaskType.SUBSCRIPTION);
+        task.setName("追剧订阅 - " + name);
+        task.setCreatedTime(Instant.now());
+        return taskRepository.save(task);
+    }
+
     public void startTask(Integer id) {
         Task task = getById(id);
         log.info("start task {}: {}", id, task.getName());
