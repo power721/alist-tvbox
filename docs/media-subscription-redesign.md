@@ -320,24 +320,27 @@ Episode 17
 
 ## 9. 迁移方案
 
-下一个可用版本 **V29**（Java migration，`src/main/java/db/migration/current/` + `META-INF/services/org.flywaydb.core.api.migration.JavaMigration` 注册）。
+**V29 已落地**：`media_subscription.last_episode` → `max_episode`（该列一直存的是挂载目录里的最大集号，属资源侧指标；旧名字读起来是"最后观看集数"，需求文档就是照字面理解写的）。可重复执行，已改名/全新库都安全。
+
+下一个可用版本 **V30**（Java migration，`src/main/java/db/migration/current/` + `META-INF/services/org.flywaydb.core.api.migration.JavaMigration` 注册）。
 
 **铁律：`mount_path` 与 `share_id` 一个字节都不能变** —— 那是不断链设计的地基。
 
-**V29 内容**
+**V29 已落地**：`last_episode` → `max_episode`（见上）。
+
+**V30 内容（第二段）**
 
 1. 建表 `msub_episode` / `msub_episode_source` / `dead_link`
 2. `media_subscription_resource` 加 `state` 列，按 `active`/`gap`/`validity` 推导初值
 3. 回填**仅 `msub_episode` 骨架**（集号 + 播出时间，取自 `schedule` 快照）
 4. **`msub_episode_source` 一行都不建**，由首次巡检按真实目录重建
-5. `media_subscription.last_episode` 改名 `max_episode`
-6. **直接 drop 旧列**：`episode_list` / `broken_episodes` / `validity` / `active` / `gap`
+5. **直接 drop 旧列**：`episode_list` / `broken_episodes` / `validity` / `active` / `gap`
 
 **为什么不回填 `episode_source`**：`episode_list` 本身就可能是缺陷 4 那样的陈旧脏数据（死资源仍声称覆盖 1–10 集）。回填等于把脏状态固化进新模型，而新模型正是为消灭这类脏状态而建。
 
-**为什么不留 V30**（Q32）：功能尚未发布，旧列的唯一价值——回退保险——已经没有保户。继续保留只会让新旧两套 `episode_list` 长期共存，每个读代码的人都要问一次"哪个是真的"。
+**为什么直接 drop 旧列**（Q32）：功能尚未发布，旧列的唯一价值——回退保险——已经没有保户。继续保留只会让新旧两套 `episode_list` 长期共存，每个读代码的人都要问一次"哪个是真的"。
 
-**为什么不合并重整 V20–V28**：未发布消除的是**数据包袱**，不是 **Flyway 校验和包袱**。改 V20 会让本地正在运行的实例校验和失配，且清空 `media_subscription` 会在 `/追剧/` 下留一批孤儿 storage。收益只是"9 个文件变 1 个"的观感。
+**为什么不合并重整 V20–V29**：未发布消除的是**数据包袱**，不是 **Flyway 校验和包袱**。改 V20 会让本地正在运行的实例校验和失配，且清空 `media_subscription` 会在 `/追剧/` 下留一批孤儿 storage。收益只是"文件数变少"的观感。
 
 **存量 season 修正**：不做（Q31）——功能未发布，无存量数据。`create()` 的兜底覆盖此后所有新建订阅。
 
@@ -345,32 +348,40 @@ Episode 17
 
 ## 10. 实施计划
 
-### 第一段：止血补丁（可独立发布）
+### 第一段：止血 + 召回修复（已完成，全量 691 测试通过）
 
-不依赖新表，改动在重构后全部保留（非白工）。**已完成**，分支 `msub-stabilize`（基于 `529e42b9`），全量 668 测试通过。
+**9 个缺陷全部修复**，全部不依赖新表，改动在第二段重构后依然保留：
 
-| # | 改动 | 修复 | 落点 |
-|---|---|---|---|
-| 1 | `matchNames` 加入裸剧名 + 删除"最长片段"启发式 + 排除纯季号词 | 缺陷 5 | `MediaSubscriptionCheckService.matchNames/addName` |
-| 2 | `create()` 兜底修正 season；季号解析迁入工具类 | 缺陷 8 | `TextUtils.resolveSeason/stripSeasonSuffix/parseTitleSeason` |
-| 3 | gap 覆盖刷新失败或列空 → 快照置空 + 标 BAD，不再用旧快照扣缺口 | 缺陷 4 | `MediaSubscriptionCheckService.fillGaps` |
-| 4 | `retireDeadGapMounts` 无条件执行，名额退役后重新核算 | 缺陷 3 | 同上 + 新增方法 |
-| 5 | `playEpisode` 全部候选失败 → 资源降分 + 触发异步补救 | 缺陷 2 | `MediaSubscriptionService.playEpisode/demoteFailedSource` |
-| 6 | 回归测试 | —— | `TextUtilsTest`（6 个）、`MediaSubscriptionCheckServiceTest`（5 个） |
+| 缺陷 | 改动 | 落点 |
+|---|---|---|
+| 5 剧名从未进匹配名单 | `matchNames` 加入裸剧名 + 删除"最长片段"启发式 + 排除纯季号词 | `MediaSubscriptionCheckService.matchNames/addName` |
+| 8 片单硬编码 `season=1` | `create()` 用剧名兜底季号；季号解析迁入工具类 | `TextUtils.resolveSeason/stripSeasonSuffix/isBareSeasonMarker` |
+| 4 死源冒领集数 | gap 覆盖刷新失败或列空 → 快照置空 + 标 BAD，不再用旧快照扣缺口 | `fillGaps` |
+| 3 死源占 `maxGapMounts` 名额 | `retireDeadGapMounts` 无条件执行、不给主网盘豁免，名额退役后重算 | 同上 + 新增方法 |
+| 2 播放失败不回灌 | 全候选失败 → 资源降分 + 触发 `checkAsync` 异步补救 | `MediaSubscriptionService.playEpisode/demoteFailedSource` |
+| 9 网盘限流被当失效 | `isThrottleError` 识别限流不标 BAD + 同盘熔断 + 15min 退避 | `activateNextCandidate` |
+| 1 损坏登记每集只记一个源 | `broken_episodes` 改多值 `{集: [源, ...]}`，兼容旧标量格式 | `parseBroken/addBrokenEpisodes/isBroken` |
+| 6 通知发在验证之前 | `applyInventory` 不再发通知，改由 `notifyNewEpisodes` 在 preheat 之后发 | `doCheck` |
+| 7 没有观看进度 | V29 `last_episode`→`max_episode`；进度改为只读 `History` | `watchedEpisode` |
+
+配套改进：
+
+- **候选池分层配额**（Q20）：每主网盘保底 3 席 + 其它盘合计 3 席，备用盘不再被主网盘包圆
+- **多源聚合搜索**：盘搜 / TG-Search / 电报网页**同时**跑并按 link 合并（`TelegramService.searchAggregated`）。回退链"够用即停"会让配了盘搜的部署永远调不到另外两个源——而资源不够时重复搜同一个源没有意义，结果不会变
+- **池枯竭补救**：无可用候选时释放旧 BAD 冷却（本轮刚判死的除外）
+- **入池归一化 validity**：只有明确判失效的落 BAD，其余 UNKNOWN；"已验证可用"只留给挂载成功那一刻
 
 **缺陷 5 与缺陷 8 必须同时修**：两者值域互补，只修其一仍然 100% 全灭。
 
-排除项：缺陷 1（`broken_episodes` 整列将被删，现在改是白工）、缺陷 6/7（依赖新模型与 History 查询，在第二段一次做对）。
-
-**顺带修复**：`MediaSubscriptionCheckServiceTest` 的 `Fixture` 少传一个构造参数导致测试模块编译失败（`529e42b9` 新增 `GuanYingSearchService` 时漏改）。
+**顺带修复**：`MediaSubscriptionCheckServiceTest` 的 `Fixture` 少传构造参数导致测试模块编译失败（`529e42b9` 新增 `GuanYingSearchService` 时漏改，后在 amend 中修正）。
 
 ### 第二段：模型重构
 
-V29 迁移 + `msub_episode` / `msub_episode_source` / `dead_link` + 状态机 + 选源算法 + 取消 primary/gap 二分 + 失败传染与抽检 + 异步补救路径。
+V30 迁移 + `msub_episode` / `msub_episode_source` / `dead_link` + 资源两级状态机 + 选源算法走索引 + 取消 primary/gap 二分 + 失败传染二次探测与主动抽检。
 
 ### 第三段：体验层
 
-分层配额（Q20）、通知门槛与观看进度（Q22/Q28）、TVBox 角标（Q29）、逐集资源矩阵 UI（Q25）、权重表筛选（Q14）。
+TVBox `🆕` 角标（Q29）、逐集资源矩阵 UI（Q25）、权重表筛选（Q14）。
 
 ---
 
