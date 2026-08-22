@@ -36,6 +36,7 @@ import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,8 +71,8 @@ import java.util.regex.Pattern;
  * <p>
  * 可用性模型(v2):资源只表达挂载生命周期(CANDIDATE/MOUNTED/RETIRED/REJECTED),
  * <b>取链事实只落在 {@link MediaSubscriptionEpisodeSource}</b> —— 某集可播 = 存在 LISTED/VERIFIED 行,
- * 整源死 = 该资源全部行 FAILED/MISSING。列得出目录 ≠ 取得到链,所以弱信号(LISTED)只作兜底,
- * 每轮巡检对每个挂载源抽 1 集主动取链、播放失败做二次探测传染判定,让 VERIFIED/FAILED 持续逼近事实。
+ * 整源死 = 该资源全部行 FAILED/MISSING。列得出目录 ≠ 取得到链,取得到链 ≠ 拉得出流,所以弱信号(LISTED)只作兜底,
+ * 每轮巡检对每个挂载源抽 1 集做字节级流探测(verifyStream)、播放失败做二次探测传染判定,让 VERIFIED/FAILED 持续逼近事实。
  */
 @Slf4j
 @Service
@@ -92,6 +93,11 @@ public class MediaSubscriptionCheckService {
     /** 网盘限流/风控(非资源失效):百度 errno -62 = 验证次数过多;其余为通用限流措辞 */
     private static final Pattern THROTTLE_ERROR = Pattern.compile(
             "(?i)errno\"?\\s*:\\s*-62|验证次数过多|请稍[后候]|访问频繁|操作频繁|too many (requests|attempts)|rate.?limit|\\b429\\b");
+    /** 明确失效(判死即拉黑):分享/提取码/过期类措辞(AList 报错原文,如 "failed get link: 参数错误")。
+     * 其余未识别错误一律按瞬时处理(见 {@link #classifyProbeFailure}) */
+    private static final Pattern GONE_ERROR = Pattern.compile(
+            "(?i)分享已?失效|链接错误|链接已?过期|提取码(错误|不正确)|密码(错误|不正确)|已取消|不存在|参数错误|"
+                    + "object not found|not exist|expired|cancel|invalid");
     /** 搜索源判定失效的原始状态词(各源大小写/措辞不一,入池时统一归一化) */
     private static final Set<String> INVALID_STATES = Set.of("BAD", "INVALID", "FAILED", "EXPIRED", "DEAD", "ERROR");
     /** 池枯竭释放 BAD 冷却的最小年龄:本轮刚判死的不参与释放 */
@@ -158,6 +164,10 @@ public class MediaSubscriptionCheckService {
     private final Map<Integer, Long> mainDriveSearchTime = new ConcurrentHashMap<>();
     /** 撞上限流的网盘 → 解禁时间戳:退避期内不再试挂该盘候选,防连环触发把好源烧成 BAD */
     private final Map<String, Long> driveThrottleTime = new ConcurrentHashMap<>();
+    /** 连续瞬时故障计数(资源 id → 次数):未识别错误默认按瞬时不下结论,streak 封顶防真死源每轮白吃探测预算 */
+    private final Map<Integer, Integer> transientStreak = new ConcurrentHashMap<>();
+    /** 字节级流探测客户端(默认 OkHttp 实现,单测注入桩) */
+    private StreamProbeClient streamProbeClient = new StreamProbeClient.Default();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "msub-check");
         thread.setDaemon(true);
@@ -852,8 +862,8 @@ public class MediaSubscriptionCheckService {
     }
 
     /**
-     * 新集播放预热验证(atv-player V82/V85 思想):对新增集做链接解析探测(getFile),
-     * 成功 → VERIFIED;失败 → FAILED + 失败传染判定(区分单集损坏与整源失效)。
+     * 新集播放预热验证(atv-player V82/V85 思想):对新增集做字节级流探测({@link #verifyStream}),
+     * 真出流 → VERIFIED;假页/死链 → FAILED + 失败传染判定(区分单集损坏与整源失效)。
      *
      * @return 本轮判定损坏的集(不可通知用户;整源已退役时集源行已无 LIVE,自然出局)
      */
@@ -875,20 +885,18 @@ public class MediaSubscriptionCheckService {
             }
             probed++;
             PlayCandidate candidate = candidates.getFirst();
-            try {
-                aListService.getFile(site(), candidate.resource().getMountPath() + "/" + candidate.source().getRelPath());
+            StreamVerdict verdict = verifyStream(candidate.resource().getMountPath(), candidate.source());
+            if (verdict == StreamVerdict.VERIFIED) {
                 markVerified(candidate.source());
-            } catch (Exception e) {
-                if (isThrottleError(e.getMessage())) {
-                    continue; // 限流 ≠ 损坏:不计数、不判死,下轮再来
-                }
-                log.info("subscription {} episode {} preheat failed: {}", subscription.getId(), episode, e.getMessage());
+            } else if (verdict == StreamVerdict.FAILED) {
+                log.info("subscription {} episode {} preheat failed: {}", subscription.getId(), episode, "stream dead");
                 markFailed(candidate.source());
                 boolean shareDead = contagion(subscription, candidate.resource(), candidate.source().getId());
                 if (!shareDead) {
                     damaged.add(episode);
                 }
             }
+            // TRANSIENT(限流/网络抖动)与 INCONCLUSIVE(403 防盗链等):不下结论,下轮再来
         }
         if (!damaged.isEmpty()) {
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR,
@@ -920,19 +928,19 @@ public class MediaSubscriptionCheckService {
             return true;
         }
         MediaSubscriptionEpisodeSource probe = live.getFirst();
-        try {
-            aListService.getFile(site(), resource.getMountPath() + "/" + probe.getRelPath());
+        StreamVerdict verdict = verifyStream(resource.getMountPath(), probe);
+        if (verdict == StreamVerdict.VERIFIED) {
             markVerified(probe);
             return false;
-        } catch (Exception e) {
-            if (isThrottleError(e.getMessage())) {
-                log.info("contagion probe throttled, no verdict for resource {}", resource.getId());
-                return false; // 限流期间不下结论
-            }
+        }
+        if (verdict == StreamVerdict.FAILED) {
             markFailed(probe);
             retireResource(subscription, resource, "二次探测仍失败,判定整源失效", false);
             return true;
         }
+        // 瞬时(限流/网络)与无结论(403 防盗链等)不下结论:整源悬置,已落的失败行维持 FAILED
+        log.info("contagion probe inconclusive for resource {}, no verdict", resource.getId());
+        return false;
     }
 
     /** 每轮对每个挂载源抽 1 集 LISTED 行主动取链(Q11):覆盖"从未被播的集永远停在 LISTED"的盲区 ——
@@ -949,17 +957,15 @@ public class MediaSubscriptionCheckService {
             if (sample == null) {
                 continue; // 全 VERIFIED(健康)或全 FAILED(已由传染判定处理)
             }
-            try {
-                aListService.getFile(site(), resource.getMountPath() + "/" + sample.getRelPath());
+            StreamVerdict verdict = verifyStream(resource.getMountPath(), sample);
+            if (verdict == StreamVerdict.VERIFIED) {
                 markVerified(sample);
-            } catch (Exception e) {
-                if (isThrottleError(e.getMessage())) {
-                    continue;
-                }
-                log.info("subscription {} sample probe failed on resource {}: {}", subscription.getId(), resource.getId(), e.getMessage());
+            } else if (verdict == StreamVerdict.FAILED) {
+                log.info("subscription {} sample probe failed on resource {}: {}", subscription.getId(), resource.getId(), "stream dead");
                 markFailed(sample);
                 contagion(subscription, resource, sample.getId());
             }
+            // TRANSIENT/INCONCLUSIVE:不下结论,下轮抽到的仍可能是它(最久未验者优先)
         }
     }
 
@@ -975,6 +981,111 @@ public class MediaSubscriptionCheckService {
         row.setFailCount(row.getFailCount() + 1);
         row.setLastVerifiedTime(System.currentTimeMillis()); // 判决时间:7 天后同路径文件仍在则回 LISTED 重探
         episodeSourceRepository.save(row);
+    }
+
+    // ---------- 字节级流验证与故障分级(v3) ----------
+
+    /** 探测失败分类:限流(盘退避,不下结论)/瞬时(不下结论,streak 封顶)/失效(判死) */
+    enum ProbeFailure { THROTTLED, TRANSIENT, GONE }
+
+    /** 字节级流验证结论:VERIFIED/FAILED 写行状态;INCONCLUSIVE 与 TRANSIENT 一律不下结论 */
+    enum StreamVerdict { VERIFIED, FAILED, INCONCLUSIVE, TRANSIENT }
+
+    void setStreamProbeClient(StreamProbeClient client) {
+        this.streamProbeClient = client;
+    }
+
+    /**
+     * 失败三分:限流 → 瞬时 → 失效。<b>未识别错误默认按瞬时</b> —— 误判瞬时只晚一轮再探,
+     * 误判失效会 RETIRED + 跨订阅黑名单(dead_link 无过期),代价不对称,往安全方向倒;
+     * streak 上限防"措辞怪异的真死源"被无限重试。
+     */
+    static ProbeFailure classifyProbeFailure(Throwable e) {
+        String message = e == null ? "" : StringUtils.defaultString(e.getMessage());
+        if (isThrottleError(message)) {
+            return ProbeFailure.THROTTLED;
+        }
+        if (GONE_ERROR.matcher(message).find()) {
+            return ProbeFailure.GONE;
+        }
+        return ProbeFailure.TRANSIENT;
+    }
+
+    /** 记一次瞬时故障;连续达上限返回 true(本次应按失效处理)并清零重新计时。 */
+    boolean transientStreakReached(MediaSubscriptionResource resource) {
+        int streak = transientStreak.merge(resource.getId(), 1, Integer::sum);
+        int limit = Math.max(1, appProperties.getSubscription().getProbeTransientStreak());
+        if (streak >= limit) {
+            transientStreak.remove(resource.getId());
+            log.info("resource {} transient streak reached {}, treating as gone", resource.getId(), limit);
+            return true;
+        }
+        return false;
+    }
+
+    private void clearTransientStreak(MediaSubscriptionResource resource) {
+        transientStreak.remove(resource.getId());
+    }
+
+    /**
+     * 字节级流验证:取链解析(AList getFile)后对直链发小段 Range 请求 —— "解析成功"≠"CDN 真出流"。
+     * 判定保守:HTML 假页/404/410 才判死(FAILED 有 7 天复活兜底);401/403 可能是防盗链要求
+     * (夸克 {@code #x-referer} 一类),无结论;代理型驱动无直链,退回解析级语义(维持原行为)。
+     */
+    StreamVerdict verifyStream(String mountPath, MediaSubscriptionEpisodeSource row) {
+        cn.har01d.alist_tvbox.model.FsDetail detail;
+        try {
+            detail = aListService.getFile(site(), mountPath + "/" + row.getRelPath());
+        } catch (Exception e) {
+            log.debug("stream resolve failed for row {}: {}", row.getId(), e.getMessage());
+            return classifyProbeFailure(e) == ProbeFailure.GONE ? StreamVerdict.FAILED : StreamVerdict.TRANSIENT;
+        }
+        if (detail == null) {
+            return StreamVerdict.TRANSIENT; // 解析无结果且无异常:无结论性证据,不下判
+        }
+        String rawUrl = detail.getRawUrl();
+        if (StringUtils.isBlank(rawUrl)) {
+            return StreamVerdict.VERIFIED; // 代理型驱动无直链:解析成功即验证,不倒退
+        }
+        int hash = rawUrl.indexOf('#');
+        if (hash >= 0) {
+            rawUrl = rawUrl.substring(0, hash); // 剥 quark #x-referer 一类 URL 片段
+        }
+        var config = appProperties.getSubscription();
+        try {
+            StreamProbeClient.ProbeResult probe = streamProbeClient.fetch(rawUrl, Constants.USER_AGENT,
+                    config.getStreamProbeMaxBytes(), config.getStreamProbeTimeoutSeconds());
+            return verdictOf(probe);
+        } catch (Exception e) {
+            log.debug("stream fetch failed for row {}: {}", row.getId(), e.getMessage());
+            return classifyProbeFailure(e) == ProbeFailure.GONE ? StreamVerdict.FAILED : StreamVerdict.TRANSIENT;
+        }
+    }
+
+    /** 判定矩阵:200/206 非假页=VERIFIED;HTML 假页/404/410=FAILED;401/403 与其它状态=无结论。 */
+    static StreamVerdict verdictOf(StreamProbeClient.ProbeResult probe) {
+        if (probe == null) {
+            return StreamVerdict.TRANSIENT;
+        }
+        if (probe.status() == 200 || probe.status() == 206) {
+            return isHtmlTrap(probe) ? StreamVerdict.FAILED : StreamVerdict.VERIFIED;
+        }
+        if (probe.status() == 404 || probe.status() == 410) {
+            return StreamVerdict.FAILED;
+        }
+        return StreamVerdict.INCONCLUSIVE;
+    }
+
+    /** HTML 假页(和谐登录页/风控页):Content-Type 声明 html 且实体确含 html 标记,双证才判死。 */
+    static boolean isHtmlTrap(StreamProbeClient.ProbeResult probe) {
+        String contentType = StringUtils.defaultString(probe.contentType()).toLowerCase(java.util.Locale.ROOT);
+        if (!contentType.contains("text/html")) {
+            return false;
+        }
+        byte[] body = probe.body() == null ? new byte[0] : probe.body();
+        String head = new String(body, 0, Math.min(body.length, 512), java.nio.charset.StandardCharsets.UTF_8)
+                .toLowerCase(java.util.Locale.ROOT);
+        return head.contains("<html") || head.contains("<!doctype html");
     }
 
     /** 转存校验发现"列得出、拷不过去"的集:该(集,资源)行判 FAILED —— 旧 broken_episodes 登记表的行级替代品。 */
@@ -1067,10 +1178,14 @@ public class MediaSubscriptionCheckService {
             try {
                 probeShare(subscription, resource);
                 probed++;
+                clearTransientStreak(resource);
                 resource.setCheckedTime(System.currentTimeMillis());
                 resourceRepository.save(resource);
             } catch (Exception e) {
                 log.info("probe candidate {} failed: {}", resource.getId(), e.getMessage());
+                if (classifyProbeFailure(e) == ProbeFailure.TRANSIENT && !transientStreakReached(resource)) {
+                    continue; // 瞬时故障:不退役不拉黑,下轮再探
+                }
                 retireResource(subscription, resource, e.getMessage(), true);
                 continue;
             }
@@ -1450,6 +1565,7 @@ public class MediaSubscriptionCheckService {
                 }
                 try {
                     activate(subscription, resource);
+                    clearTransientStreak(resource);
                     return true;
                 } catch (Exception e) {
                     log.info("candidate {} invalid: {}", resource.getId(), e.getMessage());
@@ -1463,6 +1579,9 @@ public class MediaSubscriptionCheckService {
                         addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR,
                                 driveName(drive) + "限流,本轮跳过该网盘候选(不判失效)");
                         continue;
+                    }
+                    if (classifyProbeFailure(e) == ProbeFailure.TRANSIENT && !transientStreakReached(resource)) {
+                        continue; // 瞬时故障不下结论(误判失效会进跨订阅黑名单);连续达上限才按失效处理
                     }
                     retireResource(subscription, resource, e.getMessage(), true);
                 }
@@ -2111,13 +2230,20 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** 失效黑名单查询:在名单里 = 有订阅已用取链事实判死过它。 */
+    /**
+     * 失效黑名单查询:窗口内({@code deadLinkTtlDays},默认 90 天)的判死记录才拦截入池。
+     * 链接失效是双向漂移(死链偶被分享主复活/审核回滚),过期记录保留 fail_count 历史,
+     * 该链可重新试错一次 —— 再判死会刷新时间,黑名单从"永久"变"长冷却"。
+     */
     private boolean isDeadLink(String link) {
         if (StringUtils.isBlank(link)) {
             return true;
         }
         try {
-            return deadLinkRepository.findByLink(link).isPresent();
+            return deadLinkRepository.findByLink(link)
+                    .map(dead -> System.currentTimeMillis() - dead.getTime()
+                            < appProperties.getSubscription().getDeadLinkTtlDays() * 24L * 3600_000)
+                    .orElse(false);
         } catch (Exception e) {
             return false;
         }

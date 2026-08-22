@@ -133,6 +133,14 @@ public class AppProperties {
         private int returningBackoffCapHours = 12;
         /** BAD 候选冷却(天):超期允许重探一次(误标自愈),再失败重新计时 */
         private int badCooldownDays = 7;
+        /** 字节级流探测:对直链 Range 请求的字节上限(解析成功后再拉一小段,验证 CDN 真出流) */
+        private int streamProbeMaxBytes = 4096;
+        /** 字节级流探测:HTTP 超时(秒) */
+        private int streamProbeTimeoutSeconds = 8;
+        /** 连续瞬时故障次数上限:达到后按失效处理(未识别错误默认按瞬时,防真死源无限白吃探测预算) */
+        private int probeTransientStreak = 3;
+        /** 失效黑名单窗口(天):窗口外的判死记录不再拦截入池,该链可重新试错一次(再判死刷新时间) */
+        private int deadLinkTtlDays = 90;
         /** 玩偶聚合搜索源(玩偶/多多/木偶等 11 站聚合,搜索+详情页提取分享链接):追剧候选池补充来源 */
         private boolean wanouEnabled = true;
         /** 玩偶聚合:站点最新域名监控接口(空=只用内置静态域名) */

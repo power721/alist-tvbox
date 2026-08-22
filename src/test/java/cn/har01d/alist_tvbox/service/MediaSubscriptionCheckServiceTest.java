@@ -821,6 +821,186 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
     }
 
+    // ---------- v3:字节级流验证(verifyStream)与故障分级 ----------
+    // 解析级验证(AList getFile)只证明"取得到链接";和谐资源的常见形态是目录在、解析过、
+    // 拉流 403/HTML。判定矩阵保守:HTML 假页/404/410 才判死,401/403 可能是防盗链要求。
+
+    @Test
+    void streamVerdictMatrix() {
+        byte[] video = new byte[]{0x1A, 0x45, (byte) 0xDF, (byte) 0xA3}; // EBML 头(mkv)
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.VERIFIED,
+                MediaSubscriptionCheckService.verdictOf(new StreamProbeClient.ProbeResult(200, "video/mp4", video)));
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.VERIFIED,
+                MediaSubscriptionCheckService.verdictOf(new StreamProbeClient.ProbeResult(206, "application/octet-stream", video)));
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.FAILED,
+                MediaSubscriptionCheckService.verdictOf(new StreamProbeClient.ProbeResult(404, "", new byte[0])));
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.FAILED,
+                MediaSubscriptionCheckService.verdictOf(new StreamProbeClient.ProbeResult(410, "", new byte[0])));
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.INCONCLUSIVE,
+                MediaSubscriptionCheckService.verdictOf(new StreamProbeClient.ProbeResult(403, "", new byte[0])), "403 可能是防盗链,无结论");
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.INCONCLUSIVE,
+                MediaSubscriptionCheckService.verdictOf(new StreamProbeClient.ProbeResult(500, "", new byte[0])));
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.TRANSIENT,
+                MediaSubscriptionCheckService.verdictOf(null));
+    }
+
+    @Test
+    void htmlTrapRequiresDoubleEvidence() {
+        byte[] html = "<html><head>".getBytes();
+        assertTrue(MediaSubscriptionCheckService.isHtmlTrap(
+                new StreamProbeClient.ProbeResult(200, "text/html; charset=utf-8", html)), "ct=html 且实体含 html 标记");
+        assertFalse(MediaSubscriptionCheckService.isHtmlTrap(
+                new StreamProbeClient.ProbeResult(200, "text/html", new byte[0])), "ct=html 但空体:不下死判");
+        assertFalse(MediaSubscriptionCheckService.isHtmlTrap(
+                new StreamProbeClient.ProbeResult(200, "video/mp4", html)), "ct=视频,实体像 html 也不判死");
+        assertTrue(MediaSubscriptionCheckService.isHtmlTrap(
+                new StreamProbeClient.ProbeResult(200, "text/html", "<!DOCTYPE html>".getBytes())));
+    }
+
+    @Test
+    void probeFailureClassification() {
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.THROTTLED,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("{\"errno\":-62}")));
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("failed get link: 参数错误")));
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("分享已失效")));
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("object not found")));
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.TRANSIENT,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("connect timed out")));
+        // 未识别错误默认按瞬时:误判瞬时只晚一轮,误判失效会 RETIRED + 跨订阅黑名单
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.TRANSIENT,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("奇怪的未知错误")));
+    }
+
+    @Test
+    void verifyStreamFetchesRealBytesAndStripsFragment() throws Exception {
+        Fixture fixture = new Fixture();
+        String[] fetchedUrl = {null};
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) -> {
+            fetchedUrl[0] = url;
+            return new StreamProbeClient.ProbeResult(206, "video/mp4", new byte[]{0x1A, 0x45});
+        });
+        cn.har01d.alist_tvbox.model.FsDetail detail = new cn.har01d.alist_tvbox.model.FsDetail();
+        detail.setRawUrl("https://dl.quark.cn/x.mp4#x-referer=raw");
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(detail);
+        MediaSubscriptionEpisodeSource row = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.VERIFIED,
+                fixture.service.verifyStream("/追剧/1-测试剧", row));
+        assertEquals("https://dl.quark.cn/x.mp4", fetchedUrl[0], "quark #x-referer 一类 URL 片段必须剥掉再探测");
+    }
+
+    @Test
+    void verifyStreamHtmlTrapIsFailed() {
+        Fixture fixture = new Fixture();
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) ->
+                new StreamProbeClient.ProbeResult(200, "text/html", "<html>请登录</html>".getBytes()));
+        cn.har01d.alist_tvbox.model.FsDetail detail = new cn.har01d.alist_tvbox.model.FsDetail();
+        detail.setRawUrl("https://pan.baidu.com/share/x.mp4");
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(detail);
+        MediaSubscriptionEpisodeSource row = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.FAILED,
+                fixture.service.verifyStream("/追剧/1-测试剧", row), "和谐登录页 = 链死");
+    }
+
+    @Test
+    void verifyStreamBlankRawUrlStaysResolutionLevel() {
+        // 代理型驱动无直链:解析成功即 VERIFIED(维持解析级语义,不倒退),且不发字节请求
+        Fixture fixture = new Fixture();
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) -> {
+            throw new AssertionError("无直链不应发起字节探测");
+        });
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
+                .thenReturn(new cn.har01d.alist_tvbox.model.FsDetail());
+        MediaSubscriptionEpisodeSource row = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.VERIFIED,
+                fixture.service.verifyStream("/追剧/1-测试剧", row));
+    }
+
+    @Test
+    void verifyStreamNetworkBlipIsTransientNotFailed() {
+        Fixture fixture = new Fixture();
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) -> {
+            throw new java.io.IOException("connect timed out");
+        });
+        cn.har01d.alist_tvbox.model.FsDetail detail = new cn.har01d.alist_tvbox.model.FsDetail();
+        detail.setRawUrl("https://dl.quark.cn/x.mp4");
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(detail);
+        MediaSubscriptionEpisodeSource row = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.TRANSIENT,
+                fixture.service.verifyStream("/追剧/1-测试剧", row));
+    }
+
+    @Test
+    void verifyStreamGoneResolveFailureIsFailed() {
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
+                .thenThrow(new RuntimeException("failed get link: 参数错误"));
+        MediaSubscriptionEpisodeSource row = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.FAILED,
+                fixture.service.verifyStream("/追剧/1-测试剧", row));
+    }
+
+    @Test
+    void contagionInconclusiveProbeDoesNotRetire() {
+        // 二次探测 403(防盗链):无结论不判整源死 —— 误判失效会进跨订阅黑名单
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource resource = mountedPrimary(2, 9);
+        MediaSubscriptionEpisodeSource liveRow = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(2)).thenReturn(List.of(liveRow));
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) ->
+                new StreamProbeClient.ProbeResult(403, "", new byte[0]));
+        cn.har01d.alist_tvbox.model.FsDetail detail = new cn.har01d.alist_tvbox.model.FsDetail();
+        detail.setRawUrl("https://dl.quark.cn/x.mp4");
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(detail);
+
+        assertFalse(fixture.service.contagion(fixture.subscription, resource, 99), "无结论不判死");
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, resource.getState());
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_LISTED, liveRow.getState(), "行状态不动");
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
+    }
+
+    @Test
+    void transientStreakEscalatesAfterLimitAndResets() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource resource = mountedPrimary(2, 9);
+
+        assertFalse(fixture.service.transientStreakReached(resource), "第 1 次瞬时:不下结论");
+        assertFalse(fixture.service.transientStreakReached(resource), "第 2 次瞬时:不下结论");
+        assertTrue(fixture.service.transientStreakReached(resource), "第 3 次(默认上限)按失效处理");
+        assertFalse(fixture.service.transientStreakReached(resource), "计数已清零,重新累计");
+    }
+
+    @Test
+    void fillPoolDeadLinkWindowExpires() {
+        // 黑名单窗口(默认 90 天):过期判死记录不再拦截入池,该链可重新试错
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/dead", "苍兰诀 第01-08集 4K"),
+                        message("https://pan.quark.cn/s/alive", "苍兰诀 第01-08集 4K")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+        cn.har01d.alist_tvbox.entity.DeadLink stale = new cn.har01d.alist_tvbox.entity.DeadLink();
+        stale.setLink("https://pan.quark.cn/s/dead");
+        stale.setTime(System.currentTimeMillis() - 91L * 24 * 3600_000);
+        Mockito.when(fixture.deadLinkRepository.findByLink("https://pan.quark.cn/s/dead"))
+                .thenReturn(Optional.of(stale));
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository, Mockito.atLeastOnce()).save(captor.capture());
+        assertEquals("https://pan.quark.cn/s/alive", captor.getValue().getLink(), "过期死链放行重新试错");
+    }
+
     // ---------- 播放选源:集源行索引 + VERIFIED 优先 ----------
 
     @Test
