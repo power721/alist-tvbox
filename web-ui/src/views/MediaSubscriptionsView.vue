@@ -64,17 +64,16 @@
           <el-table-column label="剧名" min-width="230">
             <template #default="scope">
               <div class="name-cell">
-                <el-image :src="scope.row.cover" fit="cover" class="cover">
+                <el-image :src="scope.row.cover" fit="cover" class="cover cover-click" @click="showDetail(scope.row)">
                   <template #error>
-                    <div class="cover cover-placeholder">{{ scope.row.name.charAt(0) }}</div>
+                    <div class="cover cover-placeholder cover-click" @click="showDetail(scope.row)">
+                      {{ scope.row.name.charAt(0) }}
+                    </div>
                   </template>
                 </el-image>
                 <div>
                   <div>
-                    <router-link v-if="scope.row.mountPath" :to="'/vod' + scope.row.mountPath" class="name-link">
-                      {{ scope.row.name }}
-                    </router-link>
-                    <template v-else>{{ scope.row.name }}</template>
+                    <a class="name-link" @click="showDetail(scope.row)">{{ scope.row.name }}</a>
                   </div>
                   <div class="sub-text">
                     {{ scope.row.activeResourceTitle || scope.row.keyword }}
@@ -115,9 +114,8 @@
               <div class="sub-text">上次检查:{{ formatTime(scope.row.lastCheckTime) }}</div>
             </template>
           </el-table-column>
-          <el-table-column fixed="right" label="操作" width="330">
+          <el-table-column fixed="right" label="操作" width="280">
             <template #default="scope">
-              <el-button link type="primary" size="small" @click="showDetail(scope.row)">详情</el-button>
               <el-button link type="primary" size="small" @click="checkNow(scope.row)">检查</el-button>
               <el-button link type="primary" size="small" @click="showResources(scope.row)">候选源</el-button>
               <el-button link type="primary" size="small" @click="showEpisodes(scope.row)">集数</el-button>
@@ -126,7 +124,6 @@
                 {{ scope.row.status === 'PAUSED' ? '恢复' : '暂停' }}
               </el-button>
               <el-button v-if="scope.row.mode === 'TRANSFER'" link type="success" size="small" @click="transferNow(scope.row)">转存</el-button>
-              <el-button v-if="scope.row.status === 'ENDED'" link type="warning" size="small" @click="subscribeNextSeason(scope.row)">下一季</el-button>
               <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
               <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
             </template>
@@ -332,6 +329,10 @@
             刷新元数据
           </el-button>
           <el-button size="small" @click="checkFromDetail">检查更新</el-button>
+          <el-button v-if="current?.status === 'ENDED'" size="small" type="warning" plain
+                     @click="current && subscribeNextSeason(current)">下一季</el-button>
+          <el-button v-if="detailData?.subscription?.mountPath" size="small" link type="primary"
+                     @click="browseMount">浏览目录</el-button>
           <span v-if="!current?.metaProvider" class="sub-text">未绑定元数据条目,刷新不可用</span>
         </div>
         <div v-if="detailData" class="detail-hero">
@@ -576,8 +577,11 @@
 
 <script setup lang="ts">
 import {computed, onMounted, ref} from 'vue'
+import {useRouter} from 'vue-router'
 import axios from 'axios'
 import {ElMessage, ElMessageBox} from 'element-plus'
+
+const router = useRouter()
 
 interface SubscriptionDto {
   id: number
@@ -1247,6 +1251,14 @@ const reloadDetail = () => {
   }
 }
 
+/** 列表剧名原是 router-link 直跳挂载目录;点击标题让位给详情后,目录浏览入口收进详情抽屉 */
+const browseMount = () => {
+  const mountPath = detailData.value?.subscription?.mountPath
+  if (!mountPath) return
+  detailVisible.value = false
+  router.push('/vod' + mountPath)
+}
+
 /** 刷新元数据:异步任务(TMDB 4 请求/豆瓣桥接),数秒后自动重开详情看新数据 */
 const refreshMeta = () => {
   if (!current.value) return
@@ -1807,10 +1819,15 @@ const formatClock = (time: number) => {
 .name-link {
   color: var(--el-color-primary);
   text-decoration: none;
+  cursor: pointer;
 }
 
 .name-link:hover {
   text-decoration: underline;
+}
+
+.cover-click {
+  cursor: pointer;
 }
 
 .sub-text {
