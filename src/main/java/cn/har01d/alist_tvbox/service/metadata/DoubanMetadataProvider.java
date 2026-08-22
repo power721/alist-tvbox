@@ -205,6 +205,8 @@ public class DoubanMetadataProvider implements MetadataProvider {
                             details.setRating(String.valueOf(rating));
                         }
                     }
+                    putRating(details, NAME, details.getRating());
+                    details.setExternalIds(new java.util.LinkedHashMap<>(java.util.Map.of(NAME, id)));
                     // rexxar aka:名称桥接的匹配素材(也是标题归属别名,详情页又名缺失时补上)
                     if (body.hasNonNull("aka") && body.get("aka").isArray()) {
                         List<String> akas = new ArrayList<>();
@@ -242,6 +244,7 @@ public class DoubanMetadataProvider implements MetadataProvider {
                 if (StringUtils.isBlank(details.getRating()) && StringUtils.isNotBlank(movie.getDbScore())) {
                     details.setRating(movie.getDbScore());
                 }
+                putRating(details, NAME, details.getRating());
                 if (details.getGenres() == null) {
                     details.setGenres(splitNames(movie.getGenre(), 8));
                 }
@@ -565,14 +568,30 @@ public class DoubanMetadataProvider implements MetadataProvider {
         if (StringUtils.isBlank(douban.getRating()) && StringUtils.isNotBlank(tmdb.getRating())) {
             douban.setRating(tmdb.getRating()); // 豆瓣评分优先,缺失时 TMDB 评分兜底
         }
-        if (douban.getDirectors() == null && tmdb.getDirectors() != null) {
-            douban.setDirectors(tmdb.getDirectors());
+        // 多源评分合并(豆瓣+TMDB 同时展示);跨源条目 id 并入(详情页外链)
+        if (tmdb.getRatings() != null) {
+            java.util.Map<String, String> ratings = douban.getRatings() == null
+                    ? new java.util.LinkedHashMap<>() : new java.util.LinkedHashMap<>(douban.getRatings());
+            tmdb.getRatings().forEach(ratings::putIfAbsent);
+            douban.setRatings(ratings);
+        }
+        if (tmdb.getId() != null && StringUtils.isNotBlank(tmdb.getId())) {
+            java.util.Map<String, String> ids = douban.getExternalIds() == null
+                    ? new java.util.LinkedHashMap<>() : new java.util.LinkedHashMap<>(douban.getExternalIds());
+            ids.putIfAbsent(TmdbMetadataProvider.NAME, tmdb.getId());
+            douban.setExternalIds(ids);
+        }
+        if (tmdb.getDirectors() != null && (douban.getDirectors() == null || tmdb.getDirectors().size() > douban.getDirectors().size())) {
+            douban.setDirectors(tmdb.getDirectors()); // TMDB 结构化演职员信息更全(带角色/头像),取更全一侧
         }
         if (douban.getWriters() == null && tmdb.getWriters() != null) {
             douban.setWriters(tmdb.getWriters());
         }
-        if (douban.getCast() == null && tmdb.getCast() != null) {
-            douban.setCast(tmdb.getCast());
+        if (douban.getCast() == null || douban.getCast().stream().allMatch(member -> member.getAvatar() == null)) {
+            // 豆瓣兜底卡司来自本地库纯名字(无头像);TMDB 卡司带头像+饰演角色,有则替换
+            if (tmdb.getCast() != null && !tmdb.getCast().isEmpty()) {
+                douban.setCast(tmdb.getCast());
+            }
         }
         if (StringUtils.isBlank(douban.getBackdrop()) && StringUtils.isNotBlank(tmdb.getBackdrop())) {
             douban.setBackdrop(tmdb.getBackdrop());
@@ -589,6 +608,17 @@ public class DoubanMetadataProvider implements MetadataProvider {
             }
             douban.setAliases(merged);
         }
+    }
+
+    /** 评分写入多源表(ratings);主 rating 字段独立维护(主展示值)。 */
+    private static void putRating(MetadataDetails details, String source, String value) {
+        if (StringUtils.isBlank(value)) {
+            return;
+        }
+        java.util.Map<String, String> ratings = details.getRatings() == null
+                ? new java.util.LinkedHashMap<>() : details.getRatings();
+        ratings.putIfAbsent(source, value);
+        details.setRatings(ratings);
     }
 
     /** 豆瓣库字段分隔符不统一:类型/演员逗号(中/英文),地区/语言/导演多值 " / " —— 兼容拆分并限长。 */

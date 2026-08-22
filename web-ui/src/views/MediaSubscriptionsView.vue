@@ -355,9 +355,16 @@
                   {{ detailData.media.status === 'RETURNING' ? '在播' : detailData.media.status === 'ENDED' ? '已完结' : '状态未知' }}
                 </el-tag>
                 <el-tag size="small" type="info">第{{ detailData.media.season }}季</el-tag>
-                <el-tag v-if="detailData.media.rating" size="small" type="warning">
+                <el-tag v-if="detailData.media.rating && !Object.keys(detailData.media.ratings || {}).length" size="small" type="warning">
                   {{ providerName(detailData.media.provider || '') }} {{ detailData.media.rating }}
                 </el-tag>
+                <template v-if="detailData.media.ratings && Object.keys(detailData.media.ratings).length">
+                  <el-tag v-for="(score, source) in detailData.media.ratings" :key="source" size="small" type="warning">
+                    {{ providerName(source) }} {{ score }}
+                  </el-tag>
+                </template>
+                <a v-for="(url, label) in detailData.media.links || {}" :key="label"
+                   :href="url" target="_blank" rel="noopener" class="detail-ext-link">{{ label }}</a>
               </div>
               <div v-if="detailData.media.originalName && detailData.media.originalName !== detailData.media.name"
                    class="sub-text">{{ detailData.media.originalName }}</div>
@@ -412,7 +419,7 @@
           <el-table-column label="标题" min-width="170" show-overflow-tooltip>
             <template #default="scope">{{ scope.row.title || '—' }}</template>
           </el-table-column>
-          <el-table-column label="播出时间" width="180">
+          <el-table-column label="播出时间" width="190">
             <template #default="scope">{{ scope.row.airTime ? formatTime(scope.row.airTime) : '—' }}</template>
           </el-table-column>
           <el-table-column label="时长" width="70">
@@ -669,6 +676,8 @@ interface MediaDetailData {
     languages?: string[]
     firstAirDate?: string | null
     rating?: string | null
+    ratings?: Record<string, string> | null
+    links?: Record<string, string> | null
     directors?: string[]
     writers?: string[]
     cast?: { name: string, role: string | null, avatar: string | null }[]
@@ -1731,6 +1740,17 @@ const formatClock = (time: number) => {
   gap: 6px;
   flex-wrap: wrap;
   margin: 4px 0;
+}
+
+.detail-ext-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.detail-ext-link:hover {
+  text-decoration: underline;
 }
 
 .detail-cast {

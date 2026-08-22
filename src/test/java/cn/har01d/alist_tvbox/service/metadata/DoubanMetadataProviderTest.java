@@ -124,6 +124,35 @@ class DoubanMetadataProviderTest {
     }
 
     @Test
+    void mergeTmdbCombinesRatingsLinksAndReplacesAvatarlessCast() {
+        MetadataDetails douban = new MetadataDetails();
+        douban.setProvider("douban");
+        douban.setName("九门");
+        douban.setRating("6.8");
+        douban.setRatings(new java.util.LinkedHashMap<>(java.util.Map.of("douban", "6.8")));
+        douban.setExternalIds(new java.util.LinkedHashMap<>(java.util.Map.of("douban", "37123")));
+        douban.setCast(List.of(new cn.har01d.alist_tvbox.dto.CastMember("陈伟霆,陈瑶", null, null))); // 本地库纯名字形态
+
+        MetadataDetails tmdb = new MetadataDetails();
+        tmdb.setId("141888");
+        tmdb.setRating("7.5");
+        tmdb.setRatings(new java.util.LinkedHashMap<>(java.util.Map.of("tmdb", "7.5")));
+        tmdb.setCast(List.of(
+                new cn.har01d.alist_tvbox.dto.CastMember("陈伟霆", "二月红", "https://media.themoviedb.org/t/p/w185/a.jpg"),
+                new cn.har01d.alist_tvbox.dto.CastMember("陈瑶", "尹新月", "https://media.themoviedb.org/t/p/w185/b.jpg")));
+
+        DoubanMetadataProvider.mergeTmdbDetails(douban, tmdb);
+
+        assertEquals("6.8", douban.getRating()); // 主评分仍是豆瓣
+        assertEquals(2, douban.getRatings().size(), "多源评分并存:豆瓣 6.8 + TMDB 7.5");
+        assertEquals("7.5", douban.getRatings().get("tmdb"));
+        assertEquals("141888", douban.getExternalIds().get("tmdb"), "跨源条目 id 并入(详情页外链)");
+        assertEquals("37123", douban.getExternalIds().get("douban"));
+        assertEquals(2, douban.getCast().size(), "无头像的本地库卡司被 TMDB 头像卡司替换");
+        assertEquals("二月红", douban.getCast().get(0).getRole());
+    }
+
+    @Test
     void pageRateLimiterEnforcesMinimumInterval() throws Exception {
         DoubanMetadataProvider.PageRateLimiter limiter = new DoubanMetadataProvider.PageRateLimiter(120);
         long start = System.currentTimeMillis();

@@ -1195,10 +1195,18 @@ public class MediaSubscriptionService {
             media.put("languages", details.getLanguages() == null ? List.of() : details.getLanguages());
             media.put("firstAirDate", details.getFirstAirDate());
             media.put("rating", details.getRating());
+            media.put("ratings", details.getRatings() == null ? Map.of() : details.getRatings());
             media.put("directors", details.getDirectors() == null ? List.of() : details.getDirectors());
             media.put("writers", details.getWriters() == null ? List.of() : details.getWriters());
             media.put("cast", details.getCast() == null ? List.of() : details.getCast());
         }
+        // 条目外链(豆瓣/TMDB/Bangumi 页面,新窗跳转):订阅绑定源 + 桥接拿到的跨源 id
+        Map<String, Object> links = new java.util.LinkedHashMap<>();
+        appendMetaLink(links, subscription.getMetaProvider(), subscription.getMetaId());
+        if (details != null && details.getExternalIds() != null) {
+            details.getExternalIds().forEach((provider, metaId) -> appendMetaLink(links, provider, metaId));
+        }
+        media.put("links", links);
         // 订阅侧快照兜底:元数据未拉到/字段缺时详情页仍有官方集数与下集播出时间
         media.put("officialEpisodes", subscription.getOfficialEpisodes());
         media.put("officialTotal", subscription.getOfficialTotal());
@@ -1664,6 +1672,20 @@ public class MediaSubscriptionService {
         return subscription.getSeason() != null && subscription.getSeason() > 1
                 ? subscription.getName() + " 第" + subscription.getSeason() + "季"
                 : subscription.getName();
+    }
+
+    /** 条目页外链:豆瓣 subject / TMDB tv / Bangumi subject。 */
+    private static void appendMetaLink(Map<String, Object> links, String provider, String id) {
+        if (StringUtils.isBlank(provider) || StringUtils.isBlank(id)) {
+            return;
+        }
+        switch (provider) {
+            case "douban" -> links.putIfAbsent("豆瓣", "https://movie.douban.com/subject/" + id + "/");
+            case "tmdb" -> links.putIfAbsent("TMDB", "https://www.themoviedb.org/tv/" + id);
+            case "bangumi" -> links.putIfAbsent("Bangumi", "https://bgm.tv/subject/" + id);
+            default -> {
+            }
+        }
     }
 
     /**

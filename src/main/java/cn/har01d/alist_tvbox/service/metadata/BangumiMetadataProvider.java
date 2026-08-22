@@ -131,7 +131,9 @@ public class BangumiMetadataProvider implements MetadataProvider {
             double score = subject.path("rating").path("score").asDouble(0);
             if (score > 0) {
                 details.setRating(String.valueOf(score));
+                details.setRatings(new java.util.LinkedHashMap<>(java.util.Map.of(NAME, String.valueOf(score))));
             }
+            details.setExternalIds(new java.util.LinkedHashMap<>(java.util.Map.of(NAME, id)));
             details.setYear(subject.path("date").asText(""));
             if (details.getYear() != null && details.getYear().length() > 4) {
                 details.setYear(details.getYear().substring(0, 4));

@@ -145,6 +145,10 @@ public class TmdbMetadataProvider implements MetadataProvider {
             details.setYear(yearOf(tv.path("first_air_date").asText()));
             details.setFirstAirDate(tv.path("first_air_date").asText(""));
             details.setRating(ratingOf(tv.path("vote_average").asDouble(0)));
+            if (details.getRating() != null) {
+                details.setRatings(new java.util.LinkedHashMap<>(java.util.Map.of("tmdb", details.getRating())));
+            }
+            details.setExternalIds(new java.util.LinkedHashMap<>(java.util.Map.of("tmdb", id)));
             List<String> genres = new ArrayList<>();
             if (tv.has("genres") && tv.get("genres").isArray()) {
                 for (JsonNode genre : tv.get("genres")) {

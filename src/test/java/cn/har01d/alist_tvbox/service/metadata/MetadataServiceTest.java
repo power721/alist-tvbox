@@ -63,6 +63,7 @@ class MetadataServiceTest {
         details.setStatus(status);
         details.setTotalEpisodes(12);
         details.setGenres(List.of("剧情")); // 新版快照形态(扩展字段在场);全缺 = 旧版,视为过期
+        details.setRatings(java.util.Map.of("tmdb", "8.0")); // 多源评分扩展后的形态;缺 = 旧版
         return details;
     }
 

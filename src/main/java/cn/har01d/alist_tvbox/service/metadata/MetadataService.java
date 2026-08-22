@@ -175,6 +175,9 @@ public class MetadataService {
         if (details.getOriginalName() == null && details.getGenres() == null && details.getRating() == null) {
             return true;
         }
+        if (details.getRatings() == null) {
+            return true; // 多源评分/外链扩展前写入
+        }
         if (details.getGenres() != null && details.getGenres().stream()
                 .anyMatch(g -> g.contains(",") || g.contains("，"))) {
             return true;

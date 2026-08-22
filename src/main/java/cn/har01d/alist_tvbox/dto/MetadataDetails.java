@@ -44,6 +44,10 @@ public class MetadataDetails {
     private String firstAirDate;
     /** 评分(展示形态如 "8.5";来源 = provider 名) */
     private String rating;
+    /** 多源评分(source → 分值,如 {"douban":"6.8","tmdb":"7.5"}):豆瓣订阅桥接 TMDB 后两边评分都在 */
+    private java.util.Map<String, String> ratings;
+    /** 跨源条目 id(provider → id,如豆瓣订阅桥接后含 {"tmdb":"123"}):详情页外链跳转用 */
+    private java.util.Map<String, String> externalIds;
     /** 导演 */
     private List<String> directors;
     /** 编剧 */
