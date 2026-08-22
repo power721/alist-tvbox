@@ -1,4 +1,4 @@
-package cn.har01d.alist_tvbox.service;
+package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
