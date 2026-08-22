@@ -359,7 +359,7 @@
                 <a v-for="(url, label) in detailData.media.links || {}" :key="label"
                    :href="url" target="_blank" rel="noopener" class="rating-tag-link">
                   <el-tag size="small" type="warning">
-                    {{ label }}<template v-if="ratingOfSource(label)"> {{ ratingOfSource(label) }}</template>
+                    {{ label }} <template v-if="ratingOfSource(label)"> {{ ratingOfSource(label) }}</template>
                   </el-tag>
                 </a>
                 <a v-if="!Object.keys(detailData.media.links || {}).length && detailData.media.rating"
