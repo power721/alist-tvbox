@@ -72,11 +72,7 @@ public class MediaSubscriptionCheckService {
     /** 扫集号前先剥掉的技术标签(避免 1080/2160/4K 被当成集数) */
     private static final Pattern TECH_TAGS = Pattern.compile(
             "(?i)(2160p|1080p|720p|480p|4k|8k|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|国语|粤语|中字|简体|繁体|双语|字幕)");
-    /** 标题级季标记:中文"第N季"、SxxEyy 的季、独立 Sxx、Season N */
-    private static final Pattern TITLE_SEASON_CN = Pattern.compile("第\\s*([0-9一二三四五六七八九十]{1,3})\\s*季");
-    private static final Pattern TITLE_SEASON_SXXE = Pattern.compile("[Ss](\\d{1,2})\\s*[Ee]\\d{1,3}");
-    private static final Pattern TITLE_SEASON_ALONE = Pattern.compile("(?:^|[^A-Za-z0-9])[Ss](\\d{1,2})(?![\\dEe])");
-    private static final Pattern TITLE_SEASON_EN = Pattern.compile("(?i)season\\s*(\\d{1,2})");
+    /** 标题级季标记:中文"第N季"、SxxEyy 的季、独立 Sxx、Season N —— 见 TextUtils.parseTitleSeason */
     /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
     private static final Pattern TITLE_PROGRESS = Pattern.compile(
             "(?i)更新?至\\s*(\\d{1,3})|全\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*[-~至]\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,3})(?!\\d)");
@@ -475,28 +471,35 @@ public class MediaSubscriptionCheckService {
      * 已挂载的补缺源:直接刷新其挂载目录覆盖快照(挂载原地增长)并从缺口扣除 —— 不重复探测、不重复挂载、不重复事件。
      * 挂载数达上限(maxGapMounts)后不再探测新候选;池耗尽仍缺 → 搜索:先整季关键词,再逐集降级(第N集)。
      */
-    private void fillGaps(MediaSubscription subscription, Set<Integer> missingStill) {
-        int gapMounted = 0;
+    void fillGaps(MediaSubscription subscription, Set<Integer> missingStill) {
         int maxMounts = appProperties.getSubscription().getMaxGapMounts();
         for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
             if (resource.isGap() && resource.getShareId() != null && StringUtils.isNotBlank(resource.getMountPath())) {
-                gapMounted++;
                 migrateLegacyGapMount(subscription, resource);
-                // 补缺挂载原位刷新覆盖快照(不临时挂载探测),并从剩余缺口中扣除
+                // 补缺挂载原位刷新覆盖快照(不临时挂载探测),并从剩余缺口中扣除。
+                // 刷新失败或列空 = 该分享已死:必须把快照清空并标 BAD,否则旧快照会继续"冒领"它已经
+                // 提供不了的集,缺口被扣光 → 不触发补搜 → 系统自认健康而用户一集都播不了(线上事故)。
+                Set<Integer> coverage;
                 try {
-                    Set<Integer> coverage = walkEpisodes(site(), subscription.getSeason(),
+                    coverage = walkEpisodes(site(), subscription.getSeason(),
                             resource.getMountPath(), maxEpisodeBytes(subscription));
-                    if (!coverage.isEmpty()) {
-                        resource.setEpisodeList(serializeEpisodes(coverage));
-                        resource.setCheckedTime(System.currentTimeMillis());
-                        resourceRepository.save(resource);
-                    }
                 } catch (Exception e) {
-                    log.debug("refresh gap mount coverage failed: {} {}", resource.getMountPath(), e.getMessage());
+                    log.info("gap mount coverage refresh failed, treat as dead: {} {}",
+                            resource.getMountPath(), e.getMessage());
+                    coverage = Set.of();
                 }
+                resource.setEpisodeList(serializeEpisodes(coverage));
+                resource.setCheckedTime(System.currentTimeMillis());
+                if (coverage.isEmpty()) {
+                    resource.setValidity(MediaSubscriptionResource.VALIDITY_BAD);
+                }
+                resourceRepository.save(resource);
                 missingStill.removeAll(new TreeSet<>(parseEpisodeList(resource.getEpisodeList())));
             }
         }
+        // 死掉的补缺挂载立刻退役,否则占着 maxGapMounts 名额,新源补不进来;名额在退役后重新核算
+        retireDeadGapMounts(subscription);
+        int gapMounted = countGapMounts(subscription);
 
         int probed = 0;
         int maxProbes = appProperties.getSubscription().getMaxGapProbesPerRound();
@@ -829,6 +832,43 @@ public class MediaSubscriptionCheckService {
         resource.setShareId(share.getId());
         resource.setValidity(MediaSubscriptionResource.VALIDITY_OK);
         return true;
+    }
+
+    /**
+     * 退役已死的补缺挂载:覆盖快照为空 = 该分享列不出任何集,留着只占 maxGapMounts 名额。
+     * <p>
+     * 与 {@link #retireGapMounts} 的区别:那个退的是"主源已覆盖、功成身退"的挂载,因而对主网盘冗余
+     * 挂载有豁免(留着保线路不断供);这里退的是"已经死了、什么也提供不了"的挂载,主网盘同样要退——
+     * 一个列不出内容的挂载撑不起任何线路。
+     */
+    void retireDeadGapMounts(MediaSubscription subscription) {
+        for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId())) {
+            if (!resource.isGap() || resource.getShareId() == null
+                    || !parseEpisodeList(resource.getEpisodeList()).isEmpty()) {
+                continue;
+            }
+            try {
+                shareService.deleteShare(resource.getShareId());
+            } catch (Exception e) {
+                log.warn("retire dead gap mount failed: {}", e.getMessage());
+                continue;
+            }
+            resource.setGap(false);
+            resource.setMountPath(null);
+            resource.setShareId(null);
+            resource.setValidity(MediaSubscriptionResource.VALIDITY_BAD);
+            resourceRepository.save(resource);
+            log.info("subscription {} retired dead gap mount (resource {})", subscription.getId(), resource.getId());
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                    "补缺源失效已退役:" + StringUtils.defaultIfBlank(resource.getTitle(), "候选源"));
+        }
+    }
+
+    /** 当前常驻补缺挂载数(占 maxGapMounts 名额的那些)。 */
+    private int countGapMounts(MediaSubscription subscription) {
+        return (int) resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
+                .filter(r -> r.isGap() && r.getShareId() != null && StringUtils.isNotBlank(r.getMountPath()))
+                .count();
     }
 
     /** 主源已覆盖补缺源全部集数 → 退役补缺挂载(删 share,资源保留为普通候选)。 */
@@ -1753,36 +1793,39 @@ public class MediaSubscriptionCheckService {
     // ---------- 标题归属匹配(§4.7 候选过滤) ----------
 
     /** 归属匹配名称集:剧名 + 搜索词(整串与最长词) + 元数据别名(换行分隔)。 */
+    /**
+     * 候选标题归属匹配用的名称清单:剧名、搜索词、**裸剧名**(剥掉季号后缀)、元数据别名。
+     * <p>
+     * 裸剧名是关键:订阅名常带季号(片单条目名原样带入,如"诛仙 第四季"),而资源标题的季号写法
+     * 五花八门(第四季/第4季/S04/4/不写)。拿带季号的全名做包含匹配等于要求写法逐字相同,
+     * 会把绝大多数候选误判为不相关(线上曾出现 31 条召回全灭)。季号判定交给 parseTitleSeason 那一关,
+     * 此处只管"是不是这部剧"。
+     */
     static List<String> matchNames(String name, String keyword, String aliases) {
         List<String> names = new ArrayList<>();
-        if (StringUtils.isNotBlank(name)) {
-            names.add(name.trim());
-        }
-        if (StringUtils.isNotBlank(keyword)) {
-            String trimmed = keyword.trim();
-            if (!names.contains(trimmed)) {
-                names.add(trimmed);
-            }
-            // 搜索词常是"剧名 + 盘名/限定词"组合,再取最长一段参与包含匹配
-            String longest = "";
-            for (String part : trimmed.split("\\s+")) {
-                if (part.length() > longest.length()) {
-                    longest = part;
-                }
-            }
-            if (longest.length() >= 2 && !names.contains(longest)) {
-                names.add(longest);
-            }
-        }
+        addName(names, name);
+        addName(names, keyword);
+        // 裸剧名:剥掉"第N季/SN/Season N"后缀,让不同季号写法的候选都能命中
+        addName(names, TextUtils.stripSeasonSuffix(name));
+        addName(names, TextUtils.stripSeasonSuffix(keyword));
         if (StringUtils.isNotBlank(aliases)) {
             for (String alias : aliases.split("\\n")) {
-                String trimmed = alias.trim();
-                if (trimmed.length() >= 2 && !names.contains(trimmed)) {
-                    names.add(trimmed);
-                }
+                addName(names, alias);
             }
         }
         return names;
+    }
+
+    /** 纳入匹配名单:去空白、去重、长度 ≥2;纯季号词(如"第四季")会命中任意同季别剧,必须排除。 */
+    private static void addName(List<String> names, String value) {
+        if (StringUtils.isBlank(value)) {
+            return;
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() < 2 || names.contains(trimmed) || TextUtils.isBareSeasonMarker(trimmed)) {
+            return;
+        }
+        names.add(trimmed);
     }
 
     List<String> matchNames(MediaSubscription subscription) {
@@ -1843,49 +1886,7 @@ public class MediaSubscriptionCheckService {
 
     /** 标题级季标记解析:返回标题明确标注的季号;无标记或多个不同季号(跨季合集)返回 null 不参与判定。 */
     static Integer parseTitleSeason(String title) {
-        if (title == null || title.isBlank()) {
-            return null;
-        }
-        Set<Integer> seasons = new TreeSet<>();
-        Matcher cn = TITLE_SEASON_CN.matcher(title);
-        while (cn.find()) {
-            int value = cn.group(1).matches("\\d+") ? Integer.parseInt(cn.group(1)) : parseChineseNumber(cn.group(1));
-            if (value > 0) {
-                seasons.add(value);
-            }
-        }
-        collectSeason(title, seasons, TITLE_SEASON_SXXE);
-        collectSeason(title, seasons, TITLE_SEASON_ALONE);
-        collectSeason(title, seasons, TITLE_SEASON_EN);
-        return seasons.size() == 1 ? seasons.iterator().next() : null;
-    }
-
-    private static void collectSeason(String title, Set<Integer> seasons, Pattern pattern) {
-        Matcher matcher = pattern.matcher(title);
-        while (matcher.find()) {
-            seasons.add(Integer.parseInt(matcher.group(1)));
-        }
-    }
-
-    /** 中文数字(一~九十九)转阿拉伯;不可解析返回 0。 */
-    static int parseChineseNumber(String text) {
-        if (text == null || text.isBlank()) {
-            return 0;
-        }
-        int result = 0;
-        int current = 0;
-        for (char c : text.toCharArray()) {
-            int digit = "零一二三四五六七八九".indexOf(c);
-            if (digit >= 0) {
-                current = digit;
-            } else if (c == '十') {
-                result += current == 0 ? 10 : current * 10;
-                current = 0;
-            } else {
-                return 0;
-            }
-        }
-        return result + current;
+        return TextUtils.parseTitleSeason(title);
     }
 
     /** 标题宣称的集数进度(TITLE_PROGRESS 各形态的最大值);无信息返回 null。 */

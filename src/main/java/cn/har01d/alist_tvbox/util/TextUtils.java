@@ -4,6 +4,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -100,6 +102,102 @@ public class TextUtils {
             return name;
         }
         return LEADING_NOISE.matcher(name).replaceFirst("");
+    }
+
+    // ---------- 季号解析（追剧订阅与候选标题共用） ----------
+
+    /** 标题级季标记：中文"第N季"、SxxEyy 的季、独立 Sxx、Season N */
+    private static final Pattern TITLE_SEASON_CN = Pattern.compile("第\\s*([0-9一二三四五六七八九十]{1,3})\\s*季");
+    private static final Pattern TITLE_SEASON_SXXE = Pattern.compile("[Ss](\\d{1,2})\\s*[Ee]\\d{1,3}");
+    private static final Pattern TITLE_SEASON_ALONE = Pattern.compile("(?:^|[^A-Za-z0-9])[Ss](\\d{1,2})(?![\\dEe])");
+    private static final Pattern TITLE_SEASON_EN = Pattern.compile("(?i)season\\s*(\\d{1,2})");
+    /** 剧名尾部的季号后缀，用于还原裸剧名 */
+    private static final Pattern TRAILING_SEASON = Pattern.compile(
+            "(?i)\\s*(第\\s*[0-9一二三四五六七八九十]{1,3}\\s*季|season\\s*\\d{1,2}|[Ss]\\d{1,2})\\s*$");
+
+    /** 标题级季标记解析：返回标题明确标注的季号；无标记或多个不同季号（跨季合集）返回 null 不参与判定。 */
+    public static Integer parseTitleSeason(String title) {
+        if (title == null || title.isBlank()) {
+            return null;
+        }
+        Set<Integer> seasons = new TreeSet<>();
+        Matcher cn = TITLE_SEASON_CN.matcher(title);
+        while (cn.find()) {
+            int value = cn.group(1).matches("\\d+") ? Integer.parseInt(cn.group(1)) : parseChineseNumber(cn.group(1));
+            if (value > 0) {
+                seasons.add(value);
+            }
+        }
+        collectSeason(title, seasons, TITLE_SEASON_SXXE);
+        collectSeason(title, seasons, TITLE_SEASON_ALONE);
+        collectSeason(title, seasons, TITLE_SEASON_EN);
+        return seasons.size() == 1 ? seasons.iterator().next() : null;
+    }
+
+    private static void collectSeason(String title, Set<Integer> seasons, Pattern pattern) {
+        Matcher matcher = pattern.matcher(title);
+        while (matcher.find()) {
+            seasons.add(Integer.parseInt(matcher.group(1)));
+        }
+    }
+
+    /** 中文数字（一~九十九）转阿拉伯；不可解析返回 0。 */
+    public static int parseChineseNumber(String text) {
+        if (text == null || text.isBlank()) {
+            return 0;
+        }
+        int result = 0;
+        int current = 0;
+        for (char c : text.toCharArray()) {
+            int digit = "零一二三四五六七八九".indexOf(c);
+            if (digit >= 0) {
+                current = digit;
+            } else if (c == '十') {
+                result += current == 0 ? 10 : current * 10;
+                current = 0;
+            } else {
+                return 0;
+            }
+        }
+        return result + current;
+    }
+
+    /**
+     * 剥掉剧名尾部的季号后缀，还原裸剧名（"诛仙 第四季" → "诛仙"）。
+     * <p>
+     * 订阅名常带季号（片单条目名原样带入），而资源标题的季号写法五花八门（第四季/第4季/S04/4）。
+     * 拿带季号的全名做包含匹配等于要求写法逐字相同，会把绝大多数候选误判为不相关。
+     * 剥完为空时原样返回——空串会退化成"匹配一切"。
+     */
+    public static String stripSeasonSuffix(String name) {
+        if (name == null || name.isBlank()) {
+            return name;
+        }
+        String stripped = TRAILING_SEASON.matcher(name.trim()).replaceFirst("").trim();
+        return stripped.isEmpty() ? name.trim() : stripped;
+    }
+
+    /** 整串就是一个季标记（"第四季"/"S04"/"Season 3"），不含任何剧名信息——不可作为匹配名。 */
+    public static boolean isBareSeasonMarker(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        return TRAILING_SEASON.matcher(text.trim()).replaceFirst("").trim().isEmpty();
+    }
+
+    /**
+     * 季号兜底：调用方未指定或给的是默认值 1，而剧名明确写了季号时，以剧名为准。
+     * <p>
+     * 季号错误会同时静默击穿三条链路——候选入池的季过滤、{@code SxxEyy} 文件名的集号识别、
+     * 播放列表合并的集号解析——每一条都表现为"什么都没搜到/一集都没有"，极难定位。
+     * 用户显式指定的非默认值不覆盖（不猜测用户意图）。
+     */
+    public static Integer resolveSeason(Integer requested, String name) {
+        if (requested != null && requested > 1) {
+            return requested;
+        }
+        Integer parsed = parseTitleSeason(name);
+        return parsed != null ? parsed : requested;
     }
 
     public static String fixName(String name) {

@@ -25,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -302,15 +303,6 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
-    void chineseNumberConversion() {
-        assertEquals(1, MediaSubscriptionCheckService.parseChineseNumber("一"));
-        assertEquals(10, MediaSubscriptionCheckService.parseChineseNumber("十"));
-        assertEquals(11, MediaSubscriptionCheckService.parseChineseNumber("十一"));
-        assertEquals(21, MediaSubscriptionCheckService.parseChineseNumber("二十一"));
-        assertEquals(0, MediaSubscriptionCheckService.parseChineseNumber("百"));
-    }
-
-    @Test
     void fillPoolFiltersIrrelevantResults() {
         Fixture fixture = new Fixture();
         fixture.subscription.setName("苍兰诀");
@@ -405,6 +397,84 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(Math.abs(expected - actual) < 60_000L, "expected ~" + expected + " but was " + actual);
     }
 
+    // ---------- 缺陷 4 回归:死掉的补缺挂载不得再"冒领"集数 ----------
+    // 线上事故:补缺源标题「10集全」,分享已死(取链 参数错误),但旧覆盖快照仍声称覆盖 1~10 集。
+    // 刷新时 walkEpisodes 抛异常被静默吞掉、快照保持不变,随后 missingStill 被这份陈旧快照扣光
+    // → 不触发补搜 → 池永远补不上 → 播放时"已尝试 1 个源"失败。系统自认健康,用户一集都播不了。
+
+    @Test
+    void deadGapMountStopsClaimingEpisodesAndIsRetired() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource gap = new MediaSubscriptionResource();
+        gap.setId(9);
+        gap.setSubscriptionId(1);
+        gap.setLink("https://pan.quark.cn/s/dead");
+        gap.setTitle("测试剧 10集全");
+        gap.setType(5);
+        gap.setGap(true);
+        gap.setShareId(7);
+        gap.setMountPath("/追剧/.sources/1-测试剧-补1");
+        gap.setEpisodeList("[1,2,3,4,5,6,7,8,9,10]"); // 陈旧快照:声称覆盖全 10 集
+        gap.setValidity(MediaSubscriptionResource.VALIDITY_OK);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(gap));
+        // 分享已死:列目录抛错
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new IllegalStateException("failed get link: 参数错误"));
+
+        Set<Integer> missing = new TreeSet<>(Set.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+        fixture.service.fillGaps(fixture.subscription, missing);
+
+        assertEquals(Set.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), missing,
+                "死源不得从缺口里扣掉任何一集 —— 扣掉就不会触发补搜");
+        assertEquals(MediaSubscriptionResource.VALIDITY_BAD, gap.getValidity(), "列不出内容的源必须标 BAD");
+        Mockito.verify(fixture.shareService).deleteShare(7); // 退役,腾出 maxGapMounts 名额
+        assertFalse(gap.isGap());
+        assertNull(gap.getShareId());
+    }
+
+    @Test
+    void liveGapMountStillCoversItsEpisodes() {
+        // 对照组:分享活着就照常扣减缺口,不能因为修缺陷 4 把正常补缺源也误杀
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource gap = new MediaSubscriptionResource();
+        gap.setId(9);
+        gap.setSubscriptionId(1);
+        gap.setLink("https://pan.quark.cn/s/live");
+        gap.setType(5);
+        gap.setGap(true);
+        gap.setShareId(7);
+        gap.setMountPath("/追剧/.sources/1-测试剧-补1");
+        gap.setEpisodeList("[1,2]");
+        gap.setValidity(MediaSubscriptionResource.VALIDITY_OK);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(gap));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files("测试剧.第01集.mkv", "测试剧.第02集.mkv"));
+
+        Set<Integer> missing = new TreeSet<>(Set.of(1, 2, 3));
+        fixture.service.fillGaps(fixture.subscription, missing);
+
+        assertEquals(Set.of(3), missing, "活着的补缺源正常扣减它覆盖的集");
+        assertEquals(MediaSubscriptionResource.VALIDITY_OK, gap.getValidity());
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
+    }
+
+    /** 构造一个 AList 目录响应:全部按视频文件计,体积过 minEpisodeSizeMb 下限。 */
+    private static FsResponse files(String... names) {
+        FsResponse response = new FsResponse();
+        List<FsInfo> list = new ArrayList<>();
+        for (String name : names) {
+            FsInfo info = new FsInfo();
+            info.setName(name);
+            info.setType(0);
+            info.setSize(500L * 1024 * 1024);
+            list.add(info);
+        }
+        response.setFiles(list);
+        return response;
+    }
+
     /** 失效确认分支的 mock 夹具:订阅已挂主源(shareId=5),AList 列目录行为由各测试定制。 */
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
@@ -415,6 +485,7 @@ class MediaSubscriptionCheckServiceTest {
         final SettingRepository settingRepository = Mockito.mock(SettingRepository.class);
         final AListService aListService = Mockito.mock(AListService.class);
         final TelegramService telegramService = Mockito.mock(TelegramService.class);
+        final ShareService shareService = Mockito.mock(ShareService.class);
         final MediaSubscriptionCheckService service;
         final MediaSubscription subscription = new MediaSubscription();
 
@@ -424,7 +495,7 @@ class MediaSubscriptionCheckServiceTest {
             service = new MediaSubscriptionCheckService(subscriptionRepository, resourceRepository, eventRepository,
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),
                     Mockito.mock(IndexTemplateRepository.class), settingRepository,
-                    Mockito.mock(ShareService.class), aListService, telegramService, null, null, null, null,
+                    shareService, aListService, telegramService, null, null, null, null,
                     Mockito.mock(MetadataService.class), Mockito.mock(AutoUpdateExecutor.class),
                     appProperties, new ObjectMapper());
             subscription.setId(1);

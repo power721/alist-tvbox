@@ -708,6 +708,8 @@ const isNavSubscribed = (item: any) => {
 }
 
 const navSubscribe = (item: any) => {
+  // season 只是"未标注季号时"的默认值:榜单条目名常带季号(如"诛仙 第四季"),
+  // 后端 create() 会用 TextUtils.resolveSeason 从名称改写它 —— 此处不再自行判定季号。
   const body: any = {name: item.vod_name, keyword: item.vod_name, season: 1}
   const vodId = String(item.vod_id || '')
   navSubscribing.value = vodId

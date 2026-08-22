@@ -26,6 +26,7 @@ import cn.har01d.alist_tvbox.service.metadata.MetadataService;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,6 +54,8 @@ import java.util.stream.Collectors;
 public class MediaSubscriptionService {
     public static final String CATEGORY_ID = "msub";
     public static final String VOD_ID_PREFIX = "msub:";
+    /** 播放取链失败对资源的降分幅度:够把它挤到同类候选之后,又不至于一次失败就永久出局 */
+    private static final int PLAY_FAILURE_PENALTY = 20;
 
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionResourceRepository resourceRepository;
@@ -126,7 +129,9 @@ public class MediaSubscriptionService {
         subscription.setName(StringUtils.abbreviate(request.getName().trim(), 250));
         subscription.setKeyword(StringUtils.abbreviate(
                 StringUtils.defaultIfBlank(request.getKeyword(), request.getName()).trim(), 250));
-        subscription.setSeason(request.getSeason());
+        // 季号兜底:片单/链接直订等入口不解析季号(片单曾硬编码 season=1),而条目名常写着"第四季"。
+        // 季号错会同时击穿候选季过滤、SxxEyy 集号识别、播放列表集号解析三条链路,且都表现为"什么都没搜到"。
+        subscription.setSeason(TextUtils.resolveSeason(request.getSeason(), subscription.getName()));
         subscription.setDoubanId(request.getDoubanId());
         subscription.setMetaProvider(StringUtils.defaultIfBlank(request.getMetaProvider(), null));
         subscription.setMetaId(StringUtils.defaultIfBlank(request.getMetaId(), null));
@@ -780,10 +785,34 @@ public class MediaSubscriptionService {
                 log.info("subscription {} episode {} via {} failed: {}", subscriptionId, episode, file.dir(), e.getMessage());
                 errors.add(file.dir() + ": " + e.getMessage());
                 checkService.addBrokenEpisodes(subscription, Map.of(episode, file.dir()));
+                demoteFailedSource(subscriptionId, file.dir());
+            }
+        }
+        // 全部候选都播不了:播放期是信噪比最高的失效信号,不能只记个损坏就完事——
+        // 立刻异步补救(先查池换源,池空才搜索),否则用户重试多少次都是同一个死源。
+        if (!candidates.isEmpty()) {
+            try {
+                checkService.checkAsync(uid, subscriptionId);
+            } catch (Exception e) {
+                log.warn("trigger recovery for subscription {} failed: {}", subscriptionId, e.getMessage());
             }
         }
         throw new BadRequestException("第 " + episode + " 集暂无可用播放源(已尝试 " + candidates.size() + " 个源"
                 + (errors.isEmpty() ? "" : ";" + String.join("; ", errors)) + ")");
+    }
+
+    /** 播放取链失败 → 该挂载对应的资源降分,让下一轮选源/换源自然避开它。 */
+    private void demoteFailedSource(int subscriptionId, String dir) {
+        for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscriptionId)) {
+            if (StringUtils.isBlank(resource.getMountPath()) || !dir.startsWith(resource.getMountPath())) {
+                continue;
+            }
+            resource.setScore((resource.getScore() == null ? 0 : resource.getScore()) - PLAY_FAILURE_PENALTY);
+            resource.setCheckedTime(System.currentTimeMillis());
+            resourceRepository.save(resource);
+            log.info("subscription {} demoted resource {} after play failure", subscriptionId, resource.getId());
+            return;
+        }
     }
 
     /** 多源合并播放(§4.5,需求 1):按集号合并,优先级 转存副本(自有盘)> 主源 > 补缺源,排序成单一播放列表。
