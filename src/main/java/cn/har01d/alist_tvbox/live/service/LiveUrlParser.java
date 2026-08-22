@@ -71,7 +71,9 @@ public final class LiveUrlParser {
             return new String[]{"bili", roomId};
         }
         if (isHost(host, "cc.163.com")) {
-            return new String[]{"cc", roomId};
+            // /user/{cuteid} 是主播空间页,cuteid 与房间 id 同值,可当房间号使用
+            String userId = "user".equals(roomId) ? segment(segments, 1) : roomId;
+            return userId == null ? null : new String[]{"cc", userId};
         }
         if (isHost(host, "live.kuaishou.com") || isHost(host, "live.kuaishou.cn")) {
             // 快手房间页固定为 /u/{主播id},首段 "u" 不是房间号
@@ -89,6 +91,29 @@ public final class LiveUrlParser {
             return new String[]{"soop", roomId};
         }
         return null;
+    }
+
+    /**
+     * 由平台与房间号反向构建官方直播间页地址,与 {@link #parse} 的域名规则互逆。
+     * 平台未接入或房间号含非法字符时返回 null,调用方需自行降级。
+     */
+    public static String buildRoomUrl(String platform, String roomId) {
+        if (platform == null || roomId == null || !ROOM_ID.matcher(roomId).matches()) {
+            return null;
+        }
+        return switch (platform) {
+            case "huya" -> "https://www.huya.com/" + roomId;
+            case "douyu" -> "https://www.douyu.com/" + roomId;
+            case "bili" -> "https://live.bilibili.com/" + roomId;
+            // CC 房间直链 /{id}/ 会被官方前端重定向到首页,主播空间页 /user/{id}/ 可直达且含"Ta的直播房间"入口
+            case "cc" -> "https://cc.163.com/user/" + roomId + "/";
+            // 快手房间页按主播 id 展示,与 parse 的 /u/{id} 规则一致
+            case "ks" -> "https://live.kuaishou.com/u/" + roomId;
+            case "douyin" -> "https://live.douyin.com/" + roomId;
+            case "twitch" -> "https://www.twitch.tv/" + roomId;
+            case "soop" -> "https://play.sooplive.com/" + roomId;
+            default -> null;
+        };
     }
 
     /** 分享短链/落地页(需经网络展开):B站 b23.tv、抖音 v.douyin.com 与 iesdouyin 分享页、快手 v.kuaishou.com。 */

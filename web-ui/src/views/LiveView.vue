@@ -102,6 +102,7 @@ interface LiveFollow {
   roomName?: string;
   anchorName?: string;
   cover?: string;
+  roomUrl?: string;
   live?: boolean | null;
   followedTime?: number;
 }
@@ -716,7 +717,9 @@ onUnmounted(() => {
                 <img v-if="row.cover" :src="row.cover" :alt="row.roomName" referrerpolicy="no-referrer"
                      :class="{offline: row.live === false}" @click="openFollowRoom(row)">
                 <div>
-                  <div>{{ row.roomName || row.roomId }}</div>
+                  <a v-if="row.roomUrl" :href="row.roomUrl" target="_blank" rel="noopener noreferrer"
+                     class="follow-room-link">{{ row.roomName || row.roomId }}</a>
+                  <div v-else>{{ row.roomName || row.roomId }}</div>
                   <div class="follow-anchor">{{ row.anchorName }}</div>
                 </div>
               </div>
@@ -1016,6 +1019,15 @@ onUnmounted(() => {
   cursor: default;
   filter: grayscale(0.8);
   opacity: 0.6;
+}
+
+.follow-room-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+.follow-room-link:hover {
+  text-decoration: underline;
 }
 
 .follow-anchor {

@@ -19,6 +19,7 @@ class LiveUrlParserTest {
             "https://www.douyu.com/288016, douyu, 288016",
             "https://live.bilibili.com/6, bili, 6",
             "https://cc.163.com/362433, cc, 362433",
+            "https://cc.163.com/user/362433/, cc, 362433",
             "https://live.kuaishou.com/u/3x9r7wqbqvi6cks, ks, 3x9r7wqbqvi6cks",
             "https://live.kuaishou.cn/u/3x9r7wqbqvi6cks, ks, 3x9r7wqbqvi6cks",
             "https://live.douyin.com/745964462470, douyin, 745964462470",
@@ -45,6 +46,7 @@ class LiveUrlParserTest {
         assertNull(LiveUrlParser.parse("https://www.bilibili.com/video/BV1xx411c7mD")); // 视频页不是直播间
         assertNull(LiveUrlParser.parse("https://www.huya.com/")); // 首页没有房间号
         assertNull(LiveUrlParser.parse("https://live.kuaishou.com/u")); // /u 后没有主播 id
+        assertNull(LiveUrlParser.parse("https://cc.163.com/user")); // /user 后没有主播 id
         assertNull(LiveUrlParser.parse("https://live.kuaishou.com/profile/abc")); // 非房间页
         assertNull(LiveUrlParser.parse("https://live.douyin.com/user/MS4wLjABAAAA")); // 主播主页不是房间页
         assertNull(LiveUrlParser.parse("https://live.bilibili.com/6?extra=a b")); // 非法字符
@@ -61,6 +63,22 @@ class LiveUrlParserTest {
         assertEquals("live.bilibili.com/6", LiveUrlParser.extractUrl("快来 live.bilibili.com/6 一起看"));
         assertNull(LiveUrlParser.extractUrl("今天天气不错"));
         assertNull(LiveUrlParser.extractUrl(null));
+    }
+
+    @Test
+    void buildRoomUrlMatchesParseRules() {
+        assertEquals("https://www.huya.com/11342412", LiveUrlParser.buildRoomUrl("huya", "11342412"));
+        assertEquals("https://www.douyu.com/288016", LiveUrlParser.buildRoomUrl("douyu", "288016"));
+        assertEquals("https://live.bilibili.com/6", LiveUrlParser.buildRoomUrl("bili", "6"));
+        assertEquals("https://cc.163.com/user/362433/", LiveUrlParser.buildRoomUrl("cc", "362433"));
+        assertEquals("https://live.kuaishou.com/u/3x9r7wqbqvi6cks", LiveUrlParser.buildRoomUrl("ks", "3x9r7wqbqvi6cks"));
+        assertEquals("https://live.douyin.com/745964462470", LiveUrlParser.buildRoomUrl("douyin", "745964462470"));
+        assertEquals("https://www.twitch.tv/riotgames", LiveUrlParser.buildRoomUrl("twitch", "riotgames"));
+        assertEquals("https://play.sooplive.com/abbbbbb", LiveUrlParser.buildRoomUrl("soop", "abbbbbb"));
+        assertNull(LiveUrlParser.buildRoomUrl("unknown", "123"));
+        assertNull(LiveUrlParser.buildRoomUrl(null, "123"));
+        assertNull(LiveUrlParser.buildRoomUrl("huya", null));
+        assertNull(LiveUrlParser.buildRoomUrl("huya", "6?x=1")); // 非法字符不得拼入外部跳转
     }
 
     @Test

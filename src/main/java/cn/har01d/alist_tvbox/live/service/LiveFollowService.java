@@ -246,6 +246,7 @@ public class LiveFollowService {
             dto.setRoomName(follow.getRoomName());
             dto.setAnchorName(follow.getAnchorName());
             dto.setCover(absoluteCover(follow.getCover()));
+            dto.setRoomUrl(LiveUrlParser.buildRoomUrl(follow.getPlatform(), follow.getRoomId()));
             dto.setFollowedTime(follow.getCreatedTime());
             MovieDetail info = refreshed.get(cacheKey(follow.getPlatform(), follow.getRoomId()));
             if (info != null) {
