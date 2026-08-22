@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service.metadata;
 
 import cn.har01d.alist_tvbox.dto.EpisodeAirDate;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
+import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import org.junit.jupiter.api.Test;
@@ -121,5 +122,199 @@ class DoubanMetadataProviderTest {
         DoubanMetadataProvider on = new DoubanMetadataProvider(
                 null, new MetadataHttp(null), new MetadataHealth(), configured, null);
         assertEquals("bid=abc; ll=118211", on.doubanCookie());
+    }
+
+    // ---------- 名称桥接(播出时间轴豆瓣源兜底) ----------
+
+    @Test
+    void seasonHintParsesChineseAndArabicAndTrailingDigit() {
+        assertEquals(4, DoubanMetadataProvider.seasonHintOf("诛仙 第四季"));
+        assertEquals(9, DoubanMetadataProvider.seasonHintOf("瑞克和莫蒂 第九季"));
+        assertEquals(2, DoubanMetadataProvider.seasonHintOf("庆余年 第二部"));
+        assertEquals(2, DoubanMetadataProvider.seasonHintOf("杀人者的购物中心2"));
+        assertEquals(23, DoubanMetadataProvider.seasonHintOf("某番 第二十三季"));
+        assertEquals(0, DoubanMetadataProvider.seasonHintOf("九门"));
+        assertEquals(0, DoubanMetadataProvider.seasonHintOf("  "));
+    }
+
+    @Test
+    void stripSeasonMarkLeavesCleanQuery() {
+        assertEquals("诛仙", DoubanMetadataProvider.stripSeasonMark("诛仙 第四季"));
+        assertEquals("瑞克和莫蒂", DoubanMetadataProvider.stripSeasonMark("瑞克和莫蒂 第九季"));
+        assertEquals("杀人者的购物中心", DoubanMetadataProvider.stripSeasonMark("杀人者的购物中心2"));
+        assertEquals("九门", DoubanMetadataProvider.stripSeasonMark("九门"));
+        assertNull(DoubanMetadataProvider.stripSeasonMark(null));
+    }
+
+    @Test
+    void parseChineseNumeralCoversSeasonRange() {
+        assertEquals(1, DoubanMetadataProvider.parseChineseNumeral("一"));
+        assertEquals(9, DoubanMetadataProvider.parseChineseNumeral("九"));
+        assertEquals(10, DoubanMetadataProvider.parseChineseNumeral("十"));
+        assertEquals(19, DoubanMetadataProvider.parseChineseNumeral("十九"));
+        assertEquals(23, DoubanMetadataProvider.parseChineseNumeral("二十三"));
+        assertEquals(0, DoubanMetadataProvider.parseChineseNumeral("第"));
+        assertEquals(4, DoubanMetadataProvider.parseNumber("4"));
+        assertEquals(0, DoubanMetadataProvider.parseNumber(""));
+    }
+
+    @Test
+    void nameBridgePrefersExactSameNameWithMatchingYear() {
+        // 「悬案」线上实测形态:同名 2026 正主 + 2018 旧片,年份门禁必须选 2026
+        TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
+        Mockito.when(tmdb.search("悬案")).thenReturn(List.of(
+                item("273114", "悬案", "2026"), item("245703", "悬案解码", "2025"), item("76582", "悬案", "2018")));
+        Mockito.when(tmdb.details("273114", 1)).thenReturn(tmdbDetails());
+        DoubanMetadataProvider provider = new DoubanMetadataProvider(
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("悬案");
+        douban.setYear("2026");
+        provider.bridgeTmdbByName(douban, 1);
+
+        Mockito.verify(tmdb).details("273114", 1); // 2018 同名旧片被年份拦下
+        assertEquals(MetadataDetails.STATUS_RETURNING, douban.getStatus());
+        assertEquals(456000L, douban.getNextAirTime());
+    }
+
+    @Test
+    void nameBridgeGivesUpWhenAllSameNameCandidatesMissYear() {
+        TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
+        Mockito.when(tmdb.search("悬案")).thenReturn(List.of(item("76582", "悬案", "2018")));
+        DoubanMetadataProvider provider = new DoubanMetadataProvider(
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("悬案");
+        douban.setYear("2026");
+        provider.bridgeTmdbByName(douban, 1);
+
+        Mockito.verify(tmdb, Mockito.never()).details(Mockito.anyString(), Mockito.anyInt());
+        assertNull(douban.getNextAirTime());
+    }
+
+    @Test
+    void nameBridgeSkipsSubstringImitation() {
+        // 「悬案」⊂「悬案解码」:归一化整词相等才算命中,子串嵌套的模仿者不碰
+        TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
+        Mockito.when(tmdb.search("悬案")).thenReturn(List.of(item("245703", "悬案解码 Dept. Q", "2025")));
+        DoubanMetadataProvider provider = new DoubanMetadataProvider(
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("悬案");
+        douban.setYear("2026");
+        provider.bridgeTmdbByName(douban, 1);
+
+        Mockito.verify(tmdb, Mockito.never()).details(Mockito.anyString(), Mockito.anyInt());
+    }
+
+    @Test
+    void nameBridgeRelaxesYearGateForLongRunningSeason() {
+        // 「诛仙 第四季」:TMDB 条目首播 2022,与豆瓣年份 2026 必然对不上,多季放行
+        TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
+        Mockito.when(tmdb.search("诛仙")).thenReturn(List.of(
+                item("206484", "诛仙", "2022"), item("293875", "诛仙合集篇", "2025")));
+        Mockito.when(tmdb.details("206484", 4)).thenReturn(tmdbDetails());
+        DoubanMetadataProvider provider = new DoubanMetadataProvider(
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("诛仙 第四季");
+        douban.setYear("2026");
+        provider.bridgeTmdbByName(douban, 4);
+
+        Mockito.verify(tmdb).details("206484", 4);
+        assertEquals(456000L, douban.getNextAirTime());
+    }
+
+    @Test
+    void nameBridgeUsesTitleSeasonHintWhenSubscriptionSeasonIsOne() {
+        // 豆瓣分条目形态:「瑞克和莫蒂 第九季」season=1,标题季标 9 才是 TMDB 的季号
+        TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
+        Mockito.when(tmdb.search("瑞克和莫蒂")).thenReturn(List.of(
+                item("60625", "瑞克和莫蒂", "2013"), item("202282", "瑞克和莫蒂：日漫版", "2024")));
+        Mockito.when(tmdb.details("60625", 9)).thenReturn(tmdbDetails());
+        DoubanMetadataProvider provider = new DoubanMetadataProvider(
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("瑞克和莫蒂 第九季");
+        douban.setYear("2026");
+        provider.bridgeTmdbByName(douban, 1);
+
+        Mockito.verify(tmdb).details("60625", 9);
+        assertEquals(456000L, douban.getNextAirTime());
+    }
+
+    @Test
+    void nameBridgeMatchesTrailingDigitSeasonAgainstBaseName() {
+        // 「杀人者的购物中心2」:TMDB 是同名条目的 S2,基名整词命中 + 尾数字季号
+        TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
+        Mockito.when(tmdb.search("杀人者的购物中心")).thenReturn(List.of(item("215072", "杀人者的购物中心", "2024")));
+        Mockito.when(tmdb.details("215072", 2)).thenReturn(tmdbDetails());
+        DoubanMetadataProvider provider = new DoubanMetadataProvider(
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("杀人者的购物中心2");
+        douban.setYear("2026");
+        provider.bridgeTmdbByName(douban, 1);
+
+        Mockito.verify(tmdb).details("215072", 2);
+        assertEquals(456000L, douban.getNextAirTime());
+    }
+
+    @Test
+    void nameBridgeSkippedWhenImdbBridgeAlreadyProvidedSchedule() {
+        TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
+        DoubanMetadataProvider provider = new DoubanMetadataProvider(
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("九门");
+        douban.setNextAirTime(1L); // IMDb 桥接已带出日程
+        provider.bridgeTmdbByName(douban, 1);
+
+        Mockito.verifyNoInteractions(tmdb);
+    }
+
+    @Test
+    void nameBridgeRejectsSeasonMissingOnTmdb() {
+        // TMDB 无该季(季标误判):details 无集数 → 宁缺毋滥,不合并
+        TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
+        Mockito.when(tmdb.search("某剧")).thenReturn(List.of(item("123", "某剧", "2026")));
+        Mockito.when(tmdb.details("123", 7)).thenReturn(new MetadataDetails()); // 无 totalEpisodes
+        DoubanMetadataProvider provider = new DoubanMetadataProvider(
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("某剧 第七季");
+        douban.setYear("2026");
+        provider.bridgeTmdbByName(douban, 1);
+
+        Mockito.verify(tmdb).details("123", 7);
+        assertNull(douban.getNextAirTime());
+    }
+
+    private static MetadataSearchItem item(String id, String name, String year) {
+        MetadataSearchItem entry = new MetadataSearchItem();
+        entry.setProvider("tmdb");
+        entry.setId(id);
+        entry.setName(name);
+        entry.setYear(year);
+        return entry;
+    }
+
+    private static MetadataDetails tmdbDetails() {
+        MetadataDetails tmdb = new MetadataDetails();
+        tmdb.setProvider("tmdb");
+        tmdb.setStatus(MetadataDetails.STATUS_RETURNING);
+        tmdb.setTotalEpisodes(33);
+        tmdb.setAiredEpisodes(29);
+        tmdb.setNextAirTime(456000L);
+        tmdb.setUpcoming(List.of(new EpisodeAirDate(30, 456000L)));
+        return tmdb;
     }
 }

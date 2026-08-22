@@ -577,7 +577,10 @@ public class MediaSubscriptionCheckService {
         }
         long now = System.currentTimeMillis();
         long interval = appProperties.getSubscription().getMetaRefreshIntervalHours() * 3600_000L;
-        if (subscription.getMetaSyncTime() != null && now - subscription.getMetaSyncTime() < interval) {
+        // 日程全空的订阅不受 24h 间隔限制:provider 侧桥接能力升级(如豆瓣名称桥接)后,
+        // 下一轮巡检(≤ checkIntervalHours)即能补上播出时间轴,不必等满一天;detailsCache 6h 兜底防打爆
+        boolean noSchedule = subscription.getNextAirTime() == null && StringUtils.isBlank(subscription.getSchedule());
+        if (subscription.getMetaSyncTime() != null && now - subscription.getMetaSyncTime() < interval && !noSchedule) {
             return;
         }
         subscription.setMetaSyncTime(now);

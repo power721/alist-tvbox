@@ -35,6 +35,8 @@ import cn.har01d.alist_tvbox.util.Utils;
  * 本地 movie 表(豆瓣同步库)兜底与合并;详情尝试 rexxar 条目接口补集数(容错,失败仅本地字段)。
  * 配置 Setting douban_cookie 后追加详情页解析:取"又名"(标题归属匹配用)与 IMDb id,
  * 并经 IMDb 桥接 TMDB(单集播出日程/状态/别名,豆瓣本身无这些字段);详情页抓取全局限速防封。
+ * IMDb 桥接未命中(未配 cookie/页面被风控/TMDB 无该 IMDb)时,退回<b>名称桥接</b>:
+ * 豆瓣名剔季缀搜 TMDB,精确同名 + 年份门禁(多季长篇放行)后按有效季合并 —— 播出时间轴不再只剩 TMDB 源订阅。
  */
 @Slf4j
 @Component
@@ -45,6 +47,10 @@ public class DoubanMetadataProvider implements MetadataProvider {
     private static final String SUBJECT_URL = "https://movie.douban.com/subject/";
     private static final Pattern ALIAS_PATTERN = Pattern.compile("又名:.*?</span>\\s*([^<]+)");
     private static final Pattern IMDB_PATTERN = Pattern.compile("IMDb:.*?(tt\\d{7,10})");
+    /** 季标:第N季/第N部(N 为阿拉伯或中文数字,「瑞克和莫蒂 第九季」「庆余年 第二部」)。 */
+    static final Pattern SEASON_MARK = Pattern.compile("第\\s*([0-9一二三四五六七八九十]{1,3})\\s*[季部]");
+    /** 尾缀季数:CJK 后跟单数字 2-9 结尾(「杀人者的购物中心2」= S2);1 是剧名本身不算。 */
+    static final Pattern TRAILING_SEASON_MARK = Pattern.compile("\\p{IsHan}([2-9])$");
     /** 详情页最小请求间隔:cookie 抓取对账号安全敏感,宁可慢不可被封(巡检每日一次,可接受) */
     private static final long PAGE_INTERVAL_MS = 8000;
 
@@ -180,6 +186,22 @@ public class DoubanMetadataProvider implements MetadataProvider {
                     if (StringUtils.isBlank(details.getCover()) && body.hasNonNull("pic")) {
                         details.setCover(body.path("pic").path("large").asText(body.path("pic").path("normal").asText("")));
                     }
+                    if (StringUtils.isBlank(details.getYear()) && body.hasNonNull("year")) {
+                        details.setYear(String.valueOf(body.get("year").asInt()));
+                    }
+                    // rexxar aka:名称桥接的匹配素材(也是标题归属别名,详情页又名缺失时补上)
+                    if (body.hasNonNull("aka") && body.get("aka").isArray()) {
+                        List<String> akas = new ArrayList<>();
+                        for (JsonNode aka : body.get("aka")) {
+                            String alias = aka.asText("");
+                            if (StringUtils.isNotBlank(alias) && alias.length() <= 100) {
+                                akas.add(alias);
+                            }
+                        }
+                        if (!akas.isEmpty()) {
+                            details.setAliases(akas);
+                        }
+                    }
                     failures.remove(id);
                 }
                 health.record(NAME, true);
@@ -206,6 +228,7 @@ public class DoubanMetadataProvider implements MetadataProvider {
             // 在线 subject id 非数字,本地表兜底不适用
         }
         enrichFromSubjectPage(details, id, season);
+        bridgeTmdbByName(details, season);
         return details;
     }
 
@@ -216,12 +239,160 @@ public class DoubanMetadataProvider implements MetadataProvider {
             return;
         }
         if (!page.aliases().isEmpty()) {
-            details.setAliases(page.aliases());
+            // 详情页又名优先(rexxar aka 排后):归属匹配以豆瓣页面口径为准
+            List<String> merged = new ArrayList<>(page.aliases());
+            if (details.getAliases() != null) {
+                for (String alias : details.getAliases()) {
+                    if (StringUtils.isNotBlank(alias) && !merged.contains(alias)) {
+                        merged.add(alias);
+                    }
+                }
+            }
+            details.setAliases(merged);
         }
         if (StringUtils.isNotBlank(page.imdbId()) && tmdbMetadataProvider != null) {
             MetadataDetails tmdb = tmdbMetadataProvider.detailsByImdb(page.imdbId(), season);
             mergeTmdbDetails(details, tmdb);
         }
+    }
+
+    /**
+     * 名称桥接(IMDb 桥接的兜底):IMDb 取不到或未命中时,用豆瓣名(剔季缀)搜 TMDB,
+     * <b>精确同名</b>(剧名/别名/剔季缀基名,归一化后整词相等)且<b>年份门禁</b>通过才合并 ——
+     * 同名异剧(「悬案」2026 vs 2018 vs 「悬案解码」)靠年份拦,子串嵌套(悬案⊂悬案解码)靠整词拦。
+     * 多季长篇(有效季 &gt; 1,「诛仙 第四季」TMDB 首播 2022)年份必然对不上,放行年份门禁。
+     * 有效季 = 订阅季(用户显式选的优先)或标题季标(瑞克和莫蒂 第九季 → S9)。
+     */
+    void bridgeTmdbByName(MetadataDetails details, int season) {
+        if (tmdbMetadataProvider == null || details.getNextAirTime() != null
+                || (details.getUpcoming() != null && !details.getUpcoming().isEmpty())) {
+            return; // IMDb 桥接已带出日程,不重复
+        }
+        String title = details.getName();
+        if (StringUtils.isBlank(title)) {
+            return;
+        }
+        String query = stripSeasonMark(title);
+        if (StringUtils.isBlank(query)) {
+            return;
+        }
+        int effectiveSeason = Math.max(season, seasonHintOf(title));
+        List<String> names = new ArrayList<>();
+        names.add(title);
+        names.add(query); // 剔季缀基名:「杀人者的购物中心2」要匹配 TMDB 的「杀人者的购物中心」
+        if (details.getAliases() != null) {
+            names.addAll(details.getAliases());
+        }
+        List<MetadataSearchItem> matched = new ArrayList<>();
+        for (MetadataSearchItem item : tmdbMetadataProvider.search(query)) {
+            String candidate = normalizeTitle(item.getName());
+            if (candidate.isEmpty()) {
+                continue;
+            }
+            for (String name : names) {
+                if (candidate.equals(normalizeTitle(name))) {
+                    matched.add(item);
+                    break;
+                }
+            }
+        }
+        if (matched.isEmpty()) {
+            return;
+        }
+        Integer year = parseYear(details.getYear());
+        if (year != null && effectiveSeason < 2) {
+            // 单季条目年份必须对上(候选缺年份视为通过);全不沾 = 同名异剧,放弃
+            List<MetadataSearchItem> yearMatched = new ArrayList<>();
+            for (MetadataSearchItem item : matched) {
+                Integer candidateYear = parseYear(item.getYear());
+                if (candidateYear == null || Math.abs(candidateYear - year) <= 1) {
+                    yearMatched.add(item);
+                }
+            }
+            if (yearMatched.isEmpty()) {
+                log.info("douban name bridge skip {} ({}): same-name candidates {} share no year",
+                        title, year, matched.stream().map(i -> i.getName() + "/" + i.getYear()).toList());
+                return;
+            }
+            matched = yearMatched;
+        }
+        MetadataSearchItem best = matched.get(0); // 搜索相关性序,门禁后取首位
+        MetadataDetails tmdb = tmdbMetadataProvider.details(best.getId(), effectiveSeason);
+        if (tmdb == null || tmdb.getTotalEpisodes() == null || tmdb.getTotalEpisodes() <= 0) {
+            return; // TMDB 无该季(季标误判/未收录),宁缺毋滥
+        }
+        log.info("douban name bridge: {} → tmdb {} ({}) season {}", title, best.getId(), best.getName(), effectiveSeason);
+        mergeTmdbDetails(details, tmdb);
+    }
+
+    /** 标题季数提示:第N季/第N部(中文数字可)或尾缀数字(剧名2);无 → 0。 */
+    static int seasonHintOf(String title) {
+        if (StringUtils.isBlank(title)) {
+            return 0;
+        }
+        Matcher matcher = SEASON_MARK.matcher(title);
+        if (matcher.find()) {
+            return parseNumber(matcher.group(1));
+        }
+        matcher = TRAILING_SEASON_MARK.matcher(title);
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
+    }
+
+    /** 剔除季标(含尾缀数字)后的基名,作搜索词与匹配基名:「诛仙 第四季」→「诛仙」。 */
+    static String stripSeasonMark(String title) {
+        if (title == null) {
+            return null;
+        }
+        String stripped = SEASON_MARK.matcher(title).replaceAll("");
+        Matcher trailing = TRAILING_SEASON_MARK.matcher(stripped);
+        if (trailing.find()) {
+            stripped = stripped.substring(0, trailing.start(1));
+        }
+        return stripped.trim();
+    }
+
+    static int parseNumber(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return 0;
+        }
+        if (raw.chars().allMatch(c -> c >= '0' && c <= '9')) {
+            try {
+                return Integer.parseInt(raw);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return parseChineseNumeral(raw);
+    }
+
+    /** 中文数字(≤ 两位,季号足够):十→10、十九→19、二十三→23;解析不了返回 0。 */
+    static int parseChineseNumeral(String raw) {
+        int p = raw.indexOf('十');
+        if (p < 0) {
+            return raw.length() == 1 ? Math.max(chineseDigit(raw.charAt(0)), 0) : 0;
+        }
+        if (raw.length() > 3) {
+            return 0;
+        }
+        int tens = p == 0 ? 1 : chineseDigit(raw.charAt(0));
+        int ones = p == raw.length() - 1 ? 0 : chineseDigit(raw.charAt(p + 1));
+        return tens > 0 && ones >= 0 ? tens * 10 + ones : 0;
+    }
+
+    private static int chineseDigit(char c) {
+        return "零一二三四五六七八九".indexOf(c);
+    }
+
+    static String normalizeTitle(String s) {
+        return s == null ? "" : s.replaceAll("[^\\p{L}\\p{N}]", "").toLowerCase();
+    }
+
+    static Integer parseYear(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+        Matcher matcher = Pattern.compile("(19[89]\\d|20[0-2]\\d)").matcher(raw);
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : null;
     }
 
     private DoubanSubjectPage fetchSubjectPage(String id) {
