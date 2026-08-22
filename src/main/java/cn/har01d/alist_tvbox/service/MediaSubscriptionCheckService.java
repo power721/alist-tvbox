@@ -58,9 +58,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -176,6 +179,12 @@ public class MediaSubscriptionCheckService {
         thread.setDaemon(true);
         return thread;
     });
+    /** 多源搜索并发池(TG 聚合 + 玩偶/盘链/观影/蜗牛 各一路):串行排队时总时长=各源之和(线上 37s),并发后=最慢一路 */
+    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(5, r -> {
+        Thread thread = new Thread(r, "msub-search");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     public MediaSubscriptionCheckService(MediaSubscriptionRepository subscriptionRepository,
                                          MediaSubscriptionResourceRepository resourceRepository,
@@ -228,6 +237,7 @@ public class MediaSubscriptionCheckService {
     @PreDestroy
     void shutdown() {
         executor.shutdownNow();
+        searchExecutor.shutdownNow();
     }
 
     /** 每小时第 20 分钟扫描到期订阅(避开 :00/:30 分享校验高峰),jitter 后转单线程执行器串行处理。 */
@@ -2265,33 +2275,64 @@ public class MediaSubscriptionCheckService {
     // ---------- 候选池与打分 ----------
 
     /**
-     * 多源聚合搜索:TG 三路(PanSou/TG-Search/网页)结果之上,并入玩偶聚合站源
-     * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接)与盘链/观影/蜗牛源(需用户
-     * 自配账号/Cookie,未配置时静默关闭),按 link 天然去重;任一新源失败不影响其它源结果。
+     * 多源聚合搜索(五路并发):TG 聚合(PanSou/TG-Search/网页,内部再并行 —— 追更一律走聚合,
+     * 回退链"够用即停"会让配了盘搜的部署永远调不到另外两个源)之上,并入玩偶聚合站源
+     * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接)与盘链/观影/蜗牛源(需用户自配
+     * 账号/Cookie,未配置时静默关闭)。<b>五路同时发起</b> —— 原先站点源在 TG 全部返回后逐个
+     * 串行排队,总时长 = 各源之和(线上 37s 级),并发后 = 最慢一路;各源内部自带超时/退避,
+     * 外层 90s 硬顶兜底;任一源失败静默为空,按 link 天然去重,TG 结果在前(先见先得)。
      */
     private List<Message> searchAllSources(String keyword, int size, boolean cached) {
-        // 追更一律走聚合模式:盘搜/TG-Search/电报网页同时跑。回退链"够用即停"会让配了盘搜的部署
-        // 永远调不到另外两个源 —— 而资源不够时重复搜同一个源没有意义,结果不会变。
-        List<Message> messages = new ArrayList<>(appProperties.getSubscription().isAggregateSearch()
-                ? telegramService.searchAggregated(keyword, size, cached)
-                : telegramService.search(keyword, size, false, cached));
+        CompletableFuture<List<Message>> telegram = searchAsync("telegram", keyword, () ->
+                appProperties.getSubscription().isAggregateSearch()
+                        ? telegramService.searchAggregated(keyword, size, cached)
+                        : telegramService.search(keyword, size, false, cached));
+        CompletableFuture<List<Message>> wanou = wanouSearchService != null && appProperties.getSubscription().isWanouEnabled()
+                ? searchAsync("wanou", keyword, () -> wanouSearchService.search(keyword)) : null;
+        CompletableFuture<List<Message>> panlian = panLianSearchService != null
+                ? searchAsync("panlian", keyword, () -> panLianSearchService.search(keyword)) : null;
+        CompletableFuture<List<Message>> guanying = guanYingSearchService != null
+                ? searchAsync("guanying", keyword, () -> guanYingSearchService.search(keyword)) : null;
+        CompletableFuture<List<Message>> woniu = woniuSearchService != null
+                ? searchAsync("woniu", keyword, () -> woniuSearchService.search(keyword)) : null;
+
+        List<Message> messages = new ArrayList<>(joinSearch("telegram", telegram));
         Set<String> links = new java.util.HashSet<>();
         for (Message message : messages) {
             links.add(message.getLink());
         }
-        if (wanouSearchService != null && appProperties.getSubscription().isWanouEnabled()) {
-            mergeSource(messages, links, wanouSearchService.search(keyword), "wanou", keyword);
+        if (wanou != null) {
+            mergeSource(messages, links, joinSearch("wanou", wanou), "wanou", keyword);
         }
-        if (panLianSearchService != null) {
-            mergeSource(messages, links, panLianSearchService.search(keyword), "panlian", keyword);
+        if (panlian != null) {
+            mergeSource(messages, links, joinSearch("panlian", panlian), "panlian", keyword);
         }
-        if (guanYingSearchService != null) {
-            mergeSource(messages, links, guanYingSearchService.search(keyword), "guanying", keyword);
+        if (guanying != null) {
+            mergeSource(messages, links, joinSearch("guanying", guanying), "guanying", keyword);
         }
-        if (woniuSearchService != null) {
-            mergeSource(messages, links, woniuSearchService.search(keyword), "woniu", keyword);
+        if (woniu != null) {
+            mergeSource(messages, links, joinSearch("woniu", woniu), "woniu", keyword);
         }
         return messages;
+    }
+
+    /** 单源搜索任务:并发池执行 + 90s 硬顶(各源内部超时之外的兜底),失败静默为空不影响其它源。 */
+    private CompletableFuture<List<Message>> searchAsync(String source, String keyword, Supplier<List<Message>> task) {
+        return CompletableFuture.supplyAsync(task, searchExecutor)
+                .orTimeout(90, TimeUnit.SECONDS)
+                .exceptionally(e -> {
+                    log.warn("{} search failed for [{}]: {}", source, keyword, e.getMessage());
+                    return List.of();
+                });
+    }
+
+    private List<Message> joinSearch(String source, CompletableFuture<List<Message>> future) {
+        try {
+            return future.join();
+        } catch (Exception e) { // exceptionally 已兜底,防御 join 意外(CancellationException 一类)
+            log.warn("{} search join failed: {}", source, e.getMessage());
+            return List.of();
+        }
     }
 
     private void mergeSource(List<Message> messages, Set<String> links, List<Message> extra, String source, String keyword) {

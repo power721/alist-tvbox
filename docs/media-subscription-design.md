@@ -47,6 +47,8 @@
 
 > **流探测误杀事故(2026-08-22 20:09,同日修)**:线上「悬案」点了一次「检查」,主源被退役删挂载、详情 404。三层根因与修复:①**「参数错误」同文案两义**——既是真死链的 AList 报错,也是百度游客取链撞反爬瞬时窗口(该主源半小时前还在正常拉流);`verifyStream` 取链失败路径把它按 GONE 判死,且样本探测+传染二次探测在 2.4s 内撞同一个反爬窗口(相关性失败,非独立证据)→ 整源退役+删挂载+90 天黑名单。修复:verifyStream 单独把「参数错误」降级为 TRANSIENT 不下结论(误杀=删挂载/黑名单,误留=行降 FAILED/缺集重开/列目录失效路径仍兜底,代价不对称);明确过期措辞(链接已过期 errno 4100018/分享已失效)仍判死。②**判死路径不换源**:onInvalid(列目录失败)自带 activateNextCandidate,而采样/传染判死只退役不重挂 → 固定路径空到下轮巡检(退避可达 24h)。修复:doCheck 在 sampleMounted 后检查 shareId 悬空即同轮 ensureSource 重挂固定路径(置于 ensureMainDrives 前,新主源优先占最佳候选)。③**列得出 ≠ 播得了**:`probeShare` 补缺/主盘/线路三处探测只列目录,115 单集分享(errno 4100018 分享页活/文件链死)照样挂载、下轮采样才发现。修复:probeShare 临时挂载窗口内抽一行 verifyStream,明确 FAILED 以「链接已过期(文件不可播)」上抛 → 调用方按 GONE 退役+黑名单,不再占挂载名额;瞬时/无结论不拦(代理型驱动无直链=VERIFIED 不受影响)。单测:参数错误→TRANSIENT/明确过期→FAILED/probeShare 链死拒挂+临时挂载即删/传染撞参数错误不判死。
 
+> **多源搜索五路并发(2026-08-22 同日)**:线上观测 fillPool 37s —— TG 聚合(PanSou/TG-Search/网页,内部已并行)返回后,玩偶→盘链→观影→蜗牛四个站点源**逐个串行排队**,总时长=各源之和。`searchAllSources` 改五路 `CompletableFuture` 并发(专用 5 线程池 `msub-search`,@PreDestroy 关闭):总时长=最慢一路;各源内部超时之外加 90s `orTimeout` 硬顶;单源失败静默为空不影响其它源;合并顺序与去重语义不变(TG 在前先见先得)。preview 路径(50 条、cached)同步受益。
+
 > 关键类:`MediaSubscriptionService`(CRUD/内容/合并播放/收件箱/导出导入/动作)、`MediaSubscriptionCheckService`(巡检/换源/补缺/探测/打分/通知)、`MediaSubscriptionTransferService`(转存/归档)、`web/MediaSubscriptionController`、`web/TelegramController`(msub 分支/操作组端点/首页分类)、`service/metadata/*`、迁移 `V20__MediaSubscription` + `V21__MediaSubscriptionMeta` + `V22__MediaSubscriptionMetaFix`(V21 曾因带引号小写列名在 H2 上导致 Column not found,V22 自愈,详见 `MediaSubscriptionMigrationTest`)。
 > 留待:集→源映射仅动态计算+接口固化展示(未落表,设计标注条件性);搜索成功率等指标在追剧页 `/stats`(未嵌入 SystemInfo 页);转存空间水位依赖事后校验发现(未做转存前预估)。
 >
