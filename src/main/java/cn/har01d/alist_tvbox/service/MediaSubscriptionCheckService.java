@@ -509,6 +509,31 @@ public class MediaSubscriptionCheckService {
         // 集源同步:主源行落库(新文件 LISTED、消失文件 MISSING),补缺挂载原位刷新,
         // 刷不出内容的死挂载就地退役 —— 缺陷 4"旧快照冒领集数"的数据层终结
         MediaSubscriptionResource primary = primaryResource(subscription);
+        if (primary != null && !belongsToShow(subscription, primary)) {
+            // 误挂异业主源(线上:「悬案解码」2025 顶在「悬案」2026 的固定路径上):列目录/流探测都正常,
+            // 巡检没有天然失效信号 —— 用与候选池同一套归属+年份门禁就地复核,不符即换源;
+            // activate 会把旧主源降级回候选池(行落 MISSING,不进黑名单:链接没死,只是不属于本剧)。
+            if (!activateNextCandidate(subscription)) {
+                fillPool(subscription, true, null);
+                activateNextCandidate(subscription);
+            }
+            if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
+                // 暂无同剧候选:保留现主源兜底可用性,下轮带新池再试
+                addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR,
+                        "主源与剧集不符(误挂异剧):" + StringUtils.defaultString(primary.getTitle()) + ",暂无同剧候选,待补池换源");
+                scheduleNext(subscription);
+                return;
+            }
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                    "主源与剧集不符(误挂异剧):" + StringUtils.defaultString(primary.getTitle()) + ",已自动换源");
+            primary = primaryResource(subscription);
+            files = listEpisodeFiles(subscription);
+            if (files == null) {
+                onInvalid(subscription, "换源后新主源列目录失败");
+                scheduleNext(subscription);
+                return;
+            }
+        }
         syncInventory(subscription, primary, subscription.getMountPath(), files);
         refreshAuxMounts(subscription);
 
@@ -1003,6 +1028,20 @@ public class MediaSubscriptionCheckService {
         return false;
     }
 
+    /** 已挂资源是否仍属于本剧:标题归属 + 年份门禁(与候选入池同规)。
+     * 误挂的异剧源列目录、流探测都正常,巡检没有天然失效信号,靠这套复核发现并纠正。 */
+    boolean belongsToShow(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        String title = StringUtils.defaultString(resource.getTitle());
+        if (title.isBlank()) {
+            return true; // 无标题旧数据无从判定,保守放行
+        }
+        List<String> names = matchNames(subscription);
+        if (!names.isEmpty() && !matchesTitle(names, title)) {
+            return false;
+        }
+        return titleYearMatches(metaYear(subscription), names, title);
+    }
+
     /** 主源资源:挂在订阅固定路径上的 MOUNTED 资源;行丢失但 share 还在时按 shareId 收养自愈。 */
     MediaSubscriptionResource primaryResource(MediaSubscription subscription) {
         if (StringUtils.isBlank(subscription.getMountPath())) {
@@ -1047,6 +1086,29 @@ public class MediaSubscriptionCheckService {
             if (!MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
                     || StringUtils.isBlank(resource.getMountPath())) {
                 continue; // 迁移失败已被重置为候选
+            }
+            if (!belongsToShow(subscription, resource)) {
+                // 误挂异剧的补缺/线路挂载:其行会向"本地已有集"冒领错误集号,就地卸载回候选池
+                // (不走 retireResource:链接没死,不进跨订阅黑名单)
+                try {
+                    shareService.deleteShare(resource.getShareId());
+                } catch (Exception e) {
+                    log.warn("retire alien aux mount failed: {}", e.getMessage());
+                    continue;
+                }
+                resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+                resource.setMountPath(null);
+                resource.setShareId(null);
+                resourceRepository.save(resource);
+                for (MediaSubscriptionEpisodeSource row : episodeSourceRepository.findByResourceId(resource.getId())) {
+                    if (LIVE_STATES.contains(row.getState())) {
+                        row.setState(MediaSubscriptionEpisodeSource.STATE_MISSING);
+                        episodeSourceRepository.save(row);
+                    }
+                }
+                addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                        "补缺源与剧集不符(误挂异剧)已卸载:" + resource.getTitle(), false);
+                continue;
             }
             TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
             try {

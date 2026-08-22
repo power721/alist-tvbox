@@ -1366,6 +1366,39 @@ class MediaSubscriptionCheckServiceTest {
                 "前缀异剧(2025 悬案解码)被挡,年份相符/无年份/首季年代全系列包照常入列");
     }
 
+    @Test
+    void primaryOwnershipRecheckForms() {
+        // 主源归属复核:误挂异业主源列目录/流探测都正常,靠标题+年份门禁发现
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("悬案"); // 与线上同形:剧名被异剧标题子串包含,归属校验放行、靠年份门禁拦截
+        fixture.subscription.setMetaProvider("douban");
+        fixture.subscription.setMetaId("36624136");
+        MetadataDetails details = new MetadataDetails();
+        details.setYear("2026");
+        Mockito.when(fixture.metadataService.details(Mockito.anyString(), Mockito.anyString(), Mockito.any()))
+                .thenReturn(details);
+        MediaSubscriptionResource alien = new MediaSubscriptionResource();
+        alien.setTitle("[英剧]悬案解码 第一季 Dept. Q Season 1 (2025) 4k中字");
+        alien.setType(10);
+        assertFalse(fixture.service.belongsToShow(fixture.subscription, alien), "年份全不符+子串嵌入:异剧");
+
+        MediaSubscriptionResource right = new MediaSubscriptionResource();
+        right.setTitle("悬案 (2026) 4K 高码率 [17集全]");
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, right), "年份相符:本剧");
+
+        MediaSubscriptionResource noYear = new MediaSubscriptionResource();
+        noYear.setTitle("悬案 4K 高码率 更17集");
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, noYear), "无年份:放行");
+
+        MediaSubscriptionResource blank = new MediaSubscriptionResource();
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, blank), "无标题旧数据:保守放行");
+
+        MediaSubscriptionResource alienNoMeta = new MediaSubscriptionResource();
+        alienNoMeta.setTitle("[英剧]悬案解码 第一季 Dept. Q Season 1 (2025)");
+        fixture.subscription.setMetaProvider(null); // 未绑元数据:门禁关闭
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, alienNoMeta), "未绑元数据无从判定:放行");
+    }
+
     /** 失效确认/集源行分支的 mock 夹具:订阅已挂主源(shareId=5),仓储行为由各测试定制。 */
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
