@@ -25,6 +25,7 @@ import db.migration.current.V28__MediaSubscriptionMainDrives;
 import db.migration.current.V29__MediaSubscriptionMaxEpisode;
 import db.migration.current.V30__MediaSubscriptionEpisodeSource;
 import db.migration.current.V31__MediaSubscriptionCover;
+import db.migration.current.V32__MediaMetadata;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -80,7 +81,8 @@ public class NativeFlywayMigrationConfig {
                     new V28__MediaSubscriptionMainDrives(),
                     new V29__MediaSubscriptionMaxEpisode(),
                     new V30__MediaSubscriptionEpisodeSource(),
-                    new V31__MediaSubscriptionCover());
+                    new V31__MediaSubscriptionCover(),
+                    new V32__MediaMetadata());
         };
     }
 }

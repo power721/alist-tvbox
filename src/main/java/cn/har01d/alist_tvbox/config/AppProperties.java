@@ -115,6 +115,8 @@ public class AppProperties {
         private int minEpisodeSizeMb = 20;
         private int maxListDepth = 3;
         private int metaRefreshIntervalHours = 24;
+        /** 在播剧(RETURNING)元数据短轮刷新间隔:官方日程/集数变化快,不等 metaRefreshIntervalHours 长轮;也是 media_metadata 表在播行的过期 TTL */
+        private int airingRefreshHours = 6;
         /** 缺集补搜:每轮巡检最多临时挂载探测的候选数 */
         private int maxGapProbesPerRound = 3;
         /** 缺集补缺:每个订阅最多同时保留的补缺/线路挂载数(-补N) */

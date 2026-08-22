@@ -169,6 +169,12 @@ public class MediaSubscriptionController {
         return subscriptionService.episodes(currentUid(), id);
     }
 
+    /** 媒体详情:元数据快照(名称/年份/状态/简介)+ 分集列表(标题/播出时间/剧照 + 本地是否已有)。零网络。 */
+    @GetMapping("/{id}/detail")
+    public Map<String, Object> detail(@PathVariable int id) {
+        return subscriptionService.detail(currentUid(), id);
+    }
+
     @GetMapping("/export")
     public List<Map<String, Object>> export() {
         return subscriptionService.export(currentUid());

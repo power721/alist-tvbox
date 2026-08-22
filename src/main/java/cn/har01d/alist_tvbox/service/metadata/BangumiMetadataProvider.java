@@ -118,6 +118,7 @@ public class BangumiMetadataProvider implements MetadataProvider {
                 return details;
             }
             details.setName(firstNonBlank(subject.path("name_cn").asText(), subject.path("name").asText()));
+            details.setOverview(subject.path("summary").asText(""));
             details.setYear(subject.path("date").asText(""));
             if (details.getYear() != null && details.getYear().length() > 4) {
                 details.setYear(details.getYear().substring(0, 4));
@@ -141,16 +142,23 @@ public class BangumiMetadataProvider implements MetadataProvider {
                 int aired = 0;
                 LocalDate nextAir = null;
                 List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
+                List<cn.har01d.alist_tvbox.dto.EpisodeInfo> episodeInfos = new ArrayList<>();
                 for (JsonNode episode : episodes) {
                     if (episode.path("type").asInt(-1) != 0) {
                         continue; // 非正片(SP/OP/ED/trailer)不计
                     }
                     total++;
+                    LocalDate airDate = localDate(episode.path("air_date").asText());
+                    // 分集详情(媒体详情页):标题/播出日期,bangumi 分集无简介/剧照
+                    cn.har01d.alist_tvbox.dto.EpisodeInfo info = new cn.har01d.alist_tvbox.dto.EpisodeInfo(
+                            episode.path("ep").asInt(0),
+                            firstNonBlank(episode.path("name_cn").asText(), episode.path("name").asText()),
+                            airDate == null ? null : airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
+                    episodeInfos.add(info);
                     if (episode.path("status").asInt(-1) == 0) {
                         aired++;
                         continue;
                     }
-                    LocalDate airDate = localDate(episode.path("air_date").asText());
                     if (airDate != null && airDate.isAfter(today)) {
                         if (nextAir == null || airDate.isBefore(nextAir)) {
                             nextAir = airDate;
@@ -165,6 +173,7 @@ public class BangumiMetadataProvider implements MetadataProvider {
                 details.setTotalEpisodes(total);
                 details.setAiredEpisodes(aired);
                 details.setUpcoming(upcoming);
+                details.setEpisodes(episodeInfos);
                 if (nextAir != null) {
                     details.setNextAirTime(nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
                     details.setStatus(MetadataDetails.STATUS_RETURNING);

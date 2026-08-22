@@ -7,6 +7,7 @@ import db.migration.current.V27__MediaSubscriptionAliases;
 import db.migration.current.V28__MediaSubscriptionMainDrives;
 import db.migration.current.V30__MediaSubscriptionEpisodeSource;
 import db.migration.current.V31__MediaSubscriptionCover;
+import db.migration.current.V32__MediaMetadata;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -195,6 +196,31 @@ class MediaSubscriptionMigrationTest {
         }
         // 幂等:重复执行不报错
         new V31__MediaSubscriptionCover().migrate(context());
+    }
+
+    @Test
+    void v32CreatesMediaMetadataTable() throws Exception {
+        new V32__MediaMetadata().migrate(context());
+        execute("INSERT INTO media_metadata (id, provider, meta_id, season, status, payload, fetch_time)"
+                + " VALUES (1, 'tmdb', '12345', 2, 'RETURNING', '{\"name\":\"测试\"}', 456000)");
+        try (ResultSet rs = query("SELECT provider, meta_id, season, status, payload FROM media_metadata WHERE id = 1")) {
+            assertTrue(rs.next());
+            assertEquals("tmdb", rs.getString(1));
+            assertEquals("12345", rs.getString(2));
+            assertEquals(2, rs.getInt(3));
+            assertEquals("RETURNING", rs.getString(4)); // 不带引号可访问(Hibernate 形态)
+        }
+        // (provider, meta_id, season) 唯一约束生效
+        try (Statement ignored = connection.createStatement()) {
+            ignored.execute("INSERT INTO media_metadata (id, provider, meta_id, season, status, payload, fetch_time)"
+                    + " VALUES (2, 'tmdb', '12345', 2, 'ENDED', '{}', 456000)");
+            org.junit.jupiter.api.Assertions.fail("重复键应被唯一约束拦截");
+        } catch (Exception expected) {
+            assertTrue(expected.getMessage().toLowerCase().contains("unique")
+                    || expected.getMessage().toLowerCase().contains("index"), expected.getMessage());
+        }
+        // 幂等:重复执行不报错
+        new V32__MediaMetadata().migrate(context());
     }
 
     private void execute(String sql) throws Exception {

@@ -145,6 +145,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 details.setStatus(MetadataDetails.STATUS_UNKNOWN);
             }
             details.setTotalSeasons(tv.path("number_of_seasons").asInt(0));
+            details.setOverview(tv.path("overview").asText(""));
             if (tv.has("episode_run_time") && tv.get("episode_run_time").isArray()
                     && !tv.get("episode_run_time").isEmpty()) {
                 details.setRuntimeMinutes(tv.get("episode_run_time").get(0).asInt());
@@ -171,6 +172,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 int aired = 0;
                 LocalDate nextAir = null;
                 List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
+                List<cn.har01d.alist_tvbox.dto.EpisodeInfo> episodeInfos = new ArrayList<>();
                 for (JsonNode episode : seasonNode.get("episodes")) {
                     total++;
                     LocalDate airDate = localDate(episode.path("air_date").asText());
@@ -189,10 +191,22 @@ public class TmdbMetadataProvider implements MetadataProvider {
                                     airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
                         }
                     }
+                    // 分集详情(媒体详情页):标题/播出日期/简介/剧照,与日程统计同源零额外请求
+                    cn.har01d.alist_tvbox.dto.EpisodeInfo info = new cn.har01d.alist_tvbox.dto.EpisodeInfo(
+                            episode.path("episode_number").asInt(0),
+                            firstNonBlank(episode.path("name").asText(""), ""),
+                            airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
+                    info.setOverview(episode.path("overview").asText(""));
+                    String still = episode.path("still_path").asText("");
+                    if (StringUtils.isNotBlank(still)) {
+                        info.setStill("https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + still);
+                    }
+                    episodeInfos.add(info);
                 }
                 details.setTotalEpisodes(total);
                 details.setAiredEpisodes(aired);
                 details.setUpcoming(upcoming);
+                details.setEpisodes(episodeInfos);
                 if (nextAir != null) {
                     details.setNextAirTime(nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
                 }

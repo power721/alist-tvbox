@@ -28,4 +28,8 @@ public class MetadataDetails {
     private List<String> aliases;
     /** 未播分集日程(播出时间轴用,尽量只含近期) */
     private List<EpisodeAirDate> upcoming;
+    /** 剧集简介(媒体详情页展示) */
+    private String overview;
+    /** 分集详情(标题/播出时间/简介/剧照),provider 未提供时为空 */
+    private List<EpisodeInfo> episodes;
 }

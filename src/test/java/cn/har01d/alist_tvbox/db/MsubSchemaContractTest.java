@@ -62,6 +62,7 @@ class MsubSchemaContractTest {
         assertColumns("msub_episode_source", "id", "episode_id", "resource_id", "rel_path", "file_size",
                 "state", "success_count", "fail_count", "last_verified_time");
         assertColumns("dead_link", "id", "link", "reason", "fail_count", "time");
+        assertColumns("media_metadata", "id", "provider", "meta_id", "season", "status", "payload", "fetch_time");
     }
 
     @Test

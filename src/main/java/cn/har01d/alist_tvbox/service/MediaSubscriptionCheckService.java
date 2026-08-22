@@ -253,6 +253,48 @@ public class MediaSubscriptionCheckService {
         autoUpdateExecutor.scheduleWithJitter(() -> executor.submit(this::sweepDue));
     }
 
+    /**
+     * 在播剧元数据短轮刷新(每小时第 35 分,避开 :20 巡检/:40 转存):
+     * 官方日程/集数变化快(周更/日更),不等巡检长轮(checkIntervalHours≥12h)——
+     * 下集播出时间、加更集数以 airingRefreshHours 节奏跟进,媒体详情页与时间轴保持新鲜。
+     */
+    @Scheduled(cron = "0 35 * * * *")
+    public void refreshAiring() {
+        if (!appProperties.getSubscription().isEnabled()) {
+            return;
+        }
+        autoUpdateExecutor.scheduleWithJitter(() -> executor.submit(this::refreshAiringDue));
+    }
+
+    void refreshAiringDue() {
+        long ttl = Math.max(1, appProperties.getSubscription().getAiringRefreshHours()) * 3600_000L;
+        long now = System.currentTimeMillis();
+        List<MediaSubscription> due = new ArrayList<>();
+        for (MediaSubscription subscription : subscriptionRepository.findAll()) {
+            if (!MediaSubscription.STATUS_ACTIVE.equals(subscription.getStatus())
+                    || !MetadataDetails.STATUS_RETURNING.equals(subscription.getOfficialStatus())
+                    || StringUtils.isBlank(subscription.getMetaProvider())) {
+                continue;
+            }
+            long last = subscription.getMetaSyncTime() == null ? 0 : subscription.getMetaSyncTime();
+            if (now - last >= ttl) {
+                due.add(subscription);
+            }
+        }
+        if (due.isEmpty()) {
+            return;
+        }
+        log.info("airing metadata refresh: {} subscriptions due (ttl {}h)", due.size(), ttl / 3600_000);
+        for (MediaSubscription subscription : due) {
+            try {
+                refreshMetadata(subscription, ttl);
+                subscriptionRepository.save(subscription);
+            } catch (Exception e) {
+                log.warn("refresh airing metadata {} failed: {}", subscription.getId(), e.getMessage());
+            }
+        }
+    }
+
     void sweepDue() {
         int limit = appProperties.getSubscription().getMaxChecksPerRound();
         List<MediaSubscription> due = new ArrayList<>(subscriptionRepository
@@ -606,21 +648,26 @@ public class MediaSubscriptionCheckService {
 
     /** 每日至多一次刷新官方集数/状态/下集播出时间;失败静默降级,不影响巡检。 */
     private void refreshMetadata(MediaSubscription subscription) {
+        refreshMetadata(subscription, appProperties.getSubscription().getMetaRefreshIntervalHours() * 3600_000L);
+    }
+
+    /** minIntervalMs 内已刷过则跳过;日程全空的订阅不受间隔限制:provider 侧桥接能力升级(如豆瓣名称桥接)后,下一轮即能补上播出时间轴。 */
+    private void refreshMetadata(MediaSubscription subscription, long minIntervalMs) {
         if (StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
             return;
         }
         long now = System.currentTimeMillis();
-        long interval = appProperties.getSubscription().getMetaRefreshIntervalHours() * 3600_000L;
-        // 日程全空的订阅不受 24h 间隔限制:provider 侧桥接能力升级(如豆瓣名称桥接)后,
-        // 下一轮巡检(≤ checkIntervalHours)即能补上播出时间轴,不必等满一天;detailsCache 6h 兜底防打爆
         boolean noSchedule = subscription.getNextAirTime() == null && StringUtils.isBlank(subscription.getSchedule());
-        if (subscription.getMetaSyncTime() != null && now - subscription.getMetaSyncTime() < interval && !noSchedule) {
+        if (subscription.getMetaSyncTime() != null && now - subscription.getMetaSyncTime() < minIntervalMs && !noSchedule) {
             return;
         }
         subscription.setMetaSyncTime(now);
         MetadataDetails details = metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
         if (details == null) {
             return;
+        }
+        if (StringUtils.isNotBlank(details.getCover())) {
+            subscription.setCoverUrl(details.getCover()); // 封面快照:列表接口纯读库,不再实时查 provider
         }
         subscription.setOfficialEpisodes(details.getAiredEpisodes());
         subscription.setOfficialTotal(details.getTotalEpisodes());

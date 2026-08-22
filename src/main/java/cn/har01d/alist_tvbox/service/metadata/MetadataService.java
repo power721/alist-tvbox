@@ -1,7 +1,11 @@
 package cn.har01d.alist_tvbox.service.metadata;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
+import cn.har01d.alist_tvbox.entity.MediaMetadata;
+import cn.har01d.alist_tvbox.entity.MediaMetadataRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -12,7 +16,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 元数据统一入口:provider 注册表 + 聚合搜索。缓存由各 provider 自持(条目 24h/集数日程 6h 量级)。
+ * 元数据统一入口:provider 注册表 + 聚合搜索。
+ * 详情三级供给:media_metadata 表(完结剧永久命中、在播剧按 TTL)→ provider(内存缓存)→ 外网,结果回写表。
+ * 表层让重启不再清空元数据(封面/详情页零网络),也是媒体详情页分集数据的本地来源。
  */
 @Slf4j
 @Service
@@ -23,9 +29,18 @@ public class MetadataService {
     }
 
     private final List<MetadataProvider> providers;
+    private final MediaMetadataRepository metadataRepository;
+    private final AppProperties appProperties;
+    private final ObjectMapper objectMapper;
 
-    public MetadataService(List<MetadataProvider> providers) {
+    public MetadataService(List<MetadataProvider> providers,
+                           MediaMetadataRepository metadataRepository,
+                           AppProperties appProperties,
+                           ObjectMapper objectMapper) {
         this.providers = providers;
+        this.metadataRepository = metadataRepository;
+        this.appProperties = appProperties;
+        this.objectMapper = objectMapper;
     }
 
     public MetadataProvider getProvider(String name) {
@@ -41,9 +56,16 @@ public class MetadataService {
     public SearchResult searchReport(String providerName, String keyword) {
         Map<String, String> errors = new LinkedHashMap<>();
         List<MetadataSearchItem> items = new ArrayList<>();
-        List<MetadataProvider> targets = StringUtils.isBlank(providerName)
-                ? providers
-                : List.of(getProvider(providerName));
+        List<MetadataProvider> targets;
+        if (StringUtils.isBlank(providerName)) {
+            targets = providers;
+        } else {
+            MetadataProvider resolved = getProvider(providerName);
+            if (resolved == null) {
+                return new SearchResult(List.of(), Map.of(String.valueOf(providerName), "未知元数据源: " + providerName));
+            }
+            targets = List.of(resolved);
+        }
         for (MetadataProvider provider : targets) {
             if (provider == null) {
                 errors.put(String.valueOf(providerName), "未知元数据源: " + providerName);
@@ -68,17 +90,85 @@ public class MetadataService {
         return searchReport(providerName, keyword).items();
     }
 
-    /** 详情查询;provider 不可用返回 null(调用方降级,不中断巡检)。 */
+    /**
+     * 详情查询:持久层 → provider(内存→外网)→ 回写持久层。provider 不可用返回 null(调用方降级,不中断巡检)。
+     */
     public MetadataDetails details(String providerName, String id, Integer season) {
         MetadataProvider provider = getProvider(providerName);
         if (provider == null) {
             return null;
         }
+        int seasonNumber = season == null || season < 1 ? 1 : season;
+        MetadataDetails persisted = readPersisted(provider.getName(), id, seasonNumber, false);
+        if (persisted != null) {
+            return persisted;
+        }
         try {
-            return provider.details(id, season);
+            MetadataDetails details = provider.details(id, seasonNumber);
+            persist(provider.getName(), id, seasonNumber, details);
+            return details;
         } catch (Exception e) {
             log.warn("metadata details {} {} failed: {}", providerName, id, e.getMessage());
             return null;
+        }
+    }
+
+    /** 只读持久层快照,不发起网络也不落库:详情页等绝不等待外网的调用方用;无快照返回 null。 */
+    public MetadataDetails cachedDetails(String providerName, String id, Integer season) {
+        MetadataProvider provider = getProvider(providerName);
+        if (provider == null) {
+            return null;
+        }
+        int seasonNumber = season == null || season < 1 ? 1 : season;
+        return readPersisted(provider.getName(), id, seasonNumber, true);
+    }
+
+    private MetadataDetails readPersisted(String providerName, String id, int season, boolean allowStale) {
+        return metadataRepository.findByProviderAndMetaIdAndSeason(providerName, id, season)
+                .map(row -> {
+                    try {
+                        MetadataDetails details = objectMapper.readValue(row.getPayload(), MetadataDetails.class);
+                        // 在播剧超 TTL 视为过期:details() 走 provider 重刷;详情页(allowStale)展示旧值等后台刷新
+                        return !allowStale && isStale(details, row.getFetchTime()) ? null : details;
+                    } catch (Exception e) {
+                        log.debug("media metadata parse failed: {} {} {}", providerName, id, e.getMessage());
+                        return null;
+                    }
+                })
+                .orElse(null);
+    }
+
+    private boolean isStale(MetadataDetails details, long fetchTime) {
+        if (!MetadataDetails.STATUS_RETURNING.equals(details.getStatus())) {
+            return false;
+        }
+        long ttl = Math.max(1, appProperties.getSubscription().getAiringRefreshHours()) * 3600_000L;
+        return System.currentTimeMillis() - fetchTime > ttl;
+    }
+
+    /** 网络结果回写;失败产出的空对象(name/封面/集数全空)不覆盖已有快照 —— 宁用旧值不写白板。 */
+    private void persist(String providerName, String id, int season, MetadataDetails details) {
+        if (details == null) {
+            return;
+        }
+        boolean meaningful = StringUtils.isNotBlank(details.getName())
+                || StringUtils.isNotBlank(details.getCover())
+                || (details.getTotalEpisodes() != null && details.getTotalEpisodes() > 0);
+        if (!meaningful) {
+            return;
+        }
+        try {
+            MediaMetadata row = metadataRepository.findByProviderAndMetaIdAndSeason(providerName, id, season)
+                    .orElseGet(MediaMetadata::new);
+            row.setProvider(providerName);
+            row.setMetaId(id);
+            row.setSeason(season);
+            row.setStatus(StringUtils.defaultIfBlank(details.getStatus(), MetadataDetails.STATUS_UNKNOWN));
+            row.setPayload(objectMapper.writeValueAsString(details));
+            row.setFetchTime(System.currentTimeMillis());
+            metadataRepository.save(row);
+        } catch (Exception e) {
+            log.debug("media metadata persist failed: {} {} {}", providerName, id, e.getMessage());
         }
     }
 }

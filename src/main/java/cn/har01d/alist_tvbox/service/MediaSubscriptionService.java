@@ -11,6 +11,8 @@ import cn.har01d.alist_tvbox.dto.MediaSubscriptionResourceDto;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisode;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
@@ -1102,6 +1104,107 @@ public class MediaSubscriptionService {
             item.put("sources", matrix.getOrDefault(i, List.of()));
             result.add(item);
         }
+        return result;
+    }
+
+    /**
+     * 媒体详情(订阅点击):元数据快照(名称/年份/状态/简介/总集数/下集播出)+ 分集列表
+     * (标题/播出时间/剧照来自 provider,是否已有/来源来自本地集源行)。全程零网络 ——
+     * 元数据读 media_metadata 表,无快照时后台预热(prewarmCoverAsync 一并落库),下次打开即有。
+     */
+    public Map<String, Object> detail(int uid, int id) {
+        MediaSubscription subscription = getOwned(uid, id);
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("subscription", toDto(subscription));
+
+        MetadataDetails details = null;
+        if (StringUtils.isNotBlank(subscription.getMetaProvider()) && StringUtils.isNotBlank(subscription.getMetaId())) {
+            details = metadataService.cachedDetails(subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+            if (details == null) {
+                checkService.prewarmCoverAsync(subscription); // 后台拉首轮元数据落库,不打断本次响应
+            }
+        }
+        Map<String, Object> media = new java.util.LinkedHashMap<>();
+        media.put("provider", subscription.getMetaProvider());
+        media.put("season", subscription.getSeason() == null ? 1 : subscription.getSeason());
+        if (details != null) {
+            media.put("name", details.getName());
+            media.put("year", details.getYear());
+            media.put("cover", proxiedCover(details.getCover()));
+            media.put("status", details.getStatus());
+            media.put("totalSeasons", details.getTotalSeasons());
+            media.put("runtimeMinutes", details.getRuntimeMinutes());
+            media.put("overview", details.getOverview());
+            media.put("aliases", details.getAliases() == null ? List.of() : details.getAliases());
+        }
+        // 订阅侧快照兜底:元数据未拉到/字段缺时详情页仍有官方集数与下集播出时间
+        media.put("officialEpisodes", subscription.getOfficialEpisodes());
+        media.put("officialTotal", subscription.getOfficialTotal());
+        media.put("officialStatus", subscription.getOfficialStatus());
+        media.put("nextAirTime", subscription.getNextAirTime());
+        int metaTotal = details == null || details.getTotalEpisodes() == null ? 0 : details.getTotalEpisodes();
+        media.put("totalEpisodes", Math.max(metaTotal,
+                subscription.getOfficialTotal() == null ? 0 : subscription.getOfficialTotal()));
+        int metaAired = details == null || details.getAiredEpisodes() == null ? 0 : details.getAiredEpisodes();
+        media.put("airedEpisodes", Math.max(metaAired,
+                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes()));
+        result.put("media", media);
+
+        // 分集合并:本地清单(已有/来源,含转存/主源/补缺)+ 元数据分集(标题/播出时间/剧照/简介)+ 分集行 + 日程快照
+        Map<Integer, Map<String, Object>> localByEpisode = new java.util.HashMap<>();
+        for (Map<String, Object> item : episodes(uid, id)) {
+            localByEpisode.put((int) item.get("episode"), item);
+        }
+        Map<Integer, cn.har01d.alist_tvbox.dto.EpisodeInfo> metaEpisodes = new java.util.HashMap<>();
+        if (details != null && details.getEpisodes() != null) {
+            for (cn.har01d.alist_tvbox.dto.EpisodeInfo info : details.getEpisodes()) {
+                metaEpisodes.put(info.getNumber(), info);
+            }
+        }
+        Map<Integer, Long> scheduleAir = new java.util.HashMap<>();
+        if (StringUtils.isNotBlank(subscription.getSchedule())) {
+            try {
+                for (cn.har01d.alist_tvbox.dto.EpisodeAirDate entry : objectMapper.readValue(
+                        subscription.getSchedule(), cn.har01d.alist_tvbox.dto.EpisodeAirDate[].class)) {
+                    scheduleAir.putIfAbsent(entry.getEpisode(), entry.getAirTime());
+                }
+            } catch (Exception e) {
+                log.debug("parse schedule failed: {}", e.getMessage());
+            }
+        }
+        Map<Integer, MediaSubscriptionEpisode> rows = new java.util.HashMap<>();
+        for (MediaSubscriptionEpisode episode : episodeRepository.findBySubscriptionIdOrderByNumber(id)) {
+            rows.put(episode.getNumber(), episode);
+        }
+        int base = Math.max(
+                Math.max((int) media.get("totalEpisodes"), (int) media.get("airedEpisodes")),
+                Math.max(localByEpisode.isEmpty() ? 0 : localByEpisode.keySet().stream().max(Integer::compareTo).orElse(0),
+                        Math.max(rows.isEmpty() ? 0 : rows.keySet().stream().max(Integer::compareTo).orElse(0),
+                                subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes())));
+        long now = System.currentTimeMillis();
+        List<Map<String, Object>> episodeItems = new ArrayList<>();
+        for (int i = 1; i <= Math.min(base, 500); i++) {
+            Map<String, Object> local = localByEpisode.get(i);
+            cn.har01d.alist_tvbox.dto.EpisodeInfo info = metaEpisodes.get(i);
+            MediaSubscriptionEpisode row = rows.get(i);
+            Long airTime = info != null && info.getAirTime() != null ? info.getAirTime()
+                    : row != null && row.getAirTime() != null ? row.getAirTime() : scheduleAir.get(i);
+            Map<String, Object> item = new java.util.LinkedHashMap<>();
+            item.put("episode", i);
+            item.put("title", info != null && StringUtils.isNotBlank(info.getTitle()) ? info.getTitle()
+                    : row != null ? row.getTitle() : null);
+            item.put("airTime", airTime);
+            item.put("aired", airTime != null && airTime <= now
+                    || row != null && Boolean.TRUE.equals(row.getAired()));
+            item.put("present", local != null && Boolean.TRUE.equals(local.get("present")));
+            item.put("source", local == null ? "" : StringUtils.defaultString((String) local.get("source")));
+            if (info != null) {
+                item.put("overview", info.getOverview());
+                item.put("still", proxiedCover(info.getStill()));
+            }
+            episodeItems.add(item);
+        }
+        result.put("episodes", episodeItems);
         return result;
     }
 

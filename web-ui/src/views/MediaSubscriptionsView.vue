@@ -117,6 +117,7 @@
           </el-table-column>
           <el-table-column fixed="right" label="操作" width="330">
             <template #default="scope">
+              <el-button link type="primary" size="small" @click="showDetail(scope.row)">详情</el-button>
               <el-button link type="primary" size="small" @click="checkNow(scope.row)">检查</el-button>
               <el-button link type="primary" size="small" @click="showResources(scope.row)">候选源</el-button>
               <el-button link type="primary" size="small" @click="showEpisodes(scope.row)">集数</el-button>
@@ -322,6 +323,70 @@
         </el-table-column>
         <el-table-column prop="source" label="来源"/>
       </el-table>
+    </el-drawer>
+
+    <el-drawer v-model="detailVisible" :title="'媒体详情 - ' + (current?.name || '')" size="58%">
+      <div v-loading="detailLoading">
+        <div v-if="detailData" class="detail-head">
+          <el-image :src="detailData.media.cover" fit="cover" class="detail-poster">
+            <template #error>
+              <div class="detail-poster cover-placeholder">{{ (detailData.media.name || current?.name || '?').charAt(0) }}</div>
+            </template>
+          </el-image>
+          <div class="detail-info">
+            <div class="detail-title">
+              {{ detailData.media.name || current?.name }}
+              <span v-if="detailData.media.year" class="sub-text">({{ detailData.media.year }})</span>
+              <el-tag size="small" :type="detailData.media.status === 'RETURNING' ? 'success' : detailData.media.status === 'ENDED' ? 'info' : 'warning'">
+                {{ detailData.media.status === 'RETURNING' ? '在播' : detailData.media.status === 'ENDED' ? '已完结' : '状态未知' }}
+              </el-tag>
+              <el-tag size="small" type="info">第{{ detailData.media.season }}季</el-tag>
+            </div>
+            <div class="sub-text">
+              已播 {{ detailData.media.airedEpisodes ?? 0 }} / 共 {{ detailData.media.totalEpisodes ?? '?' }} 集
+              <template v-if="detailData.media.runtimeMinutes"> · 每集约{{ detailData.media.runtimeMinutes }}分钟</template>
+              <template v-if="detailData.media.totalSeasons"> · 全剧{{ detailData.media.totalSeasons }}季</template>
+              · 本地已有 {{ detailData.subscription?.currentEpisodes ?? 0 }} 集
+            </div>
+            <div v-if="detailData.media.nextAirTime" class="sub-text">下集播出:{{ formatTime(detailData.media.nextAirTime) }}</div>
+            <div v-if="detailData.media.aliases?.length" class="sub-text">别名:{{ detailData.media.aliases.join(' / ') }}</div>
+            <div v-if="detailData.media.overview" class="detail-overview">{{ detailData.media.overview }}</div>
+          </div>
+        </div>
+        <el-table :data="detailData?.episodes || []" border max-height="560" row-key="episode">
+          <el-table-column type="expand">
+            <template #default="scope">
+              <div v-if="scope.row.overview || scope.row.still" class="episode-detail">
+                <el-image v-if="scope.row.still" :src="scope.row.still" fit="cover" class="episode-still">
+                  <template #error><div class="episode-still"></div></template>
+                </el-image>
+                <span v-if="scope.row.overview">{{ scope.row.overview }}</span>
+              </div>
+              <el-empty v-else description="暂无分集简介" :image-size="40"/>
+            </template>
+          </el-table-column>
+          <el-table-column prop="episode" label="集" width="70" sortable/>
+          <el-table-column label="标题" min-width="170" show-overflow-tooltip>
+            <template #default="scope">{{ scope.row.title || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="播出时间" width="150">
+            <template #default="scope">{{ scope.row.airTime ? formatTime(scope.row.airTime) : '—' }}</template>
+          </el-table-column>
+          <el-table-column label="播出" width="80">
+            <template #default="scope">
+              <el-tag v-if="scope.row.aired" size="small" type="info">已播</el-tag>
+              <el-tag v-else size="small" type="warning">未播</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="本地" min-width="140">
+            <template #default="scope">
+              <el-tag v-if="scope.row.present" size="small" type="success">已有</el-tag>
+              <el-tag v-else size="small" type="info">缺失</el-tag>
+              <span v-if="scope.row.source" class="sub-text" style="margin-left:4px">{{ scope.row.source }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-drawer>
 
     <el-drawer v-model="eventsVisible" :title="'更新动态 - ' + (current?.name || '')" size="45%">
@@ -534,6 +599,39 @@ interface EventDto {
   createdTime: number
 }
 
+/** 媒体详情(/detail):元数据快照 + 分集(标题/播出时间/剧照/简介 + 本地是否已有) */
+interface MediaDetailData {
+  subscription: SubscriptionDto
+  media: {
+    provider: string | null
+    season: number
+    name?: string
+    year?: string
+    cover?: string
+    status?: string
+    totalSeasons?: number
+    runtimeMinutes?: number
+    overview?: string
+    aliases?: string[]
+    officialEpisodes?: number | null
+    officialTotal?: number | null
+    officialStatus?: string | null
+    nextAirTime?: number | null
+    totalEpisodes: number
+    airedEpisodes: number
+  }
+  episodes: {
+    episode: number
+    title: string | null
+    airTime: number | null
+    aired: boolean
+    present: boolean
+    source: string
+    overview?: string
+    still?: string
+  }[]
+}
+
 const driveOptions = [
   {value: 5, label: '夸克'},
   {value: 8, label: '115'},
@@ -618,6 +716,9 @@ const episodesLoading = ref(false)
 const episodeItems = ref<any[]>([])
 const eventsVisible = ref(false)
 const events = ref<EventDto[]>([])
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const detailData = ref<MediaDetailData | null>(null)
 const current = ref<SubscriptionDto | null>(null)
 const importVisible = ref(false)
 const importText = ref('')
@@ -1071,6 +1172,19 @@ const showEpisodes = (row: SubscriptionDto) => {
   })
 }
 
+/** 媒体详情:零网络接口,元数据未落库时显示占位(后台预热,稍后再开即有) */
+const showDetail = (row: SubscriptionDto) => {
+  current.value = row
+  detailVisible.value = true
+  detailLoading.value = true
+  detailData.value = null
+  axios.get(`/api/media-subscriptions/${row.id}/detail`).then(response => {
+    detailData.value = response.data
+  }).finally(() => {
+    detailLoading.value = false
+  })
+}
+
 const showEvents = (row: SubscriptionDto) => {
   current.value = row
   eventsVisible.value = true
@@ -1466,6 +1580,64 @@ const formatClock = (time: number) => {
   justify-content: center;
   background: var(--el-fill-color-dark);
   color: var(--el-text-color-secondary);
+}
+
+.detail-head {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.detail-poster {
+  width: 120px;
+  height: 170px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  font-size: 32px;
+}
+
+.detail-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-title {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.detail-overview {
+  margin-top: 8px;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.episode-detail {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  line-height: 1.6;
+}
+
+.episode-still {
+  width: 160px;
+  height: 90px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: var(--el-fill-color-dark);
 }
 
 .name-link {
