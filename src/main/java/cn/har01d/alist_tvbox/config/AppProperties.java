@@ -101,6 +101,12 @@ public class AppProperties {
         private int mainDrivePoolSize = 3;
         /** 分层配额:非主网盘共享的席位数,保证主网盘全挂时仍有别盘可换 */
         private int otherDrivePoolSize = 3;
+        /** 常规搜索取回的结果条数 */
+        private int searchSize = 50;
+        /** 池枯竭(无任何可用候选)时的搜索条数:把召回面拉宽,别守着一池死判定 */
+        private int exhaustedSearchSize = 150;
+        /** 网盘限流后的退避(分钟):期内不再试挂该盘候选 */
+        private int driveThrottleCooldownMinutes = 15;
         private int stallRoundsBeforeSearch = 3;
         private int minEpisodeSizeMb = 20;
         private int maxListDepth = 3;

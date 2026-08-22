@@ -429,6 +429,28 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(Math.abs(expected - actual) < 60_000L, "expected ~" + expected + " but was " + actual);
     }
 
+    // ---------- 缺陷 9 回归:网盘限流不是资源失效 ----------
+    // 线上事故:主网盘+免会员加分把 3 个百度候选顶到最前,271ms 内连敲百度三次,
+    // 触发 errno -62(验证次数过多),3 个可能健康的分享被标 BAD 冷却 7 天。
+
+    @Test
+    void baiduThrottleErrorIsNotResourceFailure() {
+        assertTrue(MediaSubscriptionCheckService.isThrottleError(
+                "/追剧/悬案 [dbid-36624136]: {\"errno\":-62,\"request_id\":8875087666781770331}"));
+        assertTrue(MediaSubscriptionCheckService.isThrottleError("验证次数过多,请稍后再试"));
+        assertTrue(MediaSubscriptionCheckService.isThrottleError("操作频繁,请稍候"));
+        assertTrue(MediaSubscriptionCheckService.isThrottleError("HTTP 429 Too Many Requests"));
+    }
+
+    @Test
+    void realShareFailureIsStillTreatedAsBad() {
+        // 夸克「分享地址已失效」是真失效,必须继续判 BAD —— 别把限流保护扩大成"什么都不判死"
+        assertFalse(MediaSubscriptionCheckService.isThrottleError("/追剧/悬案 [dbid-36624136]: 分享地址已失效"));
+        assertFalse(MediaSubscriptionCheckService.isThrottleError("资源无可识别的剧集文件:某标题"));
+        assertFalse(MediaSubscriptionCheckService.isThrottleError("挂载失败:https://pan.quark.cn/s/x"));
+        assertFalse(MediaSubscriptionCheckService.isThrottleError(null));
+    }
+
     // ---------- 候选池分层配额:备用盘必须有保底席位 ----------
     // 主网盘打分领先是结构性的(主网盘+15、百度免会员+15、盘偏好+20/-10),
     // 纯 top-N 会被主网盘包圆 → 主网盘一挂就无源可换。

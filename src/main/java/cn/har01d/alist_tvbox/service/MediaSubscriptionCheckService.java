@@ -74,6 +74,11 @@ public class MediaSubscriptionCheckService {
     private static final Pattern TECH_TAGS = Pattern.compile(
             "(?i)(2160p|1080p|720p|480p|4k|8k|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|国语|粤语|中字|简体|繁体|双语|字幕)");
     /** 标题级季标记:中文"第N季"、SxxEyy 的季、独立 Sxx、Season N —— 见 TextUtils.parseTitleSeason */
+    /** 网盘限流/风控(非资源失效):百度 errno -62 = 验证次数过多;其余为通用限流措辞 */
+    private static final Pattern THROTTLE_ERROR = Pattern.compile(
+            "(?i)errno\"?\\s*:\\s*-62|验证次数过多|请稍[后候]|访问频繁|操作频繁|too many (requests|attempts)|rate.?limit|\\b429\\b");
+    /** 池枯竭释放 BAD 冷却的最小年龄:本轮刚判死的不参与释放 */
+    private static final long BAD_RELEASE_MIN_AGE_MS = 30 * 60_000L;
     /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
     private static final Pattern TITLE_PROGRESS = Pattern.compile(
             "(?i)更新?至\\s*(\\d{1,3})|全\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*[-~至]\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,3})(?!\\d)");
@@ -108,6 +113,8 @@ public class MediaSubscriptionCheckService {
     private final Map<Integer, Integer> gapSearchRounds = new ConcurrentHashMap<>();
     /** 主网盘补池搜索限频(订阅 id → 上次搜索时间):池内无该盘资源时主动搜索,至多每检查周期一次 */
     private final Map<Integer, Long> mainDriveSearchTime = new ConcurrentHashMap<>();
+    /** 撞上限流的网盘 → 解禁时间戳:退避期内不再试挂该盘候选,防连环触发把好源烧成 BAD */
+    private final Map<String, Long> driveThrottleTime = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "msub-check");
         thread.setDaemon(true);
@@ -934,13 +941,29 @@ public class MediaSubscriptionCheckService {
     /** 按分数依次尝试候选,失败标记 BAD 换下一个;成功则重挂到同一固定路径。 */
     private boolean activateNextCandidate(MediaSubscription subscription) {
         int current = subscription.getCurrentEpisodes() != null ? subscription.getCurrentEpisodes() : 0;
+        Set<String> throttled = new java.util.HashSet<>(); // 本轮已撞风控的盘,后续候选直接跳过
         for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
             if (!resource.isActive() && usableAsPrimary(resource, current)) {
+                String drive = driveOf(resource);
+                if (throttled.contains(drive) || isDriveThrottled(drive)) {
+                    continue; // 该盘正在限流:再试必然失败,还会加深风控
+                }
                 try {
                     activate(subscription, resource);
                     return true;
                 } catch (Exception e) {
                     log.info("candidate {} invalid: {}", resource.getId(), e.getMessage());
+                    if (isThrottleError(e.getMessage())) {
+                        // 网盘限流不是资源失效:标 BAD 会让好源白白冷却 badCooldownDays 天,
+                        // 而且同盘后续候选必然连环触发 —— 本轮跳过该盘,退避后再来。
+                        throttled.add(drive);
+                        throttleDrive(drive);
+                        resource.setCheckedTime(System.currentTimeMillis());
+                        resourceRepository.save(resource);
+                        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR,
+                                driveName(drive) + "限流,本轮跳过该网盘候选(不判失效)");
+                        continue;
+                    }
                     resource.setValidity(MediaSubscriptionResource.VALIDITY_BAD);
                     resource.setCheckedTime(System.currentTimeMillis());
                     resourceRepository.save(resource);
@@ -948,6 +971,54 @@ public class MediaSubscriptionCheckService {
             }
         }
         return false;
+    }
+
+    /** 网盘侧限流/风控错误 —— 与"分享失效"性质相反:资源是好的,只是此刻不能试。
+     * 百度分享密码验证接口的 errno -62 是最常见的一种(短时间内连敲同一网盘必触发)。 */
+    static boolean isThrottleError(String message) {
+        return message != null && THROTTLE_ERROR.matcher(message).find();
+    }
+
+    private static String driveOf(MediaSubscriptionResource resource) {
+        return resource.getType() == null ? "" : StringUtils.defaultString(DriveId.toDrive(resource.getType()));
+    }
+
+    private boolean isDriveThrottled(String drive) {
+        Long until = driveThrottleTime.get(drive);
+        return until != null && until > System.currentTimeMillis();
+    }
+
+    private void throttleDrive(String drive) {
+        long minutes = appProperties.getSubscription().getDriveThrottleCooldownMinutes();
+        driveThrottleTime.put(drive, System.currentTimeMillis() + minutes * 60_000L);
+        log.info("drive {} throttled, skip for {} minutes", drive, minutes);
+    }
+
+    private static String driveName(String drive) {
+        return StringUtils.isBlank(drive) ? "网盘" : drive;
+    }
+
+    /** 池枯竭时释放 BAD 冷却:给之前被判死的候选一次重探机会(误判自愈)。
+     * 本轮刚判死的不释放 —— 刚证明它挂不上就立刻重试毫无意义,还会掩盖真失效。 */
+    private void releaseBadCooldown(List<MediaSubscriptionResource> existing) {
+        long staleBefore = System.currentTimeMillis() - BAD_RELEASE_MIN_AGE_MS;
+        int released = 0;
+        for (MediaSubscriptionResource resource : existing) {
+            if (!MediaSubscriptionResource.VALIDITY_BAD.equals(resource.getValidity())) {
+                continue;
+            }
+            Long checked = resource.getCheckedTime();
+            if (checked != null && checked > staleBefore) {
+                continue; // 刚判死的,跳过
+            }
+            resource.setValidity(MediaSubscriptionResource.VALIDITY_UNKNOWN);
+            resource.setCheckedTime(null);
+            resourceRepository.save(resource);
+            released++;
+        }
+        if (released > 0) {
+            log.info("pool exhausted, released {} BAD candidates for retry", released);
+        }
     }
 
     /** 单集资源(每集一链)不挂主源:主源承载整季清单与固定挂载,换单集会把观测集数打回 1、
@@ -1455,12 +1526,21 @@ public class MediaSubscriptionCheckService {
         if (!force && usable >= 1) {
             return;
         }
+        // 池枯竭(无任何可用候选):①搜索条数加倍,②一次性释放 BAD 冷却 ——
+        // "全 BAD"本身就说明之前的判定可能过严(盘检过≠挂得上、风控被当失效),
+        // 与其守着一池死判定,不如给它们一次重探机会并把召回面拉宽。
+        boolean exhausted = usable == 0;
+        if (exhausted && !existing.isEmpty()) {
+            releaseBadCooldown(existing);
+        }
 
         String keyword = StringUtils.defaultIfBlank(keywordOverride,
                 StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()));
         List<Message> messages;
         try {
-            messages = searchAllSources(keyword, 50, false);
+            var config = appProperties.getSubscription();
+            messages = searchAllSources(keyword,
+                    exhausted ? config.getExhaustedSearchSize() : config.getSearchSize(), false);
         } catch (Exception e) {
             log.warn("subscription {} search failed: {}", subscription.getId(), e.getMessage());
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "搜索失败:" + e.getMessage());
