@@ -471,6 +471,27 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void weightTableOverridesScoring() {
+        // 权重表(Q14):排序偏好可调;调 0 只是不再优先,不会把候选筛空
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        fixture.subscription.setFilterConfig("{\"weights\":{\"quality.uhd\":0,\"match.title\":30}}"); // 4K 不加分,标题归属加到 30
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/q", "苍兰诀 第01-08集 4K")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(1, "https://pan.quark.cn/s/q"))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository).save(captor.capture());
+        // 底分 = 近期30 + 归属30(权重表覆盖 15) ;4K 默认 25 被调没
+        assertEquals(60, captor.getValue().getScore(), "权重表覆盖打分:quality.uhd=0 不加分,match.title=30");
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, captor.getValue().getState());
+    }
+
+    @Test
     void fillPoolRejectsWrongSeasonTitle() {
         Fixture fixture = new Fixture();
         fixture.subscription.setName("苍兰诀");

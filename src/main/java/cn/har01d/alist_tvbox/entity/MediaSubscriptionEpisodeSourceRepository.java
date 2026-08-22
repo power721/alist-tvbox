@@ -23,15 +23,15 @@ public interface MediaSubscriptionEpisodeSourceRepository extends JpaRepository<
             + " where e.subscriptionId = ?1 and e.number = ?2")
     List<MediaSubscriptionEpisodeSource> findBySubscriptionAndNumber(int subscriptionId, int number);
 
+    /** 某订阅全部 (集号, 集源行) 投影 —— 逐集资源矩阵(集数页签)用。 */
+    @Query("select e.number, s from MediaSubscriptionEpisode e join MediaSubscriptionEpisodeSource s on s.episodeId = e.id"
+            + " where e.subscriptionId = ?1")
+    List<Object[]> findNumberAndSource(int subscriptionId);
+
     /** 某订阅处于指定状态的全部集源行 —— 可用性派生查询(LISTED/VERIFIED = 可播)。 */
     @Query("select s from MediaSubscriptionEpisodeSource s join MediaSubscriptionEpisode e on s.episodeId = e.id"
             + " where e.subscriptionId = ?1 and s.state in ?2")
     List<MediaSubscriptionEpisodeSource> findBySubscriptionAndStatesIn(int subscriptionId, Collection<String> states);
-
-    /** 某订阅处于指定状态的 (resourceId, 集号) 投影 —— 按挂载点过滤损坏文件、集数页签聚合用。 */
-    @Query("select s.resourceId, e.number from MediaSubscriptionEpisodeSource s join MediaSubscriptionEpisode e on s.episodeId = e.id"
-            + " where e.subscriptionId = ?1 and s.state in ?2")
-    List<Object[]> findResourceIdAndNumber(int subscriptionId, Collection<String> states);
 
     /** 某订阅处于指定状态的集号集合(可用性派生:LISTED/VERIFIED ∪ = 本地已有集)。
      * <b>只统计 MOUNTED 资源</b> —— 候选探测后留下的行(资源还在池里没挂载)不得冒充本地已有集。 */

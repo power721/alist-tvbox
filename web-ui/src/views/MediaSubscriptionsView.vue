@@ -238,6 +238,20 @@
           <el-input-number v-model="form.maxEpisodeSizeMb" :min="0" :max="1000000"/>
           <span class="sub-text" style="margin-left:8px">0 = 不限;过滤捆绑包/异常大文件</span>
         </el-form-item>
+        <el-collapse style="width:100%">
+          <el-collapse-item title="打分权重(高级,留空用默认)">
+            <div class="weights-grid">
+              <div v-for="def in weightDefs" :key="def.key" class="weights-item">
+                <span>{{ def.label }}</span>
+                <el-input-number v-model="form.weights[def.key]" :min="-100" :max="100"
+                                 :placeholder="String(def.value)" controls-position="right" style="width:110px"/>
+              </div>
+            </div>
+            <div class="sub-text" style="margin-top:6px">
+              候选排序偏好:调 0 只是不再优先,不会把候选筛空;清空数值恢复默认。硬过滤(盘类型/关键词/体积)在上方
+            </div>
+          </el-collapse-item>
+        </el-collapse>
       </el-form>
       <template #footer>
         <el-button @click="preview" :loading="previewing">预览资源</el-button>
@@ -282,13 +296,28 @@
       </el-table>
     </el-drawer>
 
-    <el-drawer v-model="episodesVisible" :title="'集数清单 - ' + (current?.name || '')" size="42%">
-      <el-table :data="episodeItems" border v-loading="episodesLoading" max-height="600">
+    <el-drawer v-model="episodesVisible" :title="'集数清单 - ' + (current?.name || '')" size="52%">
+      <el-table :data="episodeItems" border v-loading="episodesLoading" max-height="600" row-key="episode">
+        <el-table-column type="expand">
+          <template #default="scope">
+            <div v-if="scope.row.sources?.length" class="episode-matrix">
+              <div v-for="(src, i) in scope.row.sources" :key="i" class="episode-matrix-row">
+                <el-tag size="small" :type="src.primary ? 'success' : 'warning'">{{ src.primary ? '主源' : '补缺' }}</el-tag>
+                <span class="matrix-title">{{ src.title }}</span>
+                <el-tag size="small" :type="matrixStateType(src.state)">{{ matrixStateLabel(src) }}</el-tag>
+                <span class="sub-text">{{ src.drive }}</span>
+                <span v-if="src.state !== 'TRANSFER'" class="sub-text">取链 成功{{ src.successCount }}/失败{{ src.failCount }}</span>
+              </div>
+            </div>
+            <el-empty v-else description="该集暂无资源行" :image-size="40"/>
+          </template>
+        </el-table-column>
         <el-table-column prop="episode" label="集" width="70" sortable/>
         <el-table-column label="状态" width="90">
           <template #default="scope">
             <el-tag v-if="scope.row.present" size="small" type="success">已有</el-tag>
-            <el-tag v-else size="small" type="danger">缺失</el-tag>
+            <el-tag v-else-if="scope.row.source" size="small" type="danger">损坏</el-tag>
+            <el-tag v-else size="small" type="info">缺失</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="source" label="来源"/>
@@ -481,6 +510,8 @@ interface Filter {
   excludeKeywords: string[] | null
   minEpisodeSizeMb: number | null
   maxEpisodeSizeMb: number | null
+  /** 打分权重表(维度 key → 加减分);空 = 用后端默认值 */
+  weights: Record<string, number> | null
 }
 
 interface ResourceDto {
@@ -787,6 +818,7 @@ const handleAdd = () => {
     excludeKeywords: [],
     minEpisodeSizeMb: 20,
     maxEpisodeSizeMb: 0,
+    weights: {} as Record<string, number | null>,
   }
   metaKeyword.value = ''
   metaResults.value = []
@@ -815,6 +847,7 @@ const handleEdit = (row: SubscriptionDto) => {
     excludeKeywords: row.filter?.excludeKeywords || [],
     minEpisodeSizeMb: row.filter?.minEpisodeSizeMb ?? 20,
     maxEpisodeSizeMb: row.filter?.maxEpisodeSizeMb ?? 0,
+    weights: { ...(row.filter?.weights || {}) },
   }
   metaProvider.value = row.metaProvider || 'douban'
   metaKeyword.value = ''
@@ -902,6 +935,8 @@ const buildBody = () => ({
     excludeKeywords: form.value.excludeKeywords,
     minEpisodeSizeMb: form.value.minEpisodeSizeMb,
     maxEpisodeSizeMb: form.value.maxEpisodeSizeMb,
+    weights: Object.fromEntries(Object.entries(form.value.weights || {})
+      .filter(([, v]) => v !== null && v !== undefined && v !== '')),
   },
 })
 
@@ -1195,6 +1230,49 @@ const stateType = (state: string | null) => {
   if (state === 'RETIRED') return 'danger'
   if (state === 'REJECTED') return 'danger'
   return 'info'
+}
+
+/** 打分权重维度(与后端 CheckService.WEIGHT_DEFAULTS 一一对应;留空用默认值) */
+const weightDefs: { key: string; label: string; value: number }[] = [
+  { key: 'recency.recent', label: '30天内发布', value: 30 },
+  { key: 'recency.quarter', label: '3个月内', value: 15 },
+  { key: 'recency.old', label: '较旧', value: 5 },
+  { key: 'quality.uhd', label: '4K', value: 25 },
+  { key: 'quality.fhd', label: '1080P', value: 15 },
+  { key: 'quality.hd', label: '720P', value: 8 },
+  { key: 'drive.prefer', label: '盘类型偏好', value: 20 },
+  { key: 'drive.outside', label: '偏好外盘', value: -10 },
+  { key: 'drive.main', label: '主网盘', value: 15 },
+  { key: 'account', label: '已配账号', value: 8 },
+  { key: 'account.vip', label: 'VIP账号', value: 15 },
+  { key: 'baidu.free', label: '百度免会员', value: 15 },
+  { key: 'pan115', label: '115追更弱', value: -10 },
+  { key: 'pack.complete', label: '完结包', value: -6 },
+  { key: 'size.fit', label: '体积合理', value: 10 },
+  { key: 'keyword.include', label: '命中包含词', value: 10 },
+  { key: 'match.title', label: '标题归属', value: 15 },
+  { key: 'match.season', label: '季标记匹配', value: 10 },
+  { key: 'progress.lead', label: '集数领先', value: 8 },
+  { key: 'progress.lag', label: '集数落后', value: -8 },
+  { key: 'single.episode', label: '单集链接', value: -40 },
+]
+
+/** 集数矩阵:集源行状态(取链事实)→ 标签 */
+const matrixStateType = (state: string) => {
+  if (state === 'VERIFIED' || state === 'TRANSFER') return 'success'
+  if (state === 'FAILED') return 'danger'
+  if (state === 'MISSING') return 'info'
+  return 'warning' // LISTED:列得出、未验证
+}
+
+const matrixStateLabel = (src: { state: string }) => {
+  switch (src.state) {
+    case 'VERIFIED': return '✓ 已验证'
+    case 'FAILED': return '✗ 取链失败'
+    case 'MISSING': return '文件已消失'
+    case 'TRANSFER': return '已转存'
+    default: return '未验证'
+  }
 }
 
 const stateLabel = (state: string | null) => {
@@ -1508,5 +1586,40 @@ const formatClock = (time: number) => {
   display: flex;
   justify-content: center;
   margin-top: 14px;
+}
+
+.episode-matrix {
+  padding: 4px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.episode-matrix-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.matrix-title {
+  min-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px 16px;
+  width: 100%;
+}
+
+.weights-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 </style>

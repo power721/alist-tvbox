@@ -2217,9 +2217,44 @@ public class MediaSubscriptionCheckService {
         return result;
     }
 
+    /**
+     * 打分权重默认表(排序偏好,全部可通过 filter.weights 覆盖)。硬过滤不走这里。
+     * <p>
+     * Q14 的结论:候选筛选只有盘类型/关键词/体积是硬过滤,其余维度本质是<b>排序偏好</b> ——
+     * 权重调 0 只是不再优先,不会像硬过滤那样把池筛空。key 与前端权重表一一对应。
+     */
+    static final Map<String, Integer> WEIGHT_DEFAULTS = java.util.Collections.unmodifiableMap(java.util.Map.ofEntries(
+            Map.entry("recency.recent", 30),   // 30 天内发布
+            Map.entry("recency.quarter", 15),  // 3 个月内
+            Map.entry("recency.old", 5),       // 更早
+            Map.entry("quality.uhd", 25),      // 4K/2160
+            Map.entry("quality.fhd", 15),      // 1080P
+            Map.entry("quality.hd", 8),        // 720P
+            Map.entry("drive.prefer", 20),     // 盘类型偏好(首位满分,每降一位 -5,下限 5)
+            Map.entry("drive.outside", -10),   // 偏好之外的盘(降权不硬过滤)
+            Map.entry("account", 8),           // 已配置该盘账号
+            Map.entry("account.vip", 15),      // VIP 账号
+            Map.entry("drive.main", 15),       // 主网盘候选
+            Map.entry("baidu.free", 15),       // 百度分享免会员
+            Map.entry("pan115", -10),          // 115 分享追更弱
+            Map.entry("pack.complete", -6),    // 完结包不持续更新
+            Map.entry("size.fit", 10),         // 单文件体积合理(1GB~2TB)
+            Map.entry("keyword.include", 10),  // 命中包含词
+            Map.entry("match.title", 15),      // 标题归属本剧
+            Map.entry("match.season", 10),     // 季标记匹配
+            Map.entry("progress.lead", 8),     // 标题集数领先本地
+            Map.entry("progress.lag", -8),     // 标题集数落后本地
+            Map.entry("single.episode", -40)   // 单集链接只配补缺
+    ));
+
+    /** 读权重:订阅/用户偏好覆盖 > 内置默认。 */
+    static int weight(MediaSubscriptionFilter filter, String key) {
+        Integer custom = filter == null || filter.getWeights() == null ? null : filter.getWeights().get(key);
+        return custom != null ? custom : WEIGHT_DEFAULTS.get(key);
+    }
+
     /** 元数据级打分(挂载前粗排):新近度 + 清晰度 + 盘偏好 + 账号/VIP感知 + 资源形态 + 体积合理 + 包含词。
-     * 账号感知:已配置该盘账号 +8(可转存/账号播放加速),VIP 账号再 +15(Setting msub_vip_accounts 勾选)。
-     * 资源形态:百度分享本身免会员 +15;115 分享与"全N集"完结包对追更中订阅减分(不持续更新)。 */
+     * 数值全部来自权重表({@link #weight});站点源加分走全局配置 siteSourceBonus(部署级开关,不按订阅调)。 */
     private Scored score(MediaSubscription subscription, Message message, String title, MediaSubscriptionFilter filter) {
         int result = 0;
         List<String> reasons = new ArrayList<>();
@@ -2230,56 +2265,67 @@ public class MediaSubscriptionCheckService {
         if (message.getTime() != null) {
             Duration age = Duration.between(message.getTime(), Instant.now());
             if (age.toDays() <= 30) {
-                result += 30;
-                reasons.add("近期资源+30");
+                int w = weight(filter, "recency.recent");
+                result += w;
+                reasons.add("近期资源+" + w);
             } else if (age.toDays() <= 90) {
-                result += 15;
-                reasons.add("3个月内+15");
+                int w = weight(filter, "recency.quarter");
+                result += w;
+                reasons.add("3个月内+" + w);
             } else {
-                result += 5;
-                reasons.add("较旧+5");
+                int w = weight(filter, "recency.old");
+                result += w;
+                reasons.add("较旧+" + w);
             }
         }
         if (StringUtils.containsIgnoreCase(title, "4K") || StringUtils.containsIgnoreCase(title, "2160")) {
-            result += 25;
-            reasons.add("4K+25");
+            int w = weight(filter, "quality.uhd");
+            result += w;
+            reasons.add("4K+" + w);
         } else if (StringUtils.containsIgnoreCase(title, "1080")) {
-            result += 15;
-            reasons.add("1080P+15");
+            int w = weight(filter, "quality.fhd");
+            result += w;
+            reasons.add("1080P+" + w);
         } else if (StringUtils.containsIgnoreCase(title, "720")) {
-            result += 8;
-            reasons.add("720P+8");
+            int w = weight(filter, "quality.hd");
+            result += w;
+            reasons.add("720P+" + w);
         }
         if (filter != null && filter.getDriveTypes() != null && message.getType() != null) {
             try {
                 int index = filter.getDriveTypes().indexOf(Integer.parseInt(message.getType()));
                 if (index >= 0) {
-                    int bonus = Math.max(20 - index * 5, 5);
+                    int bonus = Math.max(weight(filter, "drive.prefer") - index * 5, 5);
                     result += bonus;
                     reasons.add("盘偏好+" + bonus);
                 } else {
-                    result -= 10; // 盘偏好之外的候选降权(不硬过滤,降级可用)
-                    reasons.add("偏好外盘-10");
+                    int w = weight(filter, "drive.outside");
+                    result += w; // 盘偏好之外的候选降权(不硬过滤,降级可用)
+                    reasons.add("偏好外盘" + w);
                 }
             } catch (NumberFormatException ignored) {
                 // 非数字类型不会进入候选
             }
         }
         if (type >= 0 && accountTypes.contains(type)) {
-            result += 8;
-            reasons.add("已配置账号+8");
+            int w = weight(filter, "account");
+            result += w;
+            reasons.add("已配置账号+" + w);
             if (vipTypes.contains(type)) {
-                result += 15;
-                reasons.add("VIP账号+15");
+                int vip = weight(filter, "account.vip");
+                result += vip;
+                reasons.add("VIP账号+" + vip);
             }
         }
         if (subscription != null && type >= 0 && mainDrives(subscription).contains(DriveId.toDrive(type))) {
-            result += 15; // 主网盘候选优先入池(主网盘要维持完整覆盖,池里得先有该盘资源)
-            reasons.add("主网盘+15");
+            int w = weight(filter, "drive.main"); // 主网盘候选优先入池(主网盘要维持完整覆盖,池里得先有该盘资源)
+            result += w;
+            reasons.add("主网盘+" + w);
         }
         if (type == 10 /* 百度,DriveId:分享本身免会员,人人可看 */) {
-            result += 15;
-            reasons.add("百度分享免会员+15");
+            int w = weight(filter, "baidu.free");
+            result += w;
+            reasons.add("百度分享免会员+" + w);
         }
         // 站点源(玩偶/盘链/观影/蜗牛)的标题来自结构化卡片/详情页,剧名、季集、清晰度字段规整;
         // TG 频道消息是自由文本,防审查变形、装饰前缀、夹带广告都多,归属匹配与集数解析的误判率更高。
@@ -2289,24 +2335,28 @@ public class MediaSubscriptionCheckService {
         }
         if (ongoing) {
             if (type == 8 /* 115 分享码,见 DriveId */) {
-                result -= 10;
-                reasons.add("115分享追更弱-10");
+                int w = weight(filter, "pan115");
+                result += w;
+                reasons.add("115分享追更弱" + w);
             }
             if (COMPLETE_PACK.matcher(title).find()) {
-                result -= 6;
-                reasons.add("完结包不更新-6");
+                int w = weight(filter, "pack.complete");
+                result += w;
+                reasons.add("完结包不更新" + w);
             }
         }
         Long size = message.getSize();
         if (size != null && size > 1024L * 1024 * 1024 && size < 2L * 1024 * 1024 * 1024 * 1024) {
-            result += 10;
-            reasons.add("体积合理+10");
+            int w = weight(filter, "size.fit");
+            result += w;
+            reasons.add("体积合理+" + w);
         }
         if (filter != null && filter.getIncludeKeywords() != null) {
             for (String keyword : filter.getIncludeKeywords()) {
                 if (StringUtils.isNotBlank(keyword) && StringUtils.containsIgnoreCase(title, keyword)) {
-                    result += 10;
-                    reasons.add("包含词+10");
+                    int w = weight(filter, "keyword.include");
+                    result += w;
+                    reasons.add("包含词+" + w);
                     break;
                 }
             }
@@ -2314,29 +2364,34 @@ public class MediaSubscriptionCheckService {
         if (subscription != null) {
             List<String> names = matchNames(subscription);
             if (!names.isEmpty() && matchesTitle(names, title)) {
-                result += 15;
-                reasons.add("标题归属+15");
+                int w = weight(filter, "match.title");
+                result += w;
+                reasons.add("标题归属+" + w);
             }
             Integer titleSeason = parseTitleSeason(title);
             if (subscription.getSeason() != null && subscription.getSeason() > 0
                     && titleSeason != null && titleSeason.equals(subscription.getSeason())) {
-                result += 10;
-                reasons.add("季标记匹配+10");
+                int w = weight(filter, "match.season");
+                result += w;
+                reasons.add("季标记匹配+" + w);
             }
             Integer progress = parseTitleProgress(title);
             int current = subscription.getCurrentEpisodes() != null ? subscription.getCurrentEpisodes() : 0;
             if (progress != null && current > 0) {
                 if (progress > current) {
-                    result += 8;
-                    reasons.add("集数领先+8");
+                    int w = weight(filter, "progress.lead");
+                    result += w;
+                    reasons.add("集数领先+" + w);
                 } else if (progress < current) {
-                    result -= 8;
-                    reasons.add("集数落后-8");
+                    int w = weight(filter, "progress.lag");
+                    result += w;
+                    reasons.add("集数落后" + w);
                 }
             }
             if (current >= 2 && singleEpisodeOf(title) != null) {
-                result -= 40; // 单集链接只配补缺,VIP/4K 加分不能把它抬成主源候选
-                reasons.add("单集链接-40");
+                int w = weight(filter, "single.episode"); // 单集链接只配补缺,VIP/4K 加分不能把它抬成主源候选
+                result += w;
+                reasons.add("单集链接" + w);
             }
         }
         return new Scored(message, title, result, reasons);

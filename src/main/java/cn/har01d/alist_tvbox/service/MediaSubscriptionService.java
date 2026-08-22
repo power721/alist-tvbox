@@ -981,15 +981,30 @@ public class MediaSubscriptionService {
         return any;
     }
 
-    /** 集数清单(详情页集数页签):每集是否已有、来源(转存>主源>补缺),全部来自集源行聚合 —— 不再列目录。 */
+    /**
+     * 集数清单(详情页集数页签):每集是否已有、来源摘要(转存>主源>补缺),全部来自集源行聚合 —— 不再列目录。
+     * <p>
+     * {@code sources} 是逐集资源矩阵:该集在每个资源里的行状态(VERIFIED/LISTED/FAILED/MISSING)、
+     * 成功/失败取链次数、最后验证时间;转存副本以 state=TRANSFER 伪行呈现(自有文件,无集源行)。
+     * 这是 episode_source 落库后唯一新增的、有信息量的视图 —— "系统自以为健康"在这里一眼可见。
+     */
     public List<Map<String, Object>> episodes(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
         Map<Integer, String> sources = new TreeMap<>();
-        // 1) 转存副本(自有盘)
+        Map<Integer, List<Map<String, Object>>> matrix = new TreeMap<>();
+        // 1) 转存副本(自有盘):来源摘要 + 矩阵伪行
         if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
             for (var target : transferService.transferredTargets(uid, id)) {
-                checkService.walkEpisodesAt(target.path(), subscription.getSeason(), checkService.maxEpisodeBytes(subscription))
-                        .forEach(e -> sources.putIfAbsent(e, "转存:" + target.account()));
+                Set<Integer> covered = checkService.walkEpisodesAt(target.path(), subscription.getSeason(),
+                        checkService.maxEpisodeBytes(subscription));
+                covered.forEach(e -> {
+                    sources.putIfAbsent(e, "转存:" + target.account());
+                    matrix.computeIfAbsent(e, k -> new ArrayList<>()).add(new java.util.LinkedHashMap<>(Map.of(
+                            "title", "转存:" + target.account(),
+                            "drive", StringUtils.defaultString(target.drive()),
+                            "state", "TRANSFER",
+                            "successCount", 0, "failCount", 0)));
+                });
             }
         }
         // 2) 集源行聚合:主源行 → "主源",补缺挂载行 → "补缺:{标题}"
@@ -998,24 +1013,43 @@ public class MediaSubscriptionService {
             resources.put(resource.getId(), resource);
         }
         boolean primarySeen = false;
-        Map<Integer, java.util.List<Integer>> deadByEpisode = new java.util.TreeMap<>();
-        for (Object[] pair : episodeSourceRepository.findResourceIdAndNumber(id,
-                Set.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED,
-                        MediaSubscriptionEpisodeSource.STATE_FAILED))) {
-            Integer resourceId = (Integer) pair[0];
-            Integer number = (Integer) pair[1];
-            MediaSubscriptionResource resource = resources.get(resourceId);
+        Map<Integer, List<Integer>> deadByEpisode = new java.util.TreeMap<>();
+        Set<String> live = Set.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED);
+        for (Object[] pair : episodeSourceRepository.findNumberAndSource(id)) {
+            Integer number = (Integer) pair[0];
+            MediaSubscriptionEpisodeSource row = (MediaSubscriptionEpisodeSource) pair[1];
+            MediaSubscriptionResource resource = resources.get(row.getResourceId());
             if (resource == null) {
                 continue;
             }
-            boolean primary = MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
-                    && subscription.getMountPath() != null && subscription.getMountPath().equals(resource.getMountPath());
+            boolean mounted = MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
+                    && StringUtils.isNotBlank(resource.getMountPath());
+            boolean primary = mounted && subscription.getMountPath() != null
+                    && subscription.getMountPath().equals(resource.getMountPath());
             if (primary) {
-                primarySeen = true;
-                sources.putIfAbsent(number, "主源");
-            } else if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
-                    && StringUtils.isNotBlank(resource.getMountPath())) {
-                sources.putIfAbsent(number, "补缺:" + StringUtils.defaultIfBlank(resource.getTitle(), "候选源"));
+                primarySeen = true; // 行已同步(无论状态) —— 首轮巡检前的兜底显示不生效
+            }
+            // 只有 LIVE 行算"已有":FAILED(取不了链)的集不能再顶着"主源"的名头显示为已有
+            if (live.contains(row.getState())) {
+                if (primary) {
+                    sources.putIfAbsent(number, "主源");
+                } else if (mounted) {
+                    sources.putIfAbsent(number, "补缺:" + StringUtils.defaultIfBlank(resource.getTitle(), "候选源"));
+                }
+            }
+            if (MediaSubscriptionEpisodeSource.STATE_FAILED.equals(row.getState())) {
+                deadByEpisode.computeIfAbsent(number, k -> new ArrayList<>()).add(resource.getId());
+            }
+            if (mounted) { // 矩阵只展示挂载中的资源行(候选探测行对用户没有播放意义)
+                Map<String, Object> item = new java.util.LinkedHashMap<>();
+                item.put("title", StringUtils.defaultIfBlank(resource.getTitle(), "候选源"));
+                item.put("drive", resource.getType() == null ? "" : StringUtils.defaultString(DriveId.toDrive(resource.getType())));
+                item.put("primary", primary);
+                item.put("state", row.getState());
+                item.put("successCount", row.getSuccessCount());
+                item.put("failCount", row.getFailCount());
+                item.put("lastVerifiedTime", row.getLastVerifiedTime());
+                matrix.computeIfAbsent(number, k -> new ArrayList<>()).add(item);
             }
         }
         if (!primarySeen) {
@@ -1023,11 +1057,6 @@ public class MediaSubscriptionService {
             for (int i = 1; i <= (subscription.getCurrentEpisodes() == null ? 0 : subscription.getCurrentEpisodes()); i++) {
                 sources.putIfAbsent(i, "主源");
             }
-        }
-        // 全源判死的集:行在、LIVE 不在 —— 展示为损坏待补(旧 broken_episodes 登记表的行级替代品)
-        for (Object[] pair : episodeSourceRepository.findResourceIdAndNumber(id,
-                Set.of(MediaSubscriptionEpisodeSource.STATE_FAILED))) {
-            deadByEpisode.computeIfAbsent((Integer) pair[1], k -> new ArrayList<>()).add((Integer) pair[0]);
         }
         int base = sources.isEmpty() ? 0 : sources.keySet().stream().max(Integer::compareTo).orElse(0);
         if (!deadByEpisode.isEmpty()) {
@@ -1042,10 +1071,16 @@ public class MediaSubscriptionService {
         List<Map<String, Object>> result = new ArrayList<>();
         for (int i = 1; i <= Math.min(base, 500); i++) {
             String source = sources.get(i);
+            boolean present = source != null; // 可用性只认 LIVE 行;"源损坏"是展示文案,不是已有
             if (source == null && deadByEpisode.containsKey(i)) {
                 source = "源损坏(待补源)";
             }
-            result.add(Map.of("episode", i, "present", source != null, "source", source == null ? "" : source));
+            Map<String, Object> item = new java.util.LinkedHashMap<>();
+            item.put("episode", i);
+            item.put("present", present);
+            item.put("source", source == null ? "" : source);
+            item.put("sources", matrix.getOrDefault(i, List.of()));
+            result.add(item);
         }
         return result;
     }
@@ -1478,7 +1513,34 @@ public class MediaSubscriptionService {
         if (MediaSubscription.STATUS_ERROR.equals(subscription.getStatus())) {
             return "检查失败 · " + base;
         }
-        return base;
+        String badge = newEpisodeBadge(subscription);
+        return badge == null ? base : badge + " · " + base;
+    }
+
+    /**
+     * TVBox 新集角标(Setting {@code msub_tvbox_badge},默认开;配 false 关闭):
+     * 存在<b>取链验证通过且未观看</b>的集时返回 "🆕N"。条件对齐通知门槛(验证过 + 用户在追),
+     * 该集被播放后 watchedEpisode 追上,角标自动消除 —— vod_remarks 是 TVBox 协议里唯一
+     * 保证被渲染的文本位,通知与角标共用同一个数据口径。
+     */
+    private String newEpisodeBadge(MediaSubscription subscription) {
+        if ("false".equals(settingRepository.findById("msub_tvbox_badge").map(s -> s.getValue()).orElse(""))) {
+            return null;
+        }
+        try {
+            int watched = checkService.watchedEpisode(subscription);
+            if (watched <= 0) {
+                return null; // 还没开始看:整部剧都是"新",角标没有信息量
+            }
+            long unwatchedVerified = episodeSourceRepository
+                    .findNumbersBySubscriptionAndStatesIn(subscription.getId(),
+                            Set.of(MediaSubscriptionEpisodeSource.STATE_VERIFIED))
+                    .stream().filter(number -> number > watched).count();
+            return unwatchedVerified > 0 ? "🆕" + unwatchedVerified : null;
+        } catch (Exception e) {
+            log.debug("new episode badge failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     private MediaSubscriptionFilter resolveFilter(int uid, MediaSubscriptionFilter filter) {
