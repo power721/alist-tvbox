@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MediaSubscriptionCheckServiceTest {
 
     private final MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
     @Test
     void seasonEpisodePattern() {
@@ -436,7 +436,7 @@ class MediaSubscriptionCheckServiceTest {
             service = new MediaSubscriptionCheckService(subscriptionRepository, resourceRepository, eventRepository,
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),
                     Mockito.mock(IndexTemplateRepository.class), settingRepository,
-                    Mockito.mock(ShareService.class), aListService, telegramService, null,
+                    Mockito.mock(ShareService.class), aListService, telegramService, null, null,
                     Mockito.mock(MetadataService.class), Mockito.mock(AutoUpdateExecutor.class),
                     appProperties, new ObjectMapper());
             subscription.setId(1);

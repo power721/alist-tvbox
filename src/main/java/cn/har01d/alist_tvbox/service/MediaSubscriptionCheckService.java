@@ -94,6 +94,7 @@ public class MediaSubscriptionCheckService {
     private final AListService aListService;
     private final TelegramService telegramService;
     private final WanouSearchService wanouSearchService;
+    private final PanLianSearchService panLianSearchService;
     private final MetadataService metadataService;
     private final AutoUpdateExecutor autoUpdateExecutor;
     private final AppProperties appProperties;
@@ -122,6 +123,7 @@ public class MediaSubscriptionCheckService {
                                          AListService aListService,
                                          TelegramService telegramService,
                                          WanouSearchService wanouSearchService,
+                                         PanLianSearchService panLianSearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          AppProperties appProperties,
@@ -138,6 +140,7 @@ public class MediaSubscriptionCheckService {
         this.aListService = aListService;
         this.telegramService = telegramService;
         this.wanouSearchService = wanouSearchService;
+        this.panLianSearchService = panLianSearchService;
         this.metadataService = metadataService;
         this.autoUpdateExecutor = autoUpdateExecutor;
         this.appProperties = appProperties;
@@ -1352,27 +1355,34 @@ public class MediaSubscriptionCheckService {
 
     /**
      * 多源聚合搜索:TG 三级回退(PanSou → TG-Search → 网页)结果之上,并入玩偶聚合站源
-     * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接),按 link 天然去重;
-     * 玩偶源失败不影响 TG 结果(仅告警),反之亦然。
+     * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接)与盘链源(需用户自配账号/Cookie,
+     * 未配置时静默关闭),按 link 天然去重;任一新源失败不影响其它源结果(仅告警)。
      */
     private List<Message> searchAllSources(String keyword, int size, boolean cached) {
         List<Message> messages = new ArrayList<>(telegramService.search(keyword, size, false, cached));
+        Set<String> links = new java.util.HashSet<>();
+        for (Message message : messages) {
+            links.add(message.getLink());
+        }
         if (wanouSearchService != null && appProperties.getSubscription().isWanouEnabled()) {
-            try {
-                Set<String> links = new java.util.HashSet<>();
-                for (Message message : messages) {
-                    links.add(message.getLink());
-                }
-                for (Message message : wanouSearchService.search(keyword)) {
-                    if (StringUtils.isNotBlank(message.getLink()) && links.add(message.getLink())) {
-                        messages.add(message);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("wanou search failed for [{}]: {}", keyword, e.getMessage());
-            }
+            mergeSource(messages, links, wanouSearchService.search(keyword), "wanou", keyword);
+        }
+        if (panLianSearchService != null) {
+            mergeSource(messages, links, panLianSearchService.search(keyword), "panlian", keyword);
         }
         return messages;
+    }
+
+    private void mergeSource(List<Message> messages, Set<String> links, List<Message> extra, String source, String keyword) {
+        try {
+            for (Message message : extra) {
+                if (StringUtils.isNotBlank(message.getLink()) && links.add(message.getLink())) {
+                    messages.add(message);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("{} search failed for [{}]: {}", source, keyword, e.getMessage());
+        }
     }
 
     /**

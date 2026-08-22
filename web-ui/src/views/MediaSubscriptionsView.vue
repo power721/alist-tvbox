@@ -342,6 +342,20 @@
           </el-select>
           <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
         </el-form-item>
+        <el-divider content-position="left">盘链搜索源(可选)</el-divider>
+        <el-form-item label="盘链站点">
+          <el-input v-model="notifyForm.panlianHost" placeholder="留空用内置地址;自定义镜像站填 https://..."/>
+        </el-form-item>
+        <el-form-item label="盘链账号">
+          <el-input v-model="notifyForm.panlianUsername" placeholder="注册邮箱;账号密码或 Cookie 至少配一样"/>
+        </el-form-item>
+        <el-form-item label="盘链密码">
+          <el-input v-model="notifyForm.panlianPassword" type="password" show-password placeholder="与账号配套"/>
+        </el-form-item>
+        <el-form-item label="盘链 Cookie">
+          <el-input v-model="notifyForm.panlianCookie" type="textarea" :rows="2"
+                    placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="notifyVisible = false">取消</el-button>
@@ -549,6 +563,10 @@ const notifyForm = ref({
   archiveDays: 0,
   vipAccounts: [] as number[],
   mainDrives: [] as number[],
+  panlianHost: '',
+  panlianUsername: '',
+  panlianPassword: '',
+  panlianCookie: '',
 })
 const navigationVisible = ref(false)
 const navCategories = ref<{ type_id: string, type_name: string }[]>([])
@@ -1048,6 +1066,10 @@ const openNotify = () => {
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
     notifyForm.value.mainDrives = (settings['msub_main_drives'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0).slice(0, 2)
+    notifyForm.value.panlianHost = settings['panlian_host'] || ''
+    notifyForm.value.panlianUsername = settings['panlian_username'] || ''
+    notifyForm.value.panlianPassword = settings['panlian_password'] || ''
+    notifyForm.value.panlianCookie = settings['panlian_cookie'] || ''
     notifyVisible.value = true
   }).catch(() => {
     notifyVisible.value = true
@@ -1065,6 +1087,10 @@ const saveNotify = () => {
       name: 'msub_main_drives',
       value: [...new Set(notifyForm.value.mainDrives)].slice(0, 2).join(','),
     }),
+    axios.post('/api/settings', {name: 'panlian_host', value: notifyForm.value.panlianHost.trim()}),
+    axios.post('/api/settings', {name: 'panlian_username', value: notifyForm.value.panlianUsername.trim()}),
+    axios.post('/api/settings', {name: 'panlian_password', value: notifyForm.value.panlianPassword}),
+    axios.post('/api/settings', {name: 'panlian_cookie', value: notifyForm.value.panlianCookie.trim()}),
   ]
   Promise.all(saves).then(() => {
     ElMessage.success('已保存(下轮巡检生效)')

@@ -37,6 +37,8 @@
 >
 > **玩偶聚合搜索源(2026-08-22)**:atv-spiders `py/玩偶聚合.py` 移植为 `WanouSearchService`,成为追剧搜索源之一(§4.6 第四源)。11 个玩偶系 MacCMS 网盘站并行搜索(站点优先级玩偶>多多>木偶>…),卡片标题归一化粗匹配(剥 4K/站名噪声与集数/季/年份标记,双向包含,精确过滤仍由 `matchesTitle` 把关)后抓详情页(`module-row-info p` 文本;虎斑/小斑走 `module-row-text@data-clipboard-text`),提取分享链接(修 `hhttps://` 复制瑕疵、URL 停在中文/全角字符、行内提取码折 `?password=` 供 `ShareService.parsePassword` 消费),`Message.parseType` 复用盘型识别产出与 TG 同构的候选。**域名治理**:静态表仅种子兜底,`pan-site-monitor`(默认 `https://pan-site-monitor.douer.me/api/data`,`app.subscription.wanou-monitor-url`)每 6h 下发按延迟排序的可达地址(监控键为中文名,欧歌↔欧哥),拉取失败 10min 重试;请求逐域名 failover+成功粘滞,CF 挑战页(200+challenges.cloudflare.com)识别为失败保证轮转,全域名失败站点冷却 30min。接入点:`fillPool`/`preview` 经 `searchAllSources` 与 TG 三级回退结果按 link 去重合并(玩偶源失败仅告警不影响 TG)。配置:`wanou-enabled`(默认开)/`wanou-max-detail-pages`(单站详情页上限,默认 3)/`wanou-timeout-seconds`(总超时 45s)。单测:`WanouSearchServiceTest`(解析/盘型/failover 粘滞/监控刷新/跨站去重/CF 判定);实测冒烟:7+ 站可达,「难哄」召回 34 条(夸克/UC/阿里/115/天翼),20s 内完成。
 
+> **盘链搜索源(2026-08-22)**:atv-spiders `py/盘链.py` 移植为 `PanLianSearchService`(§4.6 第五源)。需登录的分享聚合站(默认 `https://www.xn--vzy265d.cc`,Setting `panlian_host` 可覆盖),JSON API:`/api/get_videos.php`(搜索)/`/api/search_pan_links.php`(取链,vod_id+keyword 去语言后缀)。**凭证必须用户自配**(用户要求,Python 里的混淆内置共享账号不移植):Setting `panlian_username`+`panlian_password`(multipart 登录 `/api/login.php`,先取登录页 PHPSESSID)或直接 `panlian_cookie`(优先使用不触发登录),追剧设置对话框新增「盘链搜索源」分组编辑(password/cookie 后缀命中 isSecretKey 自动脱敏);未配置任何凭证 → 源静默关闭(日志提示一次)。登录 Cookie 内存缓存,响应 code=-1/success=false 含"登录"自动重登一次,登录失败 5min 冷却。链接两态:直链(结构化 password 折参数:百度/迅雷/123 → `pwd=`、115 → `password=`,已有参数不重复折)+ token(`/api/go.php?t=` 302 跟随解析,手机 UA+`skip_go_warning=1`,仍在本站的跳转视为失败丢弃);`Message.parseType` 定型,磁力/电驴/未知盘丢弃。接入 `searchAllSources`(mergeSource 抽出,wanou/panlian 共用)。实测:站点 TLS 正常,未登录搜索返回 code=-1"请先登录"(与重登判定吻合),假账号登录被正确受理拒绝(message 字段)。单测 9 个:URL 清洗/提取码折叠/host 归一化(中文域名 IDNA,注意 URI.create 拒绝非 ASCII 主机须手动解析)/无凭证关闭/登录取链全流程/登录冷却/配置 Cookie 直用。
+
 > 关键类:`MediaSubscriptionService`(CRUD/内容/合并播放/收件箱/导出导入/动作)、`MediaSubscriptionCheckService`(巡检/换源/补缺/探测/打分/通知)、`MediaSubscriptionTransferService`(转存/归档)、`web/MediaSubscriptionController`、`web/TelegramController`(msub 分支/操作组端点/首页分类)、`service/metadata/*`、迁移 `V20__MediaSubscription` + `V21__MediaSubscriptionMeta` + `V22__MediaSubscriptionMetaFix`(V21 曾因带引号小写列名在 H2 上导致 Column not found,V22 自愈,详见 `MediaSubscriptionMigrationTest`)。
 > 留待:集→源映射仅动态计算+接口固化展示(未落表,设计标注条件性);搜索成功率等指标在追剧页 `/stats`(未嵌入 SystemInfo 页);转存空间水位依赖事后校验发现(未做转存前预估)。
 >
@@ -140,9 +142,9 @@ TRANSFER 模式同理:目标路径 = `Storage.getMountPath(account) + "/追剧/{
 
 PlaylistMerger 按集号合并多个源的清单:**转存副本(如有) > 主源 > 候选源按分数**;同集号取最高优先级源的播放地址。合并结果缓存(Caffeine,随巡检失效),TVBox 详情接口输出单一 `vod_play_url`。集 → 源的映射动态计算,不落库(P1 若需要历史级稳定性再固化到表)。
 
-### 4.6 搜索源:盘搜 / TG-Search 频道 / 电报网页搜索 / 玩偶聚合站
+### 4.6 搜索源:盘搜 / TG-Search 频道 / 电报网页搜索 / 玩偶聚合站 / 盘链
 
-分享资源来自四类来源,前三个已接入现有代码;第四个(玩偶聚合站源,2026-08-22)为 atv-spiders `py/玩偶聚合.py` 的 Java 移植:
+分享资源来自五类来源,前三个已接入现有代码;玩偶聚合站源与盘链源(均 2026-08-22)分别是 atv-spiders `py/玩偶聚合.py`、`py/盘链.py` 的 Java 移植:
 
 | 来源 | 现有实现 | 特性 | 在本系统中的角色 |
 |---|---|---|---|
@@ -150,6 +152,7 @@ PlaylistMerger 按集号合并多个源的清单:**转存副本(如有) > 主源
 | TG-Search 频道 | `TelegramService.searchTgSearchApi`(`{tgSearch}/api/search`) | 结构化最好:`cloud_types` 按盘类型过滤,`media` 元数据(title/year/episode/quality)可免挂载预打分 | 未配 PanSou 时的常规搜索首选;打分元数据的主要来源 |
 | t.me 网页抓取 | `TelegramService.searchFromWeb`(Jsoup 并行抓 `telegram_channel` 表中 webAccess 频道) | 零外部依赖、开箱即用;慢、易风控,覆盖面取决于频道表 | 兜底来源;缺集补搜聚合模式的补充源 |
 | 玩偶聚合站 | `WanouSearchService`(11 个玩偶系 MacCMS 网盘站:玩偶/多多/木偶/欧歌/至臻/蜡笔/二小/虎斑/小斑/快映/闪电) | 网页抓取:并行按站搜索 → 卡片标题粗匹配 → 抓详情页提取网盘分享链接(行内提取码折 `?password=`);域名由监控服务下发最新可达地址,逐域名 failover + 成功粘滞;CF 挑战页识别为失败 | 候选池补充源:`fillPool`/`preview` 与 TG 三级回退结果按 link 去重合并(`searchAllSources`),实测 7+ 站可达、单剧 30+ 分享 |
+| 盘链 | `PanLianSearchService`(需登录的分享聚合站,JSON API 搜索/取链) | **凭证必须用户自配**(Setting `panlian_username`/`panlian_password` 或 `panlian_cookie`,站点 `panlian_host` 可覆盖,追剧设置对话框编辑;**不内置共享账号**,未配置时源静默关闭);账号密码 multipart 登录(Cookie 内存缓存、响应"请先登录"自动重登、失败 5min 冷却防撞墙);链接两态:直链与 token(token 经 `/api/go.php` 302 解析真实分享链,手机 UA+`skip_go_warning`);结构化 password 按盘折 `pwd=`(百度/迅雷/123)/`password=`(115) | 候选池补充源:同经 `searchAllSources` 按 link 去重合并 |
 
 - **统一抽象 `SearchProvider`**:返回归一化 `Message` 列表,`link` 为天然去重键(同一分享在多源/多频道出现时自动合并);现有三个实现之外,未来来源("等" —— 其他盘搜站、聚合 API)按同一 SPI 插入。不改动 `TelegramService.search` 现有三级回退,聚合/策略层包在其上;
 - **两种策略**:常规巡检用**回退链**(省额度:PanSou → TG-Search → 网页,任一来源结果够用即停,即现有 `search()` 行为);缺集补搜用**聚合模式**(多源全开、结果合并去重,最大化候选覆盖,代价可控因为只在补集时发生);

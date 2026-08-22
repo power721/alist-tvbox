@@ -28,7 +28,7 @@ class MediaSubscriptionPlaylistParseTest {
 
     private final MediaSubscriptionCheckService checkService = new MediaSubscriptionCheckService(
             null, null, null, null, null, null, null, emptySettings(),
-            null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+            null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
     /** 全局 Setting 空 stub:未配置 msub_main_drives */
     private static SettingRepository emptySettings() {
@@ -185,7 +185,7 @@ class MediaSubscriptionPlaylistParseTest {
                 .thenReturn(java.util.Optional.of(global));
         MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
                 null, null, null, null, null, null, null, settingRepository,
-                null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+                null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
 
         MediaSubscription subscription = new MediaSubscription();
         assertEquals(List.of("quark", "115"), service.mainDrives(subscription), "订阅未覆盖时用全局配置");
