@@ -107,8 +107,9 @@ public class MediaSubscription {
     @Column(name = "current_episodes")
     private Integer currentEpisodes;
 
-    @Column(name = "last_episode")
-    private Integer lastEpisode;
+    /** 挂载目录里观测到的最大集号(资源侧指标)。**不是观看进度** —— 进度在 History,见 watchedEpisode。 */
+    @Column(name = "max_episode")
+    private Integer maxEpisode;
 
     @Column(columnDefinition = "TEXT", name = "episode_list")
     private String episodeList;

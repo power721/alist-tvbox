@@ -751,7 +751,7 @@ public class MediaSubscriptionService {
     /** 播放逻辑集 msubep-{订阅}-{集}:实时选源并回退(转存>主源>补缺),某源解析失败登记损坏并落下一个,用户无感知。 */
     public Map<String, Object> playEpisode(int uid, int subscriptionId, int episode, String client, String type) {
         MediaSubscription subscription = getOwned(uid, subscriptionId);
-        Map<Integer, String> broken = checkService.parseBroken(subscription);
+        Map<Integer, java.util.Set<String>> broken = checkService.parseBroken(subscription);
         // 逐源清单(不去重合并):转存各账号盘 → 主源 → 补缺挂载(按分序)
         List<MediaSubscriptionCheckService.EpisodeFile> candidates = new ArrayList<>();
         if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
@@ -776,7 +776,7 @@ public class MediaSubscriptionService {
         }
         List<String> errors = new ArrayList<>();
         for (MediaSubscriptionCheckService.EpisodeFile file : candidates) {
-            if (broken.containsKey(episode) && file.dir().equals(broken.get(episode))) {
+            if (MediaSubscriptionCheckService.isBroken(broken, episode, file.dir())) {
                 continue; // 该源此集已登记损坏
             }
             try {
@@ -1014,7 +1014,7 @@ public class MediaSubscriptionService {
             base = Math.max(base, subscription.getExpectedEpisodes());
         }
         List<Map<String, Object>> result = new ArrayList<>();
-        Map<Integer, String> broken = checkService.parseBroken(subscription);
+        Map<Integer, java.util.Set<String>> broken = checkService.parseBroken(subscription);
         for (int i = 1; i <= Math.min(base, 500); i++) {
             String source = sources.get(i);
             if (source == null && broken.containsKey(i)) {
@@ -1503,7 +1503,7 @@ public class MediaSubscriptionService {
         dto.setStatus(subscription.getStatus());
         dto.setExpectedEpisodes(subscription.getExpectedEpisodes());
         dto.setCurrentEpisodes(subscription.getCurrentEpisodes());
-        dto.setLastEpisode(subscription.getLastEpisode());
+        dto.setMaxEpisode(subscription.getMaxEpisode());
         dto.setMissingEpisodes(missingEpisodes(subscription));
         dto.setStallCount(subscription.getStallCount());
         dto.setCheckIntervalHours(subscription.getCheckIntervalHours());

@@ -20,6 +20,8 @@ import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
+import cn.har01d.alist_tvbox.entity.History;
+import cn.har01d.alist_tvbox.entity.HistoryRepository;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
@@ -29,6 +31,7 @@ import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +84,8 @@ public class MediaSubscriptionCheckService {
     private static final Set<String> INVALID_STATES = Set.of("BAD", "INVALID", "FAILED", "EXPIRED", "DEAD", "ERROR");
     /** 池枯竭释放 BAD 冷却的最小年龄:本轮刚判死的不参与释放 */
     private static final long BAD_RELEASE_MIN_AGE_MS = 30 * 60_000L;
+    /** 播放历史里的逻辑链接 msubep-{订阅}-{集},集号即观看进度 */
+    private static final Pattern MSUBEP_EPISODE = Pattern.compile("msubep-\\d+-(\\d{1,4})");
     /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
     private static final Pattern TITLE_PROGRESS = Pattern.compile(
             "(?i)更新?至\\s*(\\d{1,3})|全\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*[-~至]\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,3})(?!\\d)");
@@ -107,6 +112,8 @@ public class MediaSubscriptionCheckService {
     private final WoniuSearchService woniuSearchService;
     private final MetadataService metadataService;
     private final AutoUpdateExecutor autoUpdateExecutor;
+    /** 观看进度只读来源:追更系统不自行存储进度,多端合并由播放记录同步负责 */
+    private final HistoryRepository historyRepository;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
 
@@ -140,6 +147,7 @@ public class MediaSubscriptionCheckService {
                                          WoniuSearchService woniuSearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
+                                         HistoryRepository historyRepository,
                                          AppProperties appProperties,
                                          ObjectMapper objectMapper) {
         this.subscriptionRepository = subscriptionRepository;
@@ -159,6 +167,7 @@ public class MediaSubscriptionCheckService {
         this.woniuSearchService = woniuSearchService;
         this.metadataService = metadataService;
         this.autoUpdateExecutor = autoUpdateExecutor;
+        this.historyRepository = historyRepository;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
     }
@@ -352,7 +361,10 @@ public class MediaSubscriptionCheckService {
         List<Integer> added = applyInventory(subscription, episodes);
 
         // 缺集检测:官方已播集数是权威触发源(§4.8);无官方数据回退期望集数/观测范围
-        episodes.removeAll(preheatEpisodes(subscription, added));
+        Set<Integer> brokenNew = preheatEpisodes(subscription, added);
+        episodes.removeAll(brokenNew);
+        // 通知门槛(§11 / 验收场景 7):新集必须**取链验证通过**才通知,且仅通知已追平的用户
+        notifyNewEpisodes(subscription, added.stream().filter(e -> !brokenNew.contains(e)).toList(), episodes.size());
         Set<Integer> missing = computeMissing(subscription, episodes);
         if (!missing.isEmpty()) {
             fillGaps(subscription, new TreeSet<>(missing));
@@ -368,8 +380,67 @@ public class MediaSubscriptionCheckService {
         scheduleNext(subscription);
     }
 
-    /** 版本升级提醒(§10.7):主源无 4K 而池中出现 4K 完整候选 → 提示(不自动替换)。 */
-    private void detectUpgrade(MediaSubscription subscription, Set<Integer> present) {
+    /**
+     * 新集通知(§11 / 验收场景 7):必须同时满足两个条件才发。
+     * <ol>
+     *   <li><b>播放源已验证可用</b> —— 调用方只传 preheat 取链成功的集。"发现即通知"会先推
+     *       "更新 第18集"、随后再补一条"链接验证失败(疑似被和谐)",等于放羊。</li>
+     *   <li><b>用户已追平</b> —— 只有看到过上一个最新集的人才需要被叫醒;还差十集没看的人
+     *       不需要为第 18 集响一次。</li>
+     * </ol>
+     */
+    private void notifyNewEpisodes(MediaSubscription subscription, List<Integer> verified, int total) {
+        if (verified.isEmpty()) {
+            return;
+        }
+        int newest = verified.stream().max(Integer::compareTo).orElse(0);
+        int watched = watchedEpisode(subscription);
+        // 追平判定:已看集 >= 本次新增之前的最新集(= 新增里的最小集 - 1)
+        int previousNewest = verified.stream().min(Integer::compareTo).orElse(newest) - 1;
+        if (watched > 0 && watched < previousNewest) {
+            log.debug("subscription {} new episodes {} not notified: watched {} < {}",
+                    subscription.getId(), verified, watched, previousNewest);
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_NEW_EPISODE,
+                    "更新 第" + joinNumbers(verified) + " 集(共 " + total + " 集)", false);
+            return;
+        }
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_NEW_EPISODE,
+                "更新 第" + joinNumbers(verified) + " 集(共 " + total + " 集)");
+    }
+
+    /**
+     * 观看进度:读播放记录,不自行存储 —— 多端进度由播放记录同步天然合并。
+     * <p>
+     * 优先解析 {@code episodeUrl} 里的逻辑链接 {@code msubep-{订阅}-{集}}(它带着真实集号);
+     * 解析不出(用户切到了分盘线路、播的是物理地址)时退回 {@code History.episode} 选集下标 +1。
+     * 注意 {@code MediaSubscription.maxEpisode} 是<b>资源侧</b>最大集号,与观看进度无关。
+     */
+    int watchedEpisode(MediaSubscription subscription) {
+        if (historyRepository == null) {
+            return 0;
+        }
+        try {
+            int watched = 0;
+            String vodId = MediaSubscriptionService.VOD_ID_PREFIX + subscription.getId();
+            for (History history : historyRepository.findByUidAndVodId(subscription.getUid(), vodId)) {
+                watched = Math.max(watched, episodeOfHistory(history));
+            }
+            return watched;
+        } catch (Exception e) {
+            log.debug("read watch progress failed: {}", e.getMessage());
+            return 0;
+        }
+    }
+
+    private static int episodeOfHistory(History history) {
+        Matcher matcher = MSUBEP_EPISODE.matcher(StringUtils.defaultString(history.getEpisodeUrl()));
+        if (matcher.find()) {
+            return Integer.parseInt(matcher.group(1));
+        }
+        return history.getEpisode() > 0 ? history.getEpisode() + 1 : 0; // 选集下标从 0 起
+    }
+
+    /** 版本升级提醒(§10.7):主源无 4K 而池中出现 4K 完整候选 → 提示(不自动替换)。 */    private void detectUpgrade(MediaSubscription subscription, Set<Integer> present) {
         if (subscription.getStallCount() < appProperties.getSubscription().getStallRoundsBeforeSearch() || present.isEmpty()) {
             return;
         }
@@ -1165,27 +1236,34 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** 损坏集登记表:JSON {集号: "源目录|时间戳"};解析并剔除 7 天以上过期项。 */
-    Map<Integer, String> parseBroken(MediaSubscription subscription) {
+    /**
+     * 损坏集登记表:JSON {集号: ["源目录|时间戳", ...]};解析并剔除 7 天以上过期项。
+     * <p>
+     * 每集是<b>多个</b>源目录 —— 同一集可能在多个源里都损坏。旧版每集只存一个目录且覆盖写,
+     * 于是 playEpisode 的候选循环里"试 A 失败记 A,试 B 失败记 B 把 A 覆盖掉",
+     * 下次播放 A 不被跳过、重蹈覆辙,两个以上失效源时永不收敛。
+     * 兼容旧格式(字符串标量)。
+     */
+    Map<Integer, Set<String>> parseBroken(MediaSubscription subscription) {
         if (StringUtils.isBlank(subscription.getBrokenEpisodes())) {
             return Map.of();
         }
         try {
-            Map<String, String> raw = objectMapper.readValue(subscription.getBrokenEpisodes(),
-                    new TypeReference<java.util.LinkedHashMap<String, String>>() {
+            Map<String, JsonNode> raw = objectMapper.readValue(subscription.getBrokenEpisodes(),
+                    new TypeReference<java.util.LinkedHashMap<String, JsonNode>>() {
                     });
-            Map<Integer, String> result = new java.util.LinkedHashMap<>();
+            Map<Integer, Set<String>> result = new java.util.LinkedHashMap<>();
             long expireBefore = System.currentTimeMillis() - 7L * 24 * 3600_000;
-            raw.forEach((episode, value) -> {
-                int index = value.lastIndexOf('|');
-                long timestamp = 0;
-                try {
-                    timestamp = Long.parseLong(value.substring(index + 1));
-                } catch (NumberFormatException ignored) {
-                    // 无时间戳按过期前处理,重新登记
+            raw.forEach((episode, node) -> {
+                Set<String> dirs = new java.util.LinkedHashSet<>();
+                for (JsonNode entry : node.isArray() ? node : objectMapper.createArrayNode().add(node)) {
+                    String dir = liveBrokenDir(entry.asText(), expireBefore);
+                    if (dir != null) {
+                        dirs.add(dir);
+                    }
                 }
-                if (timestamp >= expireBefore) {
-                    result.put(Integer.parseInt(episode), value.substring(0, index < 0 ? value.length() : index));
+                if (!dirs.isEmpty()) {
+                    result.put(Integer.parseInt(episode), dirs);
                 }
             });
             return result;
@@ -1194,20 +1272,42 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** 登记损坏集(转存校验发现:源里列得出、实际拷不过去)。 */
-    void addBrokenEpisodes(MediaSubscription subscription, Map<Integer, String> additions) {
-        Map<Integer, String> merged = new java.util.LinkedHashMap<>(parseBroken(subscription));
-        long now = System.currentTimeMillis();
-        additions.forEach((episode, dir) -> merged.put(episode, dir + "|" + now));
+    /** 拆 "源目录|时间戳";未过期返回源目录,过期或无时间戳返回 null(重新登记)。 */
+    private static String liveBrokenDir(String value, long expireBefore) {
+        if (StringUtils.isBlank(value)) {
+            return null;
+        }
+        int index = value.lastIndexOf('|');
+        long timestamp = 0;
         try {
-            subscription.setBrokenEpisodes(objectMapper.writeValueAsString(merged));
+            timestamp = Long.parseLong(value.substring(index + 1));
+        } catch (Exception ignored) {
+            // 无时间戳按过期处理,重新登记
+        }
+        return timestamp >= expireBefore ? value.substring(0, index < 0 ? value.length() : index) : null;
+    }
+
+    /** 登记损坏集(某源的某集:列得出、实际取不了链/拷不过去);同集多个源各自累积,不互相覆盖。 */
+    void addBrokenEpisodes(MediaSubscription subscription, Map<Integer, String> additions) {
+        Map<Integer, Set<String>> merged = new java.util.LinkedHashMap<>();
+        parseBroken(subscription).forEach((episode, dirs) -> merged.put(episode, new java.util.LinkedHashSet<>(dirs)));
+        additions.forEach((episode, dir) ->
+                merged.computeIfAbsent(episode, key -> new java.util.LinkedHashSet<>()).add(dir));
+        long now = System.currentTimeMillis();
+        Map<String, List<String>> serialized = new java.util.LinkedHashMap<>();
+        merged.forEach((episode, dirs) ->
+                serialized.put(String.valueOf(episode), dirs.stream().map(dir -> dir + "|" + now).toList()));
+        try {
+            subscription.setBrokenEpisodes(objectMapper.writeValueAsString(serialized));
         } catch (Exception e) {
             log.warn("serialize broken episodes failed: {}", e.getMessage());
         }
     }
 
-    private static String brokenDir(Map<Integer, String> broken, int episode) {
-        return broken.getOrDefault(episode, "");
+    /** 该集在该源目录下是否已登记损坏。 */
+    static boolean isBroken(Map<Integer, Set<String>> broken, int episode, String dir) {
+        Set<String> dirs = broken.get(episode);
+        return dirs != null && dirs.contains(dir);
     }
 
     private Site site() {
@@ -1242,7 +1342,7 @@ public class MediaSubscriptionCheckService {
     TreeMap<Integer, EpisodeFile> walkEpisodeFiles(MediaSubscription subscription, boolean includeGaps) {
         Site site = site();
         long maxBytes = maxEpisodeBytes(subscription);
-        Map<Integer, String> broken = parseBroken(subscription);
+        Map<Integer, Set<String>> broken = parseBroken(subscription);
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, maxBytes, true);
         if (includeGaps) {
@@ -1257,7 +1357,7 @@ public class MediaSubscriptionCheckService {
             }
         }
         if (!broken.isEmpty()) {
-            result.entrySet().removeIf(entry -> entry.getValue().dir().equals(brokenDir(broken, entry.getKey())));
+            result.entrySet().removeIf(entry -> isBroken(broken, entry.getKey(), entry.getValue().dir()));
         }
         return result;
     }
@@ -1426,12 +1526,14 @@ public class MediaSubscriptionCheckService {
         List<Integer> added = episodes.stream().filter(e -> !old.contains(e)).sorted().toList();
 
         subscription.setCurrentEpisodes(episodes.size());
-        subscription.setLastEpisode(episodes.stream().max(Integer::compareTo).orElse(null));
+        subscription.setMaxEpisode(episodes.stream().max(Integer::compareTo).orElse(null));
         subscription.setEpisodeList(serializeEpisodes(episodes));
         if (!initial && !added.isEmpty()) {
             subscription.setStallCount(0);
             subscription.setUpdatedTime(System.currentTimeMillis());
-            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_NEW_EPISODE, "更新 第" + joinNumbers(added) + " 集(共 " + episodes.size() + " 集)");
+            // 通知不在这里发:此刻新集只是"目录里列得出",还没验证过能不能取到链。
+            // 发现即通知会先推一条"更新 第18集"、随后再补一条"链接验证失败(疑似被和谐)"。
+            // 由 doCheck 在 preheat 之后对通过验证的集调 notifyNewEpisodes。
         } else if (initial && !added.isEmpty()) {
             subscription.setUpdatedTime(System.currentTimeMillis());
         } else {
@@ -1501,7 +1603,11 @@ public class MediaSubscriptionCheckService {
      * 自配账号/Cookie,未配置时静默关闭),按 link 天然去重;任一新源失败不影响其它源结果。
      */
     private List<Message> searchAllSources(String keyword, int size, boolean cached) {
-        List<Message> messages = new ArrayList<>(telegramService.search(keyword, size, false, cached));
+        // 追更一律走聚合模式:盘搜/TG-Search/电报网页同时跑。回退链"够用即停"会让配了盘搜的部署
+        // 永远调不到另外两个源 —— 而资源不够时重复搜同一个源没有意义,结果不会变。
+        List<Message> messages = new ArrayList<>(appProperties.getSubscription().isAggregateSearch()
+                ? telegramService.searchAggregated(keyword, size, cached)
+                : telegramService.search(keyword, size, false, cached));
         Set<String> links = new java.util.HashSet<>();
         for (Message message : messages) {
             links.add(message.getLink());
@@ -2178,6 +2284,11 @@ public class MediaSubscriptionCheckService {
     }
 
     void addEvent(int subscriptionId, String type, String detail) {
+        addEvent(subscriptionId, type, detail, true);
+    }
+
+    /** @param push false = 只落事件流(页面时间线可见),不外发通知 —— 用于"用户还没追平"的新集。 */
+    void addEvent(int subscriptionId, String type, String detail, boolean push) {
         try {
             MediaSubscriptionEvent event = new MediaSubscriptionEvent();
             event.setSubscriptionId(subscriptionId);
@@ -2186,7 +2297,9 @@ public class MediaSubscriptionCheckService {
             event.setCreatedTime(System.currentTimeMillis());
             eventRepository.save(event);
             log.info("media subscription {} event: {} {}", subscriptionId, type, detail);
-            notifyTelegram(subscriptionId, type, detail);
+            if (push) {
+                notifyTelegram(subscriptionId, type, detail);
+            }
         } catch (Exception e) {
             log.warn("add event failed: {}", e.getMessage());
         }

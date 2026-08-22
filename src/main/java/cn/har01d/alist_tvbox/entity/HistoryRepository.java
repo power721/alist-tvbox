@@ -23,6 +23,9 @@ public interface HistoryRepository extends JpaRepository<History, Integer> {
 
     List<History> findByUidAndSourceKindAndSourceKey(int uid, String sourceKind, String sourceKey);
 
+    /** 追更观看进度:同一订阅在各端的播放记录(vodId = msub:{订阅id}),多端由播放记录同步天然合并。 */
+    List<History> findByUidAndVodId(int uid, String vodId);
+
     List<History> findByUidAndSourceKindIsNotNullAndChangeSeqGreaterThan(int uid, long changeSeq, Sort sort);
 
     List<History> findByUidAndSourceKindAndChangeSeqGreaterThan(int uid, String sourceKind, long changeSeq, Sort sort);

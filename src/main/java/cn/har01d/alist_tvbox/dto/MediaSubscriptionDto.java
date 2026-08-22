@@ -27,7 +27,7 @@ public class MediaSubscriptionDto {
     private String status;
     private Integer expectedEpisodes;
     private Integer currentEpisodes;
-    private Integer lastEpisode;
+    private Integer maxEpisode;
     private List<Integer> missingEpisodes;
     private int stallCount;
     private Integer checkIntervalHours;

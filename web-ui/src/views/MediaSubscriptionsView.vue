@@ -460,7 +460,7 @@ interface SubscriptionDto {
   accountIds: string[] | null
   expectedEpisodes: number | null
   currentEpisodes: number | null
-  lastEpisode: number | null
+  maxEpisode: number | null
   missingEpisodes: number[]
   stallCount: number
   checkIntervalHours: number | null
