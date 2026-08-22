@@ -1702,10 +1702,10 @@ const formatClock = (time: number) => {
 }
 
 .detail-backdrop {
-  height: 140px;
+  height: 210px;
   border-radius: 8px;
   overflow: hidden;
-  margin-bottom: -60px;
+  margin-bottom: -70px;
   background: var(--el-fill-color-dark);
 }
 
@@ -1732,7 +1732,8 @@ const formatClock = (time: number) => {
 .detail-info {
   flex: 1;
   min-width: 0;
-  padding-top: 4px;
+  /* 文字区避开背景图(横幅 210 高、海报压入 70):标题从图下方起排,亮背景下仍可读 */
+  padding-top: 78px;
 }
 
 .detail-genres {
