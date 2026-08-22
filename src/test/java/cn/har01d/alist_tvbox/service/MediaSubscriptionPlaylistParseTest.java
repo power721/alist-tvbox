@@ -132,32 +132,36 @@ class MediaSubscriptionPlaylistParseTest {
         quark.put(2, "02(5G)$1@201@0@1");
         drives.put("quark", quark);
         String[] lines = MediaSubscriptionService.buildTvBoxPlayLines(12, merged, drives, Set.of("quark", "baidu"));
-        assertEquals("我的追剧$$$百度网盘$$$夸克网盘", lines[0]);
+        // 同为主网盘:夸克(2 集)覆盖多于百度(1 集),居前
+        assertEquals("我的追剧$$$夸克网盘$$$百度网盘", lines[0]);
         assertEquals("01(5G)$msubep-12-1#02(5G)$msubep-12-2"
-                + "$$$01(5G)$1@101@0@0"
-                + "$$$01(5G)$1@301@0@0#02(5G)$1@201@0@1", lines[1]);
+                + "$$$01(5G)$1@301@0@0#02(5G)$1@201@0@1"
+                + "$$$01(5G)$1@101@0@0", lines[1]);
     }
 
     @Test
-    void tvboxPlayLinesKeepMainDrivesAndCompleteOthersOnly() {
-        // 主网盘线路固定展示(允许暂不完整);非主网盘须覆盖齐 merged 全部集才上线路
+    void tvboxPlayLinesShowPartialDrivesOrderedByCoverage() {
+        // 主网盘线路固定居前(允许暂不完整);其它盘线路非空即上(115 每集一链的线路就是该盘可用集清单),
+        // 按集数降序排在主网盘之后
         TreeMap<Integer, String> merged = new TreeMap<>();
         merged.put(1, "01(5G)$1@101@0@0");
         merged.put(2, "02(5G)$1@201@0@1");
         Map<String, TreeMap<Integer, String>> drives = new LinkedHashMap<>();
         TreeMap<Integer, String> baidu = new TreeMap<>();
-        baidu.put(1, "01(5G)$1@101@0@0"); // 百度为主网盘但只有第 1 集 → 仍出线路
+        baidu.put(1, "01(5G)$1@101@0@0"); // 百度为主网盘但只有第 1 集 → 仍居首条盘线路
         drives.put("baidu", baidu);
         TreeMap<Integer, String> uc = new TreeMap<>();
-        uc.put(1, "01(5G)$1@401@0@0"); // UC 非主网盘且集不齐 → 不上线路
+        uc.put(1, "01(5G)$1@401@0@0"); // UC 集不齐也出线路(单集源盘)
         drives.put("uc", uc);
         TreeMap<Integer, String> quark = new TreeMap<>();
         quark.put(1, "01(5G)$1@301@0@0");
-        quark.put(2, "02(5G)$1@201@0@1"); // 夸克非主网盘但集齐 → 上线路
+        quark.put(2, "02(5G)$1@201@0@1"); // 夸克集齐,非主网盘 → 按覆盖数排在 UC 之前
         drives.put("quark", quark);
+        TreeMap<Integer, String> unknown = new TreeMap<>(); // 空盘线路不上
+        drives.put("empty", unknown);
         String[] lines = MediaSubscriptionService.buildTvBoxPlayLines(12, merged, drives, Set.of("baidu"));
-        assertEquals("我的追剧$$$百度网盘$$$夸克网盘", lines[0]);
-        assertFalse(lines[1].contains("1@401@0@0"), "UC 集不齐不应出线路");
+        assertEquals("我的追剧$$$百度网盘$$$夸克网盘$$$UC网盘", lines[0]);
+        assertTrue(lines[1].contains("1@401@0@0"), "UC 集不齐也应有线路(该盘可用集清单)");
     }
 
     @Test

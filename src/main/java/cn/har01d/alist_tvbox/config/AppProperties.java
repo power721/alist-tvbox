@@ -117,8 +117,12 @@ public class AppProperties {
         private int metaRefreshIntervalHours = 24;
         /** 缺集补搜:每轮巡检最多临时挂载探测的候选数 */
         private int maxGapProbesPerRound = 3;
-        /** 缺集补缺:每个订阅最多同时保留的补缺挂载数(-补N) */
-        private int maxGapMounts = 3;
+        /** 缺集补缺:每个订阅最多同时保留的补缺/线路挂载数(-补N) */
+        private int maxGapMounts = 6;
+        /** 分盘线路:候选池里每个网盘自动探测挂载出备用线路(用户按盘手动切换的逃生舱),无需配置主网盘 */
+        private boolean driveLinesEnabled = true;
+        /** 分盘线路:单个网盘最多保留的线路挂载数(整季源 1 个即满覆盖;115 每集一链逐集挂) */
+        private int driveLineMountsPerDrive = 3;
         /** 自动转存:每日转存任务数上限(防配额/风控) */
         private int maxTransfersPerDay = 20;
         /** 自动转存:单轮转存等待 AList copy 任务完成的超时(分钟) */

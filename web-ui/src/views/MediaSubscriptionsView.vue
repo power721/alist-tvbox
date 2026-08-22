@@ -1296,6 +1296,7 @@ const eventType = (type: string) => {
     case 'TRANSFER_FAILED':
       return 'danger'
     case 'SOURCE_REPLACED':
+    case 'DRIVE_LINE':
       return 'primary'
     default:
       return 'info'
@@ -1307,6 +1308,7 @@ const eventTypeName = (type: string) => {
     NEW_EPISODE: '新集更新',
     SOURCE_INVALID: '主源失效',
     SOURCE_REPLACED: '换源',
+    DRIVE_LINE: '分盘线路',
     GAP_FILLED: '补缺',
     POOL_FILLED: '候选池',
     TRANSFER_DONE: '转存完成',

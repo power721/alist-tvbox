@@ -2150,6 +2150,9 @@ public class TvBoxService {
         }
         if (depth > 1) {
             folders.addAll(fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList());
+            // 版本文件夹(HQ.DV/SDR 双压包的两个 Season 目录)按画质兼容性排序:DV/HDR 标记组靠后,
+            // 组序先到先得的消费方(追剧合并 putIfAbsent/分盘线路)自然取到非 DV 版,防杜比视界 P5 绿屏
+            folders.sort(Comparator.comparingInt(TextUtils::picturePenalty));
         }
         log.info("load media files from folders: {}", folders);
         int source = 0;
@@ -2213,6 +2216,8 @@ public class TvBoxService {
                     result.getFolders().add(fixSourceName(parent + "/" + folder));
                 }
 
+                // 同 folders:嵌套版本目录(HQ.DV/SDR)兼容性差的靠后
+                subfolders.sort(Comparator.comparingInt(TextUtils::picturePenalty));
                 for (String name : subfolders) {
                     try {
                         var sub = dfs(site, path + "/" + folder + "/" + name, ac, folder + "/" + name, depth - 1);

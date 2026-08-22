@@ -162,6 +162,9 @@ public class MediaSubscriptionCheckService {
     private final Map<Integer, Integer> gapSearchRounds = new ConcurrentHashMap<>();
     /** 主网盘补池搜索限频(订阅 id → 上次搜索时间):池内无该盘资源时主动搜索,至多每检查周期一次 */
     private final Map<Integer, Long> mainDriveSearchTime = new ConcurrentHashMap<>();
+    /** 详情触发补线的限频(订阅 id → 上次触发时间),TVBox 每次打开详情都会装配线路,不能次次起后台探测 */
+    private static final long DRIVE_LINE_KICK_THROTTLE_MS = 10 * 60_000L;
+    private final Map<Integer, Long> driveLineKickTime = new ConcurrentHashMap<>();
     /** 撞上限流的网盘 → 解禁时间戳:退避期内不再试挂该盘候选,防连环触发把好源烧成 BAD */
     private final Map<String, Long> driveThrottleTime = new ConcurrentHashMap<>();
     /** 连续瞬时故障计数(资源 id → 次数):未识别错误默认按瞬时不下结论,streak 封顶防真死源每轮白吃探测预算 */
@@ -448,6 +451,7 @@ public class MediaSubscriptionCheckService {
         }
         sampleMounted(subscription);
         ensureMainDrives(subscription, present);
+        ensureDriveLines(subscription, present);
         scheduleNext(subscription);
     }
 
@@ -1133,7 +1137,8 @@ public class MediaSubscriptionCheckService {
                 .filter(row -> mounted.containsKey(row.getResourceId()))
                 .map(row -> new PlayCandidate(mounted.get(row.getResourceId()), row))
                 .sorted(Comparator.comparing(PlayCandidate::source, SOURCE_ORDER)
-                        .thenComparing(c -> -(c.resource().getScore() == null ? 0 : c.resource().getScore())))
+                        .thenComparing(c -> -(c.resource().getScore() == null ? 0 : c.resource().getScore()))
+                        .thenComparing(c -> TextUtils.picturePenalty(c.source().getRelPath()))) // 同分优先非 DV 版,防绿屏
                 .toList();
     }
 
@@ -1373,6 +1378,148 @@ public class MediaSubscriptionCheckService {
         }
     }
 
+    /**
+     * 分盘线路保障:候选池里每个网盘(除主源盘)探测挂载至少一个覆盖观测集的源,让 TVBox 详情
+     * 按盘出备用线路(百度/夸克/115…),不依赖用户配置主网盘 —— 主网盘机制是"完整覆盖保障",
+     * 这里只要"该盘有线可用":整季源挂 1 个即满覆盖;单集源(115 每集一链)逐集挂,
+     * 至 driveLineMountsPerDrive 上限。与补缺共用 maxGapMounts 挂载预算与探测限额
+     * (fillGaps/ensureMainDrives 先行,缺集优先占预算);挂后由 retireCoveredAuxMounts
+     * 的同盘冗余清理兜底,不被"主源已覆盖"整批回收。主源未集齐、无观测集时不出线。
+     */
+    void ensureDriveLines(MediaSubscription subscription, Set<Integer> present) {
+        AppProperties.Subscription config = appProperties.getSubscription();
+        if (!config.isDriveLinesEnabled() || present.isEmpty()) {
+            return;
+        }
+        String active = activeDrive(subscription);
+        List<MediaSubscriptionResource> aux = auxMounts(subscription);
+        int mounted = aux.size();
+        int maxMounts = config.getMaxGapMounts();
+        int maxPerDrive = config.getDriveLineMountsPerDrive();
+        Map<String, Set<Integer>> coverageByDrive = new LinkedHashMap<>();
+        Map<String, Integer> mountsByDrive = new HashMap<>();
+        for (MediaSubscriptionResource resource : aux) {
+            if (resource.getType() == null) {
+                continue;
+            }
+            String drive = DriveId.toDrive(resource.getType());
+            coverageByDrive.computeIfAbsent(drive, key -> new TreeSet<>()).addAll(coverageOf(resource));
+            mountsByDrive.merge(drive, 1, Integer::sum);
+        }
+        int probed = 0;
+        int maxProbes = config.getMaxGapProbesPerRound();
+        for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
+            if (probed >= maxProbes || mounted >= maxMounts) {
+                break;
+            }
+            String drive = resource.getType() == null ? null : DriveId.toDrive(resource.getType());
+            if (drive == null || drive.equals(active)) {
+                continue;
+            }
+            Set<Integer> lineCoverage = coverageByDrive.getOrDefault(drive, Set.of());
+            if (lineCoverage.containsAll(present) || mountsByDrive.getOrDefault(drive, 0) >= maxPerDrive) {
+                continue; // 该盘线路已满覆盖/达挂载上限
+            }
+            if (episodeSourceRepository.countByResourceId(resource.getId()) > 0
+                    && intersection(coverageOf(resource), present).isEmpty()) {
+                continue; // 已探测过且不覆盖任何观测集:出线无意义
+            }
+            try {
+                probeShare(subscription, resource);
+                probed++;
+                clearTransientStreak(resource);
+                resource.setCheckedTime(System.currentTimeMillis());
+                resourceRepository.save(resource);
+            } catch (Exception e) {
+                log.info("probe drive-line candidate {} failed: {}", resource.getId(), e.getMessage());
+                if (classifyProbeFailure(e) == ProbeFailure.TRANSIENT && !transientStreakReached(resource)) {
+                    continue; // 瞬时故障:不退役不拉黑,下轮再探
+                }
+                retireResource(subscription, resource, e.getMessage(), true);
+                continue;
+            }
+            Set<Integer> useful = intersection(coverageOf(resource), present);
+            if (!useful.isEmpty()) {
+                try {
+                    if (mountAux(subscription, resource)) {
+                        mounted++;
+                        mountsByDrive.merge(drive, 1, Integer::sum);
+                        coverageByDrive.computeIfAbsent(drive, key -> new TreeSet<>()).addAll(useful);
+                        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_DRIVE_LINE,
+                                "分盘线路[" + DriveId.displayName(drive) + "] 挂载:覆盖 第"
+                                        + joinNumbers(new ArrayList<>(useful)) + " 集(来自 "
+                                        + StringUtils.defaultIfBlank(resource.getTitle(), "候选源") + ")");
+                    }
+                } catch (Exception e) {
+                    log.warn("mount drive-line source failed: {}", e.getMessage());
+                    addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "分盘线路挂载失败:" + e.getMessage());
+                }
+            }
+        }
+    }
+
+    /** 详情装配时判断是否值得异步补线:存在未出线网盘的候选(主源盘除外)。 */
+    boolean hasUnlinedDriveCandidates(MediaSubscription subscription, Set<String> linedDrives) {
+        if (!appProperties.getSubscription().isDriveLinesEnabled()) {
+            return false;
+        }
+        String active = activeDrive(subscription);
+        return candidatesOrdered(subscription).stream()
+                .anyMatch(r -> r.getType() != null
+                        && !linedDrives.contains(DriveId.toDrive(r.getType()))
+                        && !DriveId.toDrive(r.getType()).equals(active));
+    }
+
+    /** 详情触发分盘线路补挂(异步,限频 10min):TVBox 打开详情时线路未齐,下一次刷新即补上,不必等巡检周期。 */
+    public void ensureDriveLinesAsync(int uid, int subscriptionId) {
+        MediaSubscription subscription = subscriptionRepository.findById(subscriptionId).orElse(null);
+        if (subscription == null || subscription.getUid() != uid
+                || MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus())
+                || !appProperties.getSubscription().isDriveLinesEnabled()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long last = driveLineKickTime.putIfAbsent(subscriptionId, now);
+        if (last != null) {
+            if (now - last < DRIVE_LINE_KICK_THROTTLE_MS) {
+                return;
+            }
+            driveLineKickTime.put(subscriptionId, now);
+        }
+        executor.submit(() -> {
+            if (!tryLock(subscriptionId)) {
+                return;
+            }
+            try {
+                resyncPrimaryInventory(subscription);
+                ensureDriveLines(subscription, liveEpisodeNumbers(subscription));
+            } catch (Exception e) {
+                log.warn("ensure drive lines for subscription {} failed: {}", subscriptionId, e.getMessage());
+            } finally {
+                inFlight.remove(subscriptionId);
+            }
+        });
+    }
+
+    /**
+     * 详情触发的轻量自愈:重列主源同步集源行 —— 画质择优换版本文件后(DV 版 → SDR 版)rel_path 原位更新,
+     * msubep 播放立即生效;不必等下一轮巡检(完结订阅退避 24h 甚至 ENDED 后不再完整巡检)。
+     * 只列不判:失败静默跳过,失效确认仍归巡检。
+     */
+    private void resyncPrimaryInventory(MediaSubscription subscription) {
+        try {
+            if (StringUtils.isBlank(subscription.getMountPath()) || subscription.getShareId() == null) {
+                return;
+            }
+            TreeMap<Integer, EpisodeFile> files = listEpisodeFiles(subscription);
+            if (!files.isEmpty()) {
+                syncInventory(subscription, primaryResource(subscription), subscription.getMountPath(), files);
+            }
+        } catch (Exception e) {
+            log.debug("resync primary inventory failed: {}", e.getMessage());
+        }
+    }
+
     /** RETIRED/REJECTED 冷却超期 = 允许重探一次(历史误标自愈;重探再失败会刷新计时)。 */
     boolean isBadCooled(MediaSubscriptionResource resource, long now) {
         if (!MediaSubscriptionResource.STATE_RETIRED.equals(resource.getState())
@@ -1494,22 +1641,43 @@ public class MediaSubscriptionCheckService {
         return true;
     }
 
-    /** 主源已覆盖补缺源全部集数 → 卸载补缺挂载(删 share,资源回候选池,行落 MISSING)。
-     * 主网盘冗余挂载豁免:主源换盘/失效时该盘线路不断供。 */
+    /**
+     * 补缺/线路挂载回收:只清"同盘冗余"—— 挂载目录刷空的死挂载已在 refreshAuxMounts 就地退役,
+     * 这里回收 ①覆盖为空 ②全部集被主源覆盖且不构成线路价值 的挂载,腾出 maxGapMounts 预算。
+     * 线路价值 = 分盘线路开启时,同盘按分数序保留至多 {@code driveLineMountsPerDrive} 个
+     * "各有独占集"的挂载(主源换盘/失效时该盘线路不断供;覆盖是同盘已保留挂载子集的纯冗余仍退,
+     * 防同盘整季源×N 吃光预算)。主网盘冗余豁免沿用(完整覆盖保障的常备线)。
+     */
     void retireCoveredAuxMounts(MediaSubscription subscription, Set<Integer> present) {
+        AppProperties.Subscription config = appProperties.getSubscription();
+        int cap = config.getDriveLineMountsPerDrive();
         List<String> mains = mainDrives(subscription);
         String active = activeDrive(subscription);
-        for (MediaSubscriptionResource resource : auxMounts(subscription)) {
-            String drive = resource.getType() == null ? null : DriveId.toDrive(resource.getType());
-            if (drive != null && mains.contains(drive) && !drive.equals(active)) {
-                continue; // 主网盘冗余挂载:即使主源已覆盖也保留
-            }
-            Set<Integer> coverage = coverageOf(resource);
-            if (coverage.isEmpty() || present.containsAll(coverage)) {
+        Map<String, List<MediaSubscriptionResource>> byDrive = new LinkedHashMap<>();
+        for (MediaSubscriptionResource resource : auxMounts(subscription)) { // 仓序即分数降序
+            String drive = resource.getType() == null ? "" : DriveId.toDrive(resource.getType());
+            byDrive.computeIfAbsent(drive, key -> new ArrayList<>()).add(resource);
+        }
+        for (var entry : byDrive.entrySet()) {
+            String drive = entry.getKey();
+            boolean mainDrive = !drive.isEmpty() && mains.contains(drive) && !drive.equals(active);
+            Set<Integer> kept = new TreeSet<>();
+            int keptCount = 0;
+            for (MediaSubscriptionResource resource : entry.getValue()) {
+                Set<Integer> coverage = coverageOf(resource);
+                boolean keep = !coverage.isEmpty()
+                        && (!present.containsAll(coverage) || mainDrive
+                        || (config.isDriveLinesEnabled() && !drive.isEmpty() && !drive.equals(active)
+                        && keptCount < cap && !kept.containsAll(coverage)));
+                if (keep) {
+                    kept.addAll(coverage);
+                    keptCount++;
+                    continue;
+                }
                 try {
                     shareService.deleteShare(resource.getShareId());
                 } catch (Exception e) {
-                    log.warn("retire gap mount failed: {}", e.getMessage());
+                    log.warn("retire covered aux mount failed: {}", e.getMessage());
                     continue;
                 }
                 resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
@@ -1522,7 +1690,8 @@ public class MediaSubscriptionCheckService {
                         episodeSourceRepository.save(row);
                     }
                 }
-                log.info("subscription {} retired aux mount (fully covered by primary)", subscription.getId());
+                log.info("subscription {} retired aux mount {} (covered, drive [{}])",
+                        subscription.getId(), resource.getId(), drive);
             }
         }
     }
@@ -1888,7 +2057,13 @@ public class MediaSubscriptionCheckService {
             }
             int episode = parseEpisode(file.getName(), season);
             if (episode > 0) {
-                result.putIfAbsent(episode, new EpisodeFile(episode, path, file.getName(), file.getSize()));
+                EpisodeFile current = result.get(episode);
+                // 同集多版本(HQ.DV/SDR 双压包两个季文件夹):列举顺序未定义,先到先得会选中 DV 版整屏泛绿;
+                // 惩罚带目录上下文(标记常在季文件夹名上),兼容性差的版本被后来者替换
+                if (current == null || TextUtils.picturePenalty(path + "/" + file.getName())
+                        < TextUtils.picturePenalty(current.dir() + "/" + current.name())) {
+                    result.put(episode, new EpisodeFile(episode, path, file.getName(), file.getSize()));
+                }
             }
         }
         for (FsInfo file : files) {

@@ -26,6 +26,7 @@ public class MediaSubscriptionEvent {
     public static final String TYPE_SOURCE_INVALID = "SOURCE_INVALID";
     public static final String TYPE_SOURCE_REPLACED = "SOURCE_REPLACED";
     public static final String TYPE_GAP_FILLED = "GAP_FILLED";
+    public static final String TYPE_DRIVE_LINE = "DRIVE_LINE";
     public static final String TYPE_POOL_FILLED = "POOL_FILLED";
     public static final String TYPE_TRANSFER_DONE = "TRANSFER_DONE";
     public static final String TYPE_TRANSFER_FAILED = "TRANSFER_FAILED";

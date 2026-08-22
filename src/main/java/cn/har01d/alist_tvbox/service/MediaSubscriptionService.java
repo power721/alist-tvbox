@@ -20,7 +20,6 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionResourceRepository;
 import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.entity.UserPreference;
 import cn.har01d.alist_tvbox.entity.UserPreferenceRepository;
-import cn.har01d.alist_tvbox.domain.DriveId;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.metadata.DoubanMetadataProvider;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
@@ -860,16 +859,29 @@ public class MediaSubscriptionService {
         if (tvboxRequest) {
             // TVBox/spider 请求:首条线路每集重写为逻辑链接 msubep-{subId}-{集},播放时实时选源并逐源回退,
             // 换源/补缺/转存切换不影响续看进度(历史绑定逻辑 id 而非物理地址);
-            // 其余线路按网盘分线(百度/夸克/…,同盘聚合所有源)——主网盘线路固定展示(完整覆盖由巡检保障),
-            // 其它盘覆盖齐全部观测集才上线路。逻辑线路失败或想固定某个盘时手动切换。
+            // 其余线路按网盘分线(百度/夸克/115…,同盘聚合所有源)——主网盘线路固定居前(完整覆盖由巡检保障),
+            // 其它盘线路非空即上(挂载由 ensureDriveLines 保障,集数可不全:115 每集一链的线路就是该盘可用集清单)。
+            // 逻辑线路失败或想固定某个盘时手动切换。
             String[] lines = buildTvBoxPlayLines(subscription.getId(), merged, driveLines,
                     Set.copyOf(checkService.mainDrives(subscription)));
             detail.setVod_play_from(lines[0]);
             detail.setVod_play_url(lines[1]);
+            kickDriveLines(subscription, driveLines.keySet());
         } else if (transferMode || merged.size() != primary.size()) {
             // web 请求保留真实地址,与挂载目录播放一致
             detail.setVod_play_from("追更");
             detail.setVod_play_url(String.join("#", merged.values()));
+        }
+    }
+
+    /** 线路未齐(池里还有未出线网盘的候选)时异步补挂,限频在 CheckService;下次详情刷新即可见新线路。 */
+    private void kickDriveLines(MediaSubscription subscription, Set<String> linedDrives) {
+        try {
+            if (checkService.hasUnlinedDriveCandidates(subscription, linedDrives)) {
+                checkService.ensureDriveLinesAsync(subscription.getUid(), subscription.getId());
+            }
+        } catch (Exception e) {
+            log.debug("kick drive lines failed: {}", e.getMessage());
         }
     }
 
@@ -897,31 +909,27 @@ public class MediaSubscriptionService {
         return playUrl.toString();
     }
 
-    /** 线路显示名:DriveId 盘 key → 中文名(未知 key 原样展示)。 */
-    private static final Map<String, String> DRIVE_NAMES = Map.ofEntries(
-            Map.entry("baidu", "百度网盘"), Map.entry("quark", "夸克网盘"), Map.entry("ali", "阿里云盘"),
-            Map.entry("115", "115网盘"), Map.entry("uc", "UC网盘"), Map.entry("189", "天翼云盘"),
-            Map.entry("123", "123云盘"), Map.entry("139", "移动云盘"), Map.entry("thunder", "迅雷云盘"),
-            Map.entry("pikpak", "PikPak"), Map.entry("duck", "广雅网盘"), Map.entry("local", "本地"),
-            Map.entry("strm", "STRM"));
-
     /** TVBox 多线路装配:首条「我的追剧」为 msubep 逻辑线路(默认,续看绑定逻辑 id),
-     * 其余每个网盘一条线路(同盘聚合 转存>主源>补缺 的全部集)。主网盘固定出线路(完整覆盖由巡检保障),
-     * 非主网盘须覆盖齐 merged 全部集才上线路。返回 [vod_play_from, vod_play_url]。 */
+     * 其余每个网盘一条线路(同盘聚合 转存>主源>补缺 的全部集),主网盘线路固定居前,
+     * 其它盘线路非空即上、按集数降序 —— 单集源盘(115 每集一链)线路即该盘可用集清单,
+     * 合并线路仍是完整权威清单。返回 [vod_play_from, vod_play_url]。 */
     static String[] buildTvBoxPlayLines(int subscriptionId, TreeMap<Integer, String> merged,
                                         Map<String, TreeMap<Integer, String>> driveLines, Set<String> mainDrives) {
+        List<Map.Entry<String, TreeMap<Integer, String>>> ordered = new ArrayList<>();
+        for (var line : driveLines.entrySet()) {
+            if (!line.getValue().isEmpty()) {
+                ordered.add(line);
+            }
+        }
+        ordered.sort(Comparator
+                .comparing((Map.Entry<String, TreeMap<Integer, String>> line) -> mainDrives.contains(line.getKey()) ? 0 : 1)
+                .thenComparing(line -> -line.getValue().size()));
         List<String> from = new ArrayList<>();
         from.add("我的追剧");
         List<String> urls = new ArrayList<>();
         urls.add(buildMsubepPlaylist(subscriptionId, merged));
-        for (var line : driveLines.entrySet()) {
-            if (line.getValue().isEmpty()) {
-                continue;
-            }
-            if (!mainDrives.contains(line.getKey()) && !line.getValue().keySet().containsAll(merged.keySet())) {
-                continue; // 非主网盘且集不齐:不上线路(其集仍并入合并线路)
-            }
-            from.add(DRIVE_NAMES.getOrDefault(line.getKey(), line.getKey()));
+        for (var line : ordered) {
+            from.add(DriveId.displayName(line.getKey()));
             urls.add(String.join("#", line.getValue().values()));
         }
         return new String[]{String.join("$$$", from), String.join("$$$", urls)};
@@ -973,7 +981,11 @@ public class MediaSubscriptionService {
                 String episodeTitle = entry.substring(0, index).replaceAll("\\([^)]*\\)$", ""); // 去掉体积后缀 (1.2G)
                 int episode = checkService.parseEpisodeFromTitle(episodeTitle, season);
                 if (episode > 0) {
-                    out.putIfAbsent(episode, entry);
+                    // 同集重复(平铺混排包 01.DV/01.SDR 同组并列):画质兼容性差的让位,防 DV 版绿屏
+                    String existing = out.get(episode);
+                    if (existing == null || TextUtils.picturePenalty(entry) < TextUtils.picturePenalty(existing)) {
+                        out.put(episode, entry);
+                    }
                     any = true;
                 }
             }

@@ -46,6 +46,43 @@ public class TextUtils {
     // ZWJ 以及 emoji/符号区段。Telegram 频道常用 ·✅✅✅ 之类前缀，由 stripLeadingNoise 统一剥离。
     private static final Pattern LEADING_NOISE = Pattern.compile(
             "^[\\s\\u00B7\\u0387\\u30FB\\uFE0F\\uFE0E\\u200D\\u2600-\\u27BF\\x{1F300}-\\x{1FAFF}]+");
+    // 画质标记(词边界;DVDRip 的 DV 无边界不误伤):同集多版本(DV/SDR 双压包)择优用
+    private static final Pattern DV_MARK = Pattern.compile("(?i)\\b(?:dv|dovi|dolby\\s*vision)\\b|杜比视界");
+    private static final Pattern HDR_MARK = Pattern.compile("(?i)\\bhdr(?:10)?\\b");
+    private static final Pattern SDR_MARK = Pattern.compile("(?i)\\bsdr\\b");
+
+    /**
+     * 画质标记 → 播放器兼容性惩罚:DV=2(杜比视界 Profile 5 单层 IHLP,不支持的设备解码整屏泛绿/灰)
+     * > HDR=1(SDR 屏放偏灰但可看)> 无标记/SDR=0。
+     * <p>
+     * 标记常在版本目录名而非文件名(线上「悬案」主源:`Season 1（HQ.DV.60fps）`14 集 + `Season 1（SDR.50fps）`17 集,
+     * 两个季文件夹,文件名不带标记),故从文件名起**逐段向外**扫描,取最近一段带标记的目录判定;
+     * 显式 SDR 段即终答(不再受外层目录噪声影响);同段 DV&SDR 混标(双压包根目录名)区分不到文件级,跳过继续向外。
+     */
+    public static int picturePenalty(String path) {
+        if (path == null || path.isEmpty()) {
+            return 0;
+        }
+        String[] segments = path.split("/");
+        for (int i = segments.length - 1; i >= 0; i--) {
+            String segment = segments[i];
+            boolean dv = DV_MARK.matcher(segment).find();
+            boolean sdr = SDR_MARK.matcher(segment).find();
+            if (dv && sdr) {
+                continue;
+            }
+            if (dv) {
+                return 2;
+            }
+            if (HDR_MARK.matcher(segment).find()) {
+                return 1;
+            }
+            if (sdr) {
+                return 0;
+            }
+        }
+        return 0;
+    }
 
     public static boolean isChineseChar(int c) {
         return c >= 0x4E00 && c <= 0x9FA5;

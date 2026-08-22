@@ -23,6 +23,7 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -1112,6 +1113,104 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     /** 失效确认/集源行分支的 mock 夹具:订阅已挂主源(shareId=5),仓储行为由各测试定制。 */
+    // ---------- 画质标记惩罚(线上「悬案」主源:Season 1（HQ.DV.60fps）14 集 + Season 1（SDR.50fps）17 集,
+    // 两个季文件夹、文件名不带标记,先到先得选中 DV 版 → 整屏泛绿) ----------
+
+    @Test
+    void picturePenaltyRanksDolbyVisionWorst() {
+        assertEquals(2, TextUtils.picturePenalty("悬案.E05.4K.HQ.DV.60fps.mkv"));
+        assertEquals(2, TextUtils.picturePenalty("Show.S01E05.DoVi.2160p.mkv"));
+        assertEquals(2, TextUtils.picturePenalty("悬案.E05.Dolby Vision.mkv"));
+        assertEquals(2, TextUtils.picturePenalty("悬案.E05.杜比视界.mkv"));
+    }
+
+    @Test
+    void picturePenaltyRanksHdrBelowPlain() {
+        assertEquals(1, TextUtils.picturePenalty("悬案.E05.4K.HDR10.mkv"));
+        assertEquals(1, TextUtils.picturePenalty("Show.E05.HDR.mkv"));
+    }
+
+    @Test
+    void picturePenaltyFallsBackToNearestFolderMarker() {
+        // 线上形态:标记在季文件夹名上,文件名本身不带
+        assertEquals(2, TextUtils.picturePenalty("/追剧/悬案/Season 1（HQ.DV.60fps）/01.4K.60fps.mkv"),
+                "最近的目录段带 DV → 判 DV");
+        assertEquals(0, TextUtils.picturePenalty("/追剧/悬案/Season 1（SDR.50fps）/01.4K.50fps.mkv"));
+        // 深处的显式标记胜过外层:文件自带 DV 压过 SDR 目录名;SDR 目录终答压过 DV 根目录噪声
+        assertEquals(2, TextUtils.picturePenalty("/pack/Season 1（SDR）/05.DV.60fps.mkv"));
+        assertEquals(0, TextUtils.picturePenalty("[HQ.DV.60fps&SDR.50fps]/Season 1（SDR.50fps）/01.mkv"));
+        // 双压包根目录混标区分不到文件级:跳过,不惩罚
+        assertEquals(0, TextUtils.picturePenalty("[HQ.DV.60fps&SDR.50fps]/01.mkv"));
+    }
+
+    @Test
+    void picturePenaltyIgnoresPlainSdrAndDirMarkers() {
+        assertEquals(0, TextUtils.picturePenalty("悬案.E05.4K.SDR.50fps.mkv"));
+        assertEquals(0, TextUtils.picturePenalty("悬案.E05.1080p.mkv"));
+        assertEquals(0, TextUtils.picturePenalty("Movie.DVDRip.x264.mkv"), "DVDRip 的 DV 无词边界,不误伤");
+    }
+
+    // ---------- 分盘线路挂载回收:同盘冗余清理,保住线路挂载 ----------
+
+    @Test
+    void retireCoveredAuxMountsKeepsDriveLineAndDropsRedundant() {
+        // 线上形态:百度主源 17 集全,夸克整季线路挂载 + 同盘冗余挂载 + 115 单集线路挂载。
+        // 旧规则"主源已覆盖即退役"会把线路挂载整批回收 → TVBox 永远只有 2 条一样的线路。
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(1);
+        primary.setSubscriptionId(1);
+        primary.setType(10);
+        primary.setScore(108);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        MediaSubscriptionResource quarkLine = new MediaSubscriptionResource();
+        quarkLine.setId(9);
+        quarkLine.setSubscriptionId(1);
+        quarkLine.setType(5);
+        quarkLine.setScore(108);
+        quarkLine.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        quarkLine.setShareId(71);
+        quarkLine.setMountPath("/追剧/.sources/1-测试剧-补1");
+        MediaSubscriptionResource quarkRedundant = new MediaSubscriptionResource();
+        quarkRedundant.setId(10);
+        quarkRedundant.setSubscriptionId(1);
+        quarkRedundant.setType(5);
+        quarkRedundant.setScore(100);
+        quarkRedundant.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        quarkRedundant.setShareId(72);
+        quarkRedundant.setMountPath("/追剧/.sources/1-测试剧-补2");
+        MediaSubscriptionResource pan115Line = new MediaSubscriptionResource();
+        pan115Line.setId(11);
+        pan115Line.setSubscriptionId(1);
+        pan115Line.setType(8);
+        pan115Line.setScore(93);
+        pan115Line.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        pan115Line.setShareId(73);
+        pan115Line.setMountPath("/追剧/.sources/1-测试剧-补3");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(primary, quarkLine, quarkRedundant, pan115Line));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(9), Mockito.anyCollection()))
+                .thenReturn(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(10), Mockito.anyCollection()))
+                .thenReturn(List.of(1, 2)); // 夸克冗余挂载:覆盖是同盘线路挂载的子集
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(11), Mockito.anyCollection()))
+                .thenReturn(List.of(15));
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(10)).thenReturn(List.of(
+                sourceRow(30, 101, 10, MediaSubscriptionEpisodeSource.STATE_LISTED, "第01集.mkv"),
+                sourceRow(31, 102, 10, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv")));
+
+        fixture.service.retireCoveredAuxMounts(fixture.subscription,
+                new TreeSet<>(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)));
+
+        Mockito.verify(fixture.shareService).deleteShare(72); // 同盘纯冗余:退
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(71); // 夸克线路挂载:主源已覆盖也保留
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(73); // 115 单集线路:有独占集,保留
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, quarkRedundant.getState());
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, quarkLine.getState());
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, pan115Line.getState());
+    }
+
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
         final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
