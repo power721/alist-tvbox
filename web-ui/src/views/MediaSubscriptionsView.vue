@@ -355,16 +355,22 @@
                   {{ detailData.media.status === 'RETURNING' ? '在播' : detailData.media.status === 'ENDED' ? '已完结' : '状态未知' }}
                 </el-tag>
                 <el-tag size="small" type="info">第{{ detailData.media.season }}季</el-tag>
-                <el-tag v-if="detailData.media.rating && !Object.keys(detailData.media.ratings || {}).length" size="small" type="warning">
-                  {{ providerName(detailData.media.provider || '') }} {{ detailData.media.rating }}
-                </el-tag>
-                <template v-if="detailData.media.ratings && Object.keys(detailData.media.ratings).length">
-                  <el-tag v-for="(score, source) in detailData.media.ratings" :key="source" size="small" type="warning">
-                    {{ providerName(source) }} {{ score }}
-                  </el-tag>
-                </template>
+                <!-- 源标签即链接:有评分显示"豆瓣 6.8",无评分也显示源名可点(条目入口始终在) -->
                 <a v-for="(url, label) in detailData.media.links || {}" :key="label"
-                   :href="url" target="_blank" rel="noopener" class="detail-ext-link">{{ label }}</a>
+                   :href="url" target="_blank" rel="noopener" class="rating-tag-link">
+                  <el-tag size="small" type="warning">
+                    {{ label }}<template v-if="ratingOfSource(label)"> {{ ratingOfSource(label) }}</template>
+                  </el-tag>
+                </a>
+                <a v-if="!Object.keys(detailData.media.links || {}).length && detailData.media.rating"
+                   class="rating-tag-link">
+                  <el-tag size="small" type="warning">
+                    {{ providerName(detailData.media.provider || '') }} {{ detailData.media.rating }}
+                  </el-tag>
+                </a>
+                <span v-if="!Object.keys(detailData.media.links || {}).length
+                  && !Object.keys(detailData.media.ratings || {}).length && !detailData.media.rating"
+                      class="sub-text">评分:无</span>
               </div>
               <div v-if="detailData.media.originalName && detailData.media.originalName !== detailData.media.name"
                    class="sub-text">{{ detailData.media.originalName }}</div>
@@ -1085,6 +1091,12 @@ const providerName = (provider: string) => {
   return {douban: '豆瓣', tmdb: 'TMDB', bangumi: 'Bangumi', official: '官方平台'}[provider] || provider || ''
 }
 
+/** 标签(中文源名)→ 多源评分表里的分值;无评分返回空(标签仍显示源名占位) */
+const ratingOfSource = (label: string) => {
+  const source = {'豆瓣': 'douban', TMDB: 'tmdb', Bangumi: 'bangumi'}[label] || label
+  return detailData.value?.media.ratings?.[source] || ''
+}
+
 const buildBody = () => ({
   name: form.value.name,
   keyword: form.value.keyword,
@@ -1726,8 +1738,7 @@ const formatClock = (time: number) => {
   flex-shrink: 0;
   font-size: 32px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  /* 只有海报叠进背景图(装饰),文字区(head 正常流)永远在图下方 —— 不再用整块负 margin 重叠,标题压图问题彻底根除 */
-  margin-top: -70px;
+  margin-top: 8px;
 }
 
 .detail-info {
@@ -1747,11 +1758,22 @@ const formatClock = (time: number) => {
   color: var(--el-color-primary);
   text-decoration: none;
   font-size: 12px;
-  margin-left: 4px;
+  margin-right: 10px;
 }
 
 .detail-ext-link:hover {
   text-decoration: underline;
+}
+
+.detail-links-row {
+  margin: 4px 0 2px;
+}
+
+.detail-ratings-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 2px 0 4px;
 }
 
 .detail-cast {
