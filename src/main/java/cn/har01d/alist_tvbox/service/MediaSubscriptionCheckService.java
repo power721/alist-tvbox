@@ -450,6 +450,12 @@ public class MediaSubscriptionCheckService {
             detectUpgrade(subscription, present);
         }
         sampleMounted(subscription);
+        // 采样/传染判死可能刚把主源退役(挂载已删):同轮立即换源重挂固定路径 ——
+        // 列目录失效路径(onInvalid)自带换源,判死路径原先没有,固定路径会空到下轮巡检(退避可达 24h),
+        // TVBox 详情 404。放在 ensureMainDrives 之前,让新主源优先占住最佳候选并计入主盘覆盖。
+        if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
+            ensureSource(subscription);
+        }
         ensureMainDrives(subscription, present);
         ensureDriveLines(subscription, present);
         scheduleNext(subscription);
@@ -1041,7 +1047,14 @@ public class MediaSubscriptionCheckService {
         try {
             detail = aListService.getFile(site(), mountPath + "/" + row.getRelPath());
         } catch (Exception e) {
-            log.debug("stream resolve failed for row {}: {}", row.getId(), e.getMessage());
+            String message = StringUtils.defaultString(e.getMessage());
+            log.debug("stream resolve failed for row {}: {}", row.getId(), message);
+            // "参数错误"同文案两义:真死链,或百度游客取链撞反爬瞬时窗口(线上案例:主源半小时前还在
+            // 正常拉流,样本+传染两次探测 2.4s 内同错,被判死删挂载+90 天黑名单)。误杀(删挂载/黑名单)
+            // 与误留(行降 FAILED、缺集重开、列目录失效路径仍会兜底)代价不对称 → 单独降级不下结论。
+            if (message.contains("参数错误")) {
+                return StreamVerdict.TRANSIENT;
+            }
             return classifyProbeFailure(e) == ProbeFailure.GONE ? StreamVerdict.FAILED : StreamVerdict.TRANSIENT;
         }
         if (detail == null) {
@@ -1531,8 +1544,10 @@ public class MediaSubscriptionCheckService {
         return checked == null || now - checked >= cooldown;
     }
 
-    /** 临时挂载候选列集数并落集源行(LISTED,rel_path 与挂载点无关,转正式挂载后依然有效),用后即删。 */
-    private void probeShare(MediaSubscription subscription, MediaSubscriptionResource resource) {
+    /** 临时挂载候选列集数并落集源行(LISTED,rel_path 与挂载点无关,转正式挂载后依然有效),用后即删。
+     * 列得出 ≠ 播得了:临时挂载窗口内抽一行做字节级取链,链死(过期/假页)以「链接已过期」上抛,
+     * 按失效退役+黑名单 —— 不再把"分享页活着但文件链已和谐"的资源挂上来占名额,等下轮采样才发现。 */
+    void probeShare(MediaSubscription subscription, MediaSubscriptionResource resource) {
         ShareLink shareLink = new ShareLink();
         shareLink.setLink(resource.getLink());
         shareLink.setCode(StringUtils.defaultString(resource.getPassword()));
@@ -1556,6 +1571,14 @@ public class MediaSubscriptionCheckService {
                 throw new IllegalStateException("资源无可识别的剧集文件:" + resource.getTitle());
             }
             syncInventory(subscription, resource, share.getPath(), files);
+            // 线上:115 单集分享 errno 4100018 —— 列目录成功,文件链接已过期,挂载后下轮采样即死。
+            // 瞬时(限流/参数错误)与无结论(403 防盗链)不拦,只有明确链死才判废。
+            MediaSubscriptionEpisodeSource sample = episodeSourceRepository.findByResourceId(resource.getId()).stream()
+                    .filter(s -> LIVE_STATES.contains(s.getState()))
+                    .findFirst().orElse(null);
+            if (sample != null && verifyStream(share.getPath(), sample) == StreamVerdict.FAILED) {
+                throw new IllegalStateException("资源链接已过期(文件不可播):" + resource.getTitle());
+            }
         } finally {
             try {
                 shareService.deleteShare(share.getId());

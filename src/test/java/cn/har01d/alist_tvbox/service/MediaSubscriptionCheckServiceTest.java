@@ -42,6 +42,7 @@ import java.util.TreeSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -783,7 +784,7 @@ class MediaSubscriptionCheckServiceTest {
         MediaSubscriptionEpisodeSource liveRow = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
         Mockito.when(fixture.episodeSourceRepository.findByResourceId(2)).thenReturn(List.of(liveRow));
         Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
-                .thenThrow(new RuntimeException("failed get link: 参数错误"));
+                .thenThrow(new RuntimeException("failed get link: 链接已过期"));
 
         boolean dead = fixture.service.contagion(fixture.subscription, resource, 99);
 
@@ -791,6 +792,22 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(MediaSubscriptionResource.STATE_RETIRED, resource.getState());
         Mockito.verify(fixture.shareService).deleteShare(9);
         assertEquals(MediaSubscriptionEpisodeSource.STATE_FAILED, liveRow.getState());
+    }
+
+    @Test
+    void contagionAmbiguousParamErrorDoesNotRetire() {
+        // 线上事故回归:主源取链撞"参数错误"反爬窗口(半小时前还在正常拉流),样本+传染同窗同错
+        // 被判死删挂载。同文案两义 → 不下结论,挂载与黑名单都不动。
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource resource = mountedPrimary(2, 9);
+        MediaSubscriptionEpisodeSource liveRow = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(2)).thenReturn(List.of(liveRow));
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
+                .thenThrow(new RuntimeException("failed get link: 参数错误"));
+
+        assertFalse(fixture.service.contagion(fixture.subscription, resource, 99), "参数错误不下结论");
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, resource.getState());
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
     }
 
     @Test
@@ -941,7 +958,7 @@ class MediaSubscriptionCheckServiceTest {
     void verifyStreamGoneResolveFailureIsFailed() {
         Fixture fixture = new Fixture();
         Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
-                .thenThrow(new RuntimeException("failed get link: 参数错误"));
+                .thenThrow(new RuntimeException("failed get link: 分享已失效"));
         MediaSubscriptionEpisodeSource row = sourceRow(21, 10, 2, MediaSubscriptionEpisodeSource.STATE_LISTED, "第02集.mkv");
 
         assertEquals(MediaSubscriptionCheckService.StreamVerdict.FAILED,
@@ -1209,6 +1226,65 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, quarkRedundant.getState());
         assertEquals(MediaSubscriptionResource.STATE_MOUNTED, quarkLine.getState());
         assertEquals(MediaSubscriptionResource.STATE_MOUNTED, pan115Line.getState());
+    }
+
+    // ---------- 流探测误杀事故(2026-08-22 20:09):主源半小时前可正常拉流,取链撞"参数错误"
+    // 反爬窗口,样本+传染 2.4s 内同错被判死 → 删挂载+90 天黑名单,固定路径空到下轮(详情 404) ----------
+    @Test
+    void streamVerifyTreatsAmbiguousParamErrorAsTransient() {
+        // "参数错误"两义(真死链/百度游客反爬窗口):单次不下结论,防相关双探连带误杀
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
+                .thenThrow(new IllegalStateException("failed link: failed get link: 参数错误"));
+        MediaSubscriptionEpisodeSource row = sourceRow(99, 101, 212, MediaSubscriptionEpisodeSource.STATE_LISTED, "第01集.mkv");
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.TRANSIENT, fixture.service.verifyStream("/追剧/悬案", row));
+    }
+
+    @Test
+    void streamVerifyStillFailsOnExplicitExpiry() {
+        // 对照:明确"链接已过期"(115 errno 4100018 形态)仍判死,真死链不能漏
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
+                .thenThrow(new IllegalStateException("failed get link: {\"state\":false,\"msg\":\"链接已过期\",\"errno\":4100018}"));
+        MediaSubscriptionEpisodeSource row = sourceRow(99, 101, 212, MediaSubscriptionEpisodeSource.STATE_LISTED, "第01集.mkv");
+        assertEquals(MediaSubscriptionCheckService.StreamVerdict.FAILED, fixture.service.verifyStream("/追剧/悬案", row));
+    }
+
+    @Test
+    void probeShareRejectsLinkDeadResourceBeforeMount() {
+        // 列得出 ≠ 播得了:115 单集分享分享页活着、文件链已过期 —— 探测期就按"链接已过期"判废,
+        // 不挂载占名额(旧形态:挂上后下轮采样才死,白挂一轮)
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(9);
+        resource.setSubscriptionId(1);
+        resource.setLink("https://115.com/s/dead");
+        resource.setTitle("📺 悬案 (2026) S01E16 ✨4K WEB-DL AAC");
+        resource.setType(8);
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Share temp = new Share();
+        temp.setId(77);
+        temp.setPath("/我的115分享/temp/115@dead@");
+        Share probe = new Share();
+        probe.setType(8);
+        probe.setShareId("dead");
+        Mockito.when(fixture.shareService.parseShareLink("https://115.com/s/dead")).thenReturn(probe);
+        Mockito.when(fixture.shareRepository.findByTypeAndShareIdAndTempTrue(8, "dead")).thenReturn(List.of(temp));
+        Mockito.when(fixture.shareRepository.findByPath("/我的115分享/temp/115@dead@")).thenReturn(temp);
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files("悬案.S01E16.4K.WEB-DL.AAC.mkv"));
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(9))
+                .thenReturn(List.of(sourceRow(30, 101, 9, MediaSubscriptionEpisodeSource.STATE_LISTED, "悬案.S01E16.4K.WEB-DL.AAC.mkv")));
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1))
+                .thenReturn(List.of(episode(101, 16)));
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString()))
+                .thenThrow(new IllegalStateException("failed get link: {\"state\":false,\"msg\":\"链接已过期\",\"errno\":4100018}"));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> fixture.service.probeShare(fixture.subscription, resource));
+        assertTrue(error.getMessage().contains("链接已过期"), "判废文案须含 GONE 措辞,让调用方退役+黑名单: " + error.getMessage());
+        Mockito.verify(fixture.shareService).deleteShare(77); // 临时挂载窗口用后即删
     }
 
     private static class Fixture {
