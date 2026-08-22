@@ -1705,7 +1705,6 @@ const formatClock = (time: number) => {
   height: 210px;
   border-radius: 8px;
   overflow: hidden;
-  margin-bottom: -70px;
   background: var(--el-fill-color-dark);
 }
 
@@ -1727,13 +1726,14 @@ const formatClock = (time: number) => {
   flex-shrink: 0;
   font-size: 32px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  /* 只有海报叠进背景图(装饰),文字区(head 正常流)永远在图下方 —— 不再用整块负 margin 重叠,标题压图问题彻底根除 */
+  margin-top: -70px;
 }
 
 .detail-info {
   flex: 1;
   min-width: 0;
-  /* 文字区避开背景图(横幅 210 高、海报压入 70):标题从图下方起排,亮背景下仍可读 */
-  padding-top: 78px;
+  padding-top: 4px;
 }
 
 .detail-genres {
