@@ -198,7 +198,7 @@ public class PlaybackSyncService {
 
         long deletedAt = tombstoneWatermark(uid, syncScope, sourceKind, in.getSourceKey(), in.getVodId());
         if (updatedAt <= deletedAt) {
-            log.debug("skip resurrect (tombstone newer): uid={} vodId={}", uid, in.getVodId());
+            log.debug("skip resurrect (tombstone newer): uid={} site={} vodId={}", uid, in.getSiteKey(), in.getVodId());
             return;
         }
 
@@ -208,7 +208,7 @@ public class PlaybackSyncService {
         if (exist != null) {
             long existTime = timeOf(exist);
             if (updatedAt < existTime) {
-                log.debug("skip not newer: uid={} vodId={} remote={} local={}", uid, in.getVodId(), updatedAt, existTime);
+                log.debug("skip not newer: uid={} site={} vodId={} remote={} local={}", uid, in.getSiteKey(), in.getVodId(), updatedAt, existTime);
                 return;
             }
             if (updatedAt == existTime) {
@@ -217,11 +217,11 @@ public class PlaybackSyncService {
                     exist.setSourceName(sourceName);
                     exist.setChangeSeq(changeSeq);
                     historyRepository.save(exist);
-                    log.debug("repaired source name: uid={} vodId={} sourceName={}",
-                            uid, in.getVodId(), sourceName);
+                    log.debug("repaired source name: uid={} site={} vodId={} sourceName={}",
+                            uid, in.getSiteKey(), in.getVodId(), sourceName);
                 } else {
-                    log.debug("skip not newer: uid={} vodId={} remote={} local={}",
-                            uid, in.getVodId(), updatedAt, existTime);
+                    log.debug("skip not newer: uid={} site={} vodId={} remote={} local={}",
+                            uid, in.getSiteKey(), in.getVodId(), updatedAt, existTime);
                 }
                 return;
             }
