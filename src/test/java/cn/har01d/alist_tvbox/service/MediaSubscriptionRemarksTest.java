@@ -140,6 +140,52 @@ class MediaSubscriptionRemarksTest {
         assertEquals("已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
     }
 
+    @Test
+    void remarksFallBackToOfficialTotal() {
+        // 手填期望为空/0 时总数走官方总集数(与 web 列表同口径):线上订阅几乎都不填期望
+        MediaSubscription sub = subscription();
+        sub.setCurrentEpisodes(28);
+        sub.setExpectedEpisodes(0);
+        sub.setOfficialEpisodes(28);
+        sub.setOfficialTotal(33);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(sub));
+
+        assertEquals("28/33集", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
+    @Test
+    void remarksShowCompletedByStatusOrSeasonAiredOut() {
+        // 状态 ENDED(自动/手动完结)即完结展示,不依赖手填期望
+        MediaSubscription sub = subscription();
+        sub.setCurrentEpisodes(30);
+        sub.setStatus(MediaSubscription.STATUS_ENDED);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(sub));
+
+        assertEquals("30集完结", service.contentList(1).getList().getFirst().getVod_remarks());
+
+        // 本季已播完且收齐(isSeasonAiredOut,shouldAutoEnd 第三路同条件)同样完结展示
+        MediaSubscription airing = subscription();
+        airing.setCurrentEpisodes(10);
+        airing.setOfficialEpisodes(10);
+        airing.setOfficialTotal(10);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(airing));
+
+        assertEquals("10集完结", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
+    @Test
+    void remarksInProgressSeasonNotMarkedEnded() {
+        // 年番形态:官方已知集数已收齐但季未播完(还有下集播出时间)→ 仍是 x/y集 追更中
+        MediaSubscription sub = subscription();
+        sub.setCurrentEpisodes(188);
+        sub.setOfficialEpisodes(188);
+        sub.setOfficialTotal(188);
+        sub.setNextAirTime(System.currentTimeMillis() + 7L * 24 * 3600_000);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(sub));
+
+        assertEquals("188/188集", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
     // ---------- 标题季标去重 ----------
 
     @Test

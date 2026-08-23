@@ -1870,14 +1870,21 @@ public class MediaSubscriptionService {
 
     private String buildRemarks(MediaSubscription subscription) {
         int current = subscription.getCurrentEpisodes() == null ? 0 : subscription.getCurrentEpisodes();
-        Integer expected = subscription.getExpectedEpisodes();
-        String base = "已更新至 " + current + " 集";
-        if (expected != null && expected > 0) {
-            if (current >= expected) {
-                base = Math.max(current, expected) + "集完结";
-            } else {
-                base = current + "/" + expected + "集";
-            }
+        int expected = subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes();
+        // 总数口径与 web 列表一致:手填期望(expected=0 表示跟随官方) > 官方总集数;均无才退「已更新至 N 集」
+        int total = expected > 0 ? expected
+                : (subscription.getOfficialTotal() != null && subscription.getOfficialTotal() > 0
+                ? subscription.getOfficialTotal() : 0);
+        boolean ended = MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
+                || (expected > 0 && current >= expected)
+                || (total > 0 && subscription.isSeasonAiredOut() && current >= total);
+        String base;
+        if (ended) {
+            base = Math.max(current, total) + "集完结";
+        } else if (total > 0) {
+            base = current + "/" + total + "集";
+        } else {
+            base = "已更新至 " + current + " 集";
         }
         if (MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus())) {
             return "已暂停 · " + base;
