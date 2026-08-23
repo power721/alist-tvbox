@@ -108,6 +108,60 @@ class MediaSubscriptionRemarksTest {
         assertEquals("已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
     }
 
+    // ---------- 集数进度文案 ----------
+
+    @Test
+    void remarksShowProgressFraction() {
+        MediaSubscription sub = subscription();
+        sub.setCurrentEpisodes(10);
+        sub.setExpectedEpisodes(30);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(sub));
+
+        assertEquals("10/30集", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
+    @Test
+    void remarksShowCompletedTotal() {
+        MediaSubscription sub = subscription();
+        sub.setCurrentEpisodes(30);
+        sub.setExpectedEpisodes(30);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(sub));
+
+        assertEquals("30集完结", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
+    @Test
+    void remarksKeepUpdatedTextWithoutExpectedTotal() {
+        // 总集数未知(元数据未绑定/官方未公布):维持「已更新至 N 集」,不臆造分母
+        MediaSubscription sub = subscription();
+        sub.setCurrentEpisodes(18);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(sub));
+
+        assertEquals("已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
+    // ---------- 标题季标去重 ----------
+
+    @Test
+    void titleSeasonSuffixNotDuplicated() {
+        // 豆瓣条目名自带「第九季」,resolveSeason 从名字解析出 season=9 后不应再追加「第9季」
+        MediaSubscription sub = subscription();
+        sub.setName("瑞克和莫蒂 第九季");
+        sub.setSeason(9);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(sub));
+
+        assertEquals("瑞克和莫蒂 第九季", service.contentList(1).getList().getFirst().getVod_name());
+    }
+
+    @Test
+    void titleSeasonSuffixStillAppendedWithoutTitleMark() {
+        MediaSubscription sub = subscription();
+        sub.setSeason(2);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(sub));
+
+        assertEquals("测试剧 第2季", service.contentList(1).getList().getFirst().getVod_name());
+    }
+
     // ---------- 逐集资源矩阵 ----------
 
     @Test

@@ -1825,9 +1825,15 @@ public class MediaSubscriptionService {
     }
 
     private String displayName(MediaSubscription subscription) {
-        return subscription.getSeason() != null && subscription.getSeason() > 1
-                ? subscription.getName() + " 第" + subscription.getSeason() + "季"
-                : subscription.getName();
+        String name = subscription.getName();
+        if (subscription.getSeason() == null || subscription.getSeason() <= 1) {
+            return name;
+        }
+        Integer titleSeason = TextUtils.parseTitleSeason(name);
+        if (titleSeason != null && titleSeason.equals(subscription.getSeason())) {
+            return name; // 条目名自带季标(豆瓣「瑞克和莫蒂 第九季」),不重复追加
+        }
+        return name + " 第" + subscription.getSeason() + "季";
     }
 
     /** 条目页外链:豆瓣 subject / TMDB tv / Bangumi subject。 */
@@ -1868,9 +1874,9 @@ public class MediaSubscriptionService {
         String base = "已更新至 " + current + " 集";
         if (expected != null && expected > 0) {
             if (current >= expected) {
-                base = "全" + expected + "集 · 已完结";
+                base = Math.max(current, expected) + "集完结";
             } else {
-                base += " · 缺 " + (expected - current) + " 集";
+                base = current + "/" + expected + "集";
             }
         }
         if (MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus())) {
