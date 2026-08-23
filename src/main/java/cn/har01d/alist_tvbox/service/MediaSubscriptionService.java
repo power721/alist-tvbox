@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.dto.MediaSubscriptionEventDto;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionFilter;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionResourceDto;
+import cn.har01d.alist_tvbox.dto.CastMember;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
@@ -403,15 +404,14 @@ public class MediaSubscriptionService {
         }
     }
 
-    /** TVBox/web 详情(msub:{id}):复用 TvBoxService 播放列表(代理 URL/排序/豆瓣匹配),vod_id 重写为稳定键。 */
+    /** TVBox/web 详情(msub:{id}):复用 TvBoxService 播放列表(代理 URL/排序),跳过路径元数据匹配,
+     * 元数据(名称/封面/年份/演员/简介…)直用订阅快照,与列表侧 contentList、媒体详情页 detail() 同源。vod_id 重写为稳定键。 */
     public MovieList contentDetail(int uid, int id, String ac, String title) {
         MediaSubscription subscription = getOwned(uid, id);
         MovieList result = new MovieList();
         if (StringUtils.isBlank(subscription.getMountPath()) || subscription.getShareId() == null) {
             MovieDetail detail = new MovieDetail();
-            detail.setVod_id(VOD_ID_PREFIX + id);
-            detail.setVod_name(displayName(subscription));
-            detail.setVod_pic(coverOf(subscription));
+            applySubscriptionMetadata(detail, subscription);
             detail.setVod_remarks("尚未找到可用资源");
             result.getList().add(detail);
             result.setTotal(1);
@@ -420,18 +420,15 @@ public class MediaSubscriptionService {
         }
         try {
             result = tvBoxService.getDetail(ac, "1$" + subscription.getMountPath() + Constants.PLAYLIST,
-                    StringUtils.defaultIfBlank(title, displayName(subscription)), null, null);
+                    StringUtils.defaultIfBlank(title, displayName(subscription)), null, null, true);
             if (!result.getList().isEmpty()) {
-                result.getList().get(0).setVod_id(VOD_ID_PREFIX + id);
-                result.getList().get(0).setVod_name(displayName(subscription));
+                applySubscriptionMetadata(result.getList().get(0), subscription);
             }
             mergeGapPlaylists(subscription, result, ac);
         } catch (Exception e) {
             log.warn("subscription detail failed: {} {}", id, e.getMessage());
             MovieDetail detail = new MovieDetail();
-            detail.setVod_id(VOD_ID_PREFIX + id);
-            detail.setVod_name(displayName(subscription));
-            detail.setVod_pic(coverOf(subscription));
+            applySubscriptionMetadata(detail, subscription);
             detail.setVod_remarks("资源暂时不可用:" + e.getMessage());
             result = new MovieList();
             result.getList().add(detail);
@@ -439,6 +436,59 @@ public class MediaSubscriptionService {
             result.setLimit(1);
         }
         return result;
+    }
+
+    /** 订阅元数据覆写(vod_id/名称/封面/状态 + 快照详情字段)。快照读 media_metadata 持久层零网络,
+     * 无快照时仅基础字段 —— 替代旧版按挂载路径名匹配豆瓣/TMDB(路径名带资源后缀既慢又易错)。 */
+    private void applySubscriptionMetadata(MovieDetail detail, MediaSubscription subscription) {
+        detail.setVod_id(VOD_ID_PREFIX + subscription.getId());
+        detail.setVod_name(displayName(subscription));
+        detail.setVod_pic(absoluteCover(coverOf(subscription)));
+        if (subscription.getDoubanId() != null) {
+            detail.setDbid(subscription.getDoubanId());
+        }
+        String remarks = buildRemarks(subscription);
+        MetadataDetails meta = null;
+        if (StringUtils.isNotBlank(subscription.getMetaProvider()) && StringUtils.isNotBlank(subscription.getMetaId())) {
+            try {
+                meta = metadataService.cachedDetails(
+                        subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+                if (meta != null) {
+                    String year = meta.getYear();
+                    if (StringUtils.isBlank(year) && StringUtils.length(meta.getFirstAirDate()) >= 4) {
+                        year = meta.getFirstAirDate().substring(0, 4);
+                    }
+                    if (StringUtils.isNotBlank(year)) {
+                        detail.setVod_year(year);
+                    }
+                    if (meta.getGenres() != null && !meta.getGenres().isEmpty()) {
+                        detail.setType_name(String.join(",", meta.getGenres()));
+                    }
+                    if (meta.getCountries() != null && !meta.getCountries().isEmpty()) {
+                        detail.setVod_area(String.join(",", meta.getCountries()));
+                    }
+                    if (meta.getLanguages() != null && !meta.getLanguages().isEmpty()) {
+                        detail.setVod_lang(String.join(",", meta.getLanguages()));
+                    }
+                    if (meta.getDirectors() != null && !meta.getDirectors().isEmpty()) {
+                        detail.setVod_director(String.join(",", meta.getDirectors()));
+                    }
+                    if (meta.getCast() != null && !meta.getCast().isEmpty()) {
+                        detail.setVod_actor(meta.getCast().stream()
+                                .map(CastMember::getName).filter(StringUtils::isNotBlank)
+                                .collect(Collectors.joining(",")));
+                    }
+                    if (StringUtils.isNotBlank(meta.getRating())) {
+                        remarks += " · 评分" + meta.getRating();
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("load metadata snapshot for subscription {} failed: {}", subscription.getId(), e.getMessage());
+            }
+        }
+        // 简介整体替换为快照 overview(无快照则清空)—— getPlaylist 对非 web 请求预填的"站点:挂载路径"不外泄
+        detail.setVod_content(meta == null ? null : meta.getOverview());
+        detail.setVod_remarks(remarks);
     }
 
     /** 链接解析专用客户端(跟随重定向;String 收包 + UTF-8 默认字符集防中文乱码) */
@@ -1004,7 +1054,7 @@ public class MediaSubscriptionService {
                                    TreeMap<Integer, String> driveLine) {
         try {
             MovieList playlist = tvBoxService.getDetail(StringUtils.defaultString(ac), "1$" + path + Constants.PLAYLIST,
-                    subscription.getName(), null, 3);
+                    subscription.getName(), null, 3, true);
             if (playlist == null || playlist.getList().isEmpty()) {
                 return;
             }
