@@ -37,6 +37,8 @@ import cn.har01d.alist_tvbox.util.Utils;
  * 并经 IMDb 桥接 TMDB(单集播出日程/状态/别名,豆瓣本身无这些字段);详情页抓取全局限速防封。
  * IMDb 桥接未命中(未配 cookie/页面被风控/TMDB 无该 IMDb)时,退回<b>名称桥接</b>:
  * 豆瓣名剔季缀搜 TMDB,精确同名 + 年份门禁(多季长篇放行)后按有效季合并 —— 播出时间轴不再只剩 TMDB 源订阅。
+ * 桥接带出日程后再经 {@link BilibiliScheduleRefiner} 校正时刻:TMDB air_date 只有日期(默认填 20:00),
+ * B站独播番剧实际更新时刻(凡人修仙传周六 11:00)按官方分集 pub_time 众数改写。
  */
 @Slf4j
 @Component
@@ -68,14 +70,17 @@ public class DoubanMetadataProvider implements MetadataProvider {
     private final MetadataHealth health;
     private final SettingRepository settingRepository;
     private final TmdbMetadataProvider tmdbMetadataProvider;
+    private final BilibiliScheduleRefiner biliScheduleRefiner;
 
     public DoubanMetadataProvider(MovieRepository movieRepository, MetadataHttp metadataHttp, MetadataHealth health,
-                                  SettingRepository settingRepository, TmdbMetadataProvider tmdbMetadataProvider) {
+                                  SettingRepository settingRepository, TmdbMetadataProvider tmdbMetadataProvider,
+                                  BilibiliScheduleRefiner biliScheduleRefiner) {
         this.movieRepository = movieRepository;
         this.restTemplate = metadataHttp.create();
         this.health = health;
         this.settingRepository = settingRepository;
         this.tmdbMetadataProvider = tmdbMetadataProvider;
+        this.biliScheduleRefiner = biliScheduleRefiner;
     }
 
     @Override
@@ -274,6 +279,9 @@ public class DoubanMetadataProvider implements MetadataProvider {
         }
         enrichFromSubjectPage(details, id, season);
         bridgeTmdbByName(details, season);
+        if (biliScheduleRefiner != null) {
+            biliScheduleRefiner.refine(details); // B站独播番剧实际更新时刻(如周六 11:00)校正默认的 20:00
+        }
         return details;
     }
 

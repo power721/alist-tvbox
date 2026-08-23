@@ -183,7 +183,7 @@ class DoubanMetadataProviderTest {
         SettingRepository empty = Mockito.mock(SettingRepository.class);
         Mockito.when(empty.findById(Mockito.anyString())).thenReturn(Optional.empty());
         DoubanMetadataProvider off = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), empty, null);
+                null, new MetadataHttp(null), new MetadataHealth(), empty, null, null);
         assertNull(off.doubanCookie()); // 未配置 → 详情页增强关闭
 
         Setting setting = new Setting();
@@ -192,7 +192,7 @@ class DoubanMetadataProviderTest {
         SettingRepository configured = Mockito.mock(SettingRepository.class);
         Mockito.when(configured.findById("douban_cookie")).thenReturn(Optional.of(setting));
         DoubanMetadataProvider on = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), configured, null);
+                null, new MetadataHttp(null), new MetadataHealth(), configured, null, null);
         assertEquals("bid=abc; ll=118211", on.doubanCookie());
     }
 
@@ -238,7 +238,7 @@ class DoubanMetadataProviderTest {
                 item("273114", "悬案", "2026"), item("245703", "悬案解码", "2025"), item("76582", "悬案", "2018")));
         Mockito.when(tmdb.details("273114", 1)).thenReturn(tmdbDetails());
         DoubanMetadataProvider provider = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb, null);
 
         MetadataDetails douban = new MetadataDetails();
         douban.setName("悬案");
@@ -255,7 +255,7 @@ class DoubanMetadataProviderTest {
         TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
         Mockito.when(tmdb.search("悬案")).thenReturn(List.of(item("76582", "悬案", "2018")));
         DoubanMetadataProvider provider = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb, null);
 
         MetadataDetails douban = new MetadataDetails();
         douban.setName("悬案");
@@ -272,7 +272,7 @@ class DoubanMetadataProviderTest {
         TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
         Mockito.when(tmdb.search("悬案")).thenReturn(List.of(item("245703", "悬案解码 Dept. Q", "2025")));
         DoubanMetadataProvider provider = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb, null);
 
         MetadataDetails douban = new MetadataDetails();
         douban.setName("悬案");
@@ -290,7 +290,7 @@ class DoubanMetadataProviderTest {
                 item("206484", "诛仙", "2022"), item("293875", "诛仙合集篇", "2025")));
         Mockito.when(tmdb.details("206484", 4)).thenReturn(tmdbDetails());
         DoubanMetadataProvider provider = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb, null);
 
         MetadataDetails douban = new MetadataDetails();
         douban.setName("诛仙 第四季");
@@ -309,7 +309,7 @@ class DoubanMetadataProviderTest {
                 item("60625", "瑞克和莫蒂", "2013"), item("202282", "瑞克和莫蒂：日漫版", "2024")));
         Mockito.when(tmdb.details("60625", 9)).thenReturn(tmdbDetails());
         DoubanMetadataProvider provider = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb, null);
 
         MetadataDetails douban = new MetadataDetails();
         douban.setName("瑞克和莫蒂 第九季");
@@ -327,7 +327,7 @@ class DoubanMetadataProviderTest {
         Mockito.when(tmdb.search("杀人者的购物中心")).thenReturn(List.of(item("215072", "杀人者的购物中心", "2024")));
         Mockito.when(tmdb.details("215072", 2)).thenReturn(tmdbDetails());
         DoubanMetadataProvider provider = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb, null);
 
         MetadataDetails douban = new MetadataDetails();
         douban.setName("杀人者的购物中心2");
@@ -342,7 +342,7 @@ class DoubanMetadataProviderTest {
     void nameBridgeSkippedWhenImdbBridgeAlreadyProvidedSchedule() {
         TmdbMetadataProvider tmdb = Mockito.mock(TmdbMetadataProvider.class);
         DoubanMetadataProvider provider = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb, null);
 
         MetadataDetails douban = new MetadataDetails();
         douban.setName("九门");
@@ -359,7 +359,7 @@ class DoubanMetadataProviderTest {
         Mockito.when(tmdb.search("某剧")).thenReturn(List.of(item("123", "某剧", "2026")));
         Mockito.when(tmdb.details("123", 7)).thenReturn(new MetadataDetails()); // 无 totalEpisodes
         DoubanMetadataProvider provider = new DoubanMetadataProvider(
-                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb);
+                null, new MetadataHttp(null), new MetadataHealth(), null, tmdb, null);
 
         MetadataDetails douban = new MetadataDetails();
         douban.setName("某剧 第七季");
