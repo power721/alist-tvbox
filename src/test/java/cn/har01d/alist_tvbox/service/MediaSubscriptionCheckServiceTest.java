@@ -244,6 +244,33 @@ class MediaSubscriptionCheckServiceTest {
         assertFalse(fixture.service.shouldReopen(fixture.subscription));
     }
 
+    // ---------- 自动完结的季级口径(多季剧剧级 status 恒 RETURNING) ----------
+
+    @Test
+    void seasonAiredOutEndsSubscriptionEvenWhenShowStillReturning() {
+        MediaSubscription subscription = subscription();
+        subscription.setOfficialStatus(MetadataDetails.STATUS_RETURNING);
+        subscription.setOfficialEpisodes(10);
+        subscription.setOfficialTotal(10); // nextAirTime 空:本季无下集播出
+        assertTrue(subscription.isSeasonAiredOut());
+        assertTrue(MediaSubscriptionCheckService.shouldAutoEnd(subscription, 10));
+        // 缺集不完结:播完 ≠ 收齐,收齐前继续追缺
+        assertFalse(MediaSubscriptionCheckService.shouldAutoEnd(subscription, 8));
+    }
+
+    @Test
+    void seasonAiredOutRequiresFullAiredSeasonWithoutNextAir() {
+        MediaSubscription subscription = subscription();
+        subscription.setOfficialEpisodes(4);
+        subscription.setOfficialTotal(10);
+        assertFalse(subscription.isSeasonAiredOut());
+        // 集数已播满但还有下集播出时间(加更/季中):不算播完
+        subscription.setOfficialEpisodes(10);
+        subscription.setNextAirTime(System.currentTimeMillis() + 48 * 3600_000L);
+        assertFalse(subscription.isSeasonAiredOut());
+        assertFalse(MediaSubscriptionCheckService.shouldAutoEnd(subscription, 10));
+    }
+
     // ---------- 退役/拒绝冷却重探 ----------
 
     @Test

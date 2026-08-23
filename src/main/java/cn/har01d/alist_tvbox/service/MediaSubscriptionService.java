@@ -1250,6 +1250,10 @@ public class MediaSubscriptionService {
             media.put("writers", details.getWriters() == null ? List.of() : details.getWriters());
             media.put("cast", details.getCast() == null ? List.of() : details.getCast());
         }
+        if (subscription.isSeasonAiredOut()) {
+            // 季口径覆盖剧级 status:多季剧本季播完时整部剧仍是 RETURNING,详情页不能继续显示"在播"
+            media.put("status", MetadataDetails.STATUS_ENDED);
+        }
         // 条目外链(豆瓣/TMDB/Bangumi 页面,新窗跳转):订阅绑定源 + 桥接拿到的跨源 id
         Map<String, Object> links = new java.util.LinkedHashMap<>();
         appendMetaLink(links, subscription.getMetaProvider(), subscription.getMetaId());

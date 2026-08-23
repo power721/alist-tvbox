@@ -2581,7 +2581,7 @@ public class MediaSubscriptionCheckService {
         return false;
     }
 
-    /** 对比快照:新集计数、停滞计数/退避;官方状态完结且清集达标自动完结。 */
+    /** 对比快照:新集计数、停滞计数/退避;完结条件达标(见 {@link #shouldAutoEnd})自动完结。 */
     private void applyInventory(MediaSubscription subscription, Set<Integer> episodes, List<Integer> added) {
         boolean initial = subscription.getCurrentEpisodes() == null || subscription.getCurrentEpisodes() == 0;
         subscription.setCurrentEpisodes(episodes.size());
@@ -2597,15 +2597,26 @@ public class MediaSubscriptionCheckService {
             subscription.setStallCount(subscription.getStallCount() + 1);
         }
 
-        Integer expected = subscription.getExpectedEpisodes();
-        boolean endedByExpected = expected != null && expected > 0 && episodes.size() >= expected;
-        boolean endedByOfficial = MetadataDetails.STATUS_ENDED.equals(subscription.getOfficialStatus())
-                && subscription.getOfficialEpisodes() != null && subscription.getOfficialEpisodes() > 0
-                && episodes.size() >= subscription.getOfficialEpisodes();
-        if ((endedByExpected || endedByOfficial) && !MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
+        if (shouldAutoEnd(subscription, episodes.size()) && !MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
             subscription.setStatus(MediaSubscription.STATUS_ENDED);
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ENDED, "已完结(共 " + episodes.size() + " 集)");
         }
+    }
+
+    /**
+     * 自动完结:手填期望达标 / 官方剧级 ENDED 且集齐 / 本季已播完且集齐。
+     * 第三条是多季剧专用 —— 剧级 status 恒 RETURNING(还有下一季),本季播完要看季口径
+     * (已播 ≥ 总集数且无下集播出时间),否则瑞克和莫蒂这类续订剧的季订阅永远停在 ACTIVE 空巡检。
+     */
+    static boolean shouldAutoEnd(MediaSubscription subscription, int collected) {
+        Integer expected = subscription.getExpectedEpisodes();
+        boolean endedByExpected = expected != null && expected > 0 && collected >= expected;
+        boolean endedByOfficial = MetadataDetails.STATUS_ENDED.equals(subscription.getOfficialStatus())
+                && subscription.getOfficialEpisodes() != null && subscription.getOfficialEpisodes() > 0
+                && collected >= subscription.getOfficialEpisodes();
+        boolean endedBySeasonAired = subscription.isSeasonAiredOut()
+                && collected >= subscription.getOfficialEpisodes();
+        return endedByExpected || endedByOfficial || endedBySeasonAired;
     }
 
     // ---------- 候选池与打分 ----------

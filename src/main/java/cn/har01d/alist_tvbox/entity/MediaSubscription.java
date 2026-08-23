@@ -146,4 +146,14 @@ public class MediaSubscription {
 
     @Column(name = "updated_time")
     private Long updatedTime;
+
+    /**
+     * 本季官方集数已全部播完:已播 ≥ 总集数(>0)且无下集播出时间。
+     * officialStatus 是剧级的(多季剧本季播完时整部剧仍 RETURNING),完结判定与展示要走这个季口径。
+     */
+    public boolean isSeasonAiredOut() {
+        return officialTotal != null && officialTotal > 0
+                && officialEpisodes != null && officialEpisodes >= officialTotal
+                && nextAirTime == null;
+    }
 }
