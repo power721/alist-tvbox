@@ -53,7 +53,7 @@ public class RatingBridge {
     private static final String REXXAR_URL = "https://m.douban.com/rexxar/api/v2/tv/";
     private static final String BANGUMI_SEARCH_URL = "https://api.bgm.tv/v0/search/subjects";
 
-    /** 桥接产物:外部条目 id + 评分(字符串形态与各 provider 的 ratings 一致)。 */
+    /** 桥接产物:外部条目 id + 评分(未开分为 null —— 链接可给,分数不造;字符串形态与各 provider 的 ratings 一致)。 */
     record Rating(String id, String score) {
     }
 
@@ -145,13 +145,13 @@ public class RatingBridge {
         }
         DoubanCandidate best = matched.get(0); // suggest 相关性序,门禁后取首位
         JsonNode body = httpGetJson(REXXAR_URL + best.id(), "https://m.douban.com/");
-        double rating = body == null ? 0 : body.path("rating").path("value").asDouble(0);
-        if (rating <= 0) {
-            return Optional.empty(); // 未开分/接口无此条
+        if (body == null || StringUtils.isBlank(body.path("title").asText())) {
+            return Optional.empty(); // 接口失败/无此条目:负缓存,6h 后重试
         }
+        double rating = body.path("rating").path("value").asDouble(0);
         log.info("rating bridge: {} ({} {}) -> douban {} [{}]", details.getName(),
-                details.getProvider(), details.getId(), best.id(), rating);
-        return Optional.of(new Rating(best.id(), String.valueOf(rating)));
+                details.getProvider(), details.getId(), best.id(), rating > 0 ? rating : "unrated");
+        return Optional.of(new Rating(best.id(), rating > 0 ? String.valueOf(rating) : null));
     }
 
     private Optional<Rating> searchBangumi(MetadataDetails details, int season, List<String> names, Integer year) {
@@ -183,12 +183,9 @@ public class RatingBridge {
         } catch (NumberFormatException ignored) {
             // 形态异常按无分处理
         }
-        if (score <= 0) {
-            return Optional.empty();
-        }
         log.info("rating bridge: {} ({} {}) -> bangumi {} [{}]", details.getName(),
-                details.getProvider(), details.getId(), best.id(), best.score());
-        return Optional.of(new Rating(best.id(), best.score()));
+                details.getProvider(), details.getId(), best.id(), score > 0 ? best.score() : "unrated");
+        return Optional.of(new Rating(best.id(), score > 0 ? best.score() : null));
     }
 
     /** 剔季缀基名作第二轮搜索词(与第一轮原名不同才值得补搜);无季标返回 null。 */
@@ -258,10 +255,12 @@ public class RatingBridge {
         if (hit.isEmpty()) {
             return;
         }
-        Map<String, String> ratings = details.getRatings() == null
-                ? new LinkedHashMap<>() : new LinkedHashMap<>(details.getRatings());
-        ratings.putIfAbsent(source, hit.get().score());
-        details.setRatings(ratings);
+        if (StringUtils.isNotBlank(hit.get().score())) {
+            Map<String, String> ratings = details.getRatings() == null
+                    ? new LinkedHashMap<>() : new LinkedHashMap<>(details.getRatings());
+            ratings.putIfAbsent(source, hit.get().score());
+            details.setRatings(ratings);
+        }
         Map<String, String> ids = details.getExternalIds() == null
                 ? new LinkedHashMap<>() : new LinkedHashMap<>(details.getExternalIds());
         ids.putIfAbsent(source, hit.get().id());
@@ -281,7 +280,12 @@ public class RatingBridge {
         }
         List<DoubanCandidate> result = new ArrayList<>();
         for (JsonNode item : array) {
-            if (!"episode".equalsIgnoreCase(item.path("type").asText())) {
+            // 豆瓣 suggest 把剧集/番剧统一归 movie 大类(实测凡人修仙传各季/盗妖行全 movie),
+            // episode 类型极少见 —— 只滤 book/music 等非影视条目(同名原著小说常占搜索结果);
+            // 电影条目误入由 rexxar tv 接口无此条目兜底丢弃
+            String type = item.path("type").asText("");
+            if (!"movie".equalsIgnoreCase(type) && !"tv".equalsIgnoreCase(type)
+                    && !"episode".equalsIgnoreCase(type)) {
                 continue;
             }
             result.add(new DoubanCandidate(item.path("id").asText(""), item.path("title").asText(""),
@@ -312,8 +316,12 @@ public class RatingBridge {
             }
             List<BangumiCandidate> result = new ArrayList<>();
             for (JsonNode item : root.get("data")) {
-                result.add(new BangumiCandidate(item.path("id").asText(),
-                        item.path("name_cn").asText(item.path("name").asText("")),
+                // name_cn 常为空串(盗妖行形态,原名字段才是中文) —— asText(default) 节点存在但值为空不走 default,须显式回落
+                String name = item.path("name_cn").asText("");
+                if (StringUtils.isBlank(name)) {
+                    name = item.path("name").asText("");
+                }
+                result.add(new BangumiCandidate(item.path("id").asText(), name,
                         item.path("date").asText(""), item.path("rating").path("score").asText("")));
             }
             return result;

@@ -11,11 +11,11 @@ import org.springframework.web.client.RestTemplate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -27,13 +27,19 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  * 跨源评分桥接:各源订阅详情按剧名互补 ratings/externalIds(详情页多源评分+外链)——
  * TMDB 订阅补豆瓣(suggest 定位 + rexxar 免 cookie 评分)+ Bangumi(搜索自带 score);
  * 豆瓣订阅只补 Bangumi、Bangumi 订阅只补豆瓣(源自身/已带外链跳过)。
- * 归一化整词同名 + 年份门禁(±1,多季放行)后只补 ratings/externalIds,条目身份字段不动;
- * 原名搜空按剔季缀基名补搜一轮;未命中/失败/未开分一律负缓存静默,不影响详情主链。
+ * 线上事实口径:豆瓣 suggest 把剧集/番剧统一归 movie 大类(须滤 book/music 而非只认 episode);
+ * Bangumi 条目 name_cn 常为空串(asText(default) 不走 default,须显式回落 name);
+ * 未开分条目(豆瓣 value=0/Bangumi score=0)只并外链不造分数。
+ * 归一化整词同名 + 年份门禁(±1,多季放行)后条目身份字段不动;
+ * 原名搜空按剔季缀基名补搜一轮;未命中/失败负缓存静默,不影响详情主链。
  */
 class RatingBridgeTest {
     private static final String FANREN_SUGGEST =
             "https://movie.douban.com/j/subject_suggest?q=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0";
     private static final String FANREN_REXXAR = "https://m.douban.com/rexxar/api/v2/tv/36245887";
+    private static final String DAOYAO_SUGGEST =
+            "https://movie.douban.com/j/subject_suggest?q=%E7%9B%97%E5%A6%96%E8%A1%8C";
+    private static final String DAOYAO_REXXAR = "https://m.douban.com/rexxar/api/v2/tv/37464007";
     private static final String BANGUMI_SEARCH = "https://api.bgm.tv/v0/search/subjects";
     private static final String RICK_SUGGEST =
             "https://movie.douban.com/j/subject_suggest?q=%E7%91%9E%E5%85%8B%E5%92%8C%E8%8E%AB%E8%92%82";
@@ -48,14 +54,14 @@ class RatingBridgeTest {
         bridge = new RatingBridge(metadataHttp);
     }
 
-    /** 线上形态:TMDB 凡人修仙传(2020),suggest 命中剧集条目(movie 干扰项与子串模仿者拦掉),双源评分并入。 */
+    /** 凡人修仙传:book 干扰项被滤、movie 类型命中(豆瓣 suggest 剧集统一归 movie)、双源评分并入。 */
     @Test
     void bridgesDoubanAndBangumiRatings() {
         server.expect(once(), requestTo(FANREN_SUGGEST)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("""
-                        [{"id":"999","title":"凡人修仙传","year":"2020","type":"movie"},
-                         {"id":"36245887","title":"凡人修仙传","year":"2020","type":"episode"},
-                         {"id":"888","title":"凡人修仙传之乱星海","year":"2020","type":"episode"}]
+                        [{"id":"555","title":"凡人修仙传","year":"2018","type":"book"},
+                         {"id":"36245887","title":"凡人修仙传","year":"2020","type":"movie","episode":"60"},
+                         {"id":"888","title":"凡人修仙传之乱星海","year":"2020","type":"movie"}]
                         """, MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo(FANREN_REXXAR)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
@@ -73,7 +79,7 @@ class RatingBridgeTest {
         assertEquals("8.9", details.getRatings().get("douban"), "豆瓣评分并入");
         assertEquals("9.3", details.getRatings().get("bangumi"), "Bangumi 评分并入");
         assertEquals("8.5", details.getRatings().get("tmdb"), "TMDB 评分保留");
-        assertEquals("36245887", details.getExternalIds().get("douban"), "取剧集条目而非同名片 movie 干扰项");
+        assertEquals("36245887", details.getExternalIds().get("douban"), "取影视条目而非 book 干扰项");
         assertEquals("332432", details.getExternalIds().get("bangumi"));
         assertTrue(details.getExternalIds().containsKey("tmdb"));
         assertEquals("凡人修仙传", details.getName(), "条目身份字段不动");
@@ -82,12 +88,42 @@ class RatingBridgeTest {
         server.verify();
     }
 
+    /**
+     * 线上盗妖行形态(2026-08-23 实测):豆瓣 suggest type=movie、rexxar 未开分(value=0,count=0)
+     * → 豆瓣只并外链不造分;Bangumi 条目 name_cn 空串、name=盗妖行、13 人评分 5.4 → 正常并入。
+     */
+    @Test
+    void unratedDoubanGivesLinkWithoutScoreAndBlankNameCnStillMatches() {
+        server.expect(once(), requestTo(DAOYAO_SUGGEST)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "[{\"id\":\"37464007\",\"title\":\"盗妖行\",\"year\":\"2026\",\"type\":\"movie\",\"episode\":\"60\"}]",
+                        MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(DAOYAO_REXXAR)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "{\"title\":\"盗妖行\",\"year\":2026,\"episodes_count\":60,\"rating\":{\"value\":0,\"count\":0}}",
+                        MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(BANGUMI_SEARCH)).andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("""
+                        {"data":[{"id":608049,"name_cn":"","name":"盗妖行","date":"2026-03-03",
+                          "rating":{"score":5.4}}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        MetadataDetails details = tmdbDetails("盗妖行", "2026");
+        bridge.enrich(details, 1);
+
+        assertFalse(details.getRatings().containsKey("douban"), "未开分不造分数");
+        assertEquals("37464007", details.getExternalIds().get("douban"), "未开分仍并条目外链");
+        assertEquals("5.4", details.getRatings().get("bangumi"), "Bangumi name_cn 空串回落 name 后照常匹配");
+        assertEquals("608049", details.getExternalIds().get("bangumi"));
+        server.verify();
+    }
+
     /** 同名异剧年份拦截:候选年份与 TMDB 全不沾(±1)→ 不桥,也不发 rexxar 二跳。 */
     @Test
     void yearGateRejectsSameNameDifferentYear() {
         server.expect(once(), requestTo(FANREN_SUGGEST)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
-                        "[{\"id\":\"123\",\"title\":\"凡人修仙传\",\"year\":\"2018\",\"type\":\"episode\"}]",
+                        "[{\"id\":\"123\",\"title\":\"凡人修仙传\",\"year\":\"2018\",\"type\":\"movie\"}]",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo(BANGUMI_SEARCH)).andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess("{\"data\":[]}", MediaType.APPLICATION_JSON));
@@ -105,7 +141,7 @@ class RatingBridgeTest {
     void multiSeasonEntrySkipsYearGate() {
         server.expect(once(), requestTo(RICK_SUGGEST)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
-                        "[{\"id\":\"246971\",\"title\":\"瑞克和莫蒂\",\"year\":\"2013\",\"type\":\"episode\"}]",
+                        "[{\"id\":\"246971\",\"title\":\"瑞克和莫蒂\",\"year\":\"2013\",\"type\":\"movie\"}]",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("https://m.douban.com/rexxar/api/v2/tv/246971")).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
@@ -137,32 +173,32 @@ class RatingBridgeTest {
         server.verify();
     }
 
-    /** rexxar 未开分(rating.value=0):同属无分,不并入也不崩。 */
+    /** rexxar 无此条目(title 空):同属未命中,不并外链也不崩。 */
     @Test
-    void unratedDoubanSubjectSkipped() {
+    void rexxarMissSkipsDoubanEntirely() {
         server.expect(once(), requestTo(FANREN_SUGGEST)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
-                        "[{\"id\":\"36245887\",\"title\":\"凡人修仙传\",\"year\":\"2020\",\"type\":\"episode\"}]",
+                        "[{\"id\":\"36245887\",\"title\":\"凡人修仙传\",\"year\":\"2020\",\"type\":\"movie\"}]",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo(FANREN_REXXAR)).andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess(
-                        "{\"title\":\"凡人修仙传\",\"rating\":{\"value\":0}}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess("{\"msg\":\"subject not found\"}", MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo(BANGUMI_SEARCH)).andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess("{\"data\":[]}", MediaType.APPLICATION_JSON));
 
         MetadataDetails details = tmdbDetails("凡人修仙传", "2020");
         bridge.enrich(details, 1);
 
-        assertFalse(details.getRatings().containsKey("douban"), "未开分不并入");
+        assertFalse(details.getRatings().containsKey("douban"));
+        assertFalse(details.getExternalIds().containsKey("douban"), "条目都不在,链接不给");
         server.verify();
     }
 
-    /** 标题非整词相等(子串模仿者)不桥:不发 rexxar,标题不同也不发 Bangumi 匹配外的请求。 */
+    /** 标题非整词相等(子串模仿者)不桥。 */
     @Test
     void titleMismatchSkipsDouban() {
         server.expect(once(), requestTo(FANREN_SUGGEST)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
-                        "[{\"id\":\"888\",\"title\":\"凡人修仙传之乱星海\",\"year\":\"2020\",\"type\":\"episode\"}]",
+                        "[{\"id\":\"888\",\"title\":\"凡人修仙传之乱星海\",\"year\":\"2020\",\"type\":\"movie\"}]",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo(BANGUMI_SEARCH)).andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess("{\"data\":[]}", MediaType.APPLICATION_JSON));
@@ -209,7 +245,7 @@ class RatingBridgeTest {
     void bangumiEntryGainsDoubanOnly() {
         server.expect(once(), requestTo(FANREN_SUGGEST)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
-                        "[{\"id\":\"36245887\",\"title\":\"凡人修仙传\",\"year\":\"2020\",\"type\":\"episode\"}]",
+                        "[{\"id\":\"36245887\",\"title\":\"凡人修仙传\",\"year\":\"2020\",\"type\":\"movie\"}]",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo(FANREN_REXXAR)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
