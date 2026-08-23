@@ -40,11 +40,14 @@ public class BangumiMetadataProvider implements MetadataProvider {
 
     private final MetadataHealth health;
     private final RatingBridge ratingBridge;
+    private final PlayScheduleBridge playScheduleBridge;
 
-    public BangumiMetadataProvider(MetadataHttp metadataHttp, MetadataHealth health, RatingBridge ratingBridge) {
+    public BangumiMetadataProvider(MetadataHttp metadataHttp, MetadataHealth health, RatingBridge ratingBridge,
+                                   PlayScheduleBridge playScheduleBridge) {
         this.restTemplate = metadataHttp.create();
         this.health = health;
         this.ratingBridge = ratingBridge;
+        this.playScheduleBridge = playScheduleBridge;
     }
     private final Cache<String, MetadataDetails> detailsCache = Caffeine.newBuilder()
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
@@ -203,6 +206,9 @@ public class BangumiMetadataProvider implements MetadataProvider {
             health.record(NAME, true);
             if (ratingBridge != null) {
                 ratingBridge.enrich(details, 1); // 补豆瓣评分/外链(bangumi 无季概念,按单季过年份门禁)
+            }
+            if (playScheduleBridge != null) {
+                playScheduleBridge.refine(details); // 豆瓣桥接带出播放源后校正爱优腾实际排播时刻
             }
         } catch (Exception e) {
             health.record(NAME, false);

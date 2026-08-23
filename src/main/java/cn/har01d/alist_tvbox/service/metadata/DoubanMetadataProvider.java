@@ -72,10 +72,12 @@ public class DoubanMetadataProvider implements MetadataProvider {
     private final TmdbMetadataProvider tmdbMetadataProvider;
     private final BilibiliScheduleRefiner biliScheduleRefiner;
     private final RatingBridge ratingBridge;
+    private final PlayScheduleBridge playScheduleBridge;
 
     public DoubanMetadataProvider(MovieRepository movieRepository, MetadataHttp metadataHttp, MetadataHealth health,
                                   SettingRepository settingRepository, TmdbMetadataProvider tmdbMetadataProvider,
-                                  BilibiliScheduleRefiner biliScheduleRefiner, RatingBridge ratingBridge) {
+                                  BilibiliScheduleRefiner biliScheduleRefiner, RatingBridge ratingBridge,
+                                  PlayScheduleBridge playScheduleBridge) {
         this.movieRepository = movieRepository;
         this.restTemplate = metadataHttp.create();
         this.health = health;
@@ -83,6 +85,7 @@ public class DoubanMetadataProvider implements MetadataProvider {
         this.tmdbMetadataProvider = tmdbMetadataProvider;
         this.biliScheduleRefiner = biliScheduleRefiner;
         this.ratingBridge = ratingBridge;
+        this.playScheduleBridge = playScheduleBridge;
     }
 
     @Override
@@ -286,6 +289,9 @@ public class DoubanMetadataProvider implements MetadataProvider {
         }
         if (ratingBridge != null) {
             ratingBridge.enrich(details, season); // 补 Bangumi 评分/外链(豆瓣与 TMDB 已就位),失败自静默
+        }
+        if (playScheduleBridge != null) {
+            playScheduleBridge.refine(details); // 爱优腾实际排播时刻(如 12:00)校正默认的 20:00,失败自静默
         }
         return details;
     }

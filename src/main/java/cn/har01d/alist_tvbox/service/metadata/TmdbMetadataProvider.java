@@ -41,13 +41,15 @@ public class TmdbMetadataProvider implements MetadataProvider {
 
     private final MetadataHealth health;
     private final RatingBridge ratingBridge;
+    private final PlayScheduleBridge playScheduleBridge;
 
     public TmdbMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp, MetadataHealth health,
-                                RatingBridge ratingBridge) {
+                                RatingBridge ratingBridge, PlayScheduleBridge playScheduleBridge) {
         this.settingRepository = settingRepository;
         this.health = health;
         this.restTemplate = metadataHttp.create();
         this.ratingBridge = ratingBridge;
+        this.playScheduleBridge = playScheduleBridge;
     }
 
     @Override
@@ -283,6 +285,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
             health.record(NAME, true);
             if (ratingBridge != null) {
                 ratingBridge.enrich(details, season); // 补豆瓣/Bangumi 评分与外链,失败自静默
+            }
+            if (playScheduleBridge != null) {
+                playScheduleBridge.refine(details); // 豆瓣桥接带出播放源后校正爱优腾实际排播时刻
             }
         } catch (Exception e) {
             health.record(NAME, false);
