@@ -38,7 +38,7 @@ class TmdbMetadataProviderScheduleTest {
     TmdbMetadataProviderScheduleTest() {
         MetadataHttp metadataHttp = Mockito.mock(MetadataHttp.class);
         Mockito.when(metadataHttp.create()).thenReturn(restTemplate);
-        provider = new TmdbMetadataProvider(Mockito.mock(SettingRepository.class), metadataHttp, new MetadataHealth());
+        provider = new TmdbMetadataProvider(Mockito.mock(SettingRepository.class), metadataHttp, new MetadataHealth(), null);
     }
 
     @Test

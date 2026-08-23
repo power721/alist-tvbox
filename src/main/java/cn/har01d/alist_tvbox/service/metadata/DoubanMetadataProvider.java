@@ -71,16 +71,18 @@ public class DoubanMetadataProvider implements MetadataProvider {
     private final SettingRepository settingRepository;
     private final TmdbMetadataProvider tmdbMetadataProvider;
     private final BilibiliScheduleRefiner biliScheduleRefiner;
+    private final RatingBridge ratingBridge;
 
     public DoubanMetadataProvider(MovieRepository movieRepository, MetadataHttp metadataHttp, MetadataHealth health,
                                   SettingRepository settingRepository, TmdbMetadataProvider tmdbMetadataProvider,
-                                  BilibiliScheduleRefiner biliScheduleRefiner) {
+                                  BilibiliScheduleRefiner biliScheduleRefiner, RatingBridge ratingBridge) {
         this.movieRepository = movieRepository;
         this.restTemplate = metadataHttp.create();
         this.health = health;
         this.settingRepository = settingRepository;
         this.tmdbMetadataProvider = tmdbMetadataProvider;
         this.biliScheduleRefiner = biliScheduleRefiner;
+        this.ratingBridge = ratingBridge;
     }
 
     @Override
@@ -281,6 +283,9 @@ public class DoubanMetadataProvider implements MetadataProvider {
         bridgeTmdbByName(details, season);
         if (biliScheduleRefiner != null) {
             biliScheduleRefiner.refine(details); // B站独播番剧实际更新时刻(如周六 11:00)校正默认的 20:00
+        }
+        if (ratingBridge != null) {
+            ratingBridge.enrich(details, season); // 补 Bangumi 评分/外链(豆瓣与 TMDB 已就位),失败自静默
         }
         return details;
     }

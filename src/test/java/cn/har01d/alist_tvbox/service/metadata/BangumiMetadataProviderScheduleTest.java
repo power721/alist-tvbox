@@ -33,7 +33,7 @@ class BangumiMetadataProviderScheduleTest {
     BangumiMetadataProviderScheduleTest() {
         MetadataHttp metadataHttp = Mockito.mock(MetadataHttp.class);
         Mockito.when(metadataHttp.create()).thenReturn(restTemplate);
-        provider = new BangumiMetadataProvider(metadataHttp, new MetadataHealth());
+        provider = new BangumiMetadataProvider(metadataHttp, new MetadataHealth(), null);
     }
 
     /** Bangumi 主体接口直接 exchange(JsonNode.class):默认转换器表的 Jackson3 会抢读 com.fasterxml JsonNode,

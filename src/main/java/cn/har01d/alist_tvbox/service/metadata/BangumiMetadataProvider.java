@@ -39,10 +39,12 @@ public class BangumiMetadataProvider implements MetadataProvider {
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
     private final MetadataHealth health;
+    private final RatingBridge ratingBridge;
 
-    public BangumiMetadataProvider(MetadataHttp metadataHttp, MetadataHealth health) {
+    public BangumiMetadataProvider(MetadataHttp metadataHttp, MetadataHealth health, RatingBridge ratingBridge) {
         this.restTemplate = metadataHttp.create();
         this.health = health;
+        this.ratingBridge = ratingBridge;
     }
     private final Cache<String, MetadataDetails> detailsCache = Caffeine.newBuilder()
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
@@ -199,6 +201,9 @@ public class BangumiMetadataProvider implements MetadataProvider {
                 }
             }
             health.record(NAME, true);
+            if (ratingBridge != null) {
+                ratingBridge.enrich(details, 1); // 补豆瓣评分/外链(bangumi 无季概念,按单季过年份门禁)
+            }
         } catch (Exception e) {
             health.record(NAME, false);
             log.warn("bangumi details {} failed: {}", id, e.getMessage());

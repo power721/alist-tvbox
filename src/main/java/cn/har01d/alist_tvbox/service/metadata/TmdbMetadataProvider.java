@@ -40,11 +40,14 @@ public class TmdbMetadataProvider implements MetadataProvider {
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
 
     private final MetadataHealth health;
+    private final RatingBridge ratingBridge;
 
-    public TmdbMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp, MetadataHealth health) {
+    public TmdbMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp, MetadataHealth health,
+                                RatingBridge ratingBridge) {
         this.settingRepository = settingRepository;
         this.health = health;
         this.restTemplate = metadataHttp.create();
+        this.ratingBridge = ratingBridge;
     }
 
     @Override
@@ -278,6 +281,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 }
             }
             health.record(NAME, true);
+            if (ratingBridge != null) {
+                ratingBridge.enrich(details, season); // 补豆瓣/Bangumi 评分与外链,失败自静默
+            }
         } catch (Exception e) {
             health.record(NAME, false);
             log.warn("tmdb details {} failed: {}", id, e.getMessage());
