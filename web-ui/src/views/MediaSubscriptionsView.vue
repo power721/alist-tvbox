@@ -451,6 +451,7 @@
     </el-drawer>
 
     <el-drawer v-model="eventsVisible" :title="'更新动态 - ' + (current?.name || '')" size="45%">
+      <div v-loading="eventsLoading" style="min-height: 120px">
       <el-timeline v-if="events.length">
         <el-timeline-item v-for="event in events" :key="event.id" :timestamp="formatTime(event.createdTime)"
                           :type="eventType(event.type)">
@@ -458,6 +459,7 @@
         </el-timeline-item>
       </el-timeline>
       <el-empty v-else description="暂无动态"/>
+      </div>
     </el-drawer>
 
     <el-dialog v-model="importVisible" title="导入订阅" width="600">
@@ -560,7 +562,7 @@
       </el-form>
       <template #footer>
         <el-button @click="notifyVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveNotify">保存</el-button>
+        <el-button type="primary" :loading="notifySaving" :disabled="!notifyLoaded" @click="saveNotify">保存</el-button>
       </template>
     </el-dialog>
 
@@ -601,10 +603,28 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
 import {useRouter} from 'vue-router'
 import axios from 'axios'
 import {ElMessage, ElMessageBox} from 'element-plus'
+
+/** 组件卸载统一清理延时刷新(检查/转存后的自动 reload):离开页面后不再触发孤儿请求 */
+const pendingTimers = new Set<number>()
+const schedule = (fn: () => void, ms: number) => {
+  const id = window.setTimeout(() => {
+    pendingTimers.delete(id)
+    fn()
+  }, ms)
+  pendingTimers.add(id)
+}
+onBeforeUnmount(() => pendingTimers.forEach(clearTimeout))
+
+/** 抽屉请求序号:快速切换订阅时旧响应后到不得覆盖新状态 */
+let detailSeq = 0
+let episodesSeq = 0
+let eventsSeq = 0
+let resourcesSeq = 0
+let navSeq = 0
 
 const router = useRouter()
 
@@ -795,6 +815,9 @@ const accounts = ref<any[]>([])
 const previewVisible = ref(false)
 const previewing = ref(false)
 const previewItems = ref<any[]>([])
+const eventsLoading = ref(false)
+const notifyLoaded = ref(false)
+const notifySaving = ref(false)
 const resourcesVisible = ref(false)
 const resourcesLoading = ref(false)
 const resources = ref<ResourceDto[]>([])
@@ -922,13 +945,15 @@ const loadNavList = () => {
       params[key] = value // 空串 = "全部"选项,不传参
     }
   })
+  const my = ++navSeq
   axios.get('/api/media-subscriptions/navigation/list', {params}).then(response => {
+    if (my !== navSeq) return
     const data = response.data || {}
     navList.value = data.list || []
     navPageCount.value = data.pagecount || 1
     navTotal.value = data.total || navList.value.length
   }).catch(() => ElMessage.error('片单加载失败,该分类可能依赖外部接口')).finally(() => {
-    navLoading.value = false
+    if (my === navSeq) navLoading.value = false
   })
 }
 
@@ -1020,6 +1045,8 @@ const handleAdd = () => {
   }
   metaKeyword.value = ''
   metaResults.value = []
+  metaProvider.value = 'tmdb' // 新建对话框不沿用上次编辑遗留的 tab/链接
+  metaLink.value = ''
   formVisible.value = true
 }
 
@@ -1050,6 +1077,8 @@ const handleEdit = (row: SubscriptionDto) => {
   metaProvider.value = row.metaProvider || 'douban'
   metaKeyword.value = ''
   metaResults.value = []
+  metaProvider.value = 'tmdb' // 新建对话框不沿用上次编辑遗留的 tab/链接
+  metaLink.value = ''
   formVisible.value = true
 }
 
@@ -1161,7 +1190,7 @@ const save = () => {
   request.then(() => {
     ElMessage.success(form.value.id ? '已保存' : '已创建,开始首次搜索(稍后刷新查看结果)')
     formVisible.value = false
-    setTimeout(loadAll, 3000)
+    schedule(loadAll, 3000)
   }).finally(() => {
     saving.value = false
   })
@@ -1197,14 +1226,14 @@ const handleDelete = (row: SubscriptionDto) => {
 const checkNow = (row: SubscriptionDto) => {
   axios.post(`/api/media-subscriptions/${row.id}/check`).then(() => {
     ElMessage.success('已开始检查,稍后刷新查看结果')
-    setTimeout(loadAll, 6000)
+    schedule(loadAll, 6000)
   })
 }
 
 const transferNow = (row: SubscriptionDto) => {
   axios.post(`/api/media-subscriptions/${row.id}/transfer`).then(() => {
     ElMessage.success('已开始增量转存,结果见动态')
-    setTimeout(loadAll, 15000)
+    schedule(loadAll, 15000)
   })
 }
 
@@ -1247,10 +1276,12 @@ const showResources = (row: SubscriptionDto) => {
 const loadResources = () => {
   if (!current.value) return
   resourcesLoading.value = true
+  const my = ++resourcesSeq
   axios.get(`/api/media-subscriptions/${current.value.id}/resources`).then(response => {
+    if (my !== resourcesSeq) return
     resources.value = response.data
   }).finally(() => {
-    resourcesLoading.value = false
+    if (my === resourcesSeq) resourcesLoading.value = false
   })
 }
 
@@ -1258,8 +1289,8 @@ const activateResource = (resource: ResourceDto) => {
   if (!current.value) return
   axios.post(`/api/media-subscriptions/${current.value.id}/resources/${resource.id}/activate`).then(() => {
     ElMessage.success('已开始换源,稍后刷新')
-    setTimeout(loadResources, 6000)
-    setTimeout(loadAll, 8000)
+    schedule(loadResources, 6000)
+    schedule(loadAll, 8000)
   })
 }
 
@@ -1267,10 +1298,12 @@ const showEpisodes = (row: SubscriptionDto) => {
   current.value = row
   episodesVisible.value = true
   episodesLoading.value = true
+  const my = ++episodesSeq
   axios.get(`/api/media-subscriptions/${row.id}/episodes`).then(response => {
+    if (my !== episodesSeq) return
     episodeItems.value = response.data
   }).finally(() => {
-    episodesLoading.value = false
+    if (my === episodesSeq) episodesLoading.value = false
   })
 }
 
@@ -1280,10 +1313,12 @@ const showDetail = (row: SubscriptionDto) => {
   detailVisible.value = true
   detailLoading.value = true
   detailData.value = null
+  const my = ++detailSeq
   axios.get(`/api/media-subscriptions/${row.id}/detail`).then(response => {
+    if (my !== detailSeq) return
     detailData.value = response.data
   }).finally(() => {
-    detailLoading.value = false
+    if (my === detailSeq) detailLoading.value = false
   })
 }
 
@@ -1306,7 +1341,7 @@ const refreshMeta = () => {
   if (!current.value) return
   axios.post(`/api/media-subscriptions/${current.value.id}/refresh-meta`).then(() => {
     ElMessage.success('已开始刷新元数据,稍后自动更新详情')
-    setTimeout(() => {
+    schedule(() => {
       reloadDetail()
       loadAll()
     }, 6000)
@@ -1318,7 +1353,7 @@ const checkFromDetail = () => {
   if (!current.value) return
   axios.post(`/api/media-subscriptions/${current.value.id}/check-update`).then(() => {
     ElMessage.success('已开始检查更新,结论见本页数据与「动态」')
-    setTimeout(() => {
+    schedule(() => {
       reloadDetail()
       loadAll()
     }, 6000)
@@ -1328,8 +1363,13 @@ const checkFromDetail = () => {
 const showEvents = (row: SubscriptionDto) => {
   current.value = row
   eventsVisible.value = true
+  eventsLoading.value = true
+  const my = ++eventsSeq
   axios.get(`/api/media-subscriptions/${row.id}/events`).then(response => {
+    if (my !== eventsSeq) return
     events.value = response.data
+  }).finally(() => {
+    if (my === eventsSeq) eventsLoading.value = false
   })
 }
 
@@ -1358,7 +1398,7 @@ const batch = (action: string) => {
 const doBatch = (action: string, ids: number[]) => {
   axios.post('/api/media-subscriptions/batch', {action, ids}).then(response => {
     ElMessage.success(`已对 ${response.data.affected} 个订阅执行操作`)
-    setTimeout(loadAll, action === 'check' ? 6000 : 500)
+    schedule(loadAll, action === 'check' ? 6000 : 500)
   })
 }
 
@@ -1377,6 +1417,10 @@ const exportSubs = () => {
 const importSubs = () => {
   try {
     const list = JSON.parse(importText.value)
+    if (!Array.isArray(list)) {
+      ElMessage.error('导入内容必须是订阅数组(导出文件的 JSON 结构)')
+      return
+    }
     importing.value = true
     axios.post('/api/media-subscriptions/import', list).then(response => {
       ElMessage.success(`导入完成:新建 ${response.data.created},跳过重复 ${response.data.skipped}`)
@@ -1418,13 +1462,19 @@ const openNotify = () => {
     notifyForm.value.woniuUsername = settings['woniu_username'] || ''
     notifyForm.value.woniuPassword = settings['woniu_password'] || ''
     notifyForm.value.woniuCookie = settings['woniu_cookie'] || ''
+    notifyLoaded.value = true
     notifyVisible.value = true
   }).catch(() => {
-    notifyVisible.value = true
+    // 加载失败绝不能打开空表单:保存会把 19 项配置(含 botToken/豆瓣 cookie/搜索源凭证)整体覆写为空
+    ElMessage.error('设置加载失败,未打开对话框,请重试')
   })
 }
 
 const saveNotify = () => {
+  if (!notifyLoaded.value) {
+    ElMessage.warning('设置项尚未加载成功,暂不能保存(防止覆盖为空)')
+    return
+  }
   const saves = [
     axios.post('/api/settings', {name: 'msub_telegram_bot_token', value: notifyForm.value.botToken}),
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
@@ -1453,9 +1503,18 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'woniu_password', value: notifyForm.value.woniuPassword}),
     axios.post('/api/settings', {name: 'woniu_cookie', value: notifyForm.value.woniuCookie.trim()}),
   ]
-  Promise.all(saves).then(() => {
-    ElMessage.success('已保存(下轮巡检生效)')
-    notifyVisible.value = false
+  notifySaving.value = true
+  // tsconfig lib 无 es2020(无 Promise.allSettled),逐项吞错再计数等价实现
+  Promise.all(saves.map(p => p.then(() => true, () => false))).then(results => {
+    const failed = results.filter(ok => !ok).length
+    if (failed) {
+      ElMessage.error(`${saves.length - failed} 项已保存,${failed} 项失败,请检查后重试(对话框保留)`)
+    } else {
+      ElMessage.success('已保存(下轮巡检生效)')
+      notifyVisible.value = false
+    }
+  }).finally(() => {
+    notifySaving.value = false
   })
 }
 
@@ -1598,11 +1657,12 @@ const compactNumbers = (numbers: number[]) => {
 
 const formatTime = (time: number | null) => {
   if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN', {hour12: false})
+  // 与后端日程分桶同口径(北京时间):非东八区浏览器上避免「今天」格子与钟点互相矛盾
+  return new Date(time).toLocaleString('zh-CN', {hour12: false, timeZone: 'Asia/Shanghai'})
 }
 
 const formatClock = (time: number) => {
-  return new Date(time).toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
+  return new Date(time).toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Shanghai'})
 }
 </script>
 

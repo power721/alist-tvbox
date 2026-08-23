@@ -49,8 +49,7 @@ public class WebSecurityConfiguration {
                                 "/live/follow",
                                 "/live/unfollow",
                                 "/live/*/follow",
-                                "/live/*/unfollow",
-                                "/tg-search/*/msub/*"
+                                "/live/*/unfollow"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(

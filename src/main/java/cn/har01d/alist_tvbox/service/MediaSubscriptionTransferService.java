@@ -280,7 +280,11 @@ public class MediaSubscriptionTransferService {
             return 0;
         }
 
-        Task task = taskService.addSubscriptionTask("转存 " + subscription.getName() + " → " + target.name());
+        // 任务名要过 Task.name 列(VARCHAR 255,TaskService 还会加「追剧订阅 - 」前缀):
+        // 订阅名可到 250 + 账号昵称(网盘侧外部字符串)无界,超宽抛 22001 会被上轮 catch 记为
+        // 「转存全部失败」连锁把 TRANSFER 模式静默降级 FOLLOW
+        Task task = taskService.addSubscriptionTask(org.apache.commons.lang3.StringUtils.abbreviate(
+                "转存 " + subscription.getName() + " → " + target.name(), 200));
         taskService.startTask(task.getId());
         todayCount.incrementAndGet();
         log.info("transfer subscription {} to {}: {} -> {} ({} episodes)", subscription.getId(), target.name(),

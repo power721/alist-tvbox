@@ -95,6 +95,8 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         } catch (Exception e) {
             health.record(NAME, false);
             log.debug("official search failed: {}", e.getMessage());
+            // 上抛给 MetadataService.searchReport 的 errors 映射(与 TMDB 同规):空表与失败调用方无从区分
+            throw e instanceof RuntimeException runtimeException ? runtimeException : new IllegalStateException(e);
         }
         return result;
     }
@@ -166,7 +168,9 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         }
         // 3) 可配置模板兜底(自建代理/渲染端点)
         applyTemplate(details, id);
-        health.record(NAME, details.getAiredEpisodes() != null || details.getNextAirTime() != null);
+        // 「没搜到」是常态(官源只覆盖腾讯/优酷/爱奇艺在播剧),不能计入熔断失败 ——
+        // 否则连续查 3 部不在官源的剧就误开 60s 熔断,殃及同期其他剧的兜底查询;
+        // 真失败(HTTP 异常)在各路径的 catch 里已被吞为降级,熔断交给 search 的 record
         return details;
     }
 

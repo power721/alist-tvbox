@@ -93,7 +93,8 @@ public class BangumiMetadataProvider implements MetadataProvider {
                     if (entry.getYear() != null && entry.getYear().length() > 4) {
                         entry.setYear(entry.getYear().substring(0, 4));
                     }
-                    entry.setScore(item.path("rating").path("score").asText(""));
+                    double bgmScore = item.path("rating").path("score").asDouble(0);
+                    entry.setScore(bgmScore > 0 ? String.valueOf(bgmScore) : null); // 未开分不显示 0.0
                     result.add(entry);
                 }
             }
@@ -101,6 +102,8 @@ public class BangumiMetadataProvider implements MetadataProvider {
         } catch (Exception e) {
             health.record(NAME, false);
             log.warn("bangumi search failed: {}", e.getMessage());
+            // 上抛给 MetadataService.searchReport 的 errors 映射(与 TMDB 同规):空表与失败调用方无从区分
+            throw e instanceof RuntimeException runtimeException ? runtimeException : new IllegalStateException(e);
         }
         return result;
     }
@@ -180,7 +183,9 @@ public class BangumiMetadataProvider implements MetadataProvider {
                         aired++;
                     }
                     if (airDate != null) {
-                        if (!airedEp && airDate.isAfter(today) && (nextAir == null || airDate.isBefore(nextAir))) {
+                        // 当日待播也参与 nextAir(与 TMDB 口径一致,20:00 约定时刻):严格未来日期会把
+                        // 当日 20:00 播的集漏掉,RETURNING 不触发、播出前休眠/短轮全被跳到下个播出日
+                        if (!airedEp && !airDate.isBefore(today) && (nextAir == null || airDate.isBefore(nextAir))) {
                             nextAir = airDate;
                         }
                         // 昨日/今日档期仍进日程(时间轴「昨天/今天」用):状态已翻转的已播集、当日待播集都保留

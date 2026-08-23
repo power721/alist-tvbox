@@ -71,25 +71,32 @@ public class BilibiliScheduleRefiner {
         this.restTemplate = metadataHttp.create();
     }
 
-    /** 详情里有分集日程(TMDB 桥接产出)时,把播出时刻校正为 B站官方排播 HH:mm;未命中/失败静默跳过。 */
-    void refine(MetadataDetails details) {
+    /**
+     * 详情里有分集日程(TMDB 桥接产出)时,把播出时刻校正为 B站官方排播 HH:mm;未命中/失败静默跳过。
+     *
+     * @return true = 已按 B站官方时刻校正(调用方应让随后的平台排播桥让位:B站独播番剧的
+     *         爱优腾协力位常滞后跟进,平台桥此刻会覆盖掉更权威的 B站时刻)
+     */
+    boolean refine(MetadataDetails details) {
         if (details == null || details.getEpisodes() == null || details.getEpisodes().isEmpty()
                 || StringUtils.isBlank(details.getName())) {
-            return;
+            return false;
         }
         try {
             String ss = searchSeason(details.getName());
             if (ss == null) {
-                return;
+                return false;
             }
             LocalTime clock = seasonClock(ss);
             if (clock == null) {
-                return;
+                return false;
             }
             applyScheduleClock(details, clock, System.currentTimeMillis());
             log.info("bili schedule refine: {} air time clock -> {}", details.getName(), clock);
+            return true;
         } catch (Exception e) {
             log.debug("bili schedule refine {} failed: {}", details.getName(), e.getMessage());
+            return false;
         }
     }
 

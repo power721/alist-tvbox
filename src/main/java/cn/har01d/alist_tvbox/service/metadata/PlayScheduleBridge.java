@@ -68,7 +68,8 @@ public class PlayScheduleBridge {
     /** 优酷播放页 __INITIAL_DATA__:本集上线时刻(页面是第几集入口不影响,同剧每集同点更新)。 */
     private static final Pattern YK_PUBLISH_TIME =
             Pattern.compile("\"videoPublishTime\"\\s*:\\s*\"\\d{4}-\\d{2}-\\d{2} (\\d{2}:\\d{2})");
-    private static final Pattern YK_SHOW_ID = Pattern.compile("show[Ii]d(?:=|%3D)([0-9a-f]{16,})");
+    /** 豆瓣小程序 scheme 里的 showId(明文 = / 编码 %3D、%3d 两种形态;id 是十六进制串)。 */
+    private static final Pattern YK_SHOW_ID = Pattern.compile("(?i)show[Ii]d(?:=|%3d)([0-9a-f]{16,})");
     private static final String TENCENT_EPISODE_URL =
             "https://pbaccess.video.qq.com/trpc.universal_backend_service.page_server_rpc.PageServer/GetPageData"
                     + "?video_appid=3000010&vplatform=2&vversion_name=8.2.96";
@@ -164,7 +165,17 @@ public class PlayScheduleBridge {
             return null;
         }
         Matcher time = YK_PUBLISH_TIME.matcher(html);
-        return time.find() ? LocalTime.parse(time.group(1)) : null;
+        if (!time.find()) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(time.group(1));
+        } catch (Exception e) {
+            // 24:00 一类越界形态:返回 null 落到 vendors 里下一家平台,
+            // 上抛会把整条 fetchClock 打断(排在后面的腾讯源就永远轮不到)
+            log.debug("youku videoPublishTime unparsable: {}", time.group(1));
+            return null;
+        }
     }
 
     /**

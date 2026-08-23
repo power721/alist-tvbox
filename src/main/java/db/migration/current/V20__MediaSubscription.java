@@ -63,8 +63,11 @@ public class V20__MediaSubscription extends BaseJavaMigration {
                     checked_time BIGINT,
                     created_time BIGINT NOT NULL
                 )""");
-        // (subscription_id, link) 唯一:同一分享在多源/多频道重复出现时按链接去重
-        createIndexIfMissing(connection, "media_subscription_resource", "uk_msub_resource", true, "subscription_id", "link");
+        // (subscription_id, link) 唯一:同一分享在多源/多频道重复出现时按链接去重。
+        // MySQL InnoDB 索引键长上限 3072 字节:utf8mb4 下 link VARCHAR(1024) 即 4096 字节,整列建唯一
+        // 索引直接 ERROR 1071 → MySQL 用前缀索引(760 字符×4 + subscription_id 4 字节 ≤ 3072);
+        // 前 760 字符不同即不同链接,超长前缀撞车的极端形态由入池前 findBySubscriptionIdAndLink 预查兜底
+        createIndexIfMissing(connection, "media_subscription_resource", "uk_msub_resource", true, 760, "subscription_id", "link");
 
         execute(connection, """
                 CREATE TABLE IF NOT EXISTS media_subscription_event (
@@ -88,6 +91,13 @@ public class V20__MediaSubscription extends BaseJavaMigration {
 
     private void createIndexIfMissing(Connection connection, String table, String indexName, boolean unique, String... columns)
             throws SQLException {
+        createIndexIfMissing(connection, table, indexName, unique, null, columns);
+    }
+
+    /** @param mysqlLastColumnPrefix MySQL 专用:末列前缀索引字符数(避开 InnoDB 3072 字节键长上限),其它库忽略 */
+    private void createIndexIfMissing(Connection connection, String table, String indexName, boolean unique,
+                                      Integer mysqlLastColumnPrefix, String... columns)
+            throws SQLException {
         String actualTable = findTable(connection, table);
         if (actualTable == null || findIndex(connection, actualTable, indexName)) {
             return;
@@ -104,8 +114,20 @@ public class V20__MediaSubscription extends BaseJavaMigration {
             }
             cols.append(quote(connection, actualColumn));
         }
+        if (mysqlLastColumnPrefix != null && isMySql(connection)) {
+            cols.append("(").append(mysqlLastColumnPrefix).append(")");
+        }
         execute(connection, "CREATE " + (unique ? "UNIQUE " : "") + "INDEX "
                 + indexName + " ON " + quote(connection, actualTable) + " (" + cols + ")");
+    }
+
+    private boolean isMySql(Connection connection) throws SQLException {
+        String name = connection.getMetaData().getDatabaseProductName();
+        if (name == null) {
+            return false;
+        }
+        String lower = name.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("mysql") || lower.contains("mariadb");
     }
 
     private String findTable(Connection connection, String table) throws SQLException {

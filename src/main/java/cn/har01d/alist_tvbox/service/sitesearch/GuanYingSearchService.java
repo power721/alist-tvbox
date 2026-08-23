@@ -365,7 +365,10 @@ public class GuanYingSearchService {
             if (!ensurePow(config, config.hosts().get(0), false)) {
                 return loginFailed("PoW 验证未通过");
             }
-            http(buildGet(config.hosts().get(0), "/user/login/", null));
+            // 登录页 GET 下发的会话 Cookie(如 PHPSESSID/csrf)必须并入全局态再发登录 POST,
+            // 否则要求登录页会话的站点会永远拒绝账号密码(其余每次 http() 都 mergeCookies,唯独这里漏了)
+            Resp page = http(buildGet(config.hosts().get(0), "/user/login/", null));
+            mergeCookies(page.setCookies());
             Resp resp = http(new Request.Builder()
                     .url(config.hosts().get(0) + "/user/login")
                     .header("User-Agent", MOBILE_UA)

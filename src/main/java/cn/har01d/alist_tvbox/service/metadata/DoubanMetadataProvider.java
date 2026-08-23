@@ -116,6 +116,14 @@ public class DoubanMetadataProvider implements MetadataProvider {
                 JsonNode array = MAPPER.readTree(response.getBody());
                 if (array != null && array.isArray()) {
                     for (JsonNode item : array) {
+                        // suggest 把剧集/番剧统一归 movie 大类(线上实证,episode 字段才是集数):
+                        // 影视白名单滤掉 book/music 等非影视条目(同名原著小说常占搜索结果),
+                        // 与 RatingBridge.suggest 同规 —— 选中 book 条目喂 rexxar tv 接口只会 404
+                        String type = item.path("type").asText("");
+                        if (!"movie".equalsIgnoreCase(type) && !"tv".equalsIgnoreCase(type)
+                                && !"episode".equalsIgnoreCase(type)) {
+                            continue;
+                        }
                         String id = item.path("id").asText("");
                         String title = item.path("title").asText("");
                         if (id.isEmpty() || title.isEmpty()) {
@@ -127,7 +135,7 @@ public class DoubanMetadataProvider implements MetadataProvider {
                         entry.setName(title);
                         entry.setYear(item.path("year").asText(""));
                         entry.setCover(item.path("img").asText(""));
-                        entry.setDescription("episode".equalsIgnoreCase(item.path("type").asText()) ? "剧集" : "电影");
+                        entry.setDescription("episode".equalsIgnoreCase(type) ? "剧集" : "影视");
                         result.add(entry);
                     }
                 }
@@ -250,7 +258,10 @@ public class DoubanMetadataProvider implements MetadataProvider {
                 if (StringUtils.isBlank(details.getCover())) {
                     details.setCover(movie.getCover());
                 }
-                details.setYear(movie.getYear() == null ? "" : String.valueOf(movie.getYear()));
+                if (StringUtils.isBlank(details.getYear()) && movie.getYear() != null) {
+                    // 空值守卫:本地库 year 为 null 时清成 "" 会旁路 RatingBridge 年份门禁(parseYear("")→null 放行)
+                    details.setYear(String.valueOf(movie.getYear()));
+                }
                 if (StringUtils.isBlank(details.getRating()) && StringUtils.isNotBlank(movie.getDbScore())) {
                     details.setRating(movie.getDbScore());
                 }
@@ -284,13 +295,16 @@ public class DoubanMetadataProvider implements MetadataProvider {
         }
         enrichFromSubjectPage(details, id, season);
         bridgeTmdbByName(details, season);
+        boolean biliClocked = false;
         if (biliScheduleRefiner != null) {
-            biliScheduleRefiner.refine(details); // B站独播番剧实际更新时刻(如周六 11:00)校正默认的 20:00
+            biliClocked = biliScheduleRefiner.refine(details); // B站独播番剧实际更新时刻(如周六 11:00)校正默认的 20:00
         }
         if (ratingBridge != null) {
             ratingBridge.enrich(details, season); // 补 Bangumi 评分/外链(豆瓣与 TMDB 已就位),失败自静默
         }
-        if (playScheduleBridge != null) {
+        if (playScheduleBridge != null && !biliClocked) {
+            // B站已校正则平台桥让位:B站独播番的爱优腾协力位常滞后跟进(时刻不同),
+            // 无条件覆盖会把更权威的 B站时刻改错;国产剧 B站搜不到(biliClocked=false)照常走平台桥
             playScheduleBridge.refine(details); // 爱优腾实际排播时刻(如 12:00)校正默认的 20:00,失败自静默
         }
         return details;
@@ -348,17 +362,23 @@ public class DoubanMetadataProvider implements MetadataProvider {
             names.addAll(details.getAliases());
         }
         List<MetadataSearchItem> matched = new ArrayList<>();
-        for (MetadataSearchItem item : tmdbMetadataProvider.search(query)) {
-            String candidate = normalizeTitle(item.getName());
-            if (candidate.isEmpty()) {
-                continue;
-            }
-            for (String name : names) {
-                if (candidate.equals(normalizeTitle(name))) {
-                    matched.add(item);
-                    break;
+        try {
+            // tmdb.search 失败上抛(供 searchReport errors 映射):桥接链自行降级,别把豆瓣详情打挂
+            for (MetadataSearchItem item : tmdbMetadataProvider.search(query)) {
+                String candidate = normalizeTitle(item.getName());
+                if (candidate.isEmpty()) {
+                    continue;
+                }
+                for (String name : names) {
+                    if (candidate.equals(normalizeTitle(name))) {
+                        matched.add(item);
+                        break;
+                    }
                 }
             }
+        } catch (Exception e) {
+            log.debug("bridge tmdb by name search failed: {}", e.getMessage());
+            return;
         }
         if (matched.isEmpty()) {
             return;
@@ -561,7 +581,7 @@ public class DoubanMetadataProvider implements MetadataProvider {
             douban.setNextAirTime(tmdb.getNextAirTime());
         }
         if (tmdb.getUpcoming() != null && !tmdb.getUpcoming().isEmpty()) {
-            douban.setUpcoming(tmdb.getUpcoming());
+            douban.setUpcoming(copyUpcoming(tmdb.getUpcoming()));
         }
         if (tmdb.getTotalSeasons() != null && tmdb.getTotalSeasons() > 0) {
             douban.setTotalSeasons(tmdb.getTotalSeasons());
@@ -619,7 +639,7 @@ public class DoubanMetadataProvider implements MetadataProvider {
             douban.setOverview(tmdb.getOverview()); // 豆瓣侧无简介来源(rexxar/本地库/详情页都没有该字段),TMDB 补
         }
         if (douban.getEpisodes() == null && tmdb.getEpisodes() != null) {
-            douban.setEpisodes(tmdb.getEpisodes()); // 分集标题/播出时间/剧照/简介(豆瓣无分集数据)
+            douban.setEpisodes(copyEpisodes(tmdb.getEpisodes())); // 分集标题/播出时间/剧照/简介(豆瓣无分集数据)
         }
         if (tmdb.getAliases() != null && !tmdb.getAliases().isEmpty()) {
             List<String> merged = new ArrayList<>(douban.getAliases() == null ? List.of() : douban.getAliases());
@@ -630,6 +650,36 @@ public class DoubanMetadataProvider implements MetadataProvider {
             }
             douban.setAliases(merged);
         }
+    }
+
+    /**
+     * TMDB 缓存对象的 episodes/upcoming 必须元素级深拷贝后再并给豆瓣对象:豆瓣链尾部的
+     * applyScheduleClock/playScheduleBridge 会原地改写 airTime,共享引用会把 TMDB 的 6h
+     * 缓存条目污染成「分集时刻是平台时钟、aired/next 还是 TMDB 口径」的自相矛盾快照。
+     */
+    private static List<cn.har01d.alist_tvbox.dto.EpisodeInfo> copyEpisodes(
+            List<cn.har01d.alist_tvbox.dto.EpisodeInfo> source) {
+        List<cn.har01d.alist_tvbox.dto.EpisodeInfo> copy = new ArrayList<>(source.size());
+        for (cn.har01d.alist_tvbox.dto.EpisodeInfo info : source) {
+            cn.har01d.alist_tvbox.dto.EpisodeInfo clone = new cn.har01d.alist_tvbox.dto.EpisodeInfo();
+            clone.setNumber(info.getNumber());
+            clone.setTitle(info.getTitle());
+            clone.setAirTime(info.getAirTime());
+            clone.setOverview(info.getOverview());
+            clone.setStill(info.getStill());
+            clone.setRuntime(info.getRuntime());
+            copy.add(clone);
+        }
+        return copy;
+    }
+
+    private static List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> copyUpcoming(
+            List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> source) {
+        List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> copy = new ArrayList<>(source.size());
+        for (cn.har01d.alist_tvbox.dto.EpisodeAirDate date : source) {
+            copy.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(date.getEpisode(), date.getAirTime()));
+        }
+        return copy;
     }
 
     /** 评分写入多源表(ratings);主 rating 字段独立维护(主展示值)。 */

@@ -154,9 +154,21 @@ public class MediaSubscriptionService {
         // 季号兜底:片单/链接直订等入口不解析季号(片单曾硬编码 season=1),而条目名常写着"第四季"。
         // 季号错会同时击穿候选季过滤、SxxEyy 集号识别、播放列表集号解析三条链路,且都表现为"什么都没搜到"。
         subscription.setSeason(TextUtils.resolveSeason(request.getSeason(), subscription.getName()));
+        // 同名同季幂等:搜索/播放页「追更」按钮可连点、下一季订阅可重复提交,重复订阅会产生
+        // 两条 score=1000 候选抢主源 —— 已存在则直接复用(删除后重订不受影响)
+        Integer season = subscription.getSeason();
+        MediaSubscription existing = subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid).stream()
+                .filter(s -> subscription.getName().equals(s.getName()) && Objects.equals(season, s.getSeason()))
+                .findFirst().orElse(null);
+        if (existing != null) {
+            log.info("media subscription already exists: uid={} {} season={}, reuse id {}", uid,
+                    subscription.getName(), season, existing.getId());
+            return toDto(existing);
+        }
         subscription.setDoubanId(request.getDoubanId());
         subscription.setMetaProvider(StringUtils.defaultIfBlank(request.getMetaProvider(), null));
-        subscription.setMetaId(StringUtils.defaultIfBlank(request.getMetaId(), null));
+        // meta_id 列 VARCHAR(64):official 源的 id 是剧名(外部长字符串),链接直订回落时无界
+        subscription.setMetaId(abbreviateMetaId(request.getMetaId()));
         if (subscription.getMetaId() == null && subscription.getDoubanId() != null) {
             subscription.setMetaProvider(DoubanMetadataProvider.NAME);
             subscription.setMetaId(String.valueOf(subscription.getDoubanId()));
@@ -208,7 +220,7 @@ public class MediaSubscriptionService {
             subscription.setMetaProvider(StringUtils.defaultIfBlank(request.getMetaProvider(), null));
         }
         if (request.getMetaId() != null) {
-            subscription.setMetaId(StringUtils.defaultIfBlank(request.getMetaId(), null));
+            subscription.setMetaId(abbreviateMetaId(request.getMetaId())); // 列 VARCHAR(64),official 源 id 是剧名
             subscription.setMetaSyncTime(null); // 换条目立即重拉元数据
             subscription.setCoverUrl(null); // 封面快照随条目走,不留旧剧封面
         }
@@ -245,10 +257,11 @@ public class MediaSubscriptionService {
         return toDto(subscription);
     }
 
-    @Transactional
     public void delete(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
-        // 主源 + 所有补缺挂载都要删,否则 temp=false 且清理豁免的挂载会永久泄漏
+        // 主源 + 所有补缺挂载都要删,否则 temp=false 且清理豁免的挂载会永久泄漏。
+        // 不挂 @Transactional:远程卸载是 N 次 HTTP 往返,坐在事务里行锁横跨整个远程调用,
+        // /batch 删除循环放大 —— 先逐个卸载(失败只记日志),行删除交给各 repository 自带事务
         List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(id);
         for (MediaSubscriptionResource resource : resources) {
             if (resource.getShareId() != null) {
@@ -266,11 +279,13 @@ public class MediaSubscriptionService {
                 log.warn("delete subscription share failed: {} {}", subscription.getShareId(), e.getMessage());
             }
         }
-        episodeSourceRepository.deleteByResourceIdIn(resources.stream().map(MediaSubscriptionResource::getId).toList());
+        List<Integer> resourceIds = resources.stream().map(MediaSubscriptionResource::getId).toList();
+        episodeSourceRepository.deleteByResourceIdIn(resourceIds);
         episodeRepository.deleteBySubscriptionId(id);
         resourceRepository.deleteBySubscriptionId(id);
         eventRepository.deleteBySubscriptionId(id);
-        subscriptionRepository.delete(subscription);
+        subscriptionRepository.deleteById(id);
+        checkService.forget(id, resourceIds); // 内存态(限频/轮次/冷却 Map)随行清理,防无界泄漏
         log.info("media subscription deleted: uid={} {} {}", uid, id, subscription.getName());
     }
 
@@ -757,8 +772,13 @@ public class MediaSubscriptionService {
         }
         // 未匹配条目:回落官方平台按名(腾讯/优酷/爱奇艺集数兜底)
         result.put("provider", "official");
-        result.put("id", title);
+        result.put("id", StringUtils.abbreviate(title, 64)); // meta_id 列 VARCHAR(64),剧名无界
         return result;
+    }
+
+    /** meta_id 列 VARCHAR(64):douban/tmdb/bangumi 均为短数字 id,official 源的 id 是剧名(外部字符串无界)。 */
+    private static String abbreviateMetaId(String metaId) {
+        return StringUtils.abbreviate(StringUtils.defaultIfBlank(metaId, null), 64);
     }
 
     /** B站 PGC season API(存在 bilibili_cookie 时优先携带,游客直连会被风控 -404)。 */
@@ -1708,6 +1728,7 @@ public class MediaSubscriptionService {
     public Map<String, Object> importSubscriptions(int uid, List<MediaSubscriptionRequest> requests) {
         int created = 0;
         int skipped = 0;
+        List<Integer> createdIds = new ArrayList<>();
         var existing = subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid);
         record NameSeason(String name, Integer season) {
         }
@@ -1722,8 +1743,23 @@ public class MediaSubscriptionService {
                 continue;
             }
             MediaSubscriptionDto dto = create(uid, request);
-            checkService.checkAsync(uid, dto.getId());
+            createdIds.add(dto.getId());
             created++;
+        }
+        // 提交后再触发首轮巡检:checkAsync 的异步线程开新事务,读不到本事务未提交的行,
+        // 在事务内触发等于首轮静默丢失,只能等每小时 sweep 补救
+        if (!createdIds.isEmpty()) {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                        new org.springframework.transaction.support.TransactionSynchronization() {
+                            @Override
+                            public void afterCommit() {
+                                createdIds.forEach(id -> checkService.checkAsync(uid, id));
+                            }
+                        });
+            } else {
+                createdIds.forEach(id -> checkService.checkAsync(uid, id));
+            }
         }
         return Map.of("created", created, "skipped", skipped);
     }
@@ -1764,7 +1800,7 @@ public class MediaSubscriptionService {
                 if (StringUtils.isNotBlank(link)) {
                     MediaSubscriptionResource resource = new MediaSubscriptionResource();
                     resource.setSubscriptionId(dto.getId());
-                    resource.setLink(link.trim());
+                    resource.setLink(StringUtils.abbreviate(link.trim(), 1000)); // 列 VARCHAR(1024),站点链接无界
                     resource.setTitle(StringUtils.abbreviate(name.trim(), 250));
                     resource.setScore(1000); // 订阅即所见:当前源优先
                     resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);

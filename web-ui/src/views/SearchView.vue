@@ -240,14 +240,23 @@ const isCheckSupportedRow = (row: any) => {
   return !!diskTypeMap[row.vod_remarks]
 }
 
+const followingKeys = new Set<string>()
+
 const followSearch = (row: any) => {
   const link = decodeURIComponent(row.vod_id || '')
   if (!link.startsWith('http')) {
     ElMessage.warning('该结果不是网盘分享链接,请在追剧页手动订阅')
     return
   }
+  const key = row.vod_name + '|' + link
+  if (followingKeys.has(key)) {
+    return // 提交中防连点;后端 create 同名同季幂等兜底
+  }
+  followingKeys.add(key)
   axios.post('/api/media-subscriptions/follow', {name: row.vod_name, link: link}).then(() => {
     ElMessage.success(`已订阅追更「${row.vod_name}」,当前资源直接作为主源,稍后到追剧页查看`)
+  }).finally(() => {
+    followingKeys.delete(key)
   })
 }
 

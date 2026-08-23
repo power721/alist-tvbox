@@ -83,12 +83,15 @@ public class RatingBridge {
         try {
             List<String> names = matchNames(details);
             Integer year = DoubanMetadataProvider.parseYear(details.getYear());
+            // 缓存键带 season:年份门禁只在 season<2 生效 —— 同剧 S1/S2 订阅共享结论会把
+            // S2(无门禁)命中的同名异剧 id 串给 S1(本应门禁拦截),反之亦然
+            String cacheKey = details.getProvider() + ":" + details.getId() + ":" + season;
             if (!hasExternal(details, DoubanMetadataProvider.NAME)) {
-                apply(details, DoubanMetadataProvider.NAME, doubanCache.get(details.getProvider() + ":" + details.getId(),
+                apply(details, DoubanMetadataProvider.NAME, doubanCache.get(cacheKey,
                         key -> searchDouban(details, season, names, year)));
             }
             if (!hasExternal(details, BangumiMetadataProvider.NAME)) {
-                apply(details, BangumiMetadataProvider.NAME, bangumiCache.get(details.getProvider() + ":" + details.getId(),
+                apply(details, BangumiMetadataProvider.NAME, bangumiCache.get(cacheKey,
                         key -> searchBangumi(details, season, names, year)));
             }
         } catch (Exception e) {

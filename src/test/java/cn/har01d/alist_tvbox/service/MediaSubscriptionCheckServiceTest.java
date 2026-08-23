@@ -1888,6 +1888,75 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verify(fixture.shareService).deleteShare(77); // 临时挂载窗口用后即删
     }
 
+    // ---------- 统一探测失败分级(2026-08-24 review):限流/异剧不得落入退役+拉黑 ----------
+
+    @Test
+    void probeThrottleRetiresNothingAndSkipsDrive() {
+        // 限流(errno -62)不是资源失效:统一探测入口只记盘限流退避 —— 此前 fillGaps/主盘/线路
+        // 三路 catch 只保护 TRANSIENT,限流直接 RETIRED+markDeadLink,好源被烧成 90 天黑名单
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(11);
+        resource.setSubscriptionId(1);
+        resource.setLink("https://pan.baidu.com/s/throttled");
+        resource.setTitle("测试剧 全26集");
+        resource.setType(10);
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.shareService.add(Mockito.any()))
+                .thenThrow(new IllegalStateException("分享添加失败:{\"errno\":-62}"));
+
+        assertEquals(MediaSubscriptionCheckService.ProbeOutcome.THROTTLED,
+                fixture.service.probeCandidateSafely(fixture.subscription, resource));
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, resource.getState(), "限流不退役");
+        assertNotNull(resource.getCheckedTime(), "退避计时照记");
+        Mockito.verifyNoInteractions(fixture.deadLinkRepository); // 更不进跨订阅黑名单
+    }
+
+    @Test
+    void probeForeignRejectionRetiresWithoutBlacklistViaUnifiedEntry() {
+        // 异剧标记消息经统一探测入口:幂等重放就地退役(RETIRED 冷却重探),链接活着不拉黑
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(12);
+        resource.setSubscriptionId(1);
+        resource.setLink("https://pan.baidu.com/s/alien37");
+        resource.setTitle("测试剧真人版 全37集");
+        resource.setType(10);
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.shareService.add(Mockito.any()))
+                .thenThrow(new IllegalStateException("集号超出官方范围(第37集 > 官方26集),疑似同名异剧:测试剧真人版 全37集"));
+
+        assertEquals(MediaSubscriptionCheckService.ProbeOutcome.ALIEN,
+                fixture.service.probeCandidateSafely(fixture.subscription, resource));
+        assertEquals(MediaSubscriptionResource.STATE_RETIRED, resource.getState(), "异剧退役冷却");
+        Mockito.verifyNoInteractions(fixture.deadLinkRepository); // 链接没死:不进跨订阅黑名单
+    }
+
+    @Test
+    void belongsToShowPrefersObservedFilesOverStaleRows() {
+        // 噪声剔除上线前的存量毒行(26+142 落库)不应把主体正确的主源误判异剧:doCheck 复核
+        // 传本轮清洗后的文件集;旧行口径(2 参重载)按 DB 行判 —— 印证毒行必须被洗掉
+        Fixture fixture = new Fixture();
+        fixture.subscription.setOfficialTotal(26);
+        fixture.subscription.setOfficialEpisodes(26);
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(3);
+        primary.setTitle("测试剧 4K 高码率");
+        primary.setType(10);
+        List<Integer> poisonRows = new ArrayList<>();
+        for (int i = 1; i <= 26; i++) {
+            poisonRows.add(i);
+        }
+        poisonRows.add(142);
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(
+                        Mockito.eq(3), Mockito.any())).thenReturn(poisonRows);
+
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, primary, episodeRange(1, 26)),
+                "复核以本轮清洗后的文件集为准:主体正确的主源不是异剧");
+        assertFalse(fixture.service.belongsToShow(fixture.subscription, primary),
+                "回落 DB 行口径时 142 毒行仍会误判异剧 —— 无候选路径须先 syncInventory 洗行");
+    }
+
     // ---------- 文件级噪声剔除(2026-08-23 深夜,线上 142 集)----------
     // 正确的百度补缺资源目录里被分享者塞进《都市仙医》S01E142:parseEpisode 解析出 142 落库
     // present=true,详情分集列表被撑到 1-142;且会让资源级门禁把这个主体正确的资源整体误杀。

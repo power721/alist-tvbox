@@ -462,7 +462,8 @@ public class PanLianSearchService {
         }
     }
 
-    /** 跟随重定向取最终 URL(go.php 解析用,可覆写供单测打桩)。 */
+    /** 单跳读 Location(go.php 解析用,可覆写供单测打桩):不自动跟随 —— OkHttp 跟随跨域重定向
+     * 会把手工设置的盘链会话 Cookie 头原样带到目标网盘域(pan.baidu.com 等),会话 token 泄给第三方。 */
     protected String resolveRedirect(String url, Map<String, String> headers) {
         Request.Builder builder = new Request.Builder().url(url);
         headers.forEach(builder::header);
@@ -470,9 +471,12 @@ public class PanLianSearchService {
                 .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .followRedirects(false)
+                .followSslRedirects(false)
                 .build();
         try (Response response = client.newCall(builder.build()).execute()) {
-            return response.request().url().toString();
+            String location = response.header("Location");
+            return StringUtils.isNotBlank(location) ? location : response.request().url().toString();
         } catch (Exception e) {
             return "";
         }

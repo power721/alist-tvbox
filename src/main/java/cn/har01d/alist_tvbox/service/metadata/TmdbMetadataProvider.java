@@ -86,7 +86,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                     if (StringUtils.isNotBlank(poster)) {
                         entry.setCover("https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + poster);
                     }
-                    entry.setScore(item.path("vote_average").asText(""));
+                    entry.setScore(ratingOf(item.path("vote_average").asDouble(0))); // 未开分不显示 0.0
                     result.add(entry);
                 }
             }
@@ -94,14 +94,21 @@ public class TmdbMetadataProvider implements MetadataProvider {
         } catch (Exception e) {
             health.record(NAME, false);
             log.warn("tmdb search failed: {}", e.getMessage());
+            // 上抛给 MetadataService.searchReport 的 errors 映射(前端"为什么没有 TMDB 结果"的依据),
+            // 不再吞掉返回空表 —— 空表与失败在调用方无从区分
+            throw e instanceof RuntimeException runtimeException ? runtimeException : new IllegalStateException(e);
         }
         return result;
     }
 
     @Override
     public MetadataDetails details(String id, Integer season) {
+        if (health.isOpen(NAME)) {
+            return null; // 熔断打开期间短路:别让每次调用都付满读超时(外网挂起时可拖 15s×4 请求)
+        }
         int seasonNumber = season == null || season < 1 ? 1 : season;
-        return detailsCache.get(id + ":" + seasonNumber, key -> fetchDetails(id, seasonNumber));
+        MetadataDetails details = detailsCache.get(id + ":" + seasonNumber, key -> fetchDetails(id, seasonNumber));
+        return details != null && StringUtils.isNotBlank(details.getName()) ? details : null;
     }
 
     @Override
@@ -292,6 +299,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
         } catch (Exception e) {
             health.record(NAME, false);
             log.warn("tmdb details {} failed: {}", id, e.getMessage());
+            return StringUtils.isBlank(details.getName()) ? null : details; // 空壳不缓存(detailsCache 对 null 不落位)
         }
         return details;
     }
@@ -314,6 +322,22 @@ public class TmdbMetadataProvider implements MetadataProvider {
             total++;
             LocalDate airDate = localDate(episode.path("air_date").asText());
             if (airDate == null) {
+                // air_date 未登记(TMDB 滞后常态):不参与已播/日程统计,但分集详情照收 ——
+                // 否则 total 计了它而 episodes 缺它,详情页分集行数与总数不齐
+                cn.har01d.alist_tvbox.dto.EpisodeInfo pending = new cn.har01d.alist_tvbox.dto.EpisodeInfo(
+                        episode.path("episode_number").asInt(0),
+                        firstNonBlank(episode.path("name").asText(""), ""),
+                        null);
+                pending.setOverview(episode.path("overview").asText(""));
+                int pendingRuntime = episode.path("runtime").asInt(0);
+                if (pendingRuntime > 0) {
+                    pending.setRuntime(pendingRuntime);
+                }
+                String pendingStill = episode.path("still_path").asText("");
+                if (StringUtils.isNotBlank(pendingStill)) {
+                    pending.setStill("https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + pendingStill);
+                }
+                episodeInfos.add(pending);
                 continue;
             }
             long airMoment = airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli();
@@ -357,15 +381,18 @@ public class TmdbMetadataProvider implements MetadataProvider {
         }
     }
 
+    /** 外网 GET:失败上抛(调用方 catch 记 health/降级)—— 吞掉返回 null 会让熔断器永远打不开,
+     * 还会把网络故障当"无结果"记成 health 成功、清零失败计数。 */
     private JsonNode get(String url) {
         try {
             // String 收包再手动解析:与消息转换器组合解耦(Jackson2/Jackson3 均可)
             ResponseEntity<String> response = restTemplate.exchange(URI.create(url), HttpMethod.GET,
                     new HttpEntity<>(null, jsonHeaders()), String.class);
             return response.getBody() == null ? null : MAPPER.readTree(response.getBody());
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            return null; // 条目不存在是正常业务结果(如 IMDb 桥接 id 无对应剧集),不计健康失败
         } catch (Exception e) {
-            log.debug("tmdb request failed: {} {}", url, e.getMessage());
-            return null;
+            throw new IllegalStateException("tmdb request failed: " + e.getMessage(), e);
         }
     }
 

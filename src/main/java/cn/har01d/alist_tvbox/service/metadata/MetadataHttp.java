@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service.metadata;
 
 import org.springframework.boot.restclient.RestTemplateBuilder;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -22,16 +23,18 @@ public class MetadataHttp {
     }
 
     public RestTemplate create() {
-        if (builder != null) {
-            return builder
-                    .connectTimeout(Duration.ofSeconds(10))
-                    .readTimeout(Duration.ofSeconds(15))
-                    .build();
-        }
-        // 单测/无上下文兜底(直接实例化的 builder 仍能探测 classpath 上的 Jackson2 转换器)
-        return new RestTemplateBuilder()
+        RestTemplateBuilder base = builder != null ? builder : new RestTemplateBuilder();
+        RestTemplate template = base
                 .connectTimeout(Duration.ofSeconds(10))
                 .readTimeout(Duration.ofSeconds(15))
                 .build();
+        // builder 配的超时会被 RestTemplateConfig 全局 customizer(60s 地板)的 setRequestFactory 覆盖
+        // (customizer 在 build 时运行,JDK factory 无超时 getter 可透传)—— build 后自设 Simple
+        // factory 收回主动权:消息转换器不受影响,巡检线程对挂起平台最多等 15s 而非 60s×N 请求
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
+        factory.setReadTimeout((int) Duration.ofSeconds(15).toMillis());
+        template.setRequestFactory(factory);
+        return template;
     }
 }

@@ -348,7 +348,12 @@ public class WanouSearchService {
     boolean matchKeyword(String cardTitle, String keyword) {
         String card = normalizeTitle(cardTitle);
         String kw = KEYWORD_MARKER.matcher(normalizeTitle(keyword)).replaceAll("");
-        return kw.isEmpty() || card.contains(kw) || kw.contains(card);
+        // 归一化后为空(关键词纯"2025"被剥空 / 卡片标题全是噪声词)是无效匹配形态:
+        // kw.contains("") 恒真会放行无关卡片白吃详情页预算(空关键词已在 search 入口拦截)
+        if (kw.isEmpty() || card.isEmpty()) {
+            return false;
+        }
+        return card.contains(kw) || kw.contains(card);
     }
 
     static String normalizeTitle(String value) {

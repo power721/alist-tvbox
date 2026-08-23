@@ -61,8 +61,8 @@ class BangumiMetadataProviderScheduleTest {
         assertEquals(List.of(11, 12, 13),
                 details.getUpcoming().stream().map(EpisodeAirDate::getEpisode).toList(),
                 "昨日已播(status=0)、今日待播(status=1)、未来集都在日程");
-        assertEquals(today.plusDays(6).atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli(),
-                details.getNextAirTime(), "nextAirTime 只认未播且日期在未来的集");
+        assertEquals(today.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli(),
+                details.getNextAirTime(), "nextAirTime 含当日待播集(20:00 约定时刻,与 TMDB 口径一致)");
     }
 
     private static String episodesBody(LocalDate today) {

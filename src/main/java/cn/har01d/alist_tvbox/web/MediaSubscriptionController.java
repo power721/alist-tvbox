@@ -259,6 +259,18 @@ public class MediaSubscriptionController {
     }
 
     private static int currentUid() {
-        return (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        // 会话令牌路径 TokenFilter.setDetails(userId);Basic Auth 路径 details 是 WebAuthenticationDetails,
+        // 直接强转会 ClassCastException 500 —— 回落 principal 解析(MyUserDetailsService 以 id 字符串作 username)
+        if (authentication.getDetails() instanceof Integer userId) {
+            return userId;
+        }
+        if (authentication.getPrincipal() instanceof org.springframework.security.core.userdetails.User user) {
+            try {
+                return Integer.parseInt(user.getUsername());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return 0;
     }
 }

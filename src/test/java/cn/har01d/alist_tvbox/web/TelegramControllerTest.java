@@ -2,7 +2,6 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
-import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TelegramService;
 import cn.har01d.alist_tvbox.tvbox.Category;
@@ -34,8 +33,6 @@ class TelegramControllerTest {
     private TelegramService telegramService;
     @Mock
     private SubscriptionService subscriptionService;
-    @Mock
-    private MediaSubscriptionService mediaSubscriptionService;
 
     private MockMvc mockMvc;
 
@@ -45,7 +42,6 @@ class TelegramControllerTest {
                 telegramChannelRepository,
                 telegramService,
                 subscriptionService,
-                mediaSubscriptionService,
                 new ObjectMapper()
         );
         mockMvc = MockMvcBuilders.standaloneSetup(controller)

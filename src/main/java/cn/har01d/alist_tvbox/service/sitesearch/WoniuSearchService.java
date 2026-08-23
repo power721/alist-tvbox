@@ -398,7 +398,8 @@ public class WoniuSearchService {
         if (hosts.size() <= 1) {
             return null;
         }
-        Map<String, Long> timings = new LinkedHashMap<>();
+        // 裸线程并发 put:LinkedHashMap 非线程安全,换并发容器防丢探测结果退回默认线路
+        Map<String, Long> timings = new java.util.concurrent.ConcurrentHashMap<>();
         List<Thread> threads = new ArrayList<>();
         for (String host : hosts) {
             Thread thread = new Thread(() -> timings.put(host, probeHost(host)), "woniu-probe");

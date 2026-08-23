@@ -2255,13 +2255,21 @@ const showDelete = (data: VodItem) => {
 }
 
 // 播放记录"一键追更"(§10.1):按剧名订阅,由订阅系统自动搜索追更
+const followingNames = new Set<string>()
+
 const followSubscription = (row: any) => {
   if (!row.vod_name) {
     ElMessage.warning('缺少剧名,无法订阅')
     return
   }
+  if (followingNames.has(row.vod_name)) {
+    return // 提交中防连点;后端 create 同名同季幂等兜底
+  }
+  followingNames.add(row.vod_name)
   axios.post('/api/media-subscriptions/follow', {name: row.vod_name}).then(() => {
     ElMessage.success(`已订阅追更「${row.vod_name}」,稍后到追剧页查看`)
+  }).finally(() => {
+    followingNames.delete(row.vod_name)
   })
 }
 
