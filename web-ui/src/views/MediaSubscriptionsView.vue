@@ -150,8 +150,8 @@
         </el-form-item>
         <el-form-item label="元数据条目">
           <el-tabs v-model="metaProvider" style="width: 100%">
-            <el-tab-pane label="豆瓣" name="douban"/>
             <el-tab-pane label="TMDB" name="tmdb"/>
+            <el-tab-pane label="豆瓣" name="douban"/>
             <el-tab-pane label="Bangumi" name="bangumi"/>
             <el-tab-pane label="官方平台" name="official"/>
             <el-tab-pane label="全部" name=""/>
@@ -785,7 +785,7 @@ const selected = ref<any[]>([])
 const formVisible = ref(false)
 const saving = ref(false)
 const form = ref<any>({})
-const metaProvider = ref('douban')
+const metaProvider = ref('tmdb')
 const metaKeyword = ref('')
 const metaSearching = ref(false)
 const metaResults = ref<any[]>([])
