@@ -543,8 +543,12 @@ public class MediaSubscriptionCheckService {
 
         if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
             ensureSource(subscription);
-            scheduleNext(subscription);
-            return;
+            if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
+                scheduleNext(subscription); // 连主源都挂不上:无目录可巡,等下轮再搜
+                return;
+            }
+            // 首轮即挂上主源:不提前收工,继续走集源同步/缺集补全 —— 否则新订阅第一次打开只有
+            // 主源口径(线上:主源仅尾部10集,缺集补全要等 24h 后的下一轮巡检才轮到)
         }
 
         // 新集判定基准:本轮任何写操作之前先快照"本地已有集"(集源行 LISTED/VERIFIED ∪)
@@ -1989,12 +1993,34 @@ public class MediaSubscriptionCheckService {
             try {
                 resyncPrimaryInventory(subscription);
                 ensureDriveLines(subscription, liveEpisodeNumbers(subscription));
+                refreshEpisodeCounters(subscription);
             } catch (Exception e) {
                 log.warn("ensure drive lines for subscription {} failed: {}", subscriptionId, e.getMessage());
             } finally {
                 inFlight.remove(subscriptionId);
             }
         });
+    }
+
+    /** 轻刷集数快照(currentEpisodes/maxEpisode):分盘线路探测常把主源之外的全集行落库,
+     * 不刷的话列表 remarks 停在旧口径直到下轮巡检(可达 6~24h)。只读行并集,不触碰状态机。 */
+    void refreshEpisodeCounters(MediaSubscription subscription) {
+        try {
+            Set<Integer> live = liveEpisodeNumbers(subscription);
+            if (live.isEmpty()) {
+                return;
+            }
+            Integer max = live.stream().max(Integer::compareTo).orElse(null);
+            Integer current = subscription.getCurrentEpisodes();
+            if ((current == null || current != live.size()) || !java.util.Objects.equals(subscription.getMaxEpisode(), max)) {
+                subscription.setCurrentEpisodes(live.size());
+                subscription.setMaxEpisode(max);
+                subscription.setUpdatedTime(System.currentTimeMillis());
+                subscriptionRepository.save(subscription);
+            }
+        } catch (Exception e) {
+            log.debug("refresh episode counters for subscription {} failed: {}", subscription.getId(), e.getMessage());
+        }
     }
 
     /**
@@ -3548,11 +3574,14 @@ public class MediaSubscriptionCheckService {
         long now = System.currentTimeMillis();
         if (air != null && air > 0) {
             if (air > now + 15 * 60_000L) {
-                // 播出前休眠:播出时刻 +15min 起查(上限 24h,防日程异常导致长眠漏检)
-                subscription.setNextCheckTime(Math.min(air + 15 * 60_000L, now + 24 * 3600_000L));
-                return;
-            }
-            if (now < air + appProperties.getSubscription().getShortPollWindowHours() * 3600_000L) {
+                if (!behindAiredEpisodes(subscription)) {
+                    // 播出前休眠:播出时刻 +15min 起查(上限 24h,防日程异常导致长眠漏检)
+                    subscription.setNextCheckTime(Math.min(air + 15 * 60_000L, now + 24 * 3600_000L));
+                    return;
+                }
+                // 官方已播仍缺老集(线上:换到只留尾部几集的分享,缺45集却睡到播出前):老集缺口
+                // 与播出日程无关,不让位长眠 —— 落到常规间隔让补缺尽早跑
+            } else if (now < air + appProperties.getSubscription().getShortPollWindowHours() * 3600_000L) {
                 subscription.setNextCheckTime(now + 3600_000L); // 播后短轮:窗口内每小时一查(资源常在播后 1~12h 上线)
                 return;
             }
@@ -3566,6 +3595,14 @@ public class MediaSubscriptionCheckService {
         double factor = Math.min(Math.pow(1.5, Math.min(subscription.getStallCount(), 6)), 4);
         long interval = (long) (Math.min(hours * factor, cap) * 3600_000L);
         subscription.setNextCheckTime(now + interval);
+    }
+
+    /** 官方已播集数仍落后于本地集数快照(缺老集):换源挂到只留尾部几集的分享等场景,
+     * 缺口与播出日程无关,播出前休眠应让位。官方无数据/本地未知不判缺(维持休眠)。 */
+    static boolean behindAiredEpisodes(MediaSubscription subscription) {
+        Integer official = subscription.getOfficialEpisodes();
+        Integer current = subscription.getCurrentEpisodes();
+        return official != null && official > 0 && current != null && official > current;
     }
 
     // ---------- 工具 ----------

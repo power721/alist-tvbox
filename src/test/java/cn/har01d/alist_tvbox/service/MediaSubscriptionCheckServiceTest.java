@@ -221,6 +221,45 @@ class MediaSubscriptionCheckServiceTest {
         assertClose(now + 24 * 3600_000L, subscription.getNextCheckTime());
     }
 
+    // ---------- 播出前休眠让位于老集缺口(线上:盗妖行换到只留尾部10集的分享, ----------
+    // ---------- 缺45集却因"下一集后天播"睡到播出前,新订阅首日无补缺)                ----------
+
+    @Test
+    void scheduleNextPreAirSleepYieldsToAiredGap() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        subscription.setNextAirTime(now + 48 * 3600_000L); // 后天才播下一集
+        subscription.setOfficialEpisodes(55);
+        subscription.setCurrentEpisodes(10); // 换源只挂到尾部 10 集
+        subscription.setStallCount(0);
+        service.scheduleNext(subscription);
+        assertClose(now + 6 * 3600_000L, subscription.getNextCheckTime(), // 不睡到播出前:常规间隔让补缺尽早跑
+                "缺官方已播老集时播出前休眠应让位");
+    }
+
+    @Test
+    void scheduleNextPreAirSleepKeptWhenAiredCaughtUp() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        subscription.setNextAirTime(now + 5 * 3600_000L);
+        subscription.setOfficialEpisodes(55);
+        subscription.setCurrentEpisodes(55); // 已追平官方已播
+        service.scheduleNext(subscription);
+        assertEquals(now + 5 * 3600_000L + 15 * 60_000L, subscription.getNextCheckTime());
+    }
+
+    @Test
+    void behindAiredEpisodesRequiresBothSides() {
+        MediaSubscription subscription = subscription();
+        assertFalse(MediaSubscriptionCheckService.behindAiredEpisodes(subscription), "官方无数据不判缺");
+        subscription.setOfficialEpisodes(55);
+        assertFalse(MediaSubscriptionCheckService.behindAiredEpisodes(subscription), "本地未知不判缺");
+        subscription.setCurrentEpisodes(55);
+        assertFalse(MediaSubscriptionCheckService.behindAiredEpisodes(subscription), "追平不算缺");
+        subscription.setCurrentEpisodes(10);
+        assertTrue(MediaSubscriptionCheckService.behindAiredEpisodes(subscription));
+    }
+
     // ---------- 补搜节制:播出窗口内只缺最新集不降级、隔轮限频 ----------
 
     @Test
@@ -454,6 +493,109 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(28, fixture.subscription.getCurrentEpisodes(),
                 "补缺行本轮已落库,集数口径必须当轮追平,不能停在主源的 4 集等下轮巡检");
         assertEquals(28, fixture.subscription.getMaxEpisode());
+    }
+
+    // ---------- 首轮巡检挂上主源后继续走缺集补全 ----------
+    // 线上事故(盗妖行):新订阅首轮 doCheck 在 ensureSource 挂上主源后直接 scheduleNext+return,
+    // 缺集补全/分盘线路全部跳过;主源偏偏是只留尾部 10 集的分享,而 scheduleNext 又因
+    // "下一集后天播"睡到播出前 —— 新订阅首日缺 45 集无人补。
+
+    @Test
+    void firstRoundFillsGapsAfterMountingPrimary() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setShareId(null); // 首轮:主源未挂
+        fixture.subscription.setOfficialEpisodes(55);
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(2);
+        primary.setSubscriptionId(1);
+        primary.setType(10);
+        primary.setScore(120);
+        primary.setLink("https://pan.baidu.com/s/tail?pwd=9527");
+        primary.setTitle("测试剧 (2026) 更新至55集");
+        primary.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource fullSeason = new MediaSubscriptionResource();
+        fullSeason.setId(9);
+        fullSeason.setSubscriptionId(1);
+        fullSeason.setLink("https://pan.quark.cn/s/full");
+        fullSeason.setType(5);
+        fullSeason.setScore(110);
+        fullSeason.setTitle("测试剧 (2026) 全55集");
+        fullSeason.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(primary, fullSeason));
+        // 主源列目录:只留尾部 5 集;补缺候选的临时挂载:整季 55 集
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files("S01E51.mp4", "S01E52.mp4", "S01E53.mp4", "S01E54.mp4", "S01E55.mp4"));
+        String[] all = IntStream.rangeClosed(1, 55).mapToObj(i -> String.format("S01E%02d.mp4", i)).toArray(String[]::new);
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/probe/full"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(all));
+
+        RowStore store = new RowStore();
+        store.install(fixture);
+
+        // activate 主源:挂载落 share 行
+        Share mounted = new Share();
+        mounted.setId(5);
+        mounted.setPath("/追剧/1-测试剧");
+        Mockito.when(fixture.shareRepository.findByPath("/追剧/1-测试剧")).thenReturn(mounted);
+        // probeShare 复用全集候选的临时挂载
+        Share probe = new Share();
+        probe.setType(5);
+        probe.setShareId("quark-full");
+        Mockito.when(fixture.shareService.parseShareLink("https://pan.quark.cn/s/full")).thenReturn(probe);
+        Share temp = new Share();
+        temp.setId(55);
+        temp.setPath("/probe/full");
+        Mockito.when(fixture.shareRepository.findByTypeAndShareIdAndTempTrue(5, "quark-full")).thenReturn(List.of(temp));
+        Mockito.when(fixture.shareRepository.existsByPath(Mockito.anyString())).thenReturn(false);
+        Mockito.when(fixture.shareRepository.findByPath(Mockito.startsWith("/追剧/.sources/"))).thenAnswer(inv -> {
+            Share share = new Share();
+            share.setId(66);
+            share.setPath(inv.getArgument(0));
+            return share;
+        });
+
+        fixture.service.check(1);
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, fullSeason.getState(),
+                "首轮挂上主源后应继续缺集补全,不等下一轮巡检");
+        assertEquals(55, fixture.subscription.getCurrentEpisodes(), "首轮即追平全集口径");
+        assertEquals(55, fixture.subscription.getMaxEpisode());
+    }
+
+    // ---------- 分盘线路落行后轻刷集数快照 ----------
+    // 线上事故(盗妖行):详情触发的 ensureDriveLinesAsync 把夸克/UC 全集行落了库,
+    // 但 currentEpisodes 停在首轮 activate 写的 10 —— 数据齐了、显示没齐,列表 remarks
+    // 「10/60集」要等下轮巡检(6~24h)才追平。
+
+    @Test
+    void refreshEpisodeCountersSyncsFromLiveRows() {
+        Fixture fixture = new Fixture();
+        RowStore store = new RowStore();
+        store.install(fixture);
+        // 主源行:尾部 10 集(首轮 activate 写的快照也是 10)
+        for (int n : List.of(33, 34, 35, 36, 37, 38, 40, 53, 54, 55)) {
+            store.addEpisodeAndRow(2, n, MediaSubscriptionEpisodeSource.STATE_LISTED);
+        }
+        // 分盘线路探测落的全集行
+        for (int n = 1; n <= 55; n++) {
+            store.addEpisodeAndRow(9, n, MediaSubscriptionEpisodeSource.STATE_LISTED);
+        }
+        fixture.subscription.setCurrentEpisodes(10);
+        fixture.subscription.setMaxEpisode(55);
+
+        fixture.service.refreshEpisodeCounters(fixture.subscription);
+
+        assertEquals(55, fixture.subscription.getCurrentEpisodes(), "行并集口径应即时反映");
+        assertEquals(55, fixture.subscription.getMaxEpisode());
+        Mockito.verify(fixture.subscriptionRepository).save(fixture.subscription);
+
+        // 已一致时不再写库(避免详情高频触发空写)
+        Mockito.clearInvocations(fixture.subscriptionRepository);
+        fixture.service.refreshEpisodeCounters(fixture.subscription);
+        Mockito.verify(fixture.subscriptionRepository, Mockito.never()).save(Mockito.any());
     }
 
     private static List<Integer> numbers(Map<Integer, MediaSubscriptionEpisodeSource> rows,
@@ -767,6 +909,10 @@ class MediaSubscriptionCheckServiceTest {
 
     private static void assertClose(long expected, long actual) {
         assertTrue(Math.abs(expected - actual) < 60_000L, "expected ~" + expected + " but was " + actual);
+    }
+
+    private static void assertClose(long expected, long actual, String message) {
+        assertTrue(Math.abs(expected - actual) < 60_000L, message + ": expected ~" + expected + " but was " + actual);
     }
 
     private static List<Integer> numbers(int from, int to) {
