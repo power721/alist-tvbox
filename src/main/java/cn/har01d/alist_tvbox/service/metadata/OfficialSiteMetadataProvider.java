@@ -171,6 +171,15 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
     }
 
     static void applyEpisodeDates(MetadataDetails details, List<LocalDate> dates) {
+        applyEpisodeDates(details, dates, System.currentTimeMillis());
+    }
+
+    /**
+     * 已播按播出时刻(当日 20:00,与 airTime 展示同口径)判定而非日期粒度:播出日当天 20:00 前
+     * 刷新即把当日集算已播,会把当日待播集虚报成缺集;已播集仍按昨日窗口进日程(时间轴
+     * 「昨天/今天」用),nextAirTime 严格取 20:00 未过的集。
+     */
+    static void applyEpisodeDates(MetadataDetails details, List<LocalDate> dates, long now) {
         if (dates.isEmpty()) {
             return;
         }
@@ -179,20 +188,19 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         LocalDate nextAir = null;
         List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
         for (LocalDate date : dates) {
-            if (!date.isAfter(today)) {
+            long airMoment = date.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli();
+            if (airMoment <= now) {
                 aired++;
                 // 昨日/今日已播仍进日程(时间轴「昨天/今天」用),只收严格未来会把刚播出的集洗掉
                 if (!date.isBefore(today.minusDays(1)) && upcoming.size() < 60) {
-                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(0,
-                            date.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
+                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(0, airMoment));
                 }
             } else {
                 if (nextAir == null || date.isBefore(nextAir)) {
                     nextAir = date;
                 }
                 if (upcoming.size() < 60) {
-                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(0,
-                            date.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
+                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(0, airMoment));
                 }
             }
         }

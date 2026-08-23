@@ -266,59 +266,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
             JsonNode seasonNode = get("https://api.themoviedb.org/3/tv/" + id + "/season/" + season
                     + "?api_key=" + apiKey() + "&language=zh-CN");
             if (seasonNode != null && seasonNode.has("episodes")) {
-                LocalDate today = LocalDate.now(ZONE);
-                LocalDate windowFrom = today.minusDays(1); // 昨日/今日已播仍进日程:时间轴「昨天/今天」分组靠它,只收严格未来会把刚播出的集洗掉
-                int total = 0;
-                int aired = 0;
-                LocalDate nextAir = null;
-                List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
-                List<cn.har01d.alist_tvbox.dto.EpisodeInfo> episodeInfos = new ArrayList<>();
-                for (JsonNode episode : seasonNode.get("episodes")) {
-                    total++;
-                    LocalDate airDate = localDate(episode.path("air_date").asText());
-                    if (airDate == null) {
-                        continue;
-                    }
-                    if (!airDate.isAfter(today)) {
-                        aired++;
-                        if (!airDate.isBefore(windowFrom) && upcoming.size() < 60) {
-                            upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(
-                                    episode.path("episode_number").asInt(0),
-                                    airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
-                        }
-                    } else {
-                        if (nextAir == null || airDate.isBefore(nextAir)) {
-                            nextAir = airDate;
-                        }
-                        if (upcoming.size() < 60) {
-                            upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(
-                                    episode.path("episode_number").asInt(0),
-                                    airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
-                        }
-                    }
-                    // 分集详情(媒体详情页):标题/播出日期/简介/剧照,与日程统计同源零额外请求
-                    cn.har01d.alist_tvbox.dto.EpisodeInfo info = new cn.har01d.alist_tvbox.dto.EpisodeInfo(
-                            episode.path("episode_number").asInt(0),
-                            firstNonBlank(episode.path("name").asText(""), ""),
-                            airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
-                    info.setOverview(episode.path("overview").asText(""));
-                    int runtime = episode.path("runtime").asInt(0);
-                    if (runtime > 0) {
-                        info.setRuntime(runtime);
-                    }
-                    String still = episode.path("still_path").asText("");
-                    if (StringUtils.isNotBlank(still)) {
-                        info.setStill("https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + still);
-                    }
-                    episodeInfos.add(info);
-                }
-                details.setTotalEpisodes(total);
-                details.setAiredEpisodes(aired);
-                details.setUpcoming(upcoming);
-                details.setEpisodes(episodeInfos);
-                if (nextAir != null) {
-                    details.setNextAirTime(nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
-                }
+                applySeasonEpisodes(details, seasonNode, System.currentTimeMillis());
             }
             // next_episode_to_air 更精确(含具体集与时间),仅当属于目标季
             JsonNode next = tv.path("next_episode_to_air");
@@ -335,6 +283,67 @@ public class TmdbMetadataProvider implements MetadataProvider {
             log.warn("tmdb details {} failed: {}", id, e.getMessage());
         }
         return details;
+    }
+
+    /**
+     * 季分集 → 总集数/已播/日程/分集详情。已播按播出时刻(air_date 当日 20:00,与 airTime 展示同口径)
+     * 判定而非日期粒度:播出日当天 20:00 前刷新即把当日集算已播,点映礼 N 集同日上架的剧已播虚高
+     * (28 被记成 33),连带把未上架集报成缺集徒劳补搜;已播集仍按昨日窗口进日程,时间轴
+     * 「昨天/今天」分组不受影响。nextAirTime 严格取 20:00 未过的集。
+     */
+    static void applySeasonEpisodes(MetadataDetails details, JsonNode seasonNode, long now) {
+        LocalDate today = LocalDate.now(ZONE);
+        LocalDate windowFrom = today.minusDays(1); // 昨日/今日已播仍进日程:时间轴「昨天/今天」分组靠它,只收严格未来会把刚播出的集洗掉
+        int total = 0;
+        int aired = 0;
+        LocalDate nextAir = null;
+        List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
+        List<cn.har01d.alist_tvbox.dto.EpisodeInfo> episodeInfos = new ArrayList<>();
+        for (JsonNode episode : seasonNode.get("episodes")) {
+            total++;
+            LocalDate airDate = localDate(episode.path("air_date").asText());
+            if (airDate == null) {
+                continue;
+            }
+            long airMoment = airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli();
+            if (airMoment <= now) {
+                aired++;
+                if (!airDate.isBefore(windowFrom) && upcoming.size() < 60) {
+                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(
+                            episode.path("episode_number").asInt(0), airMoment));
+                }
+            } else {
+                if (nextAir == null || airDate.isBefore(nextAir)) {
+                    nextAir = airDate;
+                }
+                if (upcoming.size() < 60) {
+                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(
+                            episode.path("episode_number").asInt(0), airMoment));
+                }
+            }
+            // 分集详情(媒体详情页):标题/播出日期/简介/剧照,与日程统计同源零额外请求
+            cn.har01d.alist_tvbox.dto.EpisodeInfo info = new cn.har01d.alist_tvbox.dto.EpisodeInfo(
+                    episode.path("episode_number").asInt(0),
+                    firstNonBlank(episode.path("name").asText(""), ""),
+                    airMoment);
+            info.setOverview(episode.path("overview").asText(""));
+            int runtime = episode.path("runtime").asInt(0);
+            if (runtime > 0) {
+                info.setRuntime(runtime);
+            }
+            String still = episode.path("still_path").asText("");
+            if (StringUtils.isNotBlank(still)) {
+                info.setStill("https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + still);
+            }
+            episodeInfos.add(info);
+        }
+        details.setTotalEpisodes(total);
+        details.setAiredEpisodes(aired);
+        details.setUpcoming(upcoming);
+        details.setEpisodes(episodeInfos);
+        if (nextAir != null) {
+            details.setNextAirTime(nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
+        }
     }
 
     private JsonNode get(String url) {

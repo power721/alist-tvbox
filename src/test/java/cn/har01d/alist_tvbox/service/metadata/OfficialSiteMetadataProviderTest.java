@@ -69,11 +69,55 @@ class OfficialSiteMetadataProviderTest {
         LocalDate today = LocalDate.now(zone);
         MetadataDetails details = new MetadataDetails();
         OfficialSiteMetadataProvider.applyEpisodeDates(details,
-                List.of(today.minusDays(7), today.minusDays(1), today, today.plusDays(6)));
+                List.of(today.minusDays(7), today.minusDays(1), today, today.plusDays(6)),
+                today.atTime(21, 0).atZone(zone).toInstant().toEpochMilli());
 
-        assertEquals(3, details.getAiredEpisodes());
+        assertEquals(3, details.getAiredEpisodes(), "20:00 后刷新,昨日/今日集都算已播");
         assertEquals(3, details.getUpcoming().size(), "昨日/今日已播 + 未来集都进日程,7 天前的已播集不进");
         assertEquals(today.plusDays(6).atTime(20, 0).atZone(zone).toInstant().toEpochMilli(),
                 details.getNextAirTime(), "nextAirTime 仍严格取未来日期");
+    }
+
+    @Test
+    void episodeDatesNotAiredBeforeAirHourOnAirDay() {
+        ZoneId zone = ZoneId.of(Constants.ZONE_ID);
+        LocalDate today = LocalDate.now(zone);
+        // 线上形态:点映礼 5 集同日 20:00 上架,前 28 集已播;中午刷新不能把当日集算进已播
+        List<LocalDate> dates = new java.util.ArrayList<>();
+        for (int i = 1; i <= 28; i++) {
+            dates.add(today.minusDays(30 - i));
+        }
+        for (int i = 0; i < 5; i++) {
+            dates.add(today);
+        }
+        MetadataDetails details = new MetadataDetails();
+        OfficialSiteMetadataProvider.applyEpisodeDates(details, dates,
+                today.atTime(12, 0).atZone(zone).toInstant().toEpochMilli());
+
+        assertEquals(28, details.getAiredEpisodes(), "播出日当天 20:00 前,当日集不算已播");
+        assertEquals(5, details.getUpcoming().size(), "当日待播集进日程(时间轴「今天」分组)");
+        assertEquals(today.atTime(20, 0).atZone(zone).toInstant().toEpochMilli(),
+                details.getNextAirTime());
+        assertEquals(MetadataDetails.STATUS_RETURNING, details.getStatus());
+    }
+
+    @Test
+    void episodeDatesAiredAfterAirHourOnAirDay() {
+        ZoneId zone = ZoneId.of(Constants.ZONE_ID);
+        LocalDate today = LocalDate.now(zone);
+        List<LocalDate> dates = new java.util.ArrayList<>();
+        for (int i = 1; i <= 28; i++) {
+            dates.add(today.minusDays(30 - i));
+        }
+        for (int i = 0; i < 5; i++) {
+            dates.add(today);
+        }
+        MetadataDetails details = new MetadataDetails();
+        OfficialSiteMetadataProvider.applyEpisodeDates(details, dates,
+                today.atTime(21, 0).atZone(zone).toInstant().toEpochMilli());
+
+        assertEquals(33, details.getAiredEpisodes(), "播出时刻(20:00)一过即算已播");
+        assertEquals(5, details.getUpcoming().size(), "当日已播集仍在日程(昨天/今天窗口)");
+        assertNull(details.getNextAirTime());
     }
 }
