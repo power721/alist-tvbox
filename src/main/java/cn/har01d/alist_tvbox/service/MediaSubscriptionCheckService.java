@@ -2220,6 +2220,8 @@ public class MediaSubscriptionCheckService {
         syncInventory(subscription, resource, mountPath, files);
 
         long now = System.currentTimeMillis();
+        Integer supersededShareId = resource.getShareId();
+        String supersededMountPath = resource.getMountPath();
         resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).forEach(r -> {
             if (r.getId().equals(resource.getId())) {
                 r.setState(MediaSubscriptionResource.STATE_MOUNTED);
@@ -2240,6 +2242,15 @@ public class MediaSubscriptionCheckService {
             }
             resourceRepository.save(r);
         });
+        // 转正资源原是补缺挂载:旧 .sources 挂载让位删除 —— 它常驻非 temp(清理豁免),不删就成
+        // 无人认领的孤儿 AList 存储,还和新主源同链双挂导致目录重复
+        if (supersededShareId != null && !mountPath.equals(supersededMountPath)) {
+            try {
+                shareService.deleteShare(supersededShareId);
+            } catch (Exception e) {
+                log.warn("delete superseded aux share failed: {}", e.getMessage());
+            }
+        }
         applyInventory(subscription, liveEpisodeNumbers(subscription), List.of());
         subscription.setStallCount(0); // applyInventory 的停滞计数在换源场景不适用
         String drive = resource.getType() == null ? "" : DriveId.toDrive(resource.getType());

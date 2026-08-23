@@ -365,43 +365,8 @@ class MediaSubscriptionCheckServiceTest {
                 .thenReturn(files(all));
 
         // 分集/集源行内存库:save 落 Map,派生查询等价真实库
-        Map<Integer, MediaSubscriptionEpisode> episodes = new HashMap<>();
-        Map<Integer, MediaSubscriptionEpisodeSource> rows = new LinkedHashMap<>();
-        AtomicInteger episodeIds = new AtomicInteger(100);
-        AtomicInteger rowIds = new AtomicInteger(200);
-        Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1)).thenAnswer(inv ->
-                episodes.values().stream().sorted(Comparator.comparing(MediaSubscriptionEpisode::getNumber)).toList());
-        Mockito.when(fixture.episodeRepository.findBySubscriptionIdAndSeasonAndNumber(Mockito.eq(1), Mockito.anyInt(), Mockito.anyInt()))
-                .thenAnswer(inv -> Optional.ofNullable(episodes.get(inv.getArgument(2))));
-        Mockito.when(fixture.episodeRepository.save(Mockito.any())).thenAnswer(inv -> {
-            MediaSubscriptionEpisode episode = inv.getArgument(0);
-            if (episode.getId() == null) {
-                episode.setId(episodeIds.incrementAndGet());
-            }
-            episodes.put(episode.getNumber(), episode);
-            return episode;
-        });
-        Mockito.when(fixture.episodeSourceRepository.save(Mockito.any())).thenAnswer(inv -> {
-            MediaSubscriptionEpisodeSource row = inv.getArgument(0);
-            if (row.getId() == null) {
-                row.setId(rowIds.incrementAndGet());
-            }
-            rows.put(row.getId(), row);
-            return row;
-        });
-        Mockito.when(fixture.episodeSourceRepository.findByResourceId(Mockito.anyInt())).thenAnswer(inv ->
-                rows.values().stream().filter(r -> r.getResourceId() == (int) inv.getArgument(0)).toList());
-        Mockito.when(fixture.episodeSourceRepository.findByEpisodeIdAndResourceId(Mockito.anyInt(), Mockito.anyInt()))
-                .thenAnswer(inv -> rows.values().stream().filter(r -> r.getEpisodeId() == (int) inv.getArgument(0)
-                        && r.getResourceId() == (int) inv.getArgument(1)).findFirst());
-        Mockito.when(fixture.episodeSourceRepository.countByResourceId(Mockito.anyInt())).thenAnswer(inv ->
-                rows.values().stream().filter(r -> r.getResourceId() == (int) inv.getArgument(0)).count());
-        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
-                .thenAnswer(inv -> numbers(rows, episodes, r -> r.getResourceId() == (int) inv.getArgument(0),
-                        (Collection<String>) inv.getArgument(1)));
-        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
-                .thenAnswer(inv -> numbers(rows, episodes, r -> true, (Collection<String>) inv.getArgument(1))
-                        .stream().distinct().toList());
+        RowStore store = new RowStore();
+        store.install(fixture);
 
         Share probe = new Share();
         probe.setType(10);
@@ -439,6 +404,60 @@ class MediaSubscriptionCheckServiceTest {
                         .findFirst().map(MediaSubscriptionEpisode::getNumber).orElse(null))
                 .filter(Objects::nonNull)
                 .toList();
+    }
+
+    // ---------- 补缺源转正(候选资源抽屉对已挂载补缺源出「转主源」按钮) ----------
+    // 线上「重器」:主源夸克滚动窗越删越少,想把完整 28 集的百度补缺源转正当主源。
+    // 缺陷:activate 只删固定路径的旧主源挂载,转正资源自己的 .sources 补缺挂载(常驻、清理豁免)
+    // 成无人认领的孤儿 AList 存储,且同链双挂目录重复。
+
+    @Test
+    void activatingAuxMountCleansUpItsOldGapShare() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(2);
+        primary.setSubscriptionId(1);
+        primary.setType(5);
+        primary.setTitle("测试剧 4K 滚动更新");
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        primary.setShareId(50);
+        MediaSubscriptionResource aux = new MediaSubscriptionResource();
+        aux.setId(9);
+        aux.setSubscriptionId(1);
+        aux.setType(10);
+        aux.setLink("https://pan.baidu.com/s/full?pwd=9527");
+        aux.setTitle("测试剧 (2026) 全28集");
+        aux.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        aux.setMountPath("/追剧/.sources/1-测试剧-补1");
+        aux.setShareId(52);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(primary, aux));
+        // 固定路径:第一次查到旧主源挂载(删除让位),新分享挂上后再查返回新 share
+        Share oldShare = new Share();
+        oldShare.setId(50);
+        oldShare.setPath("/追剧/1-测试剧");
+        Share newShare = new Share();
+        newShare.setId(53);
+        newShare.setPath("/追剧/1-测试剧");
+        Mockito.when(fixture.shareRepository.findByPath("/追剧/1-测试剧"))
+                .thenReturn(oldShare)
+                .thenReturn(newShare);
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files("S01E01.mp4", "S01E02.mp4", "S01E03.mp4"));
+        RowStore store = new RowStore();
+        store.install(fixture);
+
+        fixture.service.activate(fixture.subscription, aux);
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, aux.getState());
+        assertEquals("/追剧/1-测试剧", aux.getMountPath(), "补缺源接管固定路径");
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, primary.getState(), "旧主源回候选池");
+        assertNull(primary.getMountPath());
+        Mockito.verify(fixture.shareService).deleteShare(50); // 固定路径旧挂载删除
+        Mockito.verify(fixture.shareService).deleteShare(52); // 补缺源旧 .sources 挂载删除,不留孤儿
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(53); // 新挂载不能误删
     }
 
     // ---------- 标题归属匹配(候选池过滤) ----------
@@ -1519,6 +1538,50 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     /** 失效确认/集源行分支的 mock 夹具:订阅已挂主源(shareId=5),仓储行为由各测试定制。 */
+    /** 集源行内存库:save 落 Map,派生查询等价真实库 —— 供整轮 check/activate 的流程测试用。 */
+    private static final class RowStore {
+        final Map<Integer, MediaSubscriptionEpisode> episodes = new HashMap<>();
+        final Map<Integer, MediaSubscriptionEpisodeSource> rows = new LinkedHashMap<>();
+        private final AtomicInteger episodeIds = new AtomicInteger(100);
+        private final AtomicInteger rowIds = new AtomicInteger(200);
+
+        void install(Fixture fixture) {
+            Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1)).thenAnswer(inv ->
+                    episodes.values().stream().sorted(Comparator.comparing(MediaSubscriptionEpisode::getNumber)).toList());
+            Mockito.when(fixture.episodeRepository.findBySubscriptionIdAndSeasonAndNumber(Mockito.eq(1), Mockito.anyInt(), Mockito.anyInt()))
+                    .thenAnswer(inv -> Optional.ofNullable(episodes.get(inv.getArgument(2))));
+            Mockito.when(fixture.episodeRepository.save(Mockito.any())).thenAnswer(inv -> {
+                MediaSubscriptionEpisode episode = inv.getArgument(0);
+                if (episode.getId() == null) {
+                    episode.setId(episodeIds.incrementAndGet());
+                }
+                episodes.put(episode.getNumber(), episode);
+                return episode;
+            });
+            Mockito.when(fixture.episodeSourceRepository.save(Mockito.any())).thenAnswer(inv -> {
+                MediaSubscriptionEpisodeSource row = inv.getArgument(0);
+                if (row.getId() == null) {
+                    row.setId(rowIds.incrementAndGet());
+                }
+                rows.put(row.getId(), row);
+                return row;
+            });
+            Mockito.when(fixture.episodeSourceRepository.findByResourceId(Mockito.anyInt())).thenAnswer(inv ->
+                    rows.values().stream().filter(r -> r.getResourceId() == (int) inv.getArgument(0)).toList());
+            Mockito.when(fixture.episodeSourceRepository.findByEpisodeIdAndResourceId(Mockito.anyInt(), Mockito.anyInt()))
+                    .thenAnswer(inv -> rows.values().stream().filter(r -> r.getEpisodeId() == (int) inv.getArgument(0)
+                            && r.getResourceId() == (int) inv.getArgument(1)).findFirst());
+            Mockito.when(fixture.episodeSourceRepository.countByResourceId(Mockito.anyInt())).thenAnswer(inv ->
+                    rows.values().stream().filter(r -> r.getResourceId() == (int) inv.getArgument(0)).count());
+            Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
+                    .thenAnswer(inv -> numbers(rows, episodes, r -> r.getResourceId() == (int) inv.getArgument(0),
+                            (Collection<String>) inv.getArgument(1)));
+            Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
+                    .thenAnswer(inv -> numbers(rows, episodes, r -> true, (Collection<String>) inv.getArgument(1))
+                            .stream().distinct().toList());
+        }
+    }
+
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
         final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);

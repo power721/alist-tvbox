@@ -289,6 +289,8 @@
           <template #default="scope">
             <el-button v-if="scope.row.state === 'CANDIDATE'" link type="primary" size="small"
                        @click="activateResource(scope.row)">启用</el-button>
+            <el-button v-else-if="scope.row.state === 'MOUNTED' && !scope.row.primary" link type="primary" size="small"
+                       @click="activateResource(scope.row)">转主源</el-button>
           </template>
         </el-table-column>
       </el-table>
