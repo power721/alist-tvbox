@@ -76,6 +76,8 @@ public class MediaSubscriptionService {
     private final cn.har01d.alist_tvbox.entity.SettingRepository settingRepository;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
+    private final ProxyService proxyService;
+    private final cn.har01d.alist_tvbox.entity.SiteRepository siteRepository;
 
     public MediaSubscriptionService(MediaSubscriptionRepository subscriptionRepository,
                                     MediaSubscriptionResourceRepository resourceRepository,
@@ -92,7 +94,9 @@ public class MediaSubscriptionService {
                                     MediaSubscriptionTransferService transferService,
                                     cn.har01d.alist_tvbox.entity.SettingRepository settingRepository,
                                     AppProperties appProperties,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    ProxyService proxyService,
+                                    cn.har01d.alist_tvbox.entity.SiteRepository siteRepository) {
         this.subscriptionRepository = subscriptionRepository;
         this.resourceRepository = resourceRepository;
         this.eventRepository = eventRepository;
@@ -109,6 +113,8 @@ public class MediaSubscriptionService {
         this.settingRepository = settingRepository;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
+        this.proxyService = proxyService;
+        this.siteRepository = siteRepository;
     }
 
     /** 订阅 token → 归属用户:用户名 token → 该用户;共享 token/空 → 首个管理员。与 live-follow/播放同步一致。 */
@@ -414,12 +420,13 @@ public class MediaSubscriptionService {
         }
     }
 
-    /** TVBox/web 详情(msub:{id}):复用 TvBoxService 播放列表(代理 URL/排序),跳过路径元数据匹配,
-     * 元数据(名称/封面/年份/演员/简介…)直用订阅快照,与列表侧 contentList、媒体详情页 detail() 同源。vod_id 重写为稳定键。 */
+    /** TVBox/web 详情(msub:{id}):元数据(名称/封面/年份/演员/简介…)直用订阅快照,与列表侧 contentList、
+     * 媒体详情页 detail() 同源。vod_id 重写为稳定键。
+     * TVBox 请求(空 ac)走集源行索引直装配(见 {@link #fastDetail});web/TG(非空 ac)与快路径兜底走旧实时列举。 */
     public MovieList contentDetail(int uid, int id, String ac, String title) {
         MediaSubscription subscription = getOwned(uid, id);
-        MovieList result = new MovieList();
         if (StringUtils.isBlank(subscription.getMountPath()) || subscription.getShareId() == null) {
+            MovieList result = new MovieList();
             MovieDetail detail = new MovieDetail();
             applySubscriptionMetadata(detail, subscription);
             detail.setVod_remarks("尚未找到可用资源");
@@ -428,6 +435,124 @@ public class MediaSubscriptionService {
             result.setLimit(1);
             return result;
         }
+        if (StringUtils.isBlank(ac)) {
+            try {
+                MovieList fast = fastDetail(subscription);
+                if (fast != null) {
+                    return fast;
+                }
+            } catch (Exception e) {
+                log.debug("fast detail for subscription {} failed: {}", id, e.getMessage());
+            }
+        }
+        return legacyDetail(subscription, ac, title);
+    }
+
+    /** 快路径详情:集源行索引直装配,零目录列举 —— 旧路径要对 主挂载/每转存目标/每补缺挂载(上限 6)各做
+     * depth-3 递归列举(最坏 ~8 挂载点串行 HTTP),这里全部换成 DB 行 + PlayUrl 注册(纯 DB)。
+     * 「我的追剧」逻辑线路 msubep-{id}-{集}(播放期实时选源降级,与旧路径同格式);盘线路条目 `1@{pid}`,
+     * 点击时经 /play 才取真链。集清单空(首轮巡检前/全源失效)返回 null,由调用方回落旧路径。 */
+    private MovieList fastDetail(MediaSubscription subscription) {
+        int id = subscription.getId();
+        // 盘线路装配序(同盘同集先到先得):转存 → 主源 → 其余 MOUNTED 按分降序 —— 与旧路径 主源>补缺 语义一致
+        Map<String, TreeMap<Integer, String>> driveLines = new LinkedHashMap<>();
+        Map<Integer, Long> sizeByEpisode = new TreeMap<>();
+        cn.har01d.alist_tvbox.entity.Site site = siteRepository.findById(1).orElseThrow();
+        if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
+            try {
+                for (var target : transferService.transferredTargets(subscription.getUid(), id)) {
+                    for (var entry : checkService.episodeFilesAt(target.path(), subscription).entrySet()) {
+                        MediaSubscriptionCheckService.EpisodeFile file = entry.getValue();
+                        sizeByEpisode.merge(entry.getKey(), file.size(), Math::max);
+                        String path = file.dir() + "/" + file.name();
+                        driveLine(driveLines, target.drive()).putIfAbsent(entry.getKey(),
+                                fileEntry(site, path, file.name(), file.size()));
+                    }
+                }
+            } catch (Exception e) {
+                // 转存列举失败只丢转存线路,资源行照常装配(episodeFilesAt 自身吞错,这里防账号/目标查询失败)
+                log.debug("load transfer targets for subscription {} failed: {}", id, e.getMessage());
+            }
+        }
+        Set<String> live = Set.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED);
+        Map<Integer, MediaSubscriptionResource> mounted = new LinkedHashMap<>();
+        for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(id)) {
+            if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
+                    && StringUtils.isNotBlank(resource.getMountPath())) {
+                mounted.put(resource.getId(), resource);
+            }
+        }
+        String mainMount = subscription.getMountPath();
+        List<MediaSubscriptionResource> ordered = new ArrayList<>(mounted.values());
+        ordered.sort(Comparator
+                .comparing((MediaSubscriptionResource r) -> mainMount != null && mainMount.equals(r.getMountPath()) ? 0 : 1)
+                .thenComparing(r -> -(r.getScore() == null ? 0 : r.getScore())));
+        record LiveRow(int episode, MediaSubscriptionEpisodeSource source) {
+        }
+        Map<Integer, List<LiveRow>> rowsByResource = new java.util.HashMap<>();
+        for (Object[] pair : episodeSourceRepository.findNumberAndSource(id)) {
+            Integer number = (Integer) pair[0];
+            MediaSubscriptionEpisodeSource row = (MediaSubscriptionEpisodeSource) pair[1];
+            if (number != null && number > 0 && live.contains(row.getState())) {
+                rowsByResource.computeIfAbsent(row.getResourceId(), key -> new ArrayList<>()).add(new LiveRow(number, row));
+            }
+        }
+        for (MediaSubscriptionResource resource : ordered) {
+            String drive = resource.getType() == null ? null : DriveId.toDrive(resource.getType());
+            for (LiveRow liveRow : rowsByResource.getOrDefault(resource.getId(), List.of())) {
+                int episode = liveRow.episode();
+                MediaSubscriptionEpisodeSource row = liveRow.source();
+                sizeByEpisode.merge(episode, row.getFileSize() == null ? 0L : row.getFileSize(), Math::max);
+                if (drive != null) {
+                    String path = resource.getMountPath() + "/" + row.getRelPath();
+                    driveLine(driveLines, drive).putIfAbsent(episode,
+                            fileEntry(site, path, row.getRelPath(), row.getFileSize() == null ? 0L : row.getFileSize()));
+                }
+            }
+        }
+        // 逻辑线路「我的追剧」:集号并集(资源行 ∪ 转存),标题元数据优先
+        Map<Integer, String> titles = episodeTitles(subscription);
+        TreeMap<Integer, String> merged = new TreeMap<>();
+        for (Integer episode : sizeByEpisode.keySet()) {
+            merged.put(episode, logicalEpisodeTitle(episode, titles.get(episode), sizeByEpisode.get(episode))
+                    + "$msubep-" + id + '-' + episode);
+        }
+        if (merged.isEmpty()) {
+            return null;
+        }
+        rewriteEpisodeTitles(subscription, merged, driveLines);
+        String[] lines = buildTvBoxPlayLines(id, merged, driveLines, Set.copyOf(checkService.mainDrives(subscription)));
+        MovieDetail detail = new MovieDetail();
+        applySubscriptionMetadata(detail, subscription);
+        detail.setVod_play_from(lines[0]);
+        detail.setVod_play_url(lines[1]);
+        MovieList result = new MovieList();
+        result.getList().add(detail);
+        result.setTotal(1);
+        result.setLimit(1);
+        kickDriveLines(subscription, driveLines.keySet());
+        log.debug("fast media subscription result: {}", result);
+        return result;
+    }
+
+    /** 盘线路条目:`文件名(大小)$1@{pid}` —— pid 经 PlayUrl 注册(纯 DB,7 天复用),点击时才解析真链。 */
+    private String fileEntry(cn.har01d.alist_tvbox.entity.Site site, String path, String relPath, long size) {
+        String name = relPath.contains("/") ? relPath.substring(relPath.lastIndexOf('/') + 1) : relPath;
+        String sizeText = size > 0 ? "(" + cn.har01d.alist_tvbox.util.Utils.byte2size(size) + ")" : "";
+        return name + sizeText + "$1@" + proxyService.generateProxyUrl(site, path);
+    }
+
+    /** 逻辑线路分集标题:`NN. 分集标题(大小)`(分集标题读元数据快照零网络;无标题兜底"第N集",无大小省略括号)。 */
+    static String logicalEpisodeTitle(int episode, String metaTitle, long sizeBytes) {
+        String number = episode > 0 && episode < 100 ? String.format("%02d", episode) : String.valueOf(episode);
+        String title = StringUtils.defaultIfBlank(sanitizeTitle(metaTitle), "第" + episode + "集");
+        String size = sizeBytes > 0 ? "(" + cn.har01d.alist_tvbox.util.Utils.byte2size(sizeBytes) + ")" : "";
+        return number + ". " + title + size;
+    }
+
+    /** 旧路径详情:复用 TvBoxService 播放列表(代理 URL/排序,逐挂载点列目录)+ 多源合并 —— 快路径的兜底。 */
+    private MovieList legacyDetail(MediaSubscription subscription, String ac, String title) {
+        MovieList result;
         try {
             result = tvBoxService.getDetail(ac, "1$" + subscription.getMountPath() + Constants.PLAYLIST,
                     StringUtils.defaultIfBlank(title, displayName(subscription)), null, null, true);
@@ -436,7 +561,7 @@ public class MediaSubscriptionService {
             }
             mergeGapPlaylists(subscription, result, ac);
         } catch (Exception e) {
-            log.warn("subscription detail failed: {} {}", id, e.getMessage());
+            log.warn("subscription detail failed: {} {}", subscription.getId(), e.getMessage());
             MovieDetail detail = new MovieDetail();
             applySubscriptionMetadata(detail, subscription);
             detail.setVod_remarks("资源暂时不可用:" + e.getMessage());
