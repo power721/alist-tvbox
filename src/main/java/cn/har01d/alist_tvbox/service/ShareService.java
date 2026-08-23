@@ -1653,6 +1653,7 @@ public class ShareService {
                 || status.contains("分享不存在")
                 || status.contains("文件不存在")
                 || status.contains("文件没有被分享")
+                || status.contains("分享无法访问")
                 ;
     }
 

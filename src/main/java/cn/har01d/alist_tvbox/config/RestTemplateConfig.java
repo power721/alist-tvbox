@@ -18,12 +18,27 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
  * {@code java.util.zip.ZipException: incorrect header check}. HttpURLConnection
  * transparently and correctly decompresses gzip/deflate, matching the pre-Boot-4 behavior,
  * so this restores it globally for all {@code builder.build()} clients.
+ *
+ * <p>Customizers run after the builder applied its request factory (including the
+ * connect/read timeouts configured on it), so swapping in a bare factory silently drops
+ * every timeout to "infinite" — a wedged server then blocks the caller's thread forever
+ * (observed: single-threaded msub-check executor stuck 20+ minutes in a socket read).
+ * The Jdk factory exposes no timeout getters to copy over, so the swap re-applies a 60s
+ * floor — matching the only explicit configuration in the codebase (AListService 60s) and
+ * safe for the rest (no builder user transfers large bodies).
  */
 @Configuration
 public class RestTemplateConfig {
 
+    private static final int TIMEOUT_MILLIS = 60_000;
+
     @Bean
     public RestTemplateCustomizer simpleClientHttpRequestFactoryCustomizer() {
-        return restTemplate -> restTemplate.setRequestFactory(new SimpleClientHttpRequestFactory());
+        return restTemplate -> {
+            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(TIMEOUT_MILLIS);
+            factory.setReadTimeout(TIMEOUT_MILLIS);
+            restTemplate.setRequestFactory(factory);
+        };
     }
 }
