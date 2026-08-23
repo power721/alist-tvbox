@@ -75,7 +75,7 @@ class MediaSubscriptionFastDetailTest {
         Mockito.when(siteRepository.findById(1)).thenReturn(Optional.of(new Site()));
         Mockito.when(checkService.mainDrives(Mockito.any())).thenReturn(List.of());
         Mockito.when(settingRepository.findById(Mockito.anyString())).thenReturn(Optional.empty());
-        Mockito.when(proxyService.generateProxyUrl(Mockito.any(Site.class), Mockito.anyString()))
+        Mockito.when(proxyService.generateProxyUrl(Mockito.any(Site.class), Mockito.anyString(), Mockito.any(java.time.Duration.class)))
                 .thenAnswer(invocation -> pid.incrementAndGet());
     }
 

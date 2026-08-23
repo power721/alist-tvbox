@@ -118,6 +118,22 @@ public class ProxyService {
         return playUrl.getId();
     }
 
+    /** 长效代理注册(追剧盘线路等长期回放场景):行不存在新建;剩余寿命超过 ttl 一半直接复用(不写库);
+     * 不足(含已过期)原地续满 ttl —— 播放历史/跨端同步绑定的 `siteId@pid` 物理地址持续可播,
+     * 不再被 7 天默认有效期回收;停止回放 ttl 后由 clean 自然清理。 */
+    public int generateProxyUrl(Site site, String path, Duration ttl) {
+        Instant now = Instant.now();
+        PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
+        if (playUrl == null) {
+            return playUrlRepository.save(new PlayUrl(site.getId(), path, now.plus(ttl))).getId();
+        }
+        if (playUrl.getTime().isAfter(now.plus(ttl.dividedBy(2)))) {
+            return playUrl.getId();
+        }
+        playUrl.setTime(now.plus(ttl));
+        return playUrlRepository.save(playUrl).getId();
+    }
+
     public int generatePath(Site site, String path) {
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
         if (playUrl == null) {

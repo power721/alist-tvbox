@@ -535,11 +535,15 @@ public class MediaSubscriptionService {
         return result;
     }
 
-    /** 盘线路条目:`文件名(大小)$1@{pid}` —— pid 经 PlayUrl 注册(纯 DB,7 天复用),点击时才解析真链。 */
+    /** 盘线路 pid 的长效注册窗口:播放历史/跨端同步绑定的 `1@pid` 地址一年内可播,每次打开详情自动续期;
+     * 剧完结停止回放一年后由 clean 自然回收(默认 7 天有效期会把历史里的物理地址变成死链)。 */
+    private static final java.time.Duration DRIVE_LINE_PID_TTL = java.time.Duration.ofDays(365);
+
+    /** 盘线路条目:`文件名(大小)$1@{pid}` —— pid 经 PlayUrl 长效注册(纯 DB),点击时才解析真链。 */
     private String fileEntry(cn.har01d.alist_tvbox.entity.Site site, String path, String relPath, long size) {
         String name = relPath.contains("/") ? relPath.substring(relPath.lastIndexOf('/') + 1) : relPath;
         String sizeText = size > 0 ? "(" + cn.har01d.alist_tvbox.util.Utils.byte2size(size) + ")" : "";
-        return name + sizeText + "$1@" + proxyService.generateProxyUrl(site, path);
+        return name + sizeText + "$1@" + proxyService.generateProxyUrl(site, path, DRIVE_LINE_PID_TTL);
     }
 
     /** 逻辑线路分集标题:`NN. 分集标题(大小)`(分集标题读元数据快照零网络;无标题兜底"第N集",无大小省略括号)。 */
