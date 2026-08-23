@@ -32,12 +32,19 @@ import org.mockito.Mockito;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -322,6 +329,118 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verify(fixture.resourceRepository, Mockito.never()).save(Mockito.any()); // 未判死
     }
 
+    // ---------- 补缺挂载当轮刷新集数口径 ----------
+    // 线上「重器」:主源是 4K 组滚动窗(只留最新 4 集),巡检补缺挂上 28 集整季源后,
+    // 旧行为 currentEpisodes 停在主源口径 4,页面"已更新至 4 集"要等下轮巡检(6-24h)才追平。
+
+    @Test
+    void gapFilledEpisodesCountInSameRound() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setOfficialEpisodes(28);
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(2);
+        primary.setSubscriptionId(1);
+        primary.setType(5);
+        primary.setScore(120);
+        primary.setTitle("测试剧 4K 滚动更新");
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        MediaSubscriptionResource fullSeason = new MediaSubscriptionResource();
+        fullSeason.setId(9);
+        fullSeason.setSubscriptionId(1);
+        fullSeason.setLink("https://pan.baidu.com/s/full?pwd=9527");
+        fullSeason.setType(10);
+        fullSeason.setScore(110);
+        fullSeason.setTitle("测试剧 (2026) 全28集");
+        fullSeason.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(primary, fullSeason));
+        // 主源列目录:滚动窗只剩最新 4 集;补缺候选的临时挂载:整季 28 集
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files("S01E25.mp4", "S01E26.mp4", "S01E27.mp4", "S01E28.mp4"));
+        String[] all = IntStream.rangeClosed(1, 28).mapToObj(i -> String.format("S01E%02d.mp4", i)).toArray(String[]::new);
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/probe/full"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(all));
+
+        // 分集/集源行内存库:save 落 Map,派生查询等价真实库
+        Map<Integer, MediaSubscriptionEpisode> episodes = new HashMap<>();
+        Map<Integer, MediaSubscriptionEpisodeSource> rows = new LinkedHashMap<>();
+        AtomicInteger episodeIds = new AtomicInteger(100);
+        AtomicInteger rowIds = new AtomicInteger(200);
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1)).thenAnswer(inv ->
+                episodes.values().stream().sorted(Comparator.comparing(MediaSubscriptionEpisode::getNumber)).toList());
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdAndSeasonAndNumber(Mockito.eq(1), Mockito.anyInt(), Mockito.anyInt()))
+                .thenAnswer(inv -> Optional.ofNullable(episodes.get(inv.getArgument(2))));
+        Mockito.when(fixture.episodeRepository.save(Mockito.any())).thenAnswer(inv -> {
+            MediaSubscriptionEpisode episode = inv.getArgument(0);
+            if (episode.getId() == null) {
+                episode.setId(episodeIds.incrementAndGet());
+            }
+            episodes.put(episode.getNumber(), episode);
+            return episode;
+        });
+        Mockito.when(fixture.episodeSourceRepository.save(Mockito.any())).thenAnswer(inv -> {
+            MediaSubscriptionEpisodeSource row = inv.getArgument(0);
+            if (row.getId() == null) {
+                row.setId(rowIds.incrementAndGet());
+            }
+            rows.put(row.getId(), row);
+            return row;
+        });
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(Mockito.anyInt())).thenAnswer(inv ->
+                rows.values().stream().filter(r -> r.getResourceId() == (int) inv.getArgument(0)).toList());
+        Mockito.when(fixture.episodeSourceRepository.findByEpisodeIdAndResourceId(Mockito.anyInt(), Mockito.anyInt()))
+                .thenAnswer(inv -> rows.values().stream().filter(r -> r.getEpisodeId() == (int) inv.getArgument(0)
+                        && r.getResourceId() == (int) inv.getArgument(1)).findFirst());
+        Mockito.when(fixture.episodeSourceRepository.countByResourceId(Mockito.anyInt())).thenAnswer(inv ->
+                rows.values().stream().filter(r -> r.getResourceId() == (int) inv.getArgument(0)).count());
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
+                .thenAnswer(inv -> numbers(rows, episodes, r -> r.getResourceId() == (int) inv.getArgument(0),
+                        (Collection<String>) inv.getArgument(1)));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
+                .thenAnswer(inv -> numbers(rows, episodes, r -> true, (Collection<String>) inv.getArgument(1))
+                        .stream().distinct().toList());
+
+        Share probe = new Share();
+        probe.setType(10);
+        probe.setShareId("full");
+        Mockito.when(fixture.shareService.parseShareLink("https://pan.baidu.com/s/full?pwd=9527")).thenReturn(probe);
+        Share temp = new Share();
+        temp.setId(55);
+        temp.setPath("/probe/full");
+        Mockito.when(fixture.shareRepository.findByTypeAndShareIdAndTempTrue(10, "full")).thenReturn(List.of(temp));
+        Mockito.when(fixture.shareRepository.existsByPath(Mockito.anyString())).thenReturn(false);
+        Mockito.when(fixture.shareRepository.findByPath(Mockito.startsWith("/追剧/.sources/"))).thenAnswer(inv -> {
+            Share share = new Share();
+            share.setId(66);
+            share.setPath(inv.getArgument(0));
+            return share;
+        });
+
+        fixture.service.check(1);
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, fullSeason.getState(), "补缺源应已挂载");
+        assertEquals(28, fixture.subscription.getCurrentEpisodes(),
+                "补缺行本轮已落库,集数口径必须当轮追平,不能停在主源的 4 集等下轮巡检");
+        assertEquals(28, fixture.subscription.getMaxEpisode());
+    }
+
+    private static List<Integer> numbers(Map<Integer, MediaSubscriptionEpisodeSource> rows,
+                                         Map<Integer, MediaSubscriptionEpisode> episodes,
+                                         java.util.function.Predicate<MediaSubscriptionEpisodeSource> scope,
+                                         Collection<String> states) {
+        return rows.values().stream()
+                .filter(scope::test)
+                .filter(r -> states.contains(r.getState()))
+                .map(r -> episodes.values().stream()
+                        .filter(e -> e.getId().equals(r.getEpisodeId()))
+                        .findFirst().map(MediaSubscriptionEpisode::getNumber).orElse(null))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     // ---------- 标题归属匹配(候选池过滤) ----------
 
     @Test
@@ -463,12 +582,12 @@ class MediaSubscriptionCheckServiceTest {
 
         ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
         Mockito.verify(fixture.resourceRepository, Mockito.times(3)).save(captor.capture());
-        // 共同底分:近期+30 4K+25 归属+15 = 70;主网盘(夸克/百度)+15,百度另有免会员+15,115 追更弱-10
+        // 共同底分:近期+30 4K+25 归属+15 = 70;主网盘(夸克/百度)+15,百度另有免会员+17(含夸克易和谐加成),115 追更弱-10
         int quark = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/q")).findFirst().orElseThrow().getScore();
         int baidu = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/b")).findFirst().orElseThrow().getScore();
         int pan115 = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/x")).findFirst().orElseThrow().getScore();
         assertEquals(85, quark, "主网盘夸克 = 70 + 主网盘15");
-        assertEquals(100, baidu, "主网盘百度 = 70 + 主网盘15 + 免会员15");
+        assertEquals(102, baidu, "主网盘百度 = 70 + 主网盘15 + 免会员17");
         assertEquals(60, pan115, "非主网盘115 = 70 - 追更弱10(无主网盘加分)");
     }
 

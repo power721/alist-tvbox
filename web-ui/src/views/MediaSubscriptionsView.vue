@@ -1480,7 +1480,7 @@ const weightDefs: { key: string; label: string; value: number }[] = [
   { key: 'drive.main', label: '主网盘', value: 15 },
   { key: 'account', label: '已配账号', value: 8 },
   { key: 'account.vip', label: 'VIP账号', value: 15 },
-  { key: 'baidu.free', label: '百度免会员', value: 15 },
+  { key: 'baidu.free', label: '百度免会员', value: 17 },
   { key: 'pan115', label: '115追更弱', value: -10 },
   { key: 'pack.complete', label: '完结包', value: -6 },
   { key: 'size.fit', label: '体积合理', value: 10 },

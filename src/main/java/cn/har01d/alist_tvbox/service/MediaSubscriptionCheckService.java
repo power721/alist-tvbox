@@ -571,6 +571,15 @@ public class MediaSubscriptionCheckService {
         Set<Integer> missing = computeMissing(subscription, present);
         if (!missing.isEmpty()) {
             fillGaps(subscription, new TreeSet<>(missing));
+            // 补缺挂载本轮已把 LISTED 行落库,而上面的 applyInventory 用的是补前快照:
+            // 不刷新的话 currentEpisodes 停在主源口径,页面"已更新至X集"要等下轮巡检(可达 6-24h)才追平
+            Set<Integer> afterFill = liveEpisodeNumbers(subscription);
+            if (afterFill.size() > present.size()) {
+                present = afterFill;
+                subscription.setCurrentEpisodes(present.size());
+                subscription.setMaxEpisode(present.stream().max(Integer::compareTo).orElse(null));
+                subscription.setUpdatedTime(System.currentTimeMillis());
+            }
         } else {
             retireCoveredAuxMounts(subscription, present);
             // 停滞多轮且池中无可用备胎 → 搜索补池(主源未失效不主动换源,避免频繁扰动播放列表)
@@ -2921,7 +2930,7 @@ public class MediaSubscriptionCheckService {
             Map.entry("account", 8),           // 已配置该盘账号
             Map.entry("account.vip", 15),      // VIP 账号
             Map.entry("drive.main", 15),       // 主网盘候选
-            Map.entry("baidu.free", 15),       // 百度分享免会员
+            Map.entry("baidu.free", 17),       // 百度分享免会员 15 + 夸克易和谐耐删加成 2(线上「重器」:夸克滚动窗分享说删就删)
             Map.entry("pan115", -10),          // 115 分享追更弱
             Map.entry("pack.complete", -6),    // 完结包不持续更新
             Map.entry("size.fit", 10),         // 单文件体积合理(1GB~2TB)
