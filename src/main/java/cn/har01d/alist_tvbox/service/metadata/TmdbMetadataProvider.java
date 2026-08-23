@@ -267,6 +267,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                     + "?api_key=" + apiKey() + "&language=zh-CN");
             if (seasonNode != null && seasonNode.has("episodes")) {
                 LocalDate today = LocalDate.now(ZONE);
+                LocalDate windowFrom = today.minusDays(1); // 昨日/今日已播仍进日程:时间轴「昨天/今天」分组靠它,只收严格未来会把刚播出的集洗掉
                 int total = 0;
                 int aired = 0;
                 LocalDate nextAir = null;
@@ -280,6 +281,11 @@ public class TmdbMetadataProvider implements MetadataProvider {
                     }
                     if (!airDate.isAfter(today)) {
                         aired++;
+                        if (!airDate.isBefore(windowFrom) && upcoming.size() < 60) {
+                            upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(
+                                    episode.path("episode_number").asInt(0),
+                                    airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
+                        }
                     } else {
                         if (nextAir == null || airDate.isBefore(nextAir)) {
                             nextAir = airDate;

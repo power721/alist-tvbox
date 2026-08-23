@@ -170,15 +170,16 @@ public class BangumiMetadataProvider implements MetadataProvider {
                             firstNonBlank(episode.path("name_cn").asText(), episode.path("name").asText()),
                             airDate == null ? null : airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
                     episodeInfos.add(info);
-                    if (episode.path("status").asInt(-1) == 0) {
+                    boolean airedEp = episode.path("status").asInt(-1) == 0;
+                    if (airedEp) {
                         aired++;
-                        continue;
                     }
-                    if (airDate != null && airDate.isAfter(today)) {
-                        if (nextAir == null || airDate.isBefore(nextAir)) {
+                    if (airDate != null) {
+                        if (!airedEp && airDate.isAfter(today) && (nextAir == null || airDate.isBefore(nextAir))) {
                             nextAir = airDate;
                         }
-                        if (upcoming.size() < 60) {
+                        // 昨日/今日档期仍进日程(时间轴「昨天/今天」用):状态已翻转的已播集、当日待播集都保留
+                        if (!airDate.isBefore(today.minusDays(1)) && upcoming.size() < 60) {
                             upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(
                                     episode.path("ep").asInt(0),
                                     airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));

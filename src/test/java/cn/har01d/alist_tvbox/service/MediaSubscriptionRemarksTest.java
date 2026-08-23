@@ -214,6 +214,26 @@ class MediaSubscriptionRemarksTest {
         assertEquals("7", MediaSubscriptionService.compactEpisodes(List.of(7)));
     }
 
+    /** 时间轴「昨天」分组:已播出的集靠 schedule 快照里的昨日条目上墙(provider 只收严格未来会把刚播的集洗掉)。 */
+    @Test
+    void schedulePutsYesterdayAiredEpisodeInYesterdayBucket() {
+        java.time.ZoneId zone = java.time.ZoneId.of("Asia/Shanghai");
+        long yesterday20 = java.time.LocalDate.now(zone).minusDays(1).atTime(20, 0)
+                .atZone(zone).toInstant().toEpochMilli();
+        subscription.setSchedule("[{\"episode\":12,\"airTime\":" + yesterday20 + "}]");
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+
+        List<Map<String, Object>> days = service.schedule(1);
+
+        assertEquals("昨天", days.get(0).get("label"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items = (List<Map<String, Object>>) days.get(0).get("items");
+        assertEquals(1, items.size(), "昨日 20:00 已播的集要落「昨天」分组");
+        assertEquals("测试剧", items.get(0).get("name"));
+        assertEquals(12, items.get(0).get("episode"));
+        assertEquals("12", items.get(0).get("episodes"));
+    }
+
     private static Map<String, Object> item(int subscriptionId, String name, int episode, long airTime) {
         Map<String, Object> item = new java.util.LinkedHashMap<>();
         item.put("subscriptionId", subscriptionId);

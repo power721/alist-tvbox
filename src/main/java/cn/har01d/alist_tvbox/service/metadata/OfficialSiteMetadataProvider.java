@@ -170,7 +170,7 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         return details;
     }
 
-    private void applyEpisodeDates(MetadataDetails details, List<LocalDate> dates) {
+    static void applyEpisodeDates(MetadataDetails details, List<LocalDate> dates) {
         if (dates.isEmpty()) {
             return;
         }
@@ -181,6 +181,11 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
         for (LocalDate date : dates) {
             if (!date.isAfter(today)) {
                 aired++;
+                // 昨日/今日已播仍进日程(时间轴「昨天/今天」用),只收严格未来会把刚播出的集洗掉
+                if (!date.isBefore(today.minusDays(1)) && upcoming.size() < 60) {
+                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(0,
+                            date.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
+                }
             } else {
                 if (nextAir == null || date.isBefore(nextAir)) {
                     nextAir = date;
