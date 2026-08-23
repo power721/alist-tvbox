@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisode;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResource;
@@ -48,6 +49,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1674,6 +1676,118 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(fixture.service.belongsToShow(fixture.subscription, alienNoMeta), "未绑元数据无从判定:放行");
     }
 
+    // ---------- 播放后前瞻验证:连播前提前发现死集并自动补源 ----------
+
+    @Test
+    void preheatAheadVerifiesUpcomingEpisodes() {
+        Fixture fixture = new Fixture();
+        RowStore store = new RowStore();
+        installMountedResource(fixture, store);
+        AtomicInteger probed = new AtomicInteger();
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) -> {
+            probed.incrementAndGet();
+            return new StreamProbeClient.ProbeResult(206, "video/mp4", new byte[]{0x1A, 0x45});
+        });
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(rawUrlDetail());
+        for (int number = 4; number <= 6; number++) {
+            store.addEpisodeAndRow(7, number, MediaSubscriptionEpisodeSource.STATE_LISTED);
+        }
+
+        fixture.service.preheatAhead(fixture.subscription, 3);
+
+        assertEquals(3, probed.get(), "后面 3 集各探测最优行一次");
+        for (MediaSubscriptionEpisodeSource row : store.rows.values()) {
+            assertEquals(MediaSubscriptionEpisodeSource.STATE_VERIFIED, row.getState());
+            assertEquals(1, row.getSuccessCount());
+            assertNotNull(row.getLastVerifiedTime());
+        }
+        Mockito.verifyNoInteractions(fixture.eventRepository);
+    }
+
+    @Test
+    void preheatAheadFailedRowTriggersRescue() {
+        Fixture fixture = new Fixture();
+        RowStore store = new RowStore();
+        installMountedResource(fixture, store);
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) ->
+                new StreamProbeClient.ProbeResult(200, "text/html", "<html>登录</html>".getBytes()));
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(rawUrlDetail());
+        store.addEpisodeAndRow(7, 4, MediaSubscriptionEpisodeSource.STATE_LISTED);
+
+        fixture.service.preheatAhead(fixture.subscription, 3);
+
+        // 假页判死 → 资源再无其他 LIVE 集,传染判整源死 → 第 4 集无候选 → 自动补源事件
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_FAILED, store.rows.values().iterator().next().getState());
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository, Mockito.atLeastOnce()).save(events.capture());
+        assertTrue(events.getAllValues().stream().anyMatch(e -> e.getDetail().contains("已自动补源")),
+                "应写自动补源事件,实际:" + events.getAllValues());
+    }
+
+    @Test
+    void preheatAheadThrottledWithinWindow() throws InterruptedException {
+        Fixture fixture = new Fixture();
+        RowStore store = new RowStore();
+        installMountedResource(fixture, store);
+        AtomicInteger probed = new AtomicInteger();
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) -> {
+            probed.incrementAndGet();
+            return new StreamProbeClient.ProbeResult(206, "video/mp4", new byte[]{0x1A, 0x45});
+        });
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(rawUrlDetail());
+        store.addEpisodeAndRow(7, 4, MediaSubscriptionEpisodeSource.STATE_LISTED);
+
+        fixture.service.preheatAheadAsync(0, 1, 3);
+        for (int i = 0; i < 100 && probed.get() == 0; i++) {
+            Thread.sleep(50);
+        }
+        assertEquals(1, probed.get(), "首次触发应完成一次探测");
+
+        fixture.service.preheatAheadAsync(0, 1, 3); // 限频窗口(默认 1h)内:不再探测
+        Thread.sleep(500);
+        assertEquals(1, probed.get(), "窗口内二次触发不得重复探测");
+    }
+
+    @Test
+    void preheatAheadSkipsUnairedEpisodes() {
+        Fixture fixture = new Fixture();
+        AtomicInteger probed = new AtomicInteger();
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) -> {
+            probed.incrementAndGet();
+            return new StreamProbeClient.ProbeResult(206, "video/mp4", new byte[]{0x1A, 0x45});
+        });
+        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(List.of(1, 2, 3)); // 已追平:后面没有已上架集
+
+        fixture.service.preheatAhead(fixture.subscription, 3);
+
+        assertEquals(0, probed.get(), "未上架的集无行可探");
+        Mockito.verifyNoInteractions(fixture.eventRepository);
+    }
+
+    /** 挂载资源 + RowStore 内存库 + playCandidates 依赖的 findBySubscriptionAndNumber 派生查询。 */
+    private static MediaSubscriptionResource installMountedResource(Fixture fixture, RowStore store) {
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(7);
+        resource.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        resource.setMountPath("/追剧/1-测试剧");
+        resource.setScore(100);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(resource));
+        store.install(fixture);
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndNumber(Mockito.eq(1), Mockito.anyInt()))
+                .thenAnswer(inv -> store.rows.values().stream()
+                        .filter(r -> store.episodes.values().stream()
+                                .anyMatch(e -> e.getId() == r.getEpisodeId() && e.getNumber() == (int) inv.getArgument(1)))
+                        .toList());
+        return resource;
+    }
+
+    private static cn.har01d.alist_tvbox.model.FsDetail rawUrlDetail() {
+        cn.har01d.alist_tvbox.model.FsDetail detail = new cn.har01d.alist_tvbox.model.FsDetail();
+        detail.setRawUrl("https://dl.quark.cn/a.mp4");
+        return detail;
+    }
+
     /** 失效确认/集源行分支的 mock 夹具:订阅已挂主源(shareId=5),仓储行为由各测试定制。 */
     /** 集源行内存库:save 落 Map,派生查询等价真实库 —— 供整轮 check/activate 的流程测试用。 */
     private static final class RowStore {
@@ -1716,6 +1830,14 @@ class MediaSubscriptionCheckServiceTest {
             Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
                     .thenAnswer(inv -> numbers(rows, episodes, r -> true, (Collection<String>) inv.getArgument(1))
                             .stream().distinct().toList());
+        }
+
+        void addEpisodeAndRow(int resourceId, int number, String state) {
+            MediaSubscriptionEpisode ep = episode(episodeIds.incrementAndGet(), number);
+            episodes.put(number, ep);
+            MediaSubscriptionEpisodeSource row = sourceRow(rowIds.incrementAndGet(), ep.getId(), resourceId, state,
+                    String.format("第%02d集.mkv", number));
+            rows.put(row.getId(), row);
         }
     }
 

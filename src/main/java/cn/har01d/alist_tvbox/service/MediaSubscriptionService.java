@@ -900,7 +900,9 @@ public class MediaSubscriptionService {
         for (MediaSubscriptionCheckService.EpisodeFile file : transferFiles) {
             attempted++;
             try {
-                return tvBoxService.getPlayUrl(1, file.dir() + "/" + file.name(), true, client, type);
+                Map<String, Object> result = tvBoxService.getPlayUrl(1, file.dir() + "/" + file.name(), true, client, type);
+                kickPreheatAhead(uid, subscriptionId, episode);
+                return result;
             } catch (Exception e) {
                 log.info("subscription {} episode {} via {} failed: {}", subscriptionId, episode, file.dir(), e.getMessage());
                 errors.add(file.dir() + ": " + e.getMessage());
@@ -915,6 +917,7 @@ public class MediaSubscriptionService {
             try {
                 Map<String, Object> result = tvBoxService.getPlayUrl(1, path, true, client, type);
                 checkService.recordPlaySuccess(candidate.source());
+                kickPreheatAhead(uid, subscriptionId, episode);
                 return result;
             } catch (Exception e) {
                 log.info("subscription {} episode {} via {} failed: {}", subscriptionId, episode, path, e.getMessage());
@@ -933,6 +936,15 @@ public class MediaSubscriptionService {
         }
         throw new BadRequestException("第 " + episode + " 集暂无可用播放源(已尝试 " + attempted + " 个源"
                 + (errors.isEmpty() ? "" : ";" + String.join("; ", errors)) + ")");
+    }
+
+    /** 播放成功后顺带触发前瞻验证(后台探测接下来几集的最优源,提前发现死集):fire-and-forget,绝不能影响播放返回。 */
+    private void kickPreheatAhead(int uid, int subscriptionId, int episode) {
+        try {
+            checkService.preheatAheadAsync(uid, subscriptionId, episode);
+        } catch (Exception e) {
+            log.debug("trigger preheat ahead for subscription {} failed: {}", subscriptionId, e.getMessage());
+        }
     }
 
     /** 多源合并播放(§4.5,需求 1):按集号合并,优先级 转存副本(自有盘)> 主源 > 补缺源,排序成单一播放列表。

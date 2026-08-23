@@ -190,6 +190,13 @@ public class MediaSubscriptionCheckService {
     private final Map<String, Long> driveThrottleTime = new ConcurrentHashMap<>();
     /** 连续瞬时故障计数(资源 id → 次数):未识别错误默认按瞬时不下结论,streak 封顶防真死源每轮白吃探测预算 */
     private final Map<Integer, Integer> transientStreak = new ConcurrentHashMap<>();
+    /** 播放后前瞻验证去重(订阅 id):在跑任务不堆积 */
+    private final Set<Integer> preheatAheadInFlight = ConcurrentHashMap.newKeySet();
+    /** 播放后前瞻验证限频(订阅 id → 上次触发时间):连播几集时不重复打探测 */
+    private final Map<Integer, Long> preheatAheadTime = new ConcurrentHashMap<>();
+    /** 前瞻发现死集后的补源冷却:探测每个限频窗口都跑,完整巡检(含补搜)一集最多 2h 触发一次 */
+    private static final long AHEAD_RESCUE_COOLDOWN_MS = 2 * 3600_000L;
+    private final Map<Integer, Long> aheadRescueTime = new ConcurrentHashMap<>();
     /** 字节级流探测客户端(默认 OkHttp 实现,单测注入桩) */
     private StreamProbeClient streamProbeClient = new StreamProbeClient.Default();
     /**
@@ -376,6 +383,44 @@ public class MediaSubscriptionCheckService {
             throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
         }
         executor.submit(() -> check(id));
+    }
+
+    /**
+     * 播放后前瞻验证:用户正在追 = 接下来大概率连播后面的集,后台顺带把已上架的接下来 N 集
+     * 最优源字节级探测一遍,提前发现死链并自动补源 —— 否则要等常规巡检(6~12h)的每源 1 集抽验
+     * 慢慢轮到,或用户播到那一集当场卡住。播放请求线程只做去重/限频判断即返回,探测全在后台。
+     */
+    public void preheatAheadAsync(int uid, int subscriptionId, int playedEpisode) {
+        if (!preheatAheadInFlight.add(subscriptionId)) {
+            return;
+        }
+        long interval = Math.max(1, appProperties.getSubscription().getPreheatAheadIntervalHours()) * 3600_000L;
+        long now = System.currentTimeMillis();
+        Long last = preheatAheadTime.get(subscriptionId);
+        if (last != null && now - last < interval) {
+            preheatAheadInFlight.remove(subscriptionId);
+            return;
+        }
+        preheatAheadTime.put(subscriptionId, now);
+        try {
+            executor.submit(() -> {
+                try {
+                    MediaSubscription subscription = subscriptionRepository.findById(subscriptionId).orElse(null);
+                    if (subscription == null || subscription.getUid() != uid) {
+                        return;
+                    }
+                    preheatAhead(subscription, playedEpisode);
+                } catch (Exception e) {
+                    log.warn("preheat ahead for subscription {} failed: {}", subscriptionId, e.getMessage());
+                } finally {
+                    preheatAheadInFlight.remove(subscriptionId);
+                }
+            });
+        } catch (Exception e) {
+            // 池已关闭等提交失败:释放去重标记,别把订阅永久卡死
+            preheatAheadInFlight.remove(subscriptionId);
+            log.debug("submit preheat ahead for subscription {} failed: {}", subscriptionId, e.getMessage());
+        }
     }
 
     /**
@@ -1271,6 +1316,65 @@ public class MediaSubscriptionCheckService {
         }
         brokenNew.addAll(damaged);
         return brokenNew;
+    }
+
+    /**
+     * 播放后前瞻验证核心(与 {@link #preheatEpisodes} 同构,探测对象从"新上架集"换成"用户即将看的集"):
+     * 播放第 N 集成功后,把已上架的 N+1..N+K 各集最优候选行字节级探测一遍 ——
+     * 真出流 → VERIFIED(刷新新鲜度,连播时首选行更可靠);假页/死链 → FAILED + 失败传染判定
+     * (整源死退役换源,单集损坏走补源)。未上架集不在 LIVE 集号集合里,自然跳过。
+     */
+    void preheatAhead(MediaSubscription subscription, int playedEpisode) {
+        int limit = Math.max(0, appProperties.getSubscription().getPreheatAheadEpisodes());
+        if (limit == 0) {
+            return;
+        }
+        List<Integer> upcoming = episodeSourceRepository
+                .findNumbersBySubscriptionAndStatesIn(subscription.getId(), LIVE_STATES).stream()
+                .filter(number -> number > playedEpisode)
+                .sorted()
+                .limit(limit)
+                .toList();
+        for (Integer episode : upcoming) {
+            List<PlayCandidate> candidates = playCandidates(subscription, episode);
+            if (candidates.isEmpty()) {
+                continue;
+            }
+            PlayCandidate candidate = candidates.getFirst();
+            StreamVerdict verdict = verifyStream(candidate.resource().getMountPath(), candidate.source());
+            if (verdict == StreamVerdict.VERIFIED) {
+                markVerified(candidate.source());
+            } else if (verdict == StreamVerdict.FAILED) {
+                log.info("subscription {} episode {} ahead probe failed: {}", subscription.getId(), episode, "stream dead");
+                markFailed(candidate.source());
+                contagion(subscription, candidate.resource(), candidate.source().getId());
+            }
+            // TRANSIENT(限流/网络抖动)与 INCONCLUSIVE(403 防盗链等):不下结论,下个窗口再来
+        }
+        rescueAheadDead(subscription, upcoming);
+    }
+
+    /**
+     * 前瞻探测后存在已无任何可播候选的集(含被传染退役牵连的)→ 提交完整巡检补源(换源优先,池空才搜索)。
+     * 带 2h 冷却:探测每个限频窗口都跑,死集补源一次即入巡检的既有节奏,不重复烧搜索配额。
+     */
+    private void rescueAheadDead(MediaSubscription subscription, List<Integer> upcoming) {
+        List<Integer> dead = upcoming.stream()
+                .filter(episode -> playCandidates(subscription, episode).isEmpty())
+                .toList();
+        if (dead.isEmpty()) {
+            return;
+        }
+        int id = subscription.getId();
+        long now = System.currentTimeMillis();
+        Long last = aheadRescueTime.get(id);
+        if (last != null && now - last < AHEAD_RESCUE_COOLDOWN_MS) {
+            return;
+        }
+        aheadRescueTime.put(id, now);
+        addEvent(id, MediaSubscriptionEvent.TYPE_ERROR,
+                "第" + joinNumbers(dead) + " 集链接验证失败(疑似被和谐),已自动补源");
+        submitCheck(id);
     }
 
     /**

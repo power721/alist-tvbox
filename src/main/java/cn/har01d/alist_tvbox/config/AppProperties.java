@@ -133,6 +133,10 @@ public class AppProperties {
         private boolean preheatEnabled = true;
         /** 新集播放预热验证:每轮最多探测的集数 */
         private int preheatMaxPerRound = 5;
+        /** 播放后前瞻验证:播放某集成功后,后台顺带探测后续 N 集的最优源(用户即将看,提前发现死集) */
+        private int preheatAheadEpisodes = 3;
+        /** 播放后前瞻验证:同一订阅两次探测的最小间隔(小时),连播时不重复打探测 */
+        private int preheatAheadIntervalHours = 1;
         /** 播出后短轮窗口(小时):窗口内每小时一查(网盘资源常在播出后 1~12h 才上线) */
         private int shortPollWindowHours = 12;
         /** 追更中(官方状态 RETURNING)无新集退避封顶(小时);完结/无元数据维持 24h */
