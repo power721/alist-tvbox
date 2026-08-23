@@ -57,6 +57,8 @@ import java.util.stream.Collectors;
 public class MediaSubscriptionService {
     public static final String CATEGORY_ID = "msub";
     public static final String VOD_ID_PREFIX = "msub:";
+    /** TVBox 分集标题美化开关(Setting,默认关):剧集列表显示「集数. 分集标题(大小)」替代文件名 */
+    public static final String SETTING_EPISODE_TITLES = "msub_episode_titles";
 
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionResourceRepository resourceRepository;
@@ -974,6 +976,7 @@ public class MediaSubscriptionService {
             // 其余线路按网盘分线(百度/夸克/115…,同盘聚合所有源)——主网盘线路固定居前(完整覆盖由巡检保障),
             // 其它盘线路非空即上(挂载由 ensureDriveLines 保障,集数可不全:115 每集一链的线路就是该盘可用集清单)。
             // 逻辑线路失败或想固定某个盘时手动切换。
+            rewriteEpisodeTitles(subscription, merged, driveLines);
             String[] lines = buildTvBoxPlayLines(subscription.getId(), merged, driveLines,
                     Set.copyOf(checkService.mainDrives(subscription)));
             detail.setVod_play_from(lines[0]);
@@ -1045,6 +1048,98 @@ public class MediaSubscriptionService {
             urls.add(String.join("#", line.getValue().values()));
         }
         return new String[]{String.join("$$$", from), String.join("$$$", urls)};
+    }
+
+    /** TVBox 分集标题美化(Setting {@link #SETTING_EPISODE_TITLES},默认关):`NN. 分集标题(大小)` 替换文件名。
+     * 逻辑线路与盘线路一并改写;分集标题来自元数据快照(TMDB 桥接产分集,豆瓣纯源无),无标题保留原文件名。 */
+    private void rewriteEpisodeTitles(MediaSubscription subscription, TreeMap<Integer, String> merged,
+                                      Map<String, TreeMap<Integer, String>> driveLines) {
+        if (!episodeTitlesEnabled()) {
+            return;
+        }
+        Map<Integer, String> titles = episodeTitles(subscription);
+        rewriteTitles(merged, titles);
+        for (TreeMap<Integer, String> line : driveLines.values()) {
+            rewriteTitles(line, titles);
+        }
+    }
+
+    private boolean episodeTitlesEnabled() {
+        return settingRepository.findById(SETTING_EPISODE_TITLES)
+                .map(setting -> setting.getValue())
+                .map(value -> "true".equalsIgnoreCase(value.trim()) || "1".equals(value.trim()))
+                .orElse(false);
+    }
+
+    /** 元数据分集标题(集号→标题),读 media_metadata 持久层快照零网络;未绑元数据/无分集返回空表。 */
+    private Map<Integer, String> episodeTitles(MediaSubscription subscription) {
+        if (StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
+            return Map.of();
+        }
+        try {
+            MetadataDetails details = metadataService.cachedDetails(
+                    subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+            if (details == null || details.getEpisodes() == null) {
+                return Map.of();
+            }
+            Map<Integer, String> titles = new LinkedHashMap<>();
+            for (cn.har01d.alist_tvbox.dto.EpisodeInfo info : details.getEpisodes()) {
+                if (info.getNumber() > 0 && StringUtils.isNotBlank(info.getTitle())) {
+                    titles.put(info.getNumber(), info.getTitle());
+                }
+            }
+            return titles;
+        } catch (Exception e) {
+            log.debug("load episode titles failed: {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    /** 每集文件大小不另查:播放列表条目标题尾部本就带 `(796.08 MB)`(TvBoxService 装配 `fixName+"("+byte2size+")"`),
+     * 直接从原标题提取,顺便剥掉避免与改写后的标题重复。 */
+    private static final java.util.regex.Pattern TRAILING_SIZE =
+            java.util.regex.Pattern.compile("\\(([\\d.]+)\\s*(B|KB|MB|GB|TB)\\)$", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** 就地改写条目标题(`title$id` → `新title$id`),URL 部分不动。 */
+    static void rewriteTitles(TreeMap<Integer, String> entries, Map<Integer, String> titles) {
+        entries.replaceAll((episode, entry) -> {
+            int index = entry.lastIndexOf('$');
+            if (index <= 0) {
+                return entry;
+            }
+            return episodeDisplayTitle(episode, titles.get(episode), entry.substring(0, index))
+                    + entry.substring(index);
+        });
+    }
+
+    /** 分集显示标题:`NN. 标题(大小)`(两位补零,百集以上不补);大小从原条目标题尾部的 `(796.08 MB)` 提取,
+     * 无大小省略括号;元数据无标题用剥掉大小后的原文件名,再无则"第N集"。
+     * 标题先洗掉 $/#/$$$ —— 它们是播放列表分隔符,残留会把条目截断。 */
+    static String episodeDisplayTitle(int episode, String metaTitle, String originalTitle) {
+        String number = episode > 0 && episode < 100 ? String.format("%02d", episode) : String.valueOf(episode);
+        String size = null;
+        String fallback = StringUtils.defaultString(originalTitle).trim();
+        if (fallback.endsWith("()")) { // byte2size(size<=0) 为空串,装配残留空括号
+            fallback = fallback.substring(0, fallback.length() - 2).trim();
+        } else {
+            java.util.regex.Matcher matcher = TRAILING_SIZE.matcher(fallback);
+            if (matcher.find()) {
+                size = matcher.group(1) + " " + matcher.group(2).toUpperCase(java.util.Locale.ROOT);
+                fallback = fallback.substring(0, matcher.start()).trim();
+            }
+        }
+        String title = StringUtils.defaultIfBlank(sanitizeTitle(metaTitle), fallback);
+        if (StringUtils.isBlank(title)) {
+            title = "第" + episode + "集";
+        }
+        return size == null ? number + ". " + title : number + ". " + title + "(" + size + ")";
+    }
+
+    private static String sanitizeTitle(String title) {
+        if (StringUtils.isBlank(title)) {
+            return null;
+        }
+        return title.replace('$', ' ').replace('#', ' ').replace("  ", " ").trim();
     }
 
     /** 拉取挂载路径播放列表并按集合并进合并线路与盘线路。

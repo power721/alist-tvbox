@@ -78,6 +78,33 @@ class MediaSubscriptionPlaylistParseTest {
     }
 
     @Test
+    void episodeDisplayTitleFormatsNumberTitleAndSize() {
+        // 元数据分集标题 + 从原标题尾部提取的大小(线上形态:fixName(796.08 MB))
+        assertEquals("01. 噗噗先生(796.08 MB)",
+                MediaSubscriptionService.episodeDisplayTitle(1, "噗噗先生", "瑞克和莫蒂.S09E01.1080p.mkv(796.08 MB)"));
+        // 无分集标题退回原文件名(剥出的大小重新拼回,不重复)
+        assertEquals("02. 48 4K.mkv(964.88 MB)",
+                MediaSubscriptionService.episodeDisplayTitle(2, null, "48 4K.mkv(964.88 MB)"));
+        // 无大小省略括号;百集以上不补零
+        assertEquals("105. 大结局", MediaSubscriptionService.episodeDisplayTitle(105, "大结局", null));
+        // byte2size(size<=0) 为空串,装配残留的空括号剥掉
+        assertEquals("03. 第3集", MediaSubscriptionService.episodeDisplayTitle(3, null, "第3集()"));
+        // 标题里的播放列表分隔符($/#)必须洗掉,否则条目被截断
+        assertEquals("01. 第1集 下集", MediaSubscriptionService.episodeDisplayTitle(1, "第1集$下集#", null));
+    }
+
+    @Test
+    void rewriteTitlesKeepsUrlPartIntact() {
+        TreeMap<Integer, String> merged = new TreeMap<>();
+        merged.put(47, "47 4K.mp4(796.08 MB)$1@191854@1@20");
+        merged.put(48, "48 4K.mkv(964.88 MB)$1@191855@1@21");
+        MediaSubscriptionService.rewriteTitles(merged, Map.of(48, "终末之始"));
+        // 标题改写、URL 原样;无元数据标题的集退回原文件名
+        assertEquals("47. 47 4K.mp4(796.08 MB)$1@191854@1@20", merged.get(47));
+        assertEquals("48. 终末之始(964.88 MB)$1@191855@1@21", merged.get(48));
+    }
+
+    @Test
     void dualVersionSeasonFoldersKeepLaterEpisodes() {
         // 复现线上:同挂载两版本季文件夹。HQ 组(14 集)公共前后缀全剥,标题纯集号;
         // SDR 组(17 集)mp4/mkv 混排公共后缀为空,标题残留 2026/50fps 等数字——
