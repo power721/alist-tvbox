@@ -324,7 +324,7 @@
       </el-table>
     </el-drawer>
 
-    <el-drawer v-model="detailVisible" :title="'媒体详情 - ' + (current?.name || '')" size="58%">
+    <el-drawer class="media-detail" v-model="detailVisible" :title="'媒体详情 - ' + (current?.name || '')" size="58%">
       <div v-loading="detailLoading">
         <div class="detail-actions">
           <el-button size="small" type="primary" :disabled="!current?.metaProvider" @click="refreshMeta">
@@ -1743,7 +1743,7 @@ const formatClock = (time: number) => {
 }
 
 .detail-backdrop {
-  height: 210px;
+  height: 350px;
   border-radius: 8px;
   overflow: hidden;
   background: var(--el-fill-color-dark);

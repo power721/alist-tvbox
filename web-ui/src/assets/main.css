@@ -33,3 +33,7 @@ div.player .el-descriptions__body .el-descriptions__table:not(.is-bordered) .el-
 div.player .el-dialog__header {
     padding-bottom: 0;
 }
+
+.media-detail header {
+    margin-bottom: 0;
+}
