@@ -144,6 +144,25 @@ class MediaSubscriptionPlaylistParseTest {
         assertEquals(-1, checkService.parseEpisodeFromTitle("上", null), "无数字标题不产出集号");
     }
 
+    // ---------- 缺陷 12 回归:夸克 4K 转码标注标题不得把三集塌成一集 ----------
+    // 线上事故(邻人可疑 2026):fixName 剥公共后缀 GB].mkv 后,标题残留未闭合技术段
+    // 「上集：… [322155_maxplus_50fps_tv_6.72(7.68 GB)」——旧首号规则把 322155 拆成 3221+55,
+    // 三集全部撞成 55 去重塌成一集,「我的追剧」线路只剩 msubep-35-55 且播放报"已尝试 0 个源"。
+    @Test
+    void quarkTranscodeBracketTitlesParseToChapterNumbers() {
+        String playUrl = String.join("#",
+                "上集：喜迁新居，竟遇“诡”邻 [322155_maxplus_50fps_tv_6.72(7.68 GB)$1@501@0@0",
+                "中集：双面丈夫，究竟谁在说谎？ [322155_maxplus_50fps_tv_6.60(7.52 GB)$1@502@0@1",
+                "下集：终极反转！全员恶人互搏 [322155_maxplus_50fps_tv_6.45(7.38 GB)$1@503@0@2");
+        TreeMap<Integer, String> out = new TreeMap<>();
+        assertTrue(service.parsePlayEntries(playUrl, 1, out));
+        assertEquals(Set.of(1, 2, 3), out.keySet(), "三集应按 上/中/下 章节各自成集:" + out.keySet());
+        assertEquals("上集：喜迁新居，竟遇“诡”邻 [322155_maxplus_50fps_tv_6.72(7.68 GB)$msubep-35-1"
+                        + "#中集：双面丈夫，究竟谁在说谎？ [322155_maxplus_50fps_tv_6.60(7.52 GB)$msubep-35-2"
+                        + "#下集：终极反转！全员恶人互搏 [322155_maxplus_50fps_tv_6.45(7.38 GB)$msubep-35-3",
+                MediaSubscriptionService.buildMsubepPlaylist(35, out));
+    }
+
     @Test
     void tvboxPlayLinesGroupByDrive() {
         // 首条合并线路(默认 msubep)+ 按网盘分线的备用线路;同盘各源按集合并

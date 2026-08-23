@@ -114,6 +114,22 @@ class DoubanMetadataProviderTest {
     }
 
     @Test
+    void mergeTmdbFillsOverviewWhenDoubanBlank() {
+        // 豆瓣侧无简介来源(rexxar/本地库/详情页都没有该字段),桥接命中时 TMDB 简介补上
+        MetadataDetails douban = new MetadataDetails();
+        douban.setName("邻人可疑");
+        MetadataDetails tmdb = new MetadataDetails();
+        tmdb.setOverview("一次搬家让两个家庭狭路相逢……");
+        DoubanMetadataProvider.mergeTmdbDetails(douban, tmdb);
+        assertEquals("一次搬家让两个家庭狭路相逢……", douban.getOverview());
+
+        // 豆瓣已有简介不被覆盖;TMDB 缺简介时保持原状
+        douban.setOverview("豆瓣简介");
+        DoubanMetadataProvider.mergeTmdbDetails(douban, new MetadataDetails());
+        assertEquals("豆瓣简介", douban.getOverview());
+    }
+
+    @Test
     void splitNamesHandlesCommaAndSlashSeparators() {
         // 豆瓣库分隔符混杂:类型/演员逗号(中/英文),地区/语言 " / "
         assertEquals(List.of("剧情", "奇幻", "冒险"), DoubanMetadataProvider.splitNames("剧情,奇幻,冒险", 8));

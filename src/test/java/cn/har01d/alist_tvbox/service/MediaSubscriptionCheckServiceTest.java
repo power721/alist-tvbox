@@ -114,6 +114,41 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(5, service.parseEpisode("Show.S01E05.2160p.mkv", 1));
     }
 
+    // ---------- 缺陷 12 回归:方括号技术标注段(夸克 4K 转码命名)不得污染集号 ----------
+    // 线上事故(邻人可疑 2026,三集迷你剧):文件名「上集：喜迁新居，竟遇“诡”邻 [322155_maxplus_50fps_tv_6.72GB].mkv」
+    // 末号规则取到体积 6.72 的 72,三集各成 45/60/72(maxEpisode=72),与官方 3 集对不上,详情页分集全缺失。
+    // 技术段剔除后无数字,按 上/中/下 章节推定集序(与 TMDB S1E1-3 标题一一对应)。
+
+    @Test
+    void bracketTechAnnotationIsNotMistakenForEpisode() {
+        assertEquals(1, service.parseEpisode("上集：喜迁新居，竟遇“诡”邻 [322155_maxplus_50fps_tv_6.72GB].mkv", null));
+        assertEquals(2, service.parseEpisode("中集：双面丈夫，究竟谁在说谎？ [322155_maxplus_50fps_tv_6.60GB].mkv", null));
+        assertEquals(3, service.parseEpisode("下集：终极反转！全员恶人互搏 [322155_maxplus_50fps_tv_6.45GB].mkv", null));
+        // 无单位体积/纯模板 id 段(闭合与未闭合形态)同样剔除
+        assertEquals(1, service.parseEpisode("上集 [322155_tv_6.72].mkv", null));
+        assertEquals(-1, service.parseEpisode("正片 [322155_maxplus].mkv", null), "剔除技术段后无集号来源");
+    }
+
+    @Test
+    void chapterFallbackOnlyWithoutExplicitNumber() {
+        // 显式集号优先:一集拆上下两部(第05集 上部/下部)不被章节标记覆盖
+        assertEquals(5, service.parseEpisode("第05集 上部.mp4", null));
+        assertEquals(5, service.parseEpisode("第05集 下部.mp4", null));
+        assertEquals(2, service.parseEpisode("邻人可疑 中篇.mp4", null));
+        // 无章节无数字仍不产出
+        assertEquals(-1, service.parseEpisode("邻人可疑 完整版.mp4", null));
+    }
+
+    @Test
+    void bracketWithExplicitEpisodeMarkKept() {
+        // 段内混有技术词但显式写了集号 → 不剔
+        assertEquals(5, service.parseEpisode("剧名 [第05集 1080P].mkv", null));
+        assertEquals(5, service.parseEpisode("剧名 [S01E05 4K].mkv", 1));
+        // 纯内容段保留:[01] 仍是集号来源;纯技术段剔后无数字
+        assertEquals(1, service.parseEpisode("剧名 [01].mkv", null));
+        assertEquals(-1, service.parseEpisode("剧名 [1080P HEVC].mkv", null));
+    }
+
     // ---------- 缺陷 11 回归:多季合集目录必须按季隔离 ----------
     // 同一分享里带 第1-3季/ 目录(52+26 集),那些文件多半只写"第01集"不写 SxxEyy,
     // 文件名级季过滤挡不住,会直接冒充目标季的集数。目录名是唯一可靠的季信号。

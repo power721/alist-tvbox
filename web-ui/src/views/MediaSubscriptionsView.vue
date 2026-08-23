@@ -331,7 +331,7 @@
             刷新元数据
           </el-button>
           <el-button size="small" @click="checkFromDetail">检查更新</el-button>
-          <el-button v-if="current?.status === 'ENDED'" size="small" type="warning" plain
+          <el-button v-if="current?.status === 'ENDED' && hasNextSeason" size="small" type="warning" plain
                      @click="current && subscribeNextSeason(current)">下一季</el-button>
           <el-button v-if="detailData?.subscription?.mountPath" size="small" link type="primary"
                      @click="browseMount">浏览目录</el-button>
@@ -807,6 +807,13 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detailData = ref<MediaDetailData | null>(null)
 const current = ref<SubscriptionDto | null>(null)
+// 元数据总季数已知且当前季已是最后一季 → 不可能有下一季,隐藏按钮(三集迷你剧完结后曾对 1 季条目展示死按钮);
+// 总季数未知(无元数据/未拉到)保留入口,点击后后端 next-season 接口会再探测
+const hasNextSeason = computed(() => {
+  const totalSeasons = detailData.value?.media?.totalSeasons
+  if (!totalSeasons) return true
+  return totalSeasons > (current.value?.season ?? 1)
+})
 const importVisible = ref(false)
 const importText = ref('')
 const importing = ref(false)

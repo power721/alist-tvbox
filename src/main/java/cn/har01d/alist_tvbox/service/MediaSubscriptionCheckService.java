@@ -99,6 +99,15 @@ public class MediaSubscriptionCheckService {
     /** 网盘限流/风控(非资源失效):百度 errno -62 = 验证次数过多;其余为通用限流措辞 */
     private static final Pattern THROTTLE_ERROR = Pattern.compile(
             "(?i)errno\"?\\s*:\\s*-62|验证次数过多|请稍[后候]|访问频繁|操作频繁|too many (requests|attempts)|rate.?limit|\\b429\\b");
+    /** 方括号段里的技术信号补充集(TECH_TAGS 之外):帧率/夸克转码模板名/体积标注/长数字 id。
+     * 线上形态 {@code [322155_maxplus_50fps_tv_6.45GB]}(夸克 4K 转码命名):模板 id 被拆成 3221+55,
+     * 体积 6.45 的 45 会被末号规则当集号,三集各解析成 45/60/72。 */
+    private static final Pattern BRACKET_TECH_EXTRA = Pattern.compile("(?i)fps|maxplus|\\d+(?:\\.\\d+)?\\s*[gmtk]b?\\b|\\d{5,}");
+    /** 方括号段里的显式集号标记:段内虽混有技术词但集号是明确写出的,不剔(如 {@code [第05集 1080P]}) */
+    private static final Pattern BRACKET_EPISODE_MARK = Pattern.compile("(?i)第\\s*\\d{1,3}\\s*集|[Ss]\\d{1,2}[Ee]\\d{1,3}|\\bep\\s*\\d{1,3}");
+    /** 上/中/下章节标记(集/篇/部):无数字集号时的集序推定,上=1 中=2 下=3。
+     * 三集迷你剧常按「上集/中集/下集」命名且与 TMDB 的 S1E1-3 标题一一对应。 */
+    private static final Pattern CHAPTER_MARK = Pattern.compile("([上中下])[集篇部]");
     /** 明确失效(判死即拉黑):分享/提取码/过期类措辞(AList 报错原文,如 "failed get link: 参数错误")。
      * 其余未识别错误一律按瞬时处理(见 {@link #classifyProbeFailure}) */
     private static final Pattern GONE_ERROR = Pattern.compile(
@@ -2547,6 +2556,7 @@ public class MediaSubscriptionCheckService {
         if (index > 0 && index < base.length() - 1 && base.substring(index + 1).matches("[a-zA-Z0-9]{1,5}")) {
             base = base.substring(0, index);
         }
+        base = stripTechBrackets(base);
         Matcher matcher = SEASON_EPISODE.matcher(base);
         if (matcher.find()) {
             int s = Integer.parseInt(matcher.group(1));
@@ -2570,7 +2580,7 @@ public class MediaSubscriptionCheckService {
                 // 4 位以上已被 \d{1,4} + 范围过滤兜底
             }
         }
-        return episode;
+        return episode > 0 ? episode : chapterNumber(cleaned);
     }
 
     /** 播放列表显示标题(fixName 已剥公共前后缀)解析集号:剥掉的是集号前的公共前缀,
@@ -2583,6 +2593,7 @@ public class MediaSubscriptionCheckService {
         if (index > 0 && index < base.length() - 1 && base.substring(index + 1).matches("[a-zA-Z0-9]{1,5}")) {
             base = base.substring(0, index);
         }
+        base = stripTechBrackets(base);
         Matcher matcher = SEASON_EPISODE.matcher(base);
         if (matcher.find()) {
             int s = Integer.parseInt(matcher.group(1));
@@ -2604,7 +2615,7 @@ public class MediaSubscriptionCheckService {
                 // 4 位以上已被 \d{1,4} + 范围过滤兜底
             }
         }
-        return -1;
+        return chapterNumber(cleaned);
     }
 
     private boolean isMediaFormat(String name) {
@@ -2614,6 +2625,44 @@ public class MediaSubscriptionCheckService {
             return appProperties.getFormats().contains(suffix) || "strm".equals(suffix) || "cas".equals(suffix);
         }
         return false;
+    }
+
+    /**
+     * 剔除方括号技术标注段(画质/帧率/体积/转码模板 id,如 {@code [322155_maxplus_50fps_tv_6.45GB]})再扫集号:
+     * 这类段的数字全是模板 id 与体积,末号规则会把 {@code 6.45GB} 的 45 当集号(线上三集迷你剧各成 45/60/72)。
+     * 段内含技术信号才剔;写了显式集号({@code [第05集 1080P]})或纯内容段({@code [01]})保留。
+     * fixName 剥公共后缀会把 {@code GB].mkv} 吃掉留下未闭合尾段({@code ...tv_6.72}),同样按信号剔到 '[' 为止。
+     */
+    static String stripTechBrackets(String name) {
+        if (name == null || (name.indexOf('[') < 0 && name.indexOf('【') < 0)) {
+            return name;
+        }
+        StringBuilder result = new StringBuilder();
+        int last = 0;
+        Matcher matcher = java.util.regex.Pattern.compile("[\\[【]([^\\[\\]【】]*)[\\]】]?").matcher(name);
+        while (matcher.find()) {
+            result.append(name, last, matcher.start());
+            if (!isTechSegment(matcher.group(1))) {
+                result.append(matcher.group());
+            }
+            last = matcher.end();
+        }
+        result.append(name, last, name.length());
+        return result.toString();
+    }
+
+    private static boolean isTechSegment(String segment) {
+        return segment != null && (TECH_TAGS.matcher(segment).find() || BRACKET_TECH_EXTRA.matcher(segment).find())
+                && !BRACKET_EPISODE_MARK.matcher(segment).find();
+    }
+
+    /** 无数字集号时按「上/中/下(+集/篇/部)」推定集序:上=1 中=2 下=3;无章节标记返回 -1。 */
+    static int chapterNumber(String name) {
+        if (name == null) {
+            return -1;
+        }
+        Matcher matcher = CHAPTER_MARK.matcher(name);
+        return matcher.find() ? "上中下".indexOf(matcher.group(1)) + 1 : -1;
     }
 
     /** 对比快照:新集计数、停滞计数/退避;完结条件达标(见 {@link #shouldAutoEnd})自动完结。 */

@@ -596,6 +596,9 @@ public class DoubanMetadataProvider implements MetadataProvider {
         if (StringUtils.isBlank(douban.getBackdrop()) && StringUtils.isNotBlank(tmdb.getBackdrop())) {
             douban.setBackdrop(tmdb.getBackdrop());
         }
+        if (StringUtils.isBlank(douban.getOverview()) && StringUtils.isNotBlank(tmdb.getOverview())) {
+            douban.setOverview(tmdb.getOverview()); // 豆瓣侧无简介来源(rexxar/本地库/详情页都没有该字段),TMDB 补
+        }
         if (douban.getEpisodes() == null && tmdb.getEpisodes() != null) {
             douban.setEpisodes(tmdb.getEpisodes()); // 分集标题/播出时间/剧照/简介(豆瓣无分集数据)
         }
