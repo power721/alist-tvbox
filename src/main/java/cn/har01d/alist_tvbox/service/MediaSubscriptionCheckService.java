@@ -50,7 +50,9 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -115,6 +117,8 @@ public class MediaSubscriptionCheckService {
                     + "object not found|not exist|expired|cancel|invalid");
     /** 搜索源判定失效的原始状态词(各源大小写/措辞不一,入池时统一归一化) */
     private static final Set<String> INVALID_STATES = Set.of("BAD", "INVALID", "FAILED", "EXPIRED", "DEAD", "ERROR");
+    /** 集号范围门禁拒绝消息的识别标记:调用方据此退役候选但不进跨订阅失效黑名单(链接没死,只是不属于本剧) */
+    private static final String FOREIGN_SHOW_MARK = "疑似同名异剧";
     /** 池枯竭释放 BAD 冷却的最小年龄:本轮刚判死的不参与释放 */
     private static final long BAD_RELEASE_MIN_AGE_MS = 30 * 60_000L;
     /** 播放历史里的逻辑链接 msubep-{订阅}-{集},集号即观看进度 */
@@ -474,7 +478,11 @@ public class MediaSubscriptionCheckService {
                 subscriptionRepository.save(subscription);
             } catch (Exception e) {
                 log.warn("activate resource {} failed: {}", resourceId, e.getMessage());
-                retireResource(subscription, resource, e.getMessage(), true);
+                if (isForeignShowRejection(e.getMessage())) {
+                    retireAlienCandidate(subscription, resource); // 异剧不拉黑(链接没死,只是不属于本剧)
+                } else {
+                    retireResource(subscription, resource, e.getMessage(), true);
+                }
                 addEvent(id, MediaSubscriptionEvent.TYPE_ERROR, "手动换源失败:" + e.getMessage());
             } finally {
                 inFlight.remove(id);
@@ -512,9 +520,22 @@ public class MediaSubscriptionCheckService {
     }
 
     /** ENDED 订阅每日轻量复查(只刷元数据,不列源不搜索):官方已播/手填期望超过本地集数 = 加更或集数修正,自动回 ACTIVE。 */
-    private boolean reopenEnded(MediaSubscription subscription) {
+    boolean reopenEnded(MediaSubscription subscription) {
         refreshMetadata(subscription);
         if (!shouldReopen(subscription)) {
+            // 异剧污染回滚:真人版同名资源把 currentEpisodes 撑过官方集数,反而把上面的重开条件堵死
+            // (本地 37 > 官方 26 永不重开)。主源集号超范围 = 误挂异剧,重开走完整巡检
+            // (doCheck 的归属复核会自动换正确源,集数快照/maxEpisode 随之归位)。
+            MediaSubscriptionResource primary = primaryResource(subscription);
+            if (primary != null && !belongsToShow(subscription, primary)) {
+                subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
+                subscription.setStallCount(0);
+                addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_RESUMED,
+                        "主源疑似误挂同名异剧,重开校正:" + StringUtils.defaultString(primary.getTitle()));
+                log.info("subscription {} reopened: alien primary [{}]",
+                        subscription.getId(), primary.getTitle());
+                return true;
+            }
             return false;
         }
         int local = subscription.getCurrentEpisodes() == null ? 0 : subscription.getCurrentEpisodes();
@@ -1051,35 +1072,56 @@ public class MediaSubscriptionCheckService {
     /** 候选池统一视图(探测/补缺/主盘/线路/换源全走这里):非挂载候选按分数降序;
      * 附年份门禁 —— 标题明确标注其它年份的资源在这里就出局,同名/前缀异剧
      * (「悬案」2026 vs「悬案解码 Dept. Q (2025)」)不再被逐个试挂;
+     * 附标题宣称集数/版本词门禁 —— 宣称集数显著超出官方总集数(真人版「全37集」包)、
+     * 动画订阅的显式「真人版」资源在此出局(探测前拦截,省一轮挂载试错);
      * 附盘白名单 —— 配置了主/扩展网盘后,白名单以外盘的存量候选不再被探测/换源/补线。 */
     List<MediaSubscriptionResource> candidatesOrdered(MediaSubscription subscription) {
         long now = System.currentTimeMillis();
         Integer metaYear = metaYear(subscription);
         List<String> names = matchNames(subscription);
+        List<String> genres = metaGenres(subscription);
         Set<String> allowedDrives = allowedCandidateDrives(subscription);
         return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
                 .filter(r -> !MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState()))
                 .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()) || isBadCooled(r, now))
                 .filter(r -> titleYearMatches(metaYear, names, r.getTitle()))
+                .filter(r -> !titleProgressForeign(subscription, r.getTitle()) && !liveActionForeign(genres, r.getTitle()))
                 .filter(r -> driveAllowed(allowedDrives, r.getType() == null ? null : DriveId.toDrive(r.getType())))
                 .toList();
     }
 
     /** 订阅元数据年份(门禁基准):provider 侧有缓存,取不到/未绑元数据返回 null(门禁关闭)。 */
     Integer metaYear(MediaSubscription subscription) {
+        MetadataDetails details = metaDetails(subscription);
+        if (details == null) {
+            return null;
+        }
+        Matcher matcher = YEAR_MARK.matcher(StringUtils.defaultString(details.getYear()));
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : null;
+    }
+
+    /** 订阅元数据类型(版本词门禁基准):genres 缺失返回 null(门禁关闭)。 */
+    List<String> metaGenres(MediaSubscription subscription) {
+        MetadataDetails details = metaDetails(subscription);
+        return details == null || details.getGenres() == null ? List.of() : details.getGenres();
+    }
+
+    /** 订阅元数据单集时长(分钟,时长门禁基准):取不到返回 null(门禁关闭)。 */
+    Integer metaRuntimeMinutes(MediaSubscription subscription) {
+        MetadataDetails details = metaDetails(subscription);
+        return details == null ? null : details.getRuntimeMinutes();
+    }
+
+    /** 元数据详情(provider 缓存 + media_metadata 持久层,完结剧零网络);未绑/异常返回 null,门禁全部关闭。 */
+    private MetadataDetails metaDetails(MediaSubscription subscription) {
         if (StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
             return null;
         }
         try {
-            MetadataDetails details = metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(),
+            return metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(),
                     subscription.getSeason());
-            if (details == null) {
-                return null;
-            }
-            Matcher matcher = YEAR_MARK.matcher(StringUtils.defaultString(details.getYear()));
-            return matcher.find() ? Integer.parseInt(matcher.group(1)) : null;
         } catch (Exception e) {
-            log.debug("meta year for subscription {} unavailable: {}", subscription.getId(), e.getMessage());
+            log.debug("meta details for subscription {} unavailable: {}", subscription.getId(), e.getMessage());
             return null;
         }
     }
@@ -1117,9 +1159,121 @@ public class MediaSubscriptionCheckService {
         return false;
     }
 
-    /** 已挂资源是否仍属于本剧:标题归属 + 年份门禁(与候选入池同规)。
+    /**
+     * 集号范围门禁:资源提供的集号显著超出本季官方总集数 = 同名异剧。经典 IP 真人版/动画版
+     * 同名同季(线上:真人版「仙剑奇侠传三 2160P」37 集顶在动画版 26 集订阅上,maxEpisode=37
+     * 还误判 ENDED),标题无年份无类型词,标题/年份门禁对这种形态全部放行 —— 探测出的集号
+     * 范围是挂上后唯一可靠的区分信号。本季已播完(登记集数全播完)后再冒的集号不可能是本剧,
+     * 超出即拒;未播完允许 +2(TMDB 登记总集数滞后于实际排播)。官方总集数未知/无集号 → 放行。
+     */
+    static boolean episodeNumbersForeign(MediaSubscription subscription, Collection<Integer> numbers) {
+        Integer total = subscription.getOfficialTotal();
+        if (total == null || total <= 0 || numbers == null || numbers.isEmpty()) {
+            return false;
+        }
+        int max = numbers.stream().max(Integer::compareTo).orElse(0);
+        int overflow = max - total;
+        return overflow > 0 && (subscription.isSeasonAiredOut() || overflow > 2);
+    }
+
+    /**
+     * 文件级解析噪声剔除:目录里混入的<b>不相干文件</b>(线上:仙剑动画资源目录里被分享者塞进
+     * 《都市仙医》S01E142,集号 142 撑爆详情分集列表,还会让资源级门禁把这个主体正确的资源
+     * 整体误杀)。判据:超出官方总集数且<b>不在衔接链上</b>的集号 = 噪声(26→142 跳变,不可能
+     * 是本剧延续);从 total+1 连续衔接的超范围尾部(真人版 1-37 / TMDB 登记滞后的真实新集)
+     * 保留,交给 {@link #episodeNumbersForeign} 资源级门禁判定。官方总集数未知 → 不剔(零误伤)。
+     */
+    static void stripForeignEpisodeNoise(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files) {
+        Integer total = subscription.getOfficialTotal();
+        if (total == null || total <= 0 || files.isEmpty()) {
+            return;
+        }
+        int next = total + 1; // 衔接链游标:官方范围外第一个可能的真集号
+        Iterator<Integer> beyond = files.tailMap(total + 1).keySet().iterator();
+        while (beyond.hasNext()) {
+            if (beyond.next() == next) {
+                next++; // 衔接链上的超范围尾部:保留,由资源级门禁判真伪
+            } else {
+                beyond.remove(); // 断裂跳号:不相干文件混入目录
+            }
+        }
+    }
+
+    /**
+     * 标题宣称集数门禁:「全37集」等宣称(TITLE_PROGRESS 各形态最大值)显著超出官方总集数
+     * (与探测集号同判据:已播完超出即拒/未播完容差 +2)—— 在入池/候选层就拦,不必等挂载探测。
+     * 标题带季标记/合集词时跳过:多季合一包宣称的是<b>跨季总数</b>(「鬼灭之刃 全52集 合集」装
+     * 全部季),与同名异剧在标题层无法区分,交给探测层季过滤/集号门禁。
+     */
+    static boolean titleProgressForeign(MediaSubscription subscription, String title) {
+        Integer total = subscription.getOfficialTotal();
+        if (total == null || total <= 0 || StringUtils.isBlank(title)) {
+            return false;
+        }
+        if (SEASON_RANGE.matcher(title).find() || title.contains("合集") || parseTitleSeason(title) != null) {
+            return false;
+        }
+        Integer claimed = parseTitleProgress(title);
+        if (claimed == null || claimed <= total) {
+            return false;
+        }
+        return subscription.isSeasonAiredOut() || claimed - total > 2;
+    }
+
+    /**
+     * 单集时长门禁:资源文件时长(AList duration,夸克等驱动返回)与元数据单集时长
+     * (runtimeMinutes,TMDB episode_run_time)显著不符 = 同名异剧。时长是内容属性不受码率影响
+     * (线上:真人版单集 45min vs 动画版 20min;体积受码率干扰不可靠),差异 &gt;50% 判异剧 ——
+     * 补集号门禁的残余盲区(未播完 + 容差内的真人版 1-28:集号合法但时长必不符)。
+     * 双侧信号齐备才判:元数据无时长、或盘驱动不给 duration(覆盖不足半数/少于 3 个文件)→ 跳过零误伤。
+     */
+    static boolean episodeDurationForeign(Integer metaRuntimeMinutes, Collection<EpisodeFile> files) {
+        if (metaRuntimeMinutes == null || metaRuntimeMinutes <= 0 || files == null || files.isEmpty()) {
+            return false;
+        }
+        List<Long> durations = files.stream().map(EpisodeFile::duration)
+                .filter(d -> d > 60).sorted().toList();
+        if (durations.size() < 3 || durations.size() * 2 < files.size()) {
+            return false; // duration 覆盖不足半数:该盘驱动不报时长,不判
+        }
+        double actualMinutes = durations.get(durations.size() / 2) / 60.0; // 中位数抗单集异常
+        return Math.abs(actualMinutes - metaRuntimeMinutes) > metaRuntimeMinutes * 0.5;
+    }
+
+    /** 标题显式「真人版」标记(版本词门禁用;词形收窄防误伤)。 */
+    private static final Pattern LIVE_ACTION_MARK = Pattern.compile("真人版|真人连续剧");
+
+    /**
+     * 版本词门禁(<b>单向</b>):动画订阅(genres 含动画,正向证据)拒标题显式标「真人版」的资源 ——
+     * 同名 IP 双形态且集数/时长信号都缺时的最后防线(真人版集数 ≤ 动画版官方数、盘又不返回
+     * duration 时)。反向(真人剧订阅拒「动画版」资源)不做:genres 缺失(豆瓣订阅)时会把
+     * 正确的动画资源误伤。标题标「动画版/动漫版」且订阅是动画 → 天然放行,无需处理。
+     */
+    static boolean liveActionForeign(List<String> genres, String title) {
+        if (genres == null || genres.isEmpty() || StringUtils.isBlank(title)) {
+            return false;
+        }
+        boolean animation = genres.stream().anyMatch(g -> g != null && (g.contains("动画") || g.contains("动漫")));
+        return animation && LIVE_ACTION_MARK.matcher(title).find();
+    }
+
+    /** 异剧拒绝消息识别(activate/probeShare 集号门禁抛出):调用方退役候选但不进失效黑名单。 */
+    static boolean isForeignShowRejection(String message) {
+        return message != null && message.contains(FOREIGN_SHOW_MARK);
+    }
+
+    /** 集号门禁拒绝消息(含 {@link #FOREIGN_SHOW_MARK} 标记,供调用方识别分流)。 */
+    static String foreignShowReason(MediaSubscription subscription, int maxEpisode, String title) {
+        return "集号超出官方范围(第" + maxEpisode + "集 > 官方" + subscription.getOfficialTotal()
+                + "集)," + FOREIGN_SHOW_MARK + ":" + StringUtils.defaultString(title);
+    }
+
+    /** 已挂资源是否仍属于本剧:集号范围 + 标题归属 + 年份门禁(与候选入池同规)。
      * 误挂的异剧源列目录、流探测都正常,巡检没有天然失效信号,靠这套复核发现并纠正。 */
     boolean belongsToShow(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        if (resource.getId() != null && episodeNumbersForeign(subscription, coverageOf(resource))) {
+            return false; // 同名真人版等异剧:标题/年份门禁放行,集号超出官方总集数是唯一信号
+        }
         String title = StringUtils.defaultString(resource.getTitle());
         if (title.isBlank()) {
             return true; // 无标题旧数据无从判定,保守放行
@@ -1208,6 +1362,7 @@ public class MediaSubscriptionCheckService {
                 retireResource(subscription, resource, e.getMessage(), false);
                 continue;
             }
+            stripForeignEpisodeNoise(subscription, files);
             if (files.isEmpty()) {
                 retireResource(subscription, resource, "挂载目录已无任何剧集文件", false);
                 continue;
@@ -1255,6 +1410,33 @@ public class MediaSubscriptionCheckService {
         }
         log.info("subscription {} retired resource {} ({}): {}", subscription.getId(), resource.getId(),
                 primary ? "primary" : "aux", StringUtils.defaultString(reason));
+    }
+
+    /**
+     * 异剧候选退役:卸载挂载、RETIRED 冷却重探、行落 FAILED。
+     * 与 {@link #retireResource} 的差别:<b>不进跨订阅失效黑名单</b> —— 链接没死,只是不属于本剧
+     * (真人版订阅可能正用着它);官方集数修正后冷却期满会重探自愈。
+     */
+    void retireAlienCandidate(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        if (resource.getShareId() != null) {
+            try {
+                shareService.deleteShare(resource.getShareId());
+            } catch (Exception e) {
+                log.warn("retire alien resource {} failed, keep for next round: {}", resource.getId(), e.getMessage());
+                return;
+            }
+        }
+        resource.setState(MediaSubscriptionResource.STATE_RETIRED);
+        resource.setShareId(null);
+        resource.setMountPath(null);
+        resource.setCheckedTime(System.currentTimeMillis());
+        resourceRepository.save(resource);
+        for (MediaSubscriptionEpisodeSource row : episodeSourceRepository.findByResourceId(resource.getId())) {
+            if (LIVE_STATES.contains(row.getState())) {
+                row.setState(MediaSubscriptionEpisodeSource.STATE_FAILED);
+                episodeSourceRepository.save(row);
+            }
+        }
     }
 
     /** 失效黑名单登记:跨订阅共享 —— 一个分享死了,所有订阅入池时都看得见。 */
@@ -2076,8 +2258,26 @@ public class MediaSubscriptionCheckService {
             TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
             collectEpisodeFiles(site(), subscription.getSeason(), share.getPath(), 1, files,
                     maxEpisodeBytes(subscription), true);
+            stripForeignEpisodeNoise(subscription, files);
             if (files.isEmpty()) {
                 throw new IllegalStateException("资源无可识别的剧集文件:" + resource.getTitle());
+            }
+            if (episodeNumbersForeign(subscription, files.keySet())) {
+                // 同名异剧:就地退役(RETIRED 冷却重探、不拉黑)再抛 —— 四路调用方(fillGaps/主盘/
+                // 线路/升级探测)catch 后按未识别错误(瞬时)跳过,不退役的话每轮都会重复探测它
+                retireAlienCandidate(subscription, resource);
+                addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                        "候选与剧集不符(" + FOREIGN_SHOW_MARK + ")已跳过:"
+                                + StringUtils.defaultIfBlank(resource.getTitle(), resource.getLink()), false);
+                throw new IllegalStateException(foreignShowReason(subscription, files.lastKey(), resource.getTitle()));
+            }
+            if (episodeDurationForeign(metaRuntimeMinutes(subscription), files.values())) {
+                // 单集时长显著不符(真人版 45min vs 动画版 20min):补集号门禁未播完容差内的盲区
+                retireAlienCandidate(subscription, resource);
+                addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                        "候选与剧集不符(" + FOREIGN_SHOW_MARK + ")已跳过:"
+                                + StringUtils.defaultIfBlank(resource.getTitle(), resource.getLink()), false);
+                throw new IllegalStateException(FOREIGN_SHOW_MARK + "(单集时长与官方不符):" + resource.getTitle());
             }
             syncInventory(subscription, resource, share.getPath(), files);
             // 线上:115 单集分享 errno 4100018 —— 列目录成功,文件链接已过期,挂载后下轮采样即死。
@@ -2255,7 +2455,7 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 按分数依次尝试候选,失败退役换下一个;成功则重挂到同一固定路径。 */
-    private boolean activateNextCandidate(MediaSubscription subscription) {
+    boolean activateNextCandidate(MediaSubscription subscription) {
         int current = liveEpisodeNumbers(subscription).size();
         Set<String> throttled = new java.util.HashSet<>(); // 本轮已撞风控的盘,后续候选直接跳过
         for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
@@ -2279,6 +2479,14 @@ public class MediaSubscriptionCheckService {
                         resourceRepository.save(resource);
                         addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR,
                                 driveName(drive) + "限流,本轮跳过该网盘候选(不判失效)");
+                        continue;
+                    }
+                    if (isForeignShowRejection(e.getMessage())) {
+                        // 同名异剧(集号超出官方总集数):退役冷却但不拉黑 —— 链接没死,官方集数修正后重探自愈
+                        retireAlienCandidate(subscription, resource);
+                        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                                "候选" + FOREIGN_SHOW_MARK + "已跳过:"
+                                        + StringUtils.defaultIfBlank(resource.getTitle(), resource.getLink()), false);
                         continue;
                     }
                     if (classifyProbeFailure(e) == ProbeFailure.TRANSIENT && !transientStreakReached(resource)) {
@@ -2385,8 +2593,28 @@ public class MediaSubscriptionCheckService {
         }
         TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
         collectEpisodeFiles(site(), subscription.getSeason(), mountPath, 1, files, maxEpisodeBytes(subscription), true);
+        stripForeignEpisodeNoise(subscription, files);
         if (files.isEmpty()) {
             throw new IllegalStateException("资源无可识别的剧集文件:" + resource.getTitle());
+        }
+        if (episodeNumbersForeign(subscription, files.keySet())) {
+            // 同名异剧(真人版集数>动画版官方总集数):卸掉刚挂的分享再抛 —— 固定路径不能残留异剧文件,
+            // 否则换源失败兜底时段播放列表列的是异剧目录
+            try {
+                shareService.deleteShare(share.getId());
+            } catch (Exception e) {
+                log.warn("delete alien mount failed: {}", e.getMessage());
+            }
+            throw new IllegalStateException(foreignShowReason(subscription, files.lastKey(), resource.getTitle()));
+        }
+        if (episodeDurationForeign(metaRuntimeMinutes(subscription), files.values())) {
+            // 单集时长显著不符(真人版 45min vs 动画版 20min):同样卸载再抛,调用方分流退役
+            try {
+                shareService.deleteShare(share.getId());
+            } catch (Exception e) {
+                log.warn("delete alien mount failed: {}", e.getMessage());
+            }
+            throw new IllegalStateException(FOREIGN_SHOW_MARK + "(单集时长与官方不符):" + resource.getTitle());
         }
 
         subscription.setShareId(share.getId());
@@ -2487,6 +2715,7 @@ public class MediaSubscriptionCheckService {
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         collectEpisodeFiles(site(), subscription.getSeason(), subscription.getMountPath(), 1, result,
                 maxEpisodeBytes(subscription), true);
+        stripForeignEpisodeNoise(subscription, result);
         return result;
     }
 
@@ -2605,7 +2834,7 @@ public class MediaSubscriptionCheckService {
                 // 惩罚带目录上下文(标记常在季文件夹名上),兼容性差的版本被后来者替换
                 if (current == null || TextUtils.picturePenalty(path + "/" + file.getName())
                         < TextUtils.picturePenalty(current.dir() + "/" + current.name())) {
-                    result.put(episode, new EpisodeFile(episode, path, file.getName(), file.getSize()));
+                    result.put(episode, new EpisodeFile(episode, path, file.getName(), file.getSize(), file.getDuration()));
                 }
             }
         }
@@ -2618,7 +2847,8 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    public record EpisodeFile(int episode, String dir, String name, long size) {
+    /** @param duration 单集时长(秒,AList FsInfo;盘驱动不给时为 0,时长门禁跳过) */
+    public record EpisodeFile(int episode, String dir, String name, long size, long duration) {
     }
 
     private void walk(Site site, Integer season, String path, int depth, Set<Integer> episodes, long maxEpisodeBytes) {
@@ -2946,6 +3176,7 @@ public class MediaSubscriptionCheckService {
         MediaSubscriptionFilter filter = parseFilter(subscription);
         List<String> names = matchNames(subscription);
         Integer metaYear = metaYear(subscription);
+        List<String> genres = metaGenres(subscription);
         int irrelevant = 0;
         int offPool = 0;
         Set<String> allowedDrives = allowedCandidateDrives(subscription);
@@ -2975,6 +3206,10 @@ public class MediaSubscriptionCheckService {
             }
             if (!titleYearMatches(metaYear, names, title)) {
                 irrelevant++; // 标题标注年份与元数据年份全不符,且剧名仅子串嵌入(前缀异剧)
+                continue;
+            }
+            if (titleProgressForeign(subscription, title) || liveActionForeign(genres, title)) {
+                irrelevant++; // 宣称集数显著超出官方总集数(真人版全集包)/动画订阅的显式「真人版」资源
                 continue;
             }
             Integer titleSeason = parseTitleSeason(title);

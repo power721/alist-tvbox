@@ -1113,8 +1113,8 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.when(fixture.episodeSourceRepository.findByEpisodeIdAndResourceId(Mockito.anyInt(), Mockito.anyInt()))
                 .thenReturn(Optional.empty());
         TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
-        files.put(1, new MediaSubscriptionCheckService.EpisodeFile(1, "/追剧/1-测试剧", "第01集.mkv", 500L));
-        files.put(2, new MediaSubscriptionCheckService.EpisodeFile(2, "/追剧/1-测试剧", "第02集.mkv", 500L));
+        files.put(1, new MediaSubscriptionCheckService.EpisodeFile(1, "/追剧/1-测试剧", "第01集.mkv", 500L, 0L));
+        files.put(2, new MediaSubscriptionCheckService.EpisodeFile(2, "/追剧/1-测试剧", "第02集.mkv", 500L, 0L));
 
         fixture.service.syncInventory(fixture.subscription, primary, "/追剧/1-测试剧", files);
 
@@ -1146,8 +1146,8 @@ class MediaSubscriptionCheckServiceTest {
         staleFailed.setLastVerifiedTime(System.currentTimeMillis() - 8L * 24 * 3600_000);
         Mockito.when(fixture.episodeSourceRepository.findByResourceId(2)).thenReturn(List.of(freshFailed, staleFailed));
         TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
-        files.put(17, new MediaSubscriptionCheckService.EpisodeFile(17, "/追剧/1-测试剧", "第17集-new.mkv", 500L));
-        files.put(18, new MediaSubscriptionCheckService.EpisodeFile(18, "/追剧/1-测试剧", "第18集.mkv", 500L));
+        files.put(17, new MediaSubscriptionCheckService.EpisodeFile(17, "/追剧/1-测试剧", "第17集-new.mkv", 500L, 0L));
+        files.put(18, new MediaSubscriptionCheckService.EpisodeFile(18, "/追剧/1-测试剧", "第18集.mkv", 500L, 0L));
 
         fixture.service.syncInventory(fixture.subscription, primary, "/追剧/1-测试剧", files);
 
@@ -1820,6 +1820,453 @@ class MediaSubscriptionCheckServiceTest {
         alienNoMeta.setTitle("[英剧]悬案解码 第一季 Dept. Q Season 1 (2025)");
         fixture.subscription.setMetaProvider(null); // 未绑元数据:门禁关闭
         assertTrue(fixture.service.belongsToShow(fixture.subscription, alienNoMeta), "未绑元数据无从判定:放行");
+    }
+
+    // ---------- 集号范围门禁(2026-08-23):真人版《仙剑奇侠传三》37 集顶在动画版订阅(官方 26 集)上 ----------
+    // 标题「仙剑奇侠传三 2160P」无年份无类型词,标题/年份门禁全部放行 —— 真人版资源挂成主源后
+    // maxEpisode=37、误判 ENDED,补缺逻辑还去找 27-37 集。探测出的集号超出官方总集数是唯一可靠信号。
+
+    @Test
+    void episodeRangeGateForms() {
+        MediaSubscription subscription = new MediaSubscription();
+        assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 99)),
+                "官方总集数未知:门禁关闭(零误伤)");
+        assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, Set.of()),
+                "无集号无从判定:放行");
+        subscription.setOfficialTotal(26);
+        assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 26)),
+                "集号不超官方:放行");
+        // 本季已播完(26/26 且无下集排播):超出即拒 —— 播完的季不可能再冒新集号
+        subscription.setOfficialEpisodes(26);
+        assertTrue(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 27)),
+                "已播完+超 1 集:异剧(线上形态 26 官方 vs 真人版 37)");
+        assertTrue(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 37)));
+        // 未播完:+2 容差(TMDB 登记总集数滞后于实际排播),超出 3 拒
+        subscription.setOfficialEpisodes(20);
+        assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 28)),
+                "未播完+2 集容差:放行(排播滞后)");
+        assertTrue(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 29)),
+                "未播完+超容差:拒");
+        subscription.setNextAirTime(System.currentTimeMillis() + 3600_000);
+        assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 28)),
+                "有下集排播 = 未播完口径,容差内放行");
+    }
+
+    @Test
+    void probeShareRetiresForeignEpisodeRange() {
+        // 探测期拦截:37 集真人版资源(官方 26 已播完)临时挂载列出 1-37 → 就地退役(不拉黑)再抛
+        Fixture fixture = new Fixture();
+        fixture.subscription.setOfficialTotal(26);
+        fixture.subscription.setOfficialEpisodes(26);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(9);
+        resource.setSubscriptionId(1);
+        resource.setLink("https://pan.quark.cn/s/xianjian37");
+        resource.setTitle("仙剑奇侠传三 2160P");
+        resource.setType(5);
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Share temp = new Share();
+        temp.setId(77);
+        temp.setPath("/我的夸克分享/temp/quark@xianjian37@");
+        Share probe = new Share();
+        probe.setType(5);
+        probe.setShareId("xianjian37");
+        Mockito.when(fixture.shareService.parseShareLink("https://pan.quark.cn/s/xianjian37")).thenReturn(probe);
+        Mockito.when(fixture.shareRepository.findByTypeAndShareIdAndTempTrue(5, "xianjian37")).thenReturn(List.of(temp));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(s01EpisodeFiles(37)));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> fixture.service.probeShare(fixture.subscription, resource));
+
+        assertTrue(MediaSubscriptionCheckService.isForeignShowRejection(error.getMessage()),
+                "拒绝消息须含异剧标记,让换源调用方退役分流: " + error.getMessage());
+        assertEquals(MediaSubscriptionResource.STATE_RETIRED, resource.getState(), "异剧候选就地退役");
+        assertNotNull(resource.getCheckedTime(), "退役计时:冷却期满重探自愈(官方集数修正后可恢复)");
+        Mockito.verifyNoInteractions(fixture.deadLinkRepository); // 链接没死:不进跨订阅黑名单
+        Mockito.verify(fixture.shareService).deleteShare(77); // 临时挂载窗口用后即删
+    }
+
+    // ---------- 文件级噪声剔除(2026-08-23 深夜,线上 142 集)----------
+    // 正确的百度补缺资源目录里被分享者塞进《都市仙医》S01E142:parseEpisode 解析出 142 落库
+    // present=true,详情分集列表被撑到 1-142;且会让资源级门禁把这个主体正确的资源整体误杀。
+    // 剔除判据:超出官方总集数且与范围断裂(26→142 跳变)= 噪声;从 total+1 连续衔接的尾部
+    // (真人版 1-37 / TMDB 滞后真集)保留,交给资源级门禁判真伪。
+
+    @Test
+    void stripForeignEpisodeNoiseForms() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialTotal(26);
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = episodeFiles(1, 26);
+        files.put(142, episodeFile(142));
+        MediaSubscriptionCheckService.stripForeignEpisodeNoise(subscription, files);
+        assertEquals(episodeRange(1, 26), files.keySet(), "断裂跳号 142 剔除,主体 1-26 保留");
+
+        files = episodeFiles(1, 37);
+        MediaSubscriptionCheckService.stripForeignEpisodeNoise(subscription, files);
+        assertEquals(episodeRange(1, 37), files.keySet(), "衔接链尾部(27-37 连续)保留:由资源级门禁判真伪");
+
+        files = episodeFiles(1, 28);
+        files.put(142, episodeFile(142));
+        MediaSubscriptionCheckService.stripForeignEpisodeNoise(subscription, files);
+        assertEquals(episodeRange(1, 28), files.keySet(), "衔接(27/28)保留 + 断裂(142)剔除");
+
+        MediaSubscription noTotal = new MediaSubscription(); // 官方总集数未知
+        files = episodeFiles(1, 26);
+        files.put(142, episodeFile(142));
+        MediaSubscriptionCheckService.stripForeignEpisodeNoise(noTotal, files);
+        assertEquals(episodeRange(1, 26).size() + 1, files.size(), "官方总集数未知:不剔(零误伤)");
+    }
+
+    @Test
+    void probeShareKeepsCorrectResourceWithPoisonFile() {
+        // 毒文件不误杀:主体 1-26 正确 + 混入 S01E142 → 剔噪后资源干净通过门禁,142 不落行
+        Fixture fixture = new Fixture();
+        fixture.subscription.setOfficialTotal(26);
+        fixture.subscription.setOfficialEpisodes(26);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(9);
+        resource.setSubscriptionId(1);
+        resource.setLink("https://pan.baidu.com/s/anim26");
+        resource.setTitle("仙剑奇侠传叁/仙剑奇侠传三/仙剑奇侠传(2025)【更26集】【4K.臻彩MAX】");
+        resource.setType(10);
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Share temp = new Share();
+        temp.setId(77);
+        temp.setPath("/我的百度分享/temp/baidu@anim26@");
+        Share probe = new Share();
+        probe.setType(10);
+        probe.setShareId("anim26");
+        Mockito.when(fixture.shareService.parseShareLink("https://pan.baidu.com/s/anim26")).thenReturn(probe);
+        Mockito.when(fixture.shareRepository.findByTypeAndShareIdAndTempTrue(10, "anim26")).thenReturn(List.of(temp));
+        List<String> names = new ArrayList<>(List.of(s01EpisodeFiles(26)));
+        names.add("Immortal Doctor In Modern City S01E142 - 第 142 集 - 2160p WEB-DL H265 AAC.mp4");
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(names.toArray(new String[0])));
+        RowStore store = new RowStore();
+        store.install(fixture);
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) ->
+                new StreamProbeClient.ProbeResult(206, "video/mp4", new byte[]{0x1A, 0x45}));
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(rawUrlDetail());
+
+        fixture.service.probeShare(fixture.subscription, resource); // 不抛:资源通过门禁
+
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, resource.getState(), "主体正确的资源不因毒文件退役");
+        assertFalse(store.episodes.containsKey(142), "142 噪声集号不落 episode/集源行");
+        assertTrue(store.episodes.containsKey(26), "主体集号照常落行");
+        Mockito.verifyNoInteractions(fixture.deadLinkRepository);
+    }
+
+    // ---------- 元数据信号增强(2026-08-23,用户提议"集数/播出时间/单集长度/类型/演员应帮助判断匹配度")----------
+    // 可落地的三路:标题宣称集数(入池即拦,不等挂载探测)、单集时长(补集号门禁未播完容差盲区,
+    // 时长是内容属性不受码率影响)、版本词(动画订阅拒显式「真人版」)。年份已有门禁;演员
+    // 负向不可枚举(不知道对面剧的演员表)正向太罕见,不做。
+
+    @Test
+    void titleProgressForeignForms() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialTotal(26);
+        subscription.setOfficialEpisodes(26); // 26/26 已播完
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "仙剑奇侠传三 2160P"),
+                "标题不宣称集数:交探测层集号门禁");
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "仙剑奇侠传三 全26集"),
+                "宣称与官方一致:放行");
+        assertTrue(MediaSubscriptionCheckService.titleProgressForeign(subscription, "仙剑奇侠传三 全37集 4K"),
+                "已播完+宣称 37 > 官方 26:真人版全集包,入池即拒");
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "鬼灭之刃 全52集 合集 4K"),
+                "合集词在场:宣称的是跨季总数,交探测层季过滤");
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "鬼灭之刃 第1-3季 全52集"),
+                "季区间标记:多季合一包,跳过");
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "瑞克和莫蒂 第二季 全10集"),
+                "单季标记:订的是别的季,季过滤管,不在此拦");
+        // 未播完:+2 容差(TMDB 登记滞后),超出 3 拒
+        subscription.setOfficialEpisodes(20);
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "测试剧 更新至28集"),
+                "未播完容差内:放行");
+        assertTrue(MediaSubscriptionCheckService.titleProgressForeign(subscription, "测试剧 更新至30集"),
+                "未播完+超容差:拒");
+        MediaSubscription unknown = new MediaSubscription(); // 官方总集数未知
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(unknown, "随便 全999集"), "官方未知:门禁关闭");
+    }
+
+    @Test
+    void episodeDurationForeignForms() {
+        // 线上形态:真人版单集 45min(duration 2700s,夸克返回)vs 动画版官方 20min
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> liveAction = new TreeMap<>();
+        for (int i = 1; i <= 37; i++) {
+            liveAction.put(i, episodeFile(i, 2700));
+        }
+        assertTrue(MediaSubscriptionCheckService.episodeDurationForeign(20, liveAction.values()),
+                "时长 45min vs 官方 20min(差>50%):异剧");
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> anime = new TreeMap<>();
+        for (int i = 1; i <= 26; i++) {
+            anime.put(i, episodeFile(i, 1200));
+        }
+        assertFalse(MediaSubscriptionCheckService.episodeDurationForeign(20, anime.values()),
+                "时长 20min 与官方一致:放行");
+        anime.put(26, episodeFile(26, 2700)); // 单集加长(季终特番常见)
+        assertFalse(MediaSubscriptionCheckService.episodeDurationForeign(20, anime.values()),
+                "中位数抗单集异常:个别加长集不误判");
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> noDuration = new TreeMap<>();
+        for (int i = 1; i <= 26; i++) {
+            noDuration.put(i, episodeFile(i, 0)); // 百度形态:驱动不返回 duration
+        }
+        assertFalse(MediaSubscriptionCheckService.episodeDurationForeign(20, noDuration.values()),
+                "时长覆盖不足:门禁跳过零误伤");
+        assertFalse(MediaSubscriptionCheckService.episodeDurationForeign(null, liveAction.values()),
+                "元数据无单集时长:门禁关闭");
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> few = new TreeMap<>();
+        few.put(1, episodeFile(1, 2700));
+        few.put(2, episodeFile(2, 2700));
+        assertFalse(MediaSubscriptionCheckService.episodeDurationForeign(20, few.values()),
+                "文件少于 3 个(新剧首集/单集链接):样本太少不判");
+    }
+
+    @Test
+    void liveActionForeignForms() {
+        List<String> animationGenres = List.of("动画", "动作冒险");
+        assertTrue(MediaSubscriptionCheckService.liveActionForeign(animationGenres, "仙剑奇侠传三 真人版 全集 4K"),
+                "动画订阅 + 标题显式真人版:拒");
+        assertFalse(MediaSubscriptionCheckService.liveActionForeign(animationGenres, "仙剑奇侠传三 2160P"),
+                "无版本词:集数/时长门禁管");
+        assertFalse(MediaSubscriptionCheckService.liveActionForeign(List.of(), "仙剑奇侠传三 真人版"),
+                "genres 缺失(豆瓣订阅):无正向证据不判");
+        assertFalse(MediaSubscriptionCheckService.liveActionForeign(List.of("古装", "剧情"), "仙剑奇侠传三 真人版"),
+                "真人剧订阅遇真人版资源:单向门禁不拦反向");
+        assertTrue(MediaSubscriptionCheckService.liveActionForeign(List.of("动漫"), "测试剧【真人连续剧】高清"),
+                "「真人连续剧」词形与「动漫」genres 同样命中");
+    }
+
+    @Test
+    void probeShareRejectsLiveActionByDuration() {
+        // 探测期时长拦截:夸克真人版 37 文件 duration 2727s,官方单集 20min —— 集号门禁
+        // 的未播完容差盲区(1-28 集号合法)由时长信号补刀
+        Fixture fixture = new Fixture();
+        fixture.subscription.setOfficialTotal(30); // 未播完场景:官方 30,资源集号 1-37 恰在容差内?
+        // 容差口径:37-30=7 > 2 → 集号门禁已拒。改官方 34:34+2=36 < 37 仍拒;要让集号门禁放行
+        // 需 claimed ≤ total+2,这里只验时长路:officialTotal 置 40(集号门禁关),纯时长判
+        fixture.subscription.setOfficialTotal(40);
+        fixture.subscription.setMetaProvider("tmdb");
+        fixture.subscription.setMetaId("233295");
+        MetadataDetails details = new MetadataDetails();
+        details.setRuntimeMinutes(20);
+        Mockito.when(fixture.metadataService.details(Mockito.anyString(), Mockito.anyString(), Mockito.any()))
+                .thenReturn(details);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(9);
+        resource.setSubscriptionId(1);
+        resource.setLink("https://pan.quark.cn/s/live37");
+        resource.setTitle("仙剑奇侠传三 2160P");
+        resource.setType(5);
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Share temp = new Share();
+        temp.setId(77);
+        temp.setPath("/我的夸克分享/temp/quark@live37@");
+        Share probe = new Share();
+        probe.setType(5);
+        probe.setShareId("live37");
+        Mockito.when(fixture.shareService.parseShareLink("https://pan.quark.cn/s/live37")).thenReturn(probe);
+        Mockito.when(fixture.shareRepository.findByTypeAndShareIdAndTempTrue(5, "live37")).thenReturn(List.of(temp));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(filesWithDuration(2727, s01EpisodeFiles(37)));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> fixture.service.probeShare(fixture.subscription, resource));
+
+        assertTrue(MediaSubscriptionCheckService.isForeignShowRejection(error.getMessage()),
+                "时长拒绝消息须含异剧标记: " + error.getMessage());
+        assertEquals(MediaSubscriptionResource.STATE_RETIRED, resource.getState(), "就地退役冷却");
+        Mockito.verifyNoInteractions(fixture.deadLinkRepository); // 不拉黑
+    }
+
+    /** 构造带单集时长(秒)的目录响应:夸克等驱动返回 duration,百度等返回 0。 */
+    private static FsResponse filesWithDuration(long durationSeconds, String... names) {
+        FsResponse response = new FsResponse();
+        List<FsInfo> list = new ArrayList<>();
+        for (String name : names) {
+            FsInfo info = new FsInfo();
+            info.setName(name);
+            info.setType(0);
+            info.setSize(500L * 1024 * 1024);
+            info.setDuration((int) durationSeconds);
+            list.add(info);
+        }
+        response.setFiles(list);
+        return response;
+    }
+
+    @Test
+    void activateRejectsForeignEpisodeRangeAndCleansMount() {
+        // 换源挂载期拦截:门禁抛错前卸掉刚挂的分享,固定路径不能残留异剧目录
+        Fixture fixture = new Fixture();
+        fixture.subscription.setOfficialTotal(26);
+        fixture.subscription.setOfficialEpisodes(26);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(9);
+        resource.setSubscriptionId(1);
+        resource.setLink("https://pan.quark.cn/s/xianjian37");
+        resource.setTitle("仙剑奇侠传三 2160P");
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Share mounted = new Share();
+        mounted.setId(66);
+        Mockito.when(fixture.shareRepository.findByPath("/追剧/1-测试剧"))
+                .thenReturn(null)      // 无旧主源挂载
+                .thenReturn(mounted);  // 新分享挂上后
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(s01EpisodeFiles(37)));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> fixture.service.activate(fixture.subscription, resource));
+
+        assertTrue(MediaSubscriptionCheckService.isForeignShowRejection(error.getMessage()),
+                "拒绝消息须含异剧标记: " + error.getMessage());
+        Mockito.verify(fixture.shareService).deleteShare(66); // 刚挂的异剧分享就地下掉
+    }
+
+    @Test
+    void activateNextCandidateSkipsForeignAndMountsNext() {
+        // 异剧候选被拒退役不拉黑,同轮继续尝试下一个候选(正确 26 集资源接管主源)
+        Fixture fixture = new Fixture();
+        fixture.subscription.setOfficialTotal(26);
+        fixture.subscription.setOfficialEpisodes(26);
+        MediaSubscriptionResource foreign = new MediaSubscriptionResource();
+        foreign.setId(51);
+        foreign.setSubscriptionId(1);
+        foreign.setLink("https://pan.quark.cn/s/xianjian37");
+        foreign.setTitle("测试剧 2160P 全集");
+        foreign.setType(5);
+        foreign.setScore(120);
+        foreign.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource right = new MediaSubscriptionResource();
+        right.setId(52);
+        right.setSubscriptionId(1);
+        right.setLink("https://pan.baidu.com/s/anim26");
+        right.setTitle("测试剧 (2025) 4K 全26集");
+        right.setType(10);
+        right.setScore(100);
+        right.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(foreign, right));
+        Share firstMount = new Share();
+        firstMount.setId(66);
+        Share secondMount = new Share();
+        secondMount.setId(88);
+        Mockito.when(fixture.shareRepository.findByPath("/追剧/1-测试剧"))
+                .thenReturn(null).thenReturn(firstMount)   // 异剧:无旧挂载 → 挂上
+                .thenReturn(firstMount).thenReturn(secondMount); // 正确源:卸异剧残留 → 挂上
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(s01EpisodeFiles(37)))
+                .thenReturn(files(s01EpisodeFiles(26)));
+        RowStore store = new RowStore();
+        store.install(fixture);
+
+        assertTrue(fixture.service.activateNextCandidate(fixture.subscription), "异剧被跳过后正确候选挂上");
+
+        assertEquals(MediaSubscriptionResource.STATE_RETIRED, foreign.getState(), "异剧候选退役冷却");
+        assertNotNull(foreign.getCheckedTime());
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, right.getState(), "第二个候选接管主源");
+        Mockito.verifyNoInteractions(fixture.deadLinkRepository); // 异剧不拉黑:链接没死,真人版订阅可能正用着;
+    }
+
+    @Test
+    void belongsToShowFlagsEpisodeRangeOverflow() {
+        // 已挂资源归属复核:标题无年份(标题/年份门禁放行形态),集号超出官方总集数即判异剧
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("仙剑奇侠传三"); // 与资源同名:标题门禁放行,靠集号区分
+        fixture.subscription.setOfficialTotal(26);
+        fixture.subscription.setOfficialEpisodes(26);
+        MediaSubscriptionResource liveAction = new MediaSubscriptionResource();
+        liveAction.setId(51);
+        liveAction.setTitle("仙剑奇侠传三 2160P");
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(
+                        Mockito.eq(51), Mockito.anyCollection()))
+                .thenReturn(new ArrayList<>(episodeRange(1, 37)));
+        assertFalse(fixture.service.belongsToShow(fixture.subscription, liveAction),
+                "集号 1-37 > 官方 26:异剧(触发主源换源/线路卸载)");
+
+        MediaSubscriptionResource right = new MediaSubscriptionResource();
+        right.setId(52);
+        right.setTitle("仙剑奇侠传三 2160P");
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(
+                        Mockito.eq(52), Mockito.anyCollection()))
+                .thenReturn(new ArrayList<>(episodeRange(1, 26)));
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, right),
+                "集号在官方范围内:标题/年份门禁照旧放行");
+    }
+
+    @Test
+    void reopenEndedReopensWhenPrimaryIsAlien() {
+        // ENDED 自愈:真人版把集数撑到 37 反向堵死重开条件(官方 26 ≤ 本地 37),
+        // 主源集号超范围 = 误挂异剧 → 重开 ACTIVE 走完整巡检换源
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("仙剑奇侠传三");
+        fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        fixture.subscription.setOfficialTotal(26);
+        fixture.subscription.setOfficialEpisodes(26);
+        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(
+                        Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(new ArrayList<>(episodeRange(1, 37))); // 本地 37 集(含真人版行)
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(51);
+        primary.setTitle("仙剑奇侠传三 2160P");
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(primary));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(
+                        Mockito.eq(51), Mockito.anyCollection()))
+                .thenReturn(new ArrayList<>(episodeRange(1, 37)));
+
+        assertTrue(fixture.service.reopenEnded(fixture.subscription), "异剧污染的 ENDED 订阅须能重开");
+        assertEquals(MediaSubscription.STATUS_ACTIVE, fixture.subscription.getStatus());
+        ArgumentCaptor<MediaSubscriptionEvent> captor = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository).save(captor.capture());
+        assertEquals(MediaSubscriptionEvent.TYPE_RESUMED, captor.getValue().getType());
+
+        // 对照:主源正常(1-26 在官方范围)且官方集数未上调 → 保持 ENDED
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(
+                        Mockito.eq(51), Mockito.anyCollection()))
+                .thenReturn(new ArrayList<>(episodeRange(1, 26)));
+        fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        assertFalse(fixture.service.reopenEnded(fixture.subscription), "正常完结:不重开");
+    }
+
+    private static Set<Integer> episodeRange(int from, int to) {
+        Set<Integer> numbers = new TreeSet<>();
+        for (int i = from; i <= to; i++) {
+            numbers.add(i);
+        }
+        return numbers;
+    }
+
+    private static TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> episodeFiles(int from, int to) {
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
+        for (int i = from; i <= to; i++) {
+            files.put(i, episodeFile(i));
+        }
+        return files;
+    }
+
+    private static MediaSubscriptionCheckService.EpisodeFile episodeFile(int number) {
+        return new MediaSubscriptionCheckService.EpisodeFile(number, "", String.format("第%02d集.mkv", number), 1, 0);
+    }
+
+    private static MediaSubscriptionCheckService.EpisodeFile episodeFile(int number, long durationSeconds) {
+        return new MediaSubscriptionCheckService.EpisodeFile(number, "", String.format("第%02d集.mkv", number), 1,
+                durationSeconds);
+    }
+
+    private static String[] s01EpisodeFiles(int count) {
+        String[] names = new String[count];
+        for (int i = 0; i < count; i++) {
+            names[i] = String.format("测试剧.S01E%02d.4K.mkv", i + 1);
+        }
+        return names;
     }
 
     // ---------- 播放后前瞻验证:连播前提前发现死集并自动补源 ----------
