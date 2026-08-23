@@ -87,6 +87,8 @@ public class MediaSubscriptionCheckService {
     private static final Pattern NUMBER = Pattern.compile("(\\d{1,4})");
     /** 全局主网盘 Setting key(逗号分隔分享类型码;订阅级 main_drives 覆盖) */
     public static final String MSUB_MAIN_DRIVES = "msub_main_drives";
+    /** 全局扩展网盘 Setting key(逗号分隔分享类型码):主网盘以外允许入候选池的盘,未配置时候选仅收主网盘 */
+    public static final String MSUB_EXTENDED_DRIVES = "msub_extended_drives";
     /** 预告/花絮等非正片 */
     private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost)");
     /** 完结资源包形态:对追更中的订阅不会持续更新 */
@@ -990,15 +992,18 @@ public class MediaSubscriptionCheckService {
 
     /** 候选池统一视图(探测/补缺/主盘/线路/换源全走这里):非挂载候选按分数降序;
      * 附年份门禁 —— 标题明确标注其它年份的资源在这里就出局,同名/前缀异剧
-     * (「悬案」2026 vs「悬案解码 Dept. Q (2025)」)不再被逐个试挂。 */
+     * (「悬案」2026 vs「悬案解码 Dept. Q (2025)」)不再被逐个试挂;
+     * 附盘白名单 —— 配置了主/扩展网盘后,白名单以外盘的存量候选不再被探测/换源/补线。 */
     List<MediaSubscriptionResource> candidatesOrdered(MediaSubscription subscription) {
         long now = System.currentTimeMillis();
         Integer metaYear = metaYear(subscription);
         List<String> names = matchNames(subscription);
+        Set<String> allowedDrives = allowedCandidateDrives(subscription);
         return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
                 .filter(r -> !MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState()))
                 .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()) || isBadCooled(r, now))
                 .filter(r -> titleYearMatches(metaYear, names, r.getTitle()))
+                .filter(r -> driveAllowed(allowedDrives, r.getType() == null ? null : DriveId.toDrive(r.getType())))
                 .toList();
     }
 
@@ -1614,9 +1619,9 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 主网盘:订阅级 main_drives 覆盖 > 全局 Setting msub_main_drives(均为逗号分隔分享类型码,取前 2)。
-     * 巡检保证该盘完整剧集覆盖,播放列表固定出该盘线路。 */
+     * 巡检保证该盘完整剧集覆盖,播放列表固定出该盘线路。subscription 为 null 时只看全局(preview 无订阅上下文)。 */
     List<String> mainDrives(MediaSubscription subscription) {
-        String raw = subscription.getMainDrives();
+        String raw = subscription == null ? null : subscription.getMainDrives();
         if (StringUtils.isBlank(raw)) {
             raw = settingRepository.findById(MSUB_MAIN_DRIVES).map(s -> s.getValue()).orElse("");
         }
@@ -1632,6 +1637,36 @@ public class MediaSubscriptionCheckService {
                 .limit(2)
                 .map(DriveId::toDrive)
                 .toList();
+    }
+
+    /** 扩展网盘(全局 Setting msub_extended_drives,逗号分隔分享类型码):主网盘以外允许入候选池的盘。
+     * 未配置时候选只收主网盘 —— 不再自动收录 115 等其它盘的分享源,必须配置才进候选。 */
+    List<String> extendedDrives() {
+        String raw = settingRepository.findById(MSUB_EXTENDED_DRIVES).map(s -> s.getValue()).orElse("");
+        if (StringUtils.isBlank(raw)) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(StringUtils::isNotBlank)
+                .map(DriveId::toTypeOrNull)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .map(DriveId::toDrive)
+                .toList();
+    }
+
+    /** 候选盘白名单:主网盘 ∪ 扩展网盘。空 = 主/扩展均未配置,不限盘(兼容旧行为);
+     * 配置了主网盘后白名单以外的盘不再入池/探测/换源/补线 —— 默认只有主网盘的源。 */
+    Set<String> allowedCandidateDrives(MediaSubscription subscription) {
+        Set<String> allowed = new java.util.LinkedHashSet<>(mainDrives(subscription));
+        allowed.addAll(extendedDrives());
+        return allowed;
+    }
+
+    /** 候选盘白名单判定:白名单为空不限盘;配置后无 type 的旧资源(判不了盘)视为域外。 */
+    static boolean driveAllowed(Set<String> allowed, String drive) {
+        return allowed.isEmpty() || (drive != null && allowed.contains(drive));
     }
 
     /** 当前主源所在盘(主源资源行的分享类型;旧数据无 type 返回 null)。 */
@@ -2733,6 +2768,8 @@ public class MediaSubscriptionCheckService {
         List<String> names = matchNames(subscription);
         Integer metaYear = metaYear(subscription);
         int irrelevant = 0;
+        int offPool = 0;
+        Set<String> allowedDrives = allowedCandidateDrives(subscription);
         List<Scored> scored = new ArrayList<>();
         String activeLink = existing.stream()
                 .filter(r -> MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
@@ -2740,6 +2777,10 @@ public class MediaSubscriptionCheckService {
                 .map(MediaSubscriptionResource::getLink).findFirst().orElse(null);
         for (Message message : messages) {
             if (StringUtils.isBlank(message.getLink()) || !PAN_TYPES.contains(StringUtils.defaultString(message.getType()))) {
+                continue;
+            }
+            if (!driveAllowed(allowedDrives, driveKeyOf(message))) {
+                offPool++; // 白名单以外的盘:默认只有主网盘的源,扩展盘须显式配置
                 continue;
             }
             String title = StringUtils.defaultIfBlank(message.getName(), message.getLink());
@@ -2814,10 +2855,13 @@ public class MediaSubscriptionCheckService {
         }
         if (added > 0) {
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_POOL_FILLED,
-                    "候选池新增 " + added + " 个资源(" + keyword + (irrelevant > 0 ? ",过滤 " + irrelevant + " 条不相关结果" : "") + ")");
+                    "候选池新增 " + added + " 个资源(" + keyword + (irrelevant > 0 ? ",过滤 " + irrelevant + " 条不相关结果" : "")
+                            + (offPool > 0 ? ",拦 " + offPool + " 条非白名单盘" : "") + ")");
         } else if (force) {
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_POOL_FILLED,
-                    "搜索无新增候选(共 " + messages.size() + " 条结果" + (irrelevant > 0 ? ",过滤 " + irrelevant + " 条不相关结果" : "") + ")");
+                    "搜索无新增候选(共 " + messages.size() + " 条结果"
+                            + (irrelevant > 0 ? ",过滤 " + irrelevant + " 条不相关结果" : "")
+                            + (offPool > 0 ? ",拦 " + offPool + " 条非白名单盘" : "") + ")");
         }
     }
 
@@ -2896,7 +2940,8 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** dry-run 预览(§10.2):按关键词+偏好即时搜索,返回候选与打分明细,不落库。 */
+    /** dry-run 预览(§10.2):按关键词+偏好即时搜索,返回候选与打分明细,不落库。
+     * 盘白名单与 fillPool 同规(无订阅上下文,取全局主盘∪扩展盘),预览看到的即能入池的。 */
     public List<Map<String, Object>> preview(String keyword, Integer season, MediaSubscriptionFilter filter) {
         List<Message> messages;
         try {
@@ -2906,8 +2951,12 @@ public class MediaSubscriptionCheckService {
         }
         List<Map<String, Object>> result = new ArrayList<>();
         List<String> names = matchNames(keyword, keyword, null);
+        Set<String> allowedDrives = allowedCandidateDrives(null);
         for (Message message : messages) {
             if (StringUtils.isBlank(message.getLink()) || !PAN_TYPES.contains(StringUtils.defaultString(message.getType()))) {
+                continue;
+            }
+            if (!driveAllowed(allowedDrives, driveKeyOf(message))) {
                 continue;
             }
             String title = StringUtils.defaultIfBlank(message.getName(), message.getLink());

@@ -611,9 +611,7 @@ class MediaSubscriptionCheckServiceTest {
     void fillPoolBoostsMainDriveCandidates() {
         Fixture fixture = new Fixture();
         fixture.subscription.setName("苍兰诀");
-        Setting mainDrives = new Setting();
-        mainDrives.setName(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES);
-        mainDrives.setValue("5,10"); // 全局主网盘:夸克/百度
+        Setting mainDrives = setting(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES, "5,10"); // 全局主网盘:夸克/百度
         Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
                 .thenReturn(Optional.of(mainDrives));
         Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
@@ -627,14 +625,46 @@ class MediaSubscriptionCheckServiceTest {
         fixture.service.fillPool(fixture.subscription, true, null);
 
         ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
-        Mockito.verify(fixture.resourceRepository, Mockito.times(3)).save(captor.capture());
-        // 共同底分:近期+30 4K+25 归属+15 = 70;主网盘(夸克/百度)+15,百度另有免会员+17(含夸克易和谐加成),115 追更弱-10
+        Mockito.verify(fixture.resourceRepository, Mockito.times(2)).save(captor.capture());
+        // 共同底分:近期+30 4K+25 归属+15 = 70;主网盘(夸克/百度)+15,百度另有免会员+17(含夸克易和谐加成)
         int quark = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/q")).findFirst().orElseThrow().getScore();
         int baidu = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/b")).findFirst().orElseThrow().getScore();
-        int pan115 = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/x")).findFirst().orElseThrow().getScore();
         assertEquals(85, quark, "主网盘夸克 = 70 + 主网盘15");
         assertEquals(102, baidu, "主网盘百度 = 70 + 主网盘15 + 免会员17");
-        assertEquals(60, pan115, "非主网盘115 = 70 - 追更弱10(无主网盘加分)");
+        assertTrue(captor.getAllValues().stream().noneMatch(r -> r.getLink().endsWith("/x")),
+                "未配置扩展网盘:非主网盘 115 不入候选池(默认只有主网盘的源)");
+    }
+
+    @Test
+    void fillPoolAdmitsExtendedDrivesCandidates() {
+        // 扩展网盘:全局配置 msub_extended_drives 后,主网盘以外的盘才进候选池
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES, "5,10")));
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_EXTENDED_DRIVES))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_EXTENDED_DRIVES, "8")));
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/q", "苍兰诀 第01-08集 4K"),
+                        message("https://pan.baidu.com/s/b", "苍兰诀 第01-08集 4K", "10"),
+                        message("https://115.com/s/x", "苍兰诀 第01-08集 4K", "8")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository, Mockito.times(3)).save(captor.capture());
+        int pan115 = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/x")).findFirst().orElseThrow().getScore();
+        assertEquals(60, pan115, "扩展盘 115 = 70 - 追更弱10(无主网盘加分)");
+    }
+
+    private static Setting setting(String name, String value) {
+        Setting setting = new Setting();
+        setting.setName(name);
+        setting.setValue(value);
+        return setting;
     }
 
     @Test
@@ -758,6 +788,8 @@ class MediaSubscriptionCheckServiceTest {
         mainDrives.setValue("5,10"); // 主网盘:夸克/百度
         Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
                 .thenReturn(Optional.of(mainDrives));
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_EXTENDED_DRIVES))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_EXTENDED_DRIVES, "8"))); // 115 列为扩展盘
         // 10 条百度 + 10 条夸克(高分,足以占满全池) + 2 条 115(低分,旧实现永远进不来)
         List<Message> results = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
@@ -780,7 +812,7 @@ class MediaSubscriptionCheckServiceTest {
         long others = captor.getAllValues().stream().filter(r -> r.getType() == 8).count();
         assertEquals(3, baidu, "主网盘百度保底 3 席");
         assertEquals(3, quark, "主网盘夸克保底 3 席");
-        assertEquals(2, others, "非主网盘必须拿到席位(旧实现为 0 —— 备用盘永远进不了池)");
+        assertEquals(2, others, "扩展盘必须拿到席位(旧实现为 0 —— 备用盘永远进不了池)");
     }
 
     @Test
@@ -1529,6 +1561,49 @@ class MediaSubscriptionCheckServiceTest {
 
         assertEquals(List.of(32, 33, 34), candidates.stream().map(MediaSubscriptionResource::getId).toList(),
                 "前缀异剧(2025 悬案解码)被挡,年份相符/无年份/首季年代全系列包照常入列");
+    }
+
+    @Test
+    void candidatesOrderedFiltersOffPoolDrives() {
+        // 盘白名单:配置主网盘后,非主/扩展盘的存量候选不再被探测/换源/补线;未配置时不限盘
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES, "5")));
+        MediaSubscriptionResource quark = new MediaSubscriptionResource();
+        quark.setId(41);
+        quark.setSubscriptionId(1);
+        quark.setTitle("测试剧 4K 更新至10集");
+        quark.setType(5);
+        quark.setScore(100);
+        quark.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource pan115 = new MediaSubscriptionResource();
+        pan115.setId(42);
+        pan115.setSubscriptionId(1);
+        pan115.setTitle("测试剧 4K 全集");
+        pan115.setType(8);
+        pan115.setScore(95);
+        pan115.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource legacy = new MediaSubscriptionResource();
+        legacy.setId(43);
+        legacy.setSubscriptionId(1);
+        legacy.setTitle("测试剧 全集");
+        legacy.setType(null); // 旧数据无 type:判不了盘,白名单配置后视为域外
+        legacy.setScore(90);
+        legacy.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(quark, pan115, legacy));
+
+        assertEquals(List.of(41), fixture.service.candidatesOrdered(fixture.subscription).stream()
+                        .map(MediaSubscriptionResource::getId).toList(),
+                "主盘夸克保留,非白名单 115 与无 type 旧资源出局");
+
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
+                .thenReturn(Optional.empty());
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_EXTENDED_DRIVES))
+                .thenReturn(Optional.empty());
+        assertEquals(List.of(41, 42, 43), fixture.service.candidatesOrdered(fixture.subscription).stream()
+                        .map(MediaSubscriptionResource::getId).toList(),
+                "主/扩展均未配置:不限盘(兼容旧行为)");
     }
 
     @Test

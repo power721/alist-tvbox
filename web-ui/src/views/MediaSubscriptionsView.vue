@@ -478,6 +478,12 @@
           </el-select>
           <span class="sub-text">巡检保证主网盘剧集完整并固定播放线路;订阅可单独覆盖;分享挂载免登录,标注"已加账号"的盘更稳</span>
         </el-form-item>
+        <el-form-item label="扩展网盘">
+          <el-select v-model="notifyForm.extendedDrives" multiple clearable placeholder="留空时候选仅收主网盘" style="width: 100%">
+            <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
+          </el-select>
+          <span class="sub-text">主网盘以外允许进候选池的网盘;不配置则候选/补缺/分盘线路只有主网盘的源(主网盘也未配置时才不限盘)</span>
+        </el-form-item>
         <el-form-item label="Bot Token">
           <el-input v-model="notifyForm.botToken" placeholder="123456:ABC-...,留空关闭通知"/>
         </el-form-item>
@@ -814,6 +820,7 @@ const notifyForm = ref({
   episodeTitles: false,
   vipAccounts: [] as number[],
   mainDrives: [] as number[],
+  extendedDrives: [] as number[],
   panlianHost: '',
   panlianUsername: '',
   panlianPassword: '',
@@ -1390,6 +1397,8 @@ const openNotify = () => {
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
     notifyForm.value.mainDrives = (settings['msub_main_drives'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0).slice(0, 2)
+    notifyForm.value.extendedDrives = (settings['msub_extended_drives'] || '')
+        .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
     notifyForm.value.panlianHost = settings['panlian_host'] || ''
     notifyForm.value.panlianUsername = settings['panlian_username'] || ''
     notifyForm.value.panlianPassword = settings['panlian_password'] || ''
@@ -1419,6 +1428,10 @@ const saveNotify = () => {
     axios.post('/api/settings', {
       name: 'msub_main_drives',
       value: [...new Set(notifyForm.value.mainDrives)].slice(0, 2).join(','),
+    }),
+    axios.post('/api/settings', {
+      name: 'msub_extended_drives',
+      value: [...new Set(notifyForm.value.extendedDrives)].join(','),
     }),
     axios.post('/api/settings', {name: 'panlian_host', value: notifyForm.value.panlianHost.trim()}),
     axios.post('/api/settings', {name: 'panlian_username', value: notifyForm.value.panlianUsername.trim()}),
