@@ -33,6 +33,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -126,8 +127,10 @@ public class WanouSearchService {
     private final Map<String, DomainState> domainStates = new ConcurrentHashMap<>();
     private final AtomicLong monitorRefreshedAt = new AtomicLong(0);
     private final AtomicBoolean monitorRefreshing = new AtomicBoolean(false);
+    /** 站点池线程序号(线程名 wanou-search-N):11 站并发时日志可分辨线程 */
+    private static final AtomicInteger SEARCH_SEQ = new AtomicInteger();
     private final ExecutorService executor = Executors.newFixedThreadPool(SITES.size(), r -> {
-        Thread thread = new Thread(r, "wanou-search");
+        Thread thread = new Thread(r, "wanou-search-" + SEARCH_SEQ.incrementAndGet());
         thread.setDaemon(true);
         return thread;
     });

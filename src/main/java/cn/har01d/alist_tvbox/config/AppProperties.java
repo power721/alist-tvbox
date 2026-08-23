@@ -155,6 +155,8 @@ public class AppProperties {
         private int wanouMaxDetailPages = 3;
         /** 玩偶聚合:整源搜索总超时(秒) */
         private int wanouTimeoutSeconds = 45;
+        /** 订阅巡检并发度:到期订阅并发检查,多个订阅的搜索不再互相排队(源侧压力不放大,见 searchExecutor) */
+        private int checkConcurrency = 3;
     }
 
     public static Map<String, Map<String, Object>> copyLocalProxyConfig(Map<String, Map<String, Object>> source) {

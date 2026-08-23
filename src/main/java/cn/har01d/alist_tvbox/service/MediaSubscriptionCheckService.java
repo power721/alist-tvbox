@@ -63,6 +63,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -109,6 +110,8 @@ public class MediaSubscriptionCheckService {
     private static final Pattern MSUBEP_EPISODE = Pattern.compile("msubep-\\d+-(\\d{1,4})");
     /** 播放取链失败对资源的降分幅度:够把它挤到同类候选之后,又不至于一次失败就永久出局 */
     static final int PLAY_FAILURE_PENALTY = 20;
+    /** 搜索池线程序号(线程名 msub-search-N):五路共用名字时日志看不出并发交错,排查误判单线程 */
+    private static final AtomicInteger SEARCH_SEQ = new AtomicInteger();
     /** 集源行"可播"状态集(可用性派生口径) */
     private static final Set<String> LIVE_STATES = Set.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED);
     /**
@@ -178,14 +181,15 @@ public class MediaSubscriptionCheckService {
     private final Map<Integer, Integer> transientStreak = new ConcurrentHashMap<>();
     /** 字节级流探测客户端(默认 OkHttp 实现,单测注入桩) */
     private StreamProbeClient streamProbeClient = new StreamProbeClient.Default();
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = new Thread(r, "msub-check");
-        thread.setDaemon(true);
-        return thread;
-    });
+    /**
+     * 订阅巡检执行池:并发度可配(checkConcurrency,默认 3),到期订阅并发检查、手动触发的
+     * 检查/换源/刷新不再与定时 sweep 排同一条队。同订阅重入由 {@link #inFlight} 防护;
+     * 源侧压力不随并发订阅数放大 —— 搜索五路池(searchExecutor)与玩偶/TG 内部池全局共享,天然限流。
+     */
+    private final ExecutorService executor;
     /** 多源搜索并发池(TG 聚合 + 玩偶/盘链/观影/蜗牛 各一路):串行排队时总时长=各源之和(线上 37s),并发后=最慢一路 */
     private final ExecutorService searchExecutor = Executors.newFixedThreadPool(5, r -> {
-        Thread thread = new Thread(r, "msub-search");
+        Thread thread = new Thread(r, "msub-search-" + SEARCH_SEQ.incrementAndGet());
         thread.setDaemon(true);
         return thread;
     });
@@ -236,6 +240,13 @@ public class MediaSubscriptionCheckService {
         this.historyRepository = historyRepository;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
+        int threads = Math.max(1, appProperties.getSubscription().getCheckConcurrency());
+        AtomicInteger checkSeq = new AtomicInteger();
+        this.executor = Executors.newFixedThreadPool(threads, r -> {
+            Thread thread = new Thread(r, "msub-check-" + checkSeq.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 
     @PreDestroy
@@ -244,13 +255,13 @@ public class MediaSubscriptionCheckService {
         searchExecutor.shutdownNow();
     }
 
-    /** 每小时第 20 分钟扫描到期订阅(避开 :00/:30 分享校验高峰),jitter 后转单线程执行器串行处理。 */
+    /** 每小时第 20 分钟扫描到期订阅(避开 :00/:30 分享校验高峰),jitter 后逐个提交到并发执行池。 */
     @Scheduled(cron = "0 20 * * * *")
     public void sweep() {
         if (!appProperties.getSubscription().isEnabled()) {
             return;
         }
-        autoUpdateExecutor.scheduleWithJitter(() -> executor.submit(this::sweepDue));
+        autoUpdateExecutor.scheduleWithJitter(this::sweepDue);
     }
 
     /**
@@ -263,7 +274,7 @@ public class MediaSubscriptionCheckService {
         if (!appProperties.getSubscription().isEnabled()) {
             return;
         }
-        autoUpdateExecutor.scheduleWithJitter(() -> executor.submit(this::refreshAiringDue));
+        autoUpdateExecutor.scheduleWithJitter(this::refreshAiringDue);
     }
 
     void refreshAiringDue() {
@@ -286,12 +297,15 @@ public class MediaSubscriptionCheckService {
         }
         log.info("airing metadata refresh: {} subscriptions due (ttl {}h)", due.size(), ttl / 3600_000);
         for (MediaSubscription subscription : due) {
-            try {
-                refreshMetadata(subscription, ttl);
-                subscriptionRepository.save(subscription);
-            } catch (Exception e) {
-                log.warn("refresh airing metadata {} failed: {}", subscription.getId(), e.getMessage());
-            }
+            int id = subscription.getId();
+            executor.submit(() -> {
+                try {
+                    refreshMetadata(subscription, ttl);
+                    subscriptionRepository.save(subscription);
+                } catch (Exception e) {
+                    log.warn("refresh airing metadata {} failed: {}", id, e.getMessage());
+                }
+            });
         }
     }
 
@@ -308,13 +322,20 @@ public class MediaSubscriptionCheckService {
                 .getContent());
         log.info("media subscription sweep: {} due (limit {})", due.size(), limit);
         for (MediaSubscription subscription : due) {
-            try {
-                check(subscription.getId());
-            } catch (Exception e) {
-                log.warn("check subscription {} failed: {}", subscription.getId(), e.getMessage());
-            }
+            submitCheck(subscription.getId());
         }
         retryErrors();
+    }
+
+    /** 提交单订阅检查到并发池:任务彼此隔离,一个订阅失败只记日志不拖累其它。 */
+    private void submitCheck(int id) {
+        executor.submit(() -> {
+            try {
+                check(id);
+            } catch (Exception e) {
+                log.warn("check subscription {} failed: {}", id, e.getMessage());
+            }
+        });
     }
 
     /** ERROR 自愈(§10.6):每日自动重试一次;连续 7 天失败提示人工检查。 */
@@ -333,11 +354,7 @@ public class MediaSubscriptionCheckService {
                 addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "连续失败超过 7 天,请人工检查(关键词/源可用性)");
             }
             log.info("retry ERROR subscription {}", subscription.getId());
-            try {
-                check(subscription.getId());
-            } catch (Exception e) {
-                log.warn("retry subscription {} failed: {}", subscription.getId(), e.getMessage());
-            }
+            submitCheck(subscription.getId());
         }
     }
 
