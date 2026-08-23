@@ -372,6 +372,7 @@ public class MediaSubscriptionService {
         result.setList(list);
         result.setTotal(list.size());
         result.setLimit(list.size());
+        log.debug("list: {}", result);
         return result;
     }
 
@@ -444,6 +445,7 @@ public class MediaSubscriptionService {
             result.setTotal(1);
             result.setLimit(1);
         }
+        log.debug("media subscription result: {}", result);
         return result;
     }
 
