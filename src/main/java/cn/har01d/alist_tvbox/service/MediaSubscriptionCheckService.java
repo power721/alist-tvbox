@@ -181,6 +181,10 @@ public class MediaSubscriptionCheckService {
     private final ObjectMapper objectMapper;
 
     private final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
+    /** 已删除订阅的取消标记(delete() 卸载/删行前第一时间打上):订阅创建即触发首轮巡检,
+     * 搜索+挂载可达数分钟,期间删除若巡检不感知,会继续搜索、把已删剧的挂载重新建回 AList,
+     * 尾部对 detached 实体的 save 更会把无 @Version 的整行 INSERT 复活(线上 #40)。 */
+    private final Set<Integer> deleted = ConcurrentHashMap.newKeySet();
     /** 封面预热去重(订阅 id):列表接口发现快照缺失时后台补拉,同订阅不堆积重复任务 */
     private final Set<Integer> coverPrewarmInFlight = ConcurrentHashMap.newKeySet();
     /** 缺集补搜关键词轮次(0=整季,1+=单集),内存态即可 */
@@ -329,6 +333,9 @@ public class MediaSubscriptionCheckService {
                         return;
                     }
                     refreshMetadata(current, ttl);
+                    if (stopIfDeleted(id)) {
+                        return;
+                    }
                     subscriptionRepository.save(current);
                 } catch (Exception e) {
                     log.warn("refresh airing metadata {} failed: {}", id, e.getMessage());
@@ -468,6 +475,63 @@ public class MediaSubscriptionCheckService {
         return false;
     }
 
+    /** 订阅删除入口(delete() 在卸载/删行前调用):打取消标记并清内存态,进行中的巡检
+     * 在下一道阶段检查点({@link #stopIfDeleted})收工。 */
+    public void onDeleted(int subscriptionId) {
+        deleted.add(subscriptionId);
+        forget(subscriptionId, null);
+    }
+
+    /** 巡检中止检查点:订阅已删即回收本轮残留并返回 true,调用方立即收工(单次 set 查询,零 DB)。 */
+    boolean stopIfDeleted(int subscriptionId) {
+        if (!deleted.contains(subscriptionId)) {
+            return false;
+        }
+        cleanupDeleted(subscriptionId);
+        return true;
+    }
+
+    /**
+     * 删除竞态的残留回收:巡检在 delete() 清库后又写入的资源行/挂载 share(常驻非 temp,享受
+     * 清理豁免)/集源行/事件行无人再清,成为永久孤儿 —— 用户视角是已删的剧还顶在 AList 目录里。
+     * 幂等,无残留即空操作;标记不摘除(id 不复用,防御 cleanup 与 delete() 并发期间其它任务漏拦)。
+     */
+    void cleanupDeleted(int subscriptionId) {
+        List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscriptionId);
+        for (MediaSubscriptionResource resource : resources) {
+            if (resource.getShareId() != null) {
+                try {
+                    shareService.deleteShare(resource.getShareId());
+                } catch (Exception e) {
+                    log.warn("delete orphan share of removed subscription {} failed: {} {}",
+                            subscriptionId, resource.getShareId(), e.getMessage());
+                }
+            }
+        }
+        List<Integer> resourceIds = resources.stream().map(MediaSubscriptionResource::getId).toList();
+        if (!resourceIds.isEmpty()) {
+            episodeSourceRepository.deleteByResourceIdIn(resourceIds);
+        }
+        episodeRepository.deleteBySubscriptionId(subscriptionId);
+        if (!resources.isEmpty()) {
+            resourceRepository.deleteBySubscriptionId(subscriptionId);
+        }
+        eventRepository.deleteBySubscriptionId(subscriptionId);
+        forget(subscriptionId, resourceIds);
+        if (!resources.isEmpty()) {
+            log.info("media subscription {} removed during check: cleaned {} orphan resources",
+                    subscriptionId, resources.size());
+        }
+    }
+
+    /** 尾部落库门禁:订阅已删则回收残留并跳过 save —— 实体无 @Version,detached merge
+     * 对已删行会把整行 INSERT 复活。 */
+    private void saveUnlessDeleted(int id, MediaSubscription subscription) {
+        if (!stopIfDeleted(id)) {
+            subscriptionRepository.save(subscription);
+        }
+    }
+
     /** 订阅删除后清理全部内存态(限频/轮次/冷却 Map 按订阅/资源 id 键控,不清理即无界泄漏)。 */
     public void forget(int subscriptionId, List<Integer> resourceIds) {
         inFlight.remove(subscriptionId);
@@ -537,6 +601,7 @@ public class MediaSubscriptionCheckService {
                         return;
                     }
                     preheatAhead(subscription, playedEpisode);
+                    stopIfDeleted(subscriptionId); // 探测期间订阅被删:回收刚写的集源行,任务到此为止
                 } catch (Exception e) {
                     log.warn("preheat ahead for subscription {} failed: {}", subscriptionId, e.getMessage());
                 } finally {
@@ -610,9 +675,15 @@ public class MediaSubscriptionCheckService {
                     return;
                 }
                 activate(current, resource);
+                if (stopIfDeleted(id)) {
+                    return;
+                }
                 subscriptionRepository.save(current);
             } catch (Exception e) {
                 log.warn("activate resource {} failed: {}", resourceId, e.getMessage());
+                if (stopIfDeleted(id)) {
+                    return; // 订阅已删:不走退役路径(retireResource 会把资源行 INSERT 复活成孤儿)
+                }
                 MediaSubscription current = subscriptionRepository.findById(id).orElse(subscription);
                 if (isForeignShowRejection(e.getMessage())) {
                     retireAlienCandidate(current, resource); // 异剧不拉黑(链接没死,只是不属于本剧)
@@ -646,21 +717,25 @@ public class MediaSubscriptionCheckService {
             if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
                     && !reopenEnded(subscription) && !staleSeasonReopen(subscription)) {
                 subscription.setNextCheckTime(System.currentTimeMillis() + 24 * 3600_000L); // 每日复查一次
-                subscriptionRepository.save(subscription);
+                saveUnlessDeleted(id, subscription);
                 return;
             }
             doCheck(subscription);
-            subscriptionRepository.save(subscription);
+            saveUnlessDeleted(id, subscription);
         } catch (Exception e) {
-            log.warn("check subscription {} failed: {}", id, e.getMessage(), e);
             MediaSubscription failed = subscriptionRepository.findById(id).orElse(null);
-            if (failed != null) {
-                failed.setStatus(MediaSubscription.STATUS_ERROR);
-                failed.setUpdatedTime(System.currentTimeMillis());
-                addEvent(id, MediaSubscriptionEvent.TYPE_ERROR, "巡检失败:" + e.getMessage());
-                scheduleNext(failed);
-                subscriptionRepository.save(failed);
+            if (failed == null) {
+                // 删除与巡检并发的尾窗(尾部 save 撞上删行抛乐观锁):不是故障,回收本轮残留即收工
+                log.info("check subscription {} aborted: subscription deleted", id);
+                cleanupDeleted(id);
+                return;
             }
+            log.warn("check subscription {} failed: {}", id, e.getMessage(), e);
+            failed.setStatus(MediaSubscription.STATUS_ERROR);
+            failed.setUpdatedTime(System.currentTimeMillis());
+            addEvent(id, MediaSubscriptionEvent.TYPE_ERROR, "巡检失败:" + e.getMessage());
+            scheduleNext(failed);
+            saveUnlessDeleted(id, failed);
         } finally {
             inFlight.remove(id);
         }
@@ -723,6 +798,9 @@ public class MediaSubscriptionCheckService {
     }
 
     private void doCheck(MediaSubscription subscription) {
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
         subscription.setLastCheckTime(System.currentTimeMillis());
         purgeForeignSeasonResources(subscription);
         if (staleSeasonInventory(subscription)) {
@@ -748,6 +826,9 @@ public class MediaSubscriptionCheckService {
             }
         }
         refreshMetadata(subscription);
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
 
         if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
             ensureSource(subscription);
@@ -835,9 +916,15 @@ public class MediaSubscriptionCheckService {
                 return;
             }
         }
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
         syncInventory(subscription, primary, subscription.getMountPath(), files);
         refreshAuxMounts(subscription);
 
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
         Set<Integer> addedSoFar = liveEpisodeNumbers(subscription);
         addedSoFar.removeAll(previous);
         Set<Integer> brokenNew = preheatEpisodes(subscription, addedSoFar);
@@ -852,6 +939,9 @@ public class MediaSubscriptionCheckService {
         notifyNewEpisodes(subscription, addedSoFar.stream().filter(e -> !brokenNew.contains(e)).toList(), present.size());
 
         // 缺集检测:官方已播集数是权威触发源(§4.8);无官方数据回退期望集数/观测范围
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
         Set<Integer> missing = computeMissing(subscription, present);
         if (!missing.isEmpty()) {
             fillGaps(subscription, new TreeSet<>(missing));
@@ -872,14 +962,26 @@ public class MediaSubscriptionCheckService {
             }
             detectUpgrade(subscription, present);
         }
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
         sampleMounted(subscription);
         // 采样/传染判死可能刚把主源退役(挂载已删):同轮立即换源重挂固定路径 ——
         // 列目录失效路径(onInvalid)自带换源,判死路径原先没有,固定路径会空到下轮巡检(退避可达 24h),
         // TVBox 详情 404。放在 ensureMainDrives 之前,让新主源优先占住最佳候选并计入主盘覆盖。
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
         if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
             ensureSource(subscription);
         }
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
         ensureMainDrives(subscription, present);
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
         ensureDriveLines(subscription, present);
         scheduleNext(subscription);
     }
@@ -1024,6 +1126,9 @@ public class MediaSubscriptionCheckService {
                 }
                 current.setMetaSyncTime(System.currentTimeMillis());
                 applyMetadataSnapshot(current, details);
+                if (stopIfDeleted(id)) {
+                    return;
+                }
                 subscriptionRepository.save(current);
                 log.info("media subscription {} metadata refreshed by user", id);
             } catch (Exception e) {
@@ -1059,6 +1164,9 @@ public class MediaSubscriptionCheckService {
                 }
                 current.setMetaSyncTime(System.currentTimeMillis());
                 applyMetadataSnapshot(current, details);
+                if (stopIfDeleted(id)) {
+                    return;
+                }
                 subscriptionRepository.save(current);
 
                 int official = details.getAiredEpisodes() == null ? 0 : details.getAiredEpisodes();
@@ -2452,6 +2560,9 @@ public class MediaSubscriptionCheckService {
             try {
                 resyncPrimaryInventory(subscription);
                 ensureDriveLines(subscription, liveEpisodeNumbers(subscription));
+                if (stopIfDeleted(subscriptionId)) {
+                    return;
+                }
                 refreshEpisodeCounters(subscription);
             } catch (Exception e) {
                 log.warn("ensure drive lines for subscription {} failed: {}", subscriptionId, e.getMessage());

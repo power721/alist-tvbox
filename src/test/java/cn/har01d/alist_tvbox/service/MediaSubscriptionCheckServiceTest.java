@@ -2721,6 +2721,46 @@ class MediaSubscriptionCheckServiceTest {
         }
     }
 
+    // ---------- 删除与巡检并发(线上 #40):创建即触发首轮巡检,删除后必须中止 ----------
+    // 不复活订阅(实体无 @Version,detached save 会 INSERT 整行)、不再搜索挂载,
+    // 并回收本轮已写入的资源行/挂载 share(清理豁免的常驻挂载,不回收就永久顶在 AList 目录里)
+
+    @Test
+    void stopIfDeletedCleansOrphanResourcesAndMounts() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource mounted = new MediaSubscriptionResource();
+        mounted.setId(11);
+        mounted.setShareId(50);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(mounted));
+        fixture.service.onDeleted(1);
+        assertTrue(fixture.service.stopIfDeleted(1), "已删除订阅应命中中止");
+        Mockito.verify(fixture.shareService).deleteShare(50); // 本轮巡检挂的 share 随行回收
+        Mockito.verify(fixture.episodeSourceRepository).deleteByResourceIdIn(List.of(11));
+        Mockito.verify(fixture.episodeRepository).deleteBySubscriptionId(1);
+        Mockito.verify(fixture.resourceRepository).deleteBySubscriptionId(1);
+        Mockito.verify(fixture.eventRepository).deleteBySubscriptionId(1);
+    }
+
+    @Test
+    void stopIfDeletedKeepsSilentForLiveSubscription() {
+        Fixture fixture = new Fixture();
+        fixture.service.onDeleted(2); // 删的是别的订阅
+        assertFalse(fixture.service.stopIfDeleted(1), "存活订阅不触发清理");
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
+        Mockito.verify(fixture.resourceRepository, Mockito.never()).deleteBySubscriptionId(Mockito.anyInt());
+    }
+
+    @Test
+    void checkAbortsWhenSubscriptionDeletedMidFlight() {
+        Fixture fixture = new Fixture();
+        fixture.service.onDeleted(1); // check() 取到实体之后、doCheck 执行之前订阅被删
+        fixture.service.check(1);
+        Mockito.verify(fixture.subscriptionRepository, Mockito.never()).save(Mockito.any()); // 整行不复活
+        Mockito.verify(fixture.shareService, Mockito.never()).add(Mockito.any()); // 不再挂载
+        Mockito.verify(fixture.aListService, Mockito.never()).listFiles(Mockito.any(), Mockito.anyString(),
+                Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()); // 不再列目录搜索
+    }
+
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
         final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);

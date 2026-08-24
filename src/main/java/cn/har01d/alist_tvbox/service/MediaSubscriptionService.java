@@ -313,6 +313,9 @@ public class MediaSubscriptionService {
 
     public void delete(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
+        // 取消标记先行:创建即触发首轮巡检,进行中的搜索/挂载(可达数分钟)在下一道阶段检查点收工,
+        // 否则巡检会把已删剧的挂载重新建回 AList、尾部 save 把无 @Version 的订阅行 INSERT 复活
+        checkService.onDeleted(id);
         // 主源 + 所有补缺挂载都要删,否则 temp=false 且清理豁免的挂载会永久泄漏。
         // 不挂 @Transactional:远程卸载是 N 次 HTTP 往返,坐在事务里行锁横跨整个远程调用,
         // /batch 删除循环放大 —— 先逐个卸载(失败只记日志),行删除交给各 repository 自带事务
