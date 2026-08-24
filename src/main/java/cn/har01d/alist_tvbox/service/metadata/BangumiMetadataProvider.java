@@ -27,7 +27,9 @@ import cn.har01d.alist_tvbox.util.Constants;
 
 /**
  * Bangumi(api.bgm.tv 公开接口,免 key):番剧/动画集数与播出日程最准(§4.8)。
- * 章节 API 区分正片(type=0)与已播(status=0),下集播出时间取最近未播章节日期。
+ * 章节 API(/v0/episodes,注意不是 /v0/subjects/{id}/episodes —— 该路径 404,曾致线上分集全空
+ * 且误触熔断)区分正片(type=0),已播/日程按播出时刻(airdate 当日 20:00)判定(与 TMDB 同口径,
+ * v0 章节无 status 字段)。
  */
 @Slf4j
 @Component
@@ -41,13 +43,15 @@ public class BangumiMetadataProvider implements MetadataProvider {
     private final MetadataHealth health;
     private final RatingBridge ratingBridge;
     private final PlayScheduleBridge playScheduleBridge;
+    private final BilibiliScheduleRefiner biliScheduleRefiner;
 
     public BangumiMetadataProvider(MetadataHttp metadataHttp, MetadataHealth health, RatingBridge ratingBridge,
-                                   PlayScheduleBridge playScheduleBridge) {
+                                   PlayScheduleBridge playScheduleBridge, BilibiliScheduleRefiner biliScheduleRefiner) {
         this.restTemplate = metadataHttp.create();
         this.health = health;
         this.ratingBridge = ratingBridge;
         this.playScheduleBridge = playScheduleBridge;
+        this.biliScheduleRefiner = biliScheduleRefiner;
     }
     private final Cache<String, MetadataDetails> detailsCache = Caffeine.newBuilder()
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
@@ -156,70 +160,109 @@ public class BangumiMetadataProvider implements MetadataProvider {
             }
             details.setAliases(aliases);
 
-            JsonNode episodes = MAPPER.readTree(restTemplate.exchange(
-                    URI.create("https://api.bgm.tv/v0/subjects/" + id + "/episodes"), HttpMethod.GET,
-                    new HttpEntity<>(null, headers()), String.class).getBody());
-            if (episodes != null && episodes.isArray()) {
-                LocalDate today = LocalDate.now(ZONE);
-                int total = 0;
-                int aired = 0;
-                LocalDate nextAir = null;
-                List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
-                List<cn.har01d.alist_tvbox.dto.EpisodeInfo> episodeInfos = new ArrayList<>();
-                for (JsonNode episode : episodes) {
-                    if (episode.path("type").asInt(-1) != 0) {
-                        continue; // 非正片(SP/OP/ED/trailer)不计
-                    }
-                    total++;
-                    LocalDate airDate = localDate(episode.path("air_date").asText());
-                    // 分集详情(媒体详情页):标题/播出日期,bangumi 分集无简介/剧照
-                    cn.har01d.alist_tvbox.dto.EpisodeInfo info = new cn.har01d.alist_tvbox.dto.EpisodeInfo(
-                            episode.path("ep").asInt(0),
-                            firstNonBlank(episode.path("name_cn").asText(), episode.path("name").asText()),
-                            airDate == null ? null : airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
-                    episodeInfos.add(info);
-                    boolean airedEp = episode.path("status").asInt(-1) == 0;
-                    if (airedEp) {
-                        aired++;
-                    }
-                    if (airDate != null) {
-                        // 当日待播也参与 nextAir(与 TMDB 口径一致,20:00 约定时刻):严格未来日期会把
-                        // 当日 20:00 播的集漏掉,RETURNING 不触发、播出前休眠/短轮全被跳到下个播出日
-                        if (!airedEp && !airDate.isBefore(today) && (nextAir == null || airDate.isBefore(nextAir))) {
-                            nextAir = airDate;
-                        }
-                        // 昨日/今日档期仍进日程(时间轴「昨天/今天」用):状态已翻转的已播集、当日待播集都保留
-                        if (!airDate.isBefore(today.minusDays(1)) && upcoming.size() < 60) {
-                            upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(
-                                    episode.path("ep").asInt(0),
-                                    airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()));
-                        }
-                    }
-                }
-                details.setTotalEpisodes(total);
-                details.setAiredEpisodes(aired);
-                details.setUpcoming(upcoming);
-                details.setEpisodes(episodeInfos);
-                if (nextAir != null) {
-                    details.setNextAirTime(nextAir.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli());
-                    details.setStatus(MetadataDetails.STATUS_RETURNING);
-                } else {
-                    details.setStatus(total > 0 && aired >= total
-                            ? MetadataDetails.STATUS_ENDED : MetadataDetails.STATUS_UNKNOWN);
-                }
+            List<JsonNode> episodes = fetchEpisodePages(restTemplate, id);
+            if (!episodes.isEmpty()) {
+                applyEpisodes(details, episodes, System.currentTimeMillis());
             }
             health.record(NAME, true);
             if (ratingBridge != null) {
                 ratingBridge.enrich(details, 1); // 补豆瓣评分/外链(bangumi 无季概念,按单季过年份门禁)
             }
-            if (playScheduleBridge != null) {
-                playScheduleBridge.refine(details); // 豆瓣桥接带出播放源后校正爱优腾实际排播时刻
+            boolean biliClocked = false;
+            if (biliScheduleRefiner != null) {
+                // B站独播番剧实际更新时刻(如盗妖行 周二/四 9:00)校正默认 20:00,并登记 B站条目外链
+                biliClocked = biliScheduleRefiner.refine(details);
+            }
+            if (playScheduleBridge != null && !biliClocked) {
+                playScheduleBridge.refine(details); // 豆瓣桥接带出播放源后校正爱优腾实际排播时刻;B站已校正则让位
             }
         } catch (Exception e) {
             health.record(NAME, false);
             log.warn("bangumi details {} failed: {}", id, e.getMessage());
         }
         return details;
+    }
+
+    /**
+     * 章节 API 分页拉全(https://api.bgm.tv/v0/episodes,每页上限 100,防长篇翻 5 页封顶):
+     * 供本类与 {@link BangumiEpisodeBridge}(分集标题桥)共用。失败上抛,由调用方决定健康记录/静默。
+     */
+    static List<JsonNode> fetchEpisodePages(RestTemplate restTemplate, String subjectId) throws Exception {
+        List<JsonNode> result = new ArrayList<>();
+        for (int page = 0; page < 5; page++) {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    URI.create("https://api.bgm.tv/v0/episodes?subject_id=" + subjectId
+                            + "&limit=100&offset=" + (page * 100)),
+                    HttpMethod.GET, new HttpEntity<>(null, headers()), String.class);
+            JsonNode data = StringUtils.isBlank(response.getBody()) ? null
+                    : MAPPER.readTree(response.getBody()).path("data");
+            if (!data.isArray()) {
+                break;
+            }
+            data.forEach(result::add);
+            if (data.size() < 100) {
+                break;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 章节 → 总集数/已播/日程/分集详情。v0 章节无 status 字段,口径与
+     * {@link TmdbMetadataProvider#applySeasonEpisodes} 对齐:已播按播出时刻(airdate 当日 20:00)
+     * 判定 —— 当日待播集参与 nextAir(20:00 前刷新不漏当日集),昨日/今日已播仍进日程
+     * (时间轴「昨天/今天」分组);airdate 未登记的章节只进分集详情不进统计(total 计数保持与列表行数一致)。
+     */
+    static void applyEpisodes(MetadataDetails details, List<JsonNode> episodes, long now) {
+        LocalDate today = LocalDate.now(ZONE);
+        LocalDate windowFrom = today.minusDays(1);
+        int total = 0;
+        int aired = 0;
+        Long nextAir = null;
+        List<cn.har01d.alist_tvbox.dto.EpisodeAirDate> upcoming = new ArrayList<>();
+        List<cn.har01d.alist_tvbox.dto.EpisodeInfo> episodeInfos = new ArrayList<>();
+        for (JsonNode episode : episodes) {
+            if (episode.path("type").asInt(-1) != 0) {
+                continue; // 非正片(SP/OP/ED/trailer)不计
+            }
+            int number = episode.path("ep").asInt(0);
+            if (number <= 0) {
+                number = episode.path("sort").asInt(0); // 未编号章节以 sort 计
+            }
+            total++;
+            LocalDate airDate = localDate(episode.path("airdate").asText());
+            Long airMoment = airDate == null ? null
+                    : airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli();
+            // 分集详情(媒体详情页):标题/播出日期,bangumi 分集无简介/剧照
+            episodeInfos.add(new cn.har01d.alist_tvbox.dto.EpisodeInfo(
+                    number,
+                    firstNonBlank(episode.path("name_cn").asText(), episode.path("name").asText()),
+                    airMoment));
+            if (airMoment == null) {
+                continue;
+            }
+            if (airMoment <= now) {
+                aired++;
+                // 昨日/今日档期仍进日程(时间轴「昨天/今天」用),状态已翻转的已播集保留
+                if (!airDate.isBefore(windowFrom) && upcoming.size() < 60) {
+                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(number, airMoment));
+                }
+            } else {
+                if (nextAir == null || airMoment < nextAir) {
+                    nextAir = airMoment;
+                }
+                if (upcoming.size() < 60) {
+                    upcoming.add(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(number, airMoment));
+                }
+            }
+        }
+        details.setTotalEpisodes(total);
+        details.setAiredEpisodes(aired);
+        details.setUpcoming(upcoming);
+        details.setEpisodes(episodeInfos);
+        details.setNextAirTime(nextAir);
+        details.setStatus(nextAir != null ? MetadataDetails.STATUS_RETURNING
+                : (total > 0 && aired >= total ? MetadataDetails.STATUS_ENDED : MetadataDetails.STATUS_UNKNOWN));
     }
 
     private static String firstNonBlank(String a, String b) {

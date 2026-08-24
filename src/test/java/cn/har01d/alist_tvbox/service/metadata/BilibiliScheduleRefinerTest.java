@@ -75,9 +75,11 @@ class BilibiliScheduleRefinerTest {
                 details.getUpcoming().get(0).getAirTime(), "日程快照(upcoming)时刻同步校正");
         assertEquals(next.atTime(11, 0).atZone(ZONE).toInstant().toEpochMilli(),
                 details.getUpcoming().get(1).getAirTime());
+        assertEquals("ss28747", details.getExternalIds().get("bilibili"),
+                "定位到 ss 即登记 B站条目 id(详情页 links 展开 B站官方链接)");
     }
 
-    /** season 接口失败:静默保留 20:00 默认时刻,不炸详情链。 */
+    /** season 接口失败:静默保留 20:00 默认时刻,不炸详情链;B站条目 id 已登记不回滚。 */
     @Test
     void seasonFailureKeepsDefaultClock() {
         LocalDate today = LocalDate.now(ZONE);
@@ -92,6 +94,7 @@ class BilibiliScheduleRefinerTest {
                 details.getEpisodes().get(0).getAirTime(), "失败保留 20:00");
         assertEquals(today.plusDays(6).atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli(),
                 details.getNextAirTime());
+        assertEquals("ss28747", details.getExternalIds().get("bilibili"), "时刻取不到不影响条目外链登记");
     }
 
     /** 搜索卡标题非整词相等(番外/续作「星海飞驰篇」):不发 season 请求,时刻不动。 */
@@ -147,6 +150,7 @@ class BilibiliScheduleRefinerTest {
     private static MetadataDetails tmdbBridgedDetails(LocalDate today, LocalDate next) {
         MetadataDetails details = new MetadataDetails();
         details.setName("凡人修仙传");
+        details.setExternalIds(new java.util.LinkedHashMap<>(java.util.Map.of("tmdb", "9521")));
         details.setEpisodes(List.of(
                 new EpisodeInfo(186, "第 186 集", today.minusDays(1).atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli()),
                 new EpisodeInfo(189, "第 189 集", next.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli())));

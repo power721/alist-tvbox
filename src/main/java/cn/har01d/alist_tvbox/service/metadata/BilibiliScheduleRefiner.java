@@ -73,6 +73,8 @@ public class BilibiliScheduleRefiner {
 
     /**
      * 详情里有分集日程(TMDB 桥接产出)时,把播出时刻校正为 B站官方排播 HH:mm;未命中/失败静默跳过。
+     * 定位到 ss 号即把 bilibili 条目 id 登记进 externalIds(详情页 links 展开 B站官方链接 —— B站独播
+     * 剧此前三源外链都没有它),时刻取不到不影响登记。
      *
      * @return true = 已按 B站官方时刻校正(调用方应让随后的平台排播桥让位:B站独播番剧的
      *         爱优腾协力位常滞后跟进,平台桥此刻会覆盖掉更权威的 B站时刻)
@@ -87,6 +89,7 @@ public class BilibiliScheduleRefiner {
             if (ss == null) {
                 return false;
             }
+            recordSeasonId(details, ss);
             LocalTime clock = seasonClock(ss);
             if (clock == null) {
                 return false;
@@ -98,6 +101,16 @@ public class BilibiliScheduleRefiner {
             log.debug("bili schedule refine {} failed: {}", details.getName(), e.getMessage());
             return false;
         }
+    }
+
+    /** B站条目 id(「ss148433」形态)进 externalIds:MediaSubscriptionService.appendMetaLink 展开成播放页链接。 */
+    private static void recordSeasonId(MetadataDetails details, String ss) {
+        Map<String, String> ids = details.getExternalIds();
+        if (ids == null) {
+            ids = new LinkedHashMap<>();
+            details.setExternalIds(ids);
+        }
+        ids.putIfAbsent("bilibili", ss);
     }
 
     /** 搜索页 SSR 解析:media-card 块的 ss 链接 + 封面标题,与剧名(或剔季缀基名)归一化整词相等才收。 */

@@ -2050,7 +2050,7 @@ public class MediaSubscriptionService {
         return name + " 第" + subscription.getSeason() + "季";
     }
 
-    /** 条目页外链:豆瓣 subject / TMDB tv / Bangumi subject。 */
+    /** 条目页外链:豆瓣 subject / TMDB tv / Bangumi subject / B站番剧播放页(bilibili id 为「ss123」形态)。 */
     private static void appendMetaLink(Map<String, Object> links, String provider, String id) {
         if (StringUtils.isBlank(provider) || StringUtils.isBlank(id)) {
             return;
@@ -2059,6 +2059,7 @@ public class MediaSubscriptionService {
             case "douban" -> links.putIfAbsent("豆瓣", "https://movie.douban.com/subject/" + id + "/");
             case "tmdb" -> links.putIfAbsent("TMDB", "https://www.themoviedb.org/tv/" + id);
             case "bangumi" -> links.putIfAbsent("Bangumi", "https://bgm.tv/subject/" + id);
+            case "bilibili" -> links.putIfAbsent("B站", "https://www.bilibili.com/bangumi/play/" + id + "/");
             default -> {
             }
         }

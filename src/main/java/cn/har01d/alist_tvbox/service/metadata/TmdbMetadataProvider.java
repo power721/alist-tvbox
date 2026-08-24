@@ -42,14 +42,19 @@ public class TmdbMetadataProvider implements MetadataProvider {
     private final MetadataHealth health;
     private final RatingBridge ratingBridge;
     private final PlayScheduleBridge playScheduleBridge;
+    private final BilibiliScheduleRefiner biliScheduleRefiner;
+    private final BangumiEpisodeBridge bangumiEpisodeBridge;
 
     public TmdbMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp, MetadataHealth health,
-                                RatingBridge ratingBridge, PlayScheduleBridge playScheduleBridge) {
+                                RatingBridge ratingBridge, PlayScheduleBridge playScheduleBridge,
+                                BilibiliScheduleRefiner biliScheduleRefiner, BangumiEpisodeBridge bangumiEpisodeBridge) {
         this.settingRepository = settingRepository;
         this.health = health;
         this.restTemplate = metadataHttp.create();
         this.ratingBridge = ratingBridge;
         this.playScheduleBridge = playScheduleBridge;
+        this.biliScheduleRefiner = biliScheduleRefiner;
+        this.bangumiEpisodeBridge = bangumiEpisodeBridge;
     }
 
     @Override
@@ -293,8 +298,18 @@ public class TmdbMetadataProvider implements MetadataProvider {
             if (ratingBridge != null) {
                 ratingBridge.enrich(details, season); // 补豆瓣/Bangumi 评分与外链,失败自静默
             }
-            if (playScheduleBridge != null) {
-                playScheduleBridge.refine(details); // 豆瓣桥接带出播放源后校正爱优腾实际排播时刻
+            if (bangumiEpisodeBridge != null) {
+                // Bangumi 分集标题回填/补行(externalIds 已带 bangumi id):TMDB 中文标题「第 N 集」
+                // 占位或滞后缺失,补入行落在时刻校正之前同享 HH:mm 校正
+                bangumiEpisodeBridge.merge(details);
+            }
+            boolean biliClocked = false;
+            if (biliScheduleRefiner != null) {
+                // B站独播番剧实际更新时刻(如盗妖行 周二/四 9:00)校正默认 20:00,并登记 B站条目外链
+                biliClocked = biliScheduleRefiner.refine(details);
+            }
+            if (playScheduleBridge != null && !biliClocked) {
+                playScheduleBridge.refine(details); // 豆瓣桥接带出播放源后校正爱优腾实际排播时刻;B站已校正则让位(与豆瓣链同规)
             }
         } catch (Exception e) {
             health.record(NAME, false);
