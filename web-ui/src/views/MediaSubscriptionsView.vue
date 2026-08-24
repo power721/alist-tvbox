@@ -1820,7 +1820,7 @@ const formatClock = (time: number) => {
 }
 
 .detail-backdrop {
-  height: 400px;
+  aspect-ratio: 16 / 9; /* TMDB 背景图为 16:9,按宽度自适应高度完整展示(固定高度会上下裁图) */
   border-radius: 8px;
   overflow: hidden;
   background: var(--el-fill-color-dark);

@@ -20,11 +20,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 /**
  * 背景图高清轮播候选(详情页头部横幅,atv-player 同款口径):官方主图恒置顶,
- * 其余按投票/票数/分辨率加成、16:9 偏差惩罚排序取 8 张,全部 original 尺寸 ——
- * 旧实现只有主图且是 w780,详情页横幅糊且静态。
+ * 其余按投票/票数/分辨率加成、16:9 偏差惩罚排序取 8 张,全部 w1280 预生成尺寸 ——
+ * 旧实现只有主图且是 w780(糊);original 虽最清但动辄数 MB 走代理加载慢,w1280 对 ~1100px 横幅已超采样。
  */
 class TmdbMetadataProviderBackdropTest {
-    private static final String BASE = "https://media.themoviedb.org/t/p/original";
+    private static final String BASE = "https://media.themoviedb.org/t/p/w1280";
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
@@ -58,9 +58,9 @@ class TmdbMetadataProviderBackdropTest {
 
         MetadataDetails details = provider.details("9521", 1);
 
-        assertEquals(BASE + "/primary.jpg", details.getBackdrop(), "主图升级 original(旧口径 w780)");
+        assertEquals(BASE + "/primary.jpg", details.getBackdrop(), "主图升级 w1280(旧口径 w780)");
         assertEquals(List.of(BASE + "/primary.jpg", BASE + "/highvote.jpg", BASE + "/lowvote.jpg"),
-                details.getBackdrops(), "主图置顶,其余按投票分降序,全部 original");
+                details.getBackdrops(), "主图置顶,其余按投票分降序,全部 w1280");
     }
 
     @Test

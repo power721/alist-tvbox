@@ -1031,12 +1031,12 @@ public class MediaSubscriptionService {
         return "/images?url=" + java.net.URLEncoder.encode(cover, java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /** 存量元数据快照的 TMDB 背景图是 w780,展示侧升级 original 高清(纯 URL 改写,免刷新元数据)。 */
+    /** 存量元数据快照的 TMDB 背景图(或上一版已升的 original)统一改写 w1280:预生成尺寸文件小、加载快,零网络免刷新。 */
     static String upgradeBackdropUrl(String url) {
         if (url == null) {
             return null;
         }
-        return url.replace("/t/p/w780/", "/t/p/original/");
+        return url.replace("/t/p/w780/", "/t/p/w1280/").replace("/t/p/original/", "/t/p/w1280/");
     }
 
     /** 背景图轮播候选(去重、升级高清、走代理):backdrops 为主,主图兜底,单图订阅也得到单元素列表。 */

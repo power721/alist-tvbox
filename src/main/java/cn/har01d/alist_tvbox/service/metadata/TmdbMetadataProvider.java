@@ -428,8 +428,11 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return headers;
     }
 
-    /** TMDB 背景图床(原始尺寸,详情页头部横幅高清轮播)。 */
-    static final String BACKDROP_BASE = "https://media.themoviedb.org/t/p/original";
+    /**
+     * TMDB 背景图床:w1280(预生成最大尺寸,1280×16:9)。original(常见 1920/3840 宽)动辄数 MB
+     * 且走 web 端 /images 代理转发,详情横幅(抽屉 ~58% 视口宽)首屏加载明显拖慢;w1280 已超采样无清晰度损失。
+     */
+    static final String BACKDROP_BASE = "https://media.themoviedb.org/t/p/w1280";
 
     /**
      * 背景图候选(≤8 张,original 尺寸):官方主图恒置顶,其余按投票/票数/分辨率加成、

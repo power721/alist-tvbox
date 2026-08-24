@@ -281,7 +281,7 @@ class MediaSubscriptionFastDetailTest {
         subscription.setMetaProvider("tmdb");
         subscription.setMetaId("12345");
         MetadataDetails details = new MetadataDetails();
-        // 存量形态:主图还是 w780;轮播候选里主图重复出现 + 一张已是 original
+        // 存量形态:主图 w780;轮播候选里主图重复出现 + 一张已是 original(上一版升级产物,同样收敛到 w1280)
         details.setBackdrop("https://media.themoviedb.org/t/p/w780/primary.jpg");
         details.setBackdrops(List.of(
                 "https://media.themoviedb.org/t/p/w780/primary.jpg",
@@ -294,11 +294,11 @@ class MediaSubscriptionFastDetailTest {
 
         Map<String, Object> media = (Map<String, Object>) service.detail(1, 7).get("media");
 
-        assertEquals(proxied("https://media.themoviedb.org/t/p/original/primary.jpg"), media.get("backdrop"),
-                "存量 w780 主图免刷新升级 original");
-        assertEquals(List.of(proxied("https://media.themoviedb.org/t/p/original/primary.jpg"),
-                proxied("https://media.themoviedb.org/t/p/original/hero.jpg")), media.get("backdrops"),
-                "候选去重 + 升级高清 + 走代理");
+        assertEquals(proxied("https://media.themoviedb.org/t/p/w1280/primary.jpg"), media.get("backdrop"),
+                "存量 w780 主图免刷新收敛 w1280");
+        assertEquals(List.of(proxied("https://media.themoviedb.org/t/p/w1280/primary.jpg"),
+                proxied("https://media.themoviedb.org/t/p/w1280/hero.jpg")), media.get("backdrops"),
+                "候选去重 + 收敛 w1280 + 走代理");
     }
 
     @Test
@@ -316,14 +316,17 @@ class MediaSubscriptionFastDetailTest {
 
         Map<String, Object> media = (Map<String, Object>) service.detail(1, 7).get("media");
 
-        assertEquals(List.of(proxied("https://media.themoviedb.org/t/p/original/primary.jpg")),
+        assertEquals(List.of(proxied("https://media.themoviedb.org/t/p/w1280/primary.jpg")),
                 media.get("backdrops"), "无候选时主图兜底成单元素列表,前端轮播逻辑零分支");
     }
 
     @Test
     void upgradeBackdropUrlOnlyRewritesTmdbSizeSegment() {
-        assertEquals("https://media.themoviedb.org/t/p/original/a.jpg",
+        assertEquals("https://media.themoviedb.org/t/p/w1280/a.jpg",
                 MediaSubscriptionService.upgradeBackdropUrl("https://media.themoviedb.org/t/p/w780/a.jpg"));
+        assertEquals("https://media.themoviedb.org/t/p/w1280/a.jpg",
+                MediaSubscriptionService.upgradeBackdropUrl("https://media.themoviedb.org/t/p/original/a.jpg"),
+                "上一版已落库的 original 同样收敛 w1280");
         assertEquals("https://example.com/w780/a.jpg",
                 MediaSubscriptionService.upgradeBackdropUrl("https://example.com/w780/a.jpg"), "非 TMDB 图床不动");
         assertNull(MediaSubscriptionService.upgradeBackdropUrl(null));
