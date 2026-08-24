@@ -116,6 +116,14 @@ public class MediaSubscription {
     private Integer maxEpisode;
 
     /**
+     * 追平标记:用户<b>看到过最新播出集</b>(观看进度 >= 当时资源侧最新集)那一刻的最新集号,
+     * null=从未追平。TVBox 🆕 角标只对追平过的订阅显示 —— 追平后新播出的集才算"新",
+     * 落后补看途中不亮灯(与通知「差十集的人不为最新一集响铃」同哲学)。由角标读路径惰性维护。
+     */
+    @Column(name = "caught_up_episode")
+    private Integer caughtUpEpisode;
+
+    /**
      * 播出日程快照(JSON [{episode,airTime}]),provider 分集播出日期,昨日~+14 天窗口。
      * 分集实体(msub_episode)建行时从这里取播出时间;时间轴 UI 也直读此快照。
      */

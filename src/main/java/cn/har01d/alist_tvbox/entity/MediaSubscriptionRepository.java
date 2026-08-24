@@ -19,4 +19,11 @@ public interface MediaSubscriptionRepository extends JpaRepository<MediaSubscrip
     @Modifying
     @Query("update MediaSubscription s set s.coverUrl = :cover where s.id = :id")
     int updateCoverUrl(Integer id, String cover);
+
+    /** 追平标记只升不降(资源侧集数回落不回退标记):定向更新,避免读路径全实体 save 与巡检任务互相覆盖。 */
+    @Transactional
+    @Modifying
+    @Query("update MediaSubscription s set s.caughtUpEpisode = :episode where s.id = :id"
+            + " and (s.caughtUpEpisode is null or s.caughtUpEpisode < :episode)")
+    int markCaughtUp(Integer id, int episode);
 }

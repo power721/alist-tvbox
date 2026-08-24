@@ -24,7 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 第三段体验层:vod_remarks 的 🆕 新集角标(通知同门槛:验证过 + 未看)与集数页签的逐集资源矩阵。
+ * 第三段体验层:vod_remarks 的 🆕 新集角标(追平门槛:看到过最新播出集后,新播出且未看才亮)
+ * 与集数页签的逐集资源矩阵。
  */
 class MediaSubscriptionRemarksTest {
 
@@ -54,27 +55,106 @@ class MediaSubscriptionRemarksTest {
     // ---------- 🆕 角标 ----------
 
     @Test
-    void badgeMarksUnwatchedVerifiedEpisodes() {
+    void badgeCountsNewEpisodesAiredAfterCaughtUp() {
+        // 用户故事:追平(看到第18集=当时最新)→ 第19集新播出 → 🆕1
+        subscription.setCaughtUpEpisode(18);
         Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
-        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(17);
+        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(18);
         Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
-                .thenReturn(List.of(16, 17, 18, 19)); // 18/19 已验证未看
+                .thenReturn(List.of(17, 18, 19));
 
-        MovieList list = service.contentList(1);
-
-        assertEquals("🆕2 · 已更新至 18 集", list.getList().getFirst().getVod_remarks());
+        assertEquals("🆕1 · 已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
     }
 
     @Test
-    void badgeHiddenWhenUserCaughtUpOrNotStarted() {
+    void badgeHiddenWhileUserBehindBeforeEverCaughtUp() {
+        // 线上诛仙形态:在看第1集、盘上已有3集,从未追平 —— 落后补看途中不亮灯,也不登记追平标记
+        subscription.setCurrentEpisodes(3);
         Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(1);
         Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
-                .thenReturn(List.of(16, 17, 18));
-        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(18); // 已追平
+                .thenReturn(List.of(1, 2, 3));
+
+        assertEquals("已更新至 3 集", service.contentList(1).getList().getFirst().getVod_remarks());
+        Mockito.verify(subscriptionRepository, Mockito.never()).markCaughtUp(Mockito.anyInt(), Mockito.anyInt());
+    }
+
+    @Test
+    void caughtUpMarkerPersistedWhenWatchingReachesLatest() {
+        // 进度追上资源侧最新集:登记追平标记(定向 update + 实体就地同步),角标为空
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(18);
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(List.of(17, 18));
 
         assertEquals("已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
+        Mockito.verify(subscriptionRepository).markCaughtUp(7, 18);
+        assertEquals(18, subscription.getCaughtUpEpisode());
 
+        // 标记已登记且未更高:后续请求不重复写库
+        Mockito.clearInvocations(subscriptionRepository);
+        service.contentList(1);
+        Mockito.verify(subscriptionRepository, Mockito.never()).markCaughtUp(Mockito.anyInt(), Mockito.anyInt());
+    }
+
+    @Test
+    void caughtUpMarkerNeverDowngraded() {
+        // 资源侧集数回落(换源/补缺丢集)最新只剩17,标记停在18:只升不降,不回写
+        subscription.setCaughtUpEpisode(18);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(18);
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(List.of(17));
+
+        assertEquals("已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
+        Mockito.verify(subscriptionRepository, Mockito.never()).markCaughtUp(Mockito.anyInt(), Mockito.anyInt());
+    }
+
+    @Test
+    void badgeDedupesSameEpisodeAcrossResources() {
+        // 同集在多个资源上都有 LIVE 行(集源行按 集×资源 粒度):去重后按集号计数
+        subscription.setCaughtUpEpisode(18);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(18);
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(List.of(18, 19, 19, 19, 20));
+
+        assertEquals("🆕2 · 已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
+    @Test
+    void badgeCountsListedEpisodesAsAired() {
+        // 播出口径 = 资源侧可播(LISTED/VERIFIED 均算),不再等取链验证 —— 与详情列表能点到的集一致
+        subscription.setCaughtUpEpisode(17);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(17);
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7),
+                        Mockito.argThat(states -> states.contains(MediaSubscriptionEpisodeSource.STATE_LISTED))))
+                .thenReturn(List.of(17, 18));
+
+        assertEquals("🆕1 · 已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
+    @Test
+    void badgeClearedWhenUserCatchesUpAgain() {
+        // 追平过的订阅落后一集,看完(19=最新)后角标消除并抬升标记
+        subscription.setCaughtUpEpisode(18);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(19);
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(List.of(18, 19));
+
+        assertEquals("已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
+        Mockito.verify(subscriptionRepository).markCaughtUp(7, 19);
+    }
+
+    @Test
+    void badgeHiddenWhenUserNotStarted() {
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
         Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(0); // 还没开始看:角标无信息量
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(List.of(18));
+
         assertEquals("已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
     }
 
@@ -91,21 +171,6 @@ class MediaSubscriptionRemarksTest {
 
         assertEquals("已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks(),
                 "Setting msub_tvbox_badge=false 关闭角标");
-    }
-
-    @Test
-    void badgeOnlyCountsVerifiedNotListed() {
-        // LISTED(列得出没取过链)不算"新集可看" —— 角标与通知共用取链事实口径
-        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
-        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(17);
-        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7),
-                        Mockito.argThat(states -> states.contains(MediaSubscriptionEpisodeSource.STATE_VERIFIED))))
-                .thenReturn(List.of(17));
-        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7),
-                        Mockito.argThat(states -> states.contains(MediaSubscriptionEpisodeSource.STATE_LISTED))))
-                .thenReturn(List.of(18));
-
-        assertEquals("已更新至 18 集", service.contentList(1).getList().getFirst().getVod_remarks());
     }
 
     // ---------- 集数进度文案 ----------

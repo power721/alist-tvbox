@@ -52,7 +52,7 @@ class MsubSchemaContractTest {
                 "meta_provider", "meta_id", "official_episodes", "official_total", "official_status",
                 "next_air_time", "meta_sync_time", "cover_url", "aliases", "main_drives", "filter_config", "mode",
                 "account_id", "account_ids", "mount_path", "share_id", "expected_episodes",
-                "current_episodes", "max_episode", "schedule", "cross_drive", "status", "stall_count",
+                "current_episodes", "max_episode", "caught_up_episode", "schedule", "cross_drive", "status", "stall_count",
                 "check_interval_hours", "next_check_time", "last_check_time", "created_time", "updated_time");
         // MediaSubscriptionResource:validity/active/gap/episode_list 已 drop,state 新增
         assertColumns("media_subscription_resource", "id", "subscription_id", "link", "type", "source",

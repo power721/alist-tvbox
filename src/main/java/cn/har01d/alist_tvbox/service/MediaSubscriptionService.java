@@ -59,6 +59,9 @@ public class MediaSubscriptionService {
     public static final String VOD_ID_PREFIX = "msub:";
     /** TVBox 分集标题美化开关(Setting,默认关):剧集列表显示「集数. 分集标题(大小)」替代文件名 */
     public static final String SETTING_EPISODE_TITLES = "msub_episode_titles";
+    /** 资源侧"可播集"状态口径:列目录见过(LISTED)或取链成功过(VERIFIED)的集源行 —— 详情装配与角标同源。 */
+    private static final Set<String> LIVE_EPISODE_STATES = Set.of(
+            MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED);
 
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionResourceRepository resourceRepository;
@@ -489,7 +492,7 @@ public class MediaSubscriptionService {
                 log.debug("load transfer targets for subscription {} failed: {}", id, e.getMessage());
             }
         }
-        Set<String> live = Set.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED);
+        Set<String> live = LIVE_EPISODE_STATES;
         Map<Integer, MediaSubscriptionResource> mounted = new LinkedHashMap<>();
         for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(id)) {
             if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
@@ -1438,7 +1441,7 @@ public class MediaSubscriptionService {
         }
         boolean primarySeen = false;
         Map<Integer, List<Integer>> deadByEpisode = new java.util.TreeMap<>();
-        Set<String> live = Set.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED);
+        Set<String> live = LIVE_EPISODE_STATES;
         for (Object[] pair : episodeSourceRepository.findNumberAndSource(id)) {
             Integer number = (Integer) pair[0];
             MediaSubscriptionEpisodeSource row = (MediaSubscriptionEpisodeSource) pair[1];
@@ -2113,9 +2116,12 @@ public class MediaSubscriptionService {
 
     /**
      * TVBox 新集角标(Setting {@code msub_tvbox_badge},默认开;配 false 关闭):
-     * 存在<b>取链验证通过且未观看</b>的集时返回 "🆕N"。条件对齐通知门槛(验证过 + 用户在追),
+     * 只对<b>追平过</b>的订阅显示 —— 观看进度追上资源侧最新集(看到最新播出集)时,把当时的
+     * 最新集号登记为追平标记({@code caught_up_episode},读路径惰性维护,只升不降);此后
+     * 新播出且未看的集计 "🆕N"(LISTED/VERIFIED 都算已播出;按集号去重,同集多资源行只计一次)。
+     * 落后补看途中不亮灯 —— 还差几集没看的人不需要为最新一集亮一次(与通知门槛同哲学);
      * 该集被播放后 watchedEpisode 追上,角标自动消除 —— vod_remarks 是 TVBox 协议里唯一
-     * 保证被渲染的文本位,通知与角标共用同一个数据口径。
+     * 保证被渲染的文本位。
      */
     private String newEpisodeBadge(MediaSubscription subscription) {
         if ("false".equals(settingRepository.findById("msub_tvbox_badge").map(s -> s.getValue()).orElse(""))) {
@@ -2126,11 +2132,24 @@ public class MediaSubscriptionService {
             if (watched <= 0) {
                 return null; // 还没开始看:整部剧都是"新",角标没有信息量
             }
-            long unwatchedVerified = episodeSourceRepository
-                    .findNumbersBySubscriptionAndStatesIn(subscription.getId(),
-                            Set.of(MediaSubscriptionEpisodeSource.STATE_VERIFIED))
-                    .stream().filter(number -> number > watched).count();
-            return unwatchedVerified > 0 ? "🆕" + unwatchedVerified : null;
+            List<Integer> live = episodeSourceRepository
+                    .findNumbersBySubscriptionAndStatesIn(subscription.getId(), LIVE_EPISODE_STATES);
+            int latest = live.stream().max(Integer::compareTo).orElse(0);
+            if (latest <= 0) {
+                return null; // 还没有任何可播集
+            }
+            if (watched >= latest) {
+                if (subscription.getCaughtUpEpisode() == null || subscription.getCaughtUpEpisode() < latest) {
+                    subscriptionRepository.markCaughtUp(subscription.getId(), latest);
+                    subscription.setCaughtUpEpisode(latest); // 就地同步,同请求内不重复写库
+                }
+                return null; // 追平(或领先):没有比已看更新的集
+            }
+            if (subscription.getCaughtUpEpisode() == null) {
+                return null; // 从未追平:落后补看途中不出角标,追平后新播出的集才算"新"
+            }
+            long unwatchedNew = live.stream().filter(number -> number > watched).distinct().count();
+            return unwatchedNew > 0 ? "🆕" + unwatchedNew : null;
         } catch (Exception e) {
             log.debug("new episode badge failed: {}", e.getMessage());
             return null;
@@ -2225,7 +2244,7 @@ public class MediaSubscriptionService {
         }
         // 本地已有集来自集源行聚合(LIVE 并集);无行(首轮巡检前)按 currentEpisodes 计
         Set<Integer> present = episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(subscription.getId(),
-                Set.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED))
+                LIVE_EPISODE_STATES)
                 .stream().collect(java.util.stream.Collectors.toSet());
         if (present.isEmpty() && subscription.getCurrentEpisodes() != null) {
             for (int i = 1; i <= subscription.getCurrentEpisodes(); i++) {
