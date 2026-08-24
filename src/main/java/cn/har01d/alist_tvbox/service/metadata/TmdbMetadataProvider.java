@@ -153,7 +153,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
         details.setId(id);
         try {
             JsonNode tv = get("https://api.themoviedb.org/3/tv/" + id
-                    + "?api_key=" + apiKey() + "&language=zh-CN");
+                    + "?api_key=" + apiKey() + "&language=zh-CN&append_to_response=images");
             if (tv == null) {
                 return details;
             }
@@ -202,7 +202,15 @@ public class TmdbMetadataProvider implements MetadataProvider {
             }
             String backdrop = tv.path("backdrop_path").asText("");
             if (StringUtils.isNotBlank(backdrop)) {
-                details.setBackdrop("https://media.themoviedb.org/t/p/w780" + backdrop);
+                details.setBackdrop(BACKDROP_BASE + backdrop);
+            }
+            // 高清背景图候选(详情页轮播):append_to_response=images 随详情一次带回,零额外请求
+            List<String> backdrops = bestBackdropUrls(tv);
+            if (!backdrops.isEmpty()) {
+                details.setBackdrops(backdrops);
+                if (StringUtils.isBlank(details.getBackdrop())) {
+                    details.setBackdrop(backdrops.get(0)); // 官方主图缺失时取最佳候选兜底
+                }
             }
             String poster = tv.path("poster_path").asText("");
             if (StringUtils.isNotBlank(poster)) {
@@ -418,6 +426,48 @@ public class TmdbMetadataProvider implements MetadataProvider {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.ACCEPT, "application/json");
         return headers;
+    }
+
+    /** TMDB 背景图床(原始尺寸,详情页头部横幅高清轮播)。 */
+    static final String BACKDROP_BASE = "https://media.themoviedb.org/t/p/original";
+
+    /**
+     * 背景图候选(≤8 张,original 尺寸):官方主图恒置顶,其余按投票/票数/分辨率加成、
+     * 16:9 偏差惩罚打分排序(atv-player 同款公式)。images 未随详情带回或为空时只含主图。
+     */
+    static List<String> bestBackdropUrls(JsonNode tv) {
+        java.util.LinkedHashSet<String> paths = new java.util.LinkedHashSet<>();
+        String primary = tv.path("backdrop_path").asText("").trim();
+        if (StringUtils.isNotBlank(primary)) {
+            paths.add(primary);
+        }
+        List<JsonNode> candidates = new ArrayList<>();
+        JsonNode backdrops = tv.path("images").path("backdrops");
+        if (backdrops.isArray()) {
+            for (JsonNode img : backdrops) {
+                if (StringUtils.isNotBlank(img.path("file_path").asText(""))) {
+                    candidates.add(img);
+                }
+            }
+        }
+        candidates.sort(java.util.Comparator.comparingDouble(TmdbMetadataProvider::backdropScore).reversed());
+        for (JsonNode img : candidates) {
+            if (paths.size() >= 8) {
+                break;
+            }
+            paths.add(img.path("file_path").asText("").trim());
+        }
+        return paths.stream().map(path -> BACKDROP_BASE + path).toList();
+    }
+
+    /** 投票优先,票数(封顶 1000)与宽度(封顶 4K)小幅加成,宽高比偏离 16:9 重罚。 */
+    private static double backdropScore(JsonNode img) {
+        double vote = img.path("vote_average").asDouble(0);
+        double count = Math.min(img.path("vote_count").asDouble(0), 1000);
+        double width = Math.min(img.path("width").asDouble(0), 3840);
+        double height = img.path("height").asDouble(0);
+        double ratio = width > 0 && height > 0 ? width / height : 16.0 / 9;
+        return vote * 1000 + count * 2 + width / 20 - Math.abs(ratio - 16.0 / 9) * 140;
     }
 
     private static String firstNonBlank(String a, String b) {

@@ -338,10 +338,13 @@
           <span v-if="!current?.metaProvider" class="sub-text">未绑定元数据条目,刷新不可用</span>
         </div>
         <div v-if="detailData" class="detail-hero">
-          <div v-if="detailData.media.backdrop" class="detail-backdrop">
-            <el-image :src="detailData.media.backdrop" fit="cover" class="detail-backdrop-img">
-              <template #error><div class="detail-backdrop"></div></template>
-            </el-image>
+          <div v-if="backdropSources.length" class="detail-backdrop">
+            <div v-for="(url, i) in backdropSources" :key="url" class="detail-backdrop-layer"
+                 :class="{ active: i === backdropIndex }">
+              <el-image :src="url" fit="cover" class="detail-backdrop-img">
+                <template #error><div class="detail-backdrop"></div></template>
+              </el-image>
+            </div>
           </div>
           <div class="detail-head">
             <el-image :src="detailData.media.cover" fit="cover" class="detail-poster">
@@ -599,7 +602,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import axios from 'axios'
 import {ElMessage, ElMessageBox} from 'element-plus'
@@ -700,6 +703,7 @@ interface MediaDetailData {
     year?: string
     cover?: string
     backdrop?: string | null
+    backdrops?: string[] | null
     status?: string
     totalSeasons?: number
     runtimeMinutes?: number
@@ -825,6 +829,26 @@ const events = ref<EventDto[]>([])
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detailData = ref<MediaDetailData | null>(null)
+// 背景图轮播(atv-player 同款节奏):候选 = backdrops 列表 + 主图兜底去重,后端已升级 original 高清
+const backdropIndex = ref(0)
+let backdropTimer: number | undefined
+const backdropSources = computed(() => {
+  const media = detailData.value?.media
+  if (!media) return []
+  const urls = [...(media.backdrops || []), ...(media.backdrop ? [media.backdrop] : [])]
+  return [...new Set(urls)].filter(Boolean)
+})
+watch([detailVisible, backdropSources], ([visible, sources]) => {
+  window.clearInterval(backdropTimer)
+  backdropIndex.value = 0
+  if (visible && sources.length > 1) {
+    sources.slice(1).forEach(url => { const img = new Image(); img.src = url }) // 预加载后续帧,切换不闪白
+    backdropTimer = window.setInterval(() => {
+      backdropIndex.value = (backdropIndex.value + 1) % sources.length
+    }, 4500)
+  }
+})
+onBeforeUnmount(() => window.clearInterval(backdropTimer))
 const current = ref<SubscriptionDto | null>(null)
 // 元数据总季数已知且当前季已是最后一季 → 不可能有下一季,隐藏按钮(三集迷你剧完结后曾对 1 季条目展示死按钮);
 // 总季数未知(无元数据/未拉到)保留入口,点击后后端 next-season 接口会再探测
@@ -1796,10 +1820,23 @@ const formatClock = (time: number) => {
 }
 
 .detail-backdrop {
-  height: 350px;
+  height: 400px;
   border-radius: 8px;
   overflow: hidden;
   background: var(--el-fill-color-dark);
+  position: relative;
+}
+
+/* 多图轮播:候选层叠,淡入淡出切换 */
+.detail-backdrop-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.detail-backdrop-layer.active {
+  opacity: 1;
 }
 
 .detail-backdrop-img {

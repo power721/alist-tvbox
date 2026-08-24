@@ -1031,6 +1031,27 @@ public class MediaSubscriptionService {
         return "/images?url=" + java.net.URLEncoder.encode(cover, java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    /** 存量元数据快照的 TMDB 背景图是 w780,展示侧升级 original 高清(纯 URL 改写,免刷新元数据)。 */
+    static String upgradeBackdropUrl(String url) {
+        if (url == null) {
+            return null;
+        }
+        return url.replace("/t/p/w780/", "/t/p/original/");
+    }
+
+    /** 背景图轮播候选(去重、升级高清、走代理):backdrops 为主,主图兜底,单图订阅也得到单元素列表。 */
+    private List<String> proxiedBackdrops(MetadataDetails details) {
+        java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
+        if (details.getBackdrops() != null) {
+            details.getBackdrops().stream().filter(StringUtils::isNotBlank).forEach(urls::add);
+        }
+        if (StringUtils.isNotBlank(details.getBackdrop())) {
+            urls.add(details.getBackdrop());
+        }
+        return urls.stream().map(MediaSubscriptionService::upgradeBackdropUrl)
+                .filter(StringUtils::isNotBlank).map(this::proxiedCover).toList();
+    }
+
     /**
      * 播放逻辑集 msubep-{订阅}-{集}:实时选源并回退(转存>VERIFIED>LISTED),用户无感知。
      * 资源侧候选走集源行索引直查(rel_path + mount_path 一次取链),不再逐挂载点递归列目录 ——
@@ -1537,7 +1558,8 @@ public class MediaSubscriptionService {
             media.put("originalName", details.getOriginalName());
             media.put("year", details.getYear());
             media.put("cover", proxiedCover(details.getCover()));
-            media.put("backdrop", proxiedCover(details.getBackdrop()));
+            media.put("backdrop", proxiedCover(upgradeBackdropUrl(details.getBackdrop())));
+            media.put("backdrops", proxiedBackdrops(details));
             media.put("status", details.getStatus());
             media.put("totalSeasons", details.getTotalSeasons());
             media.put("runtimeMinutes", details.getRuntimeMinutes());

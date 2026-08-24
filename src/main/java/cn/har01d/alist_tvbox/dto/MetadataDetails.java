@@ -58,4 +58,6 @@ public class MetadataDetails {
     private List<CastMember> cast;
     /** 背景图(详情页头部横幅) */
     private String backdrop;
+    /** 背景图候选(高清 original 尺寸,首张为主图;详情页头部横幅轮播,provider 未提供时为空) */
+    private List<String> backdrops;
 }

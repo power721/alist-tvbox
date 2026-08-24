@@ -635,6 +635,9 @@ public class DoubanMetadataProvider implements MetadataProvider {
         if (StringUtils.isBlank(douban.getBackdrop()) && StringUtils.isNotBlank(tmdb.getBackdrop())) {
             douban.setBackdrop(tmdb.getBackdrop());
         }
+        if (douban.getBackdrops() == null && tmdb.getBackdrops() != null) {
+            douban.setBackdrops(tmdb.getBackdrops()); // 豆瓣无多图背景,轮播候选来自 TMDB 桥接
+        }
         if (StringUtils.isBlank(douban.getOverview()) && StringUtils.isNotBlank(tmdb.getOverview())) {
             douban.setOverview(tmdb.getOverview()); // 豆瓣侧无简介来源(rexxar/本地库/详情页都没有该字段),TMDB 补
         }

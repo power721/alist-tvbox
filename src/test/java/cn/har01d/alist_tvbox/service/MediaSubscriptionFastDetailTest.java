@@ -21,12 +21,14 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -41,6 +43,8 @@ class MediaSubscriptionFastDetailTest {
     private final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
     private final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
     private final MediaSubscriptionEpisodeSourceRepository episodeSourceRepository = Mockito.mock(MediaSubscriptionEpisodeSourceRepository.class);
+    private final cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository episodeRepository =
+            Mockito.mock(cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository.class);
     private final SettingRepository settingRepository = Mockito.mock(SettingRepository.class);
     private final MediaSubscriptionCheckService checkService = Mockito.mock(MediaSubscriptionCheckService.class);
     private final TvBoxService tvBoxService = Mockito.mock(TvBoxService.class);
@@ -51,7 +55,7 @@ class MediaSubscriptionFastDetailTest {
     private final AtomicInteger pid = new AtomicInteger(100);
 
     private final MediaSubscriptionService service = new MediaSubscriptionService(
-            subscriptionRepository, resourceRepository, null, null, episodeSourceRepository,
+            subscriptionRepository, resourceRepository, null, episodeRepository, episodeSourceRepository,
             null, null, null, tvBoxService, null, metadataService, checkService, transferService, settingRepository,
             new AppProperties(), new ObjectMapper(), proxyService, siteRepository);
 
@@ -269,6 +273,64 @@ class MediaSubscriptionFastDetailTest {
         assertEquals("01. 噗噗先生(1.46 GB)", MediaSubscriptionService.logicalEpisodeTitle(1, "噗噗先生", 1500 * MB));
         assertEquals("105. 第105集", MediaSubscriptionService.logicalEpisodeTitle(105, null, 0));
         assertEquals("03. 第3集 下集", MediaSubscriptionService.logicalEpisodeTitle(3, "第3集$下集#", 0));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void detailUpgradesLegacyBackdropAndMergesCarouselCandidates() {
+        subscription.setMetaProvider("tmdb");
+        subscription.setMetaId("12345");
+        MetadataDetails details = new MetadataDetails();
+        // 存量形态:主图还是 w780;轮播候选里主图重复出现 + 一张已是 original
+        details.setBackdrop("https://media.themoviedb.org/t/p/w780/primary.jpg");
+        details.setBackdrops(List.of(
+                "https://media.themoviedb.org/t/p/w780/primary.jpg",
+                "https://media.themoviedb.org/t/p/original/hero.jpg"));
+        Mockito.when(metadataService.cachedDetails(Mockito.eq("tmdb"), Mockito.eq("12345"), Mockito.any()))
+                .thenReturn(details);
+        Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(7)).thenReturn(List.of());
+        Mockito.when(episodeSourceRepository.findNumberAndSource(7)).thenReturn(List.of());
+        Mockito.when(episodeRepository.findBySubscriptionIdOrderByNumber(7)).thenReturn(List.of());
+
+        Map<String, Object> media = (Map<String, Object>) service.detail(1, 7).get("media");
+
+        assertEquals(proxied("https://media.themoviedb.org/t/p/original/primary.jpg"), media.get("backdrop"),
+                "存量 w780 主图免刷新升级 original");
+        assertEquals(List.of(proxied("https://media.themoviedb.org/t/p/original/primary.jpg"),
+                proxied("https://media.themoviedb.org/t/p/original/hero.jpg")), media.get("backdrops"),
+                "候选去重 + 升级高清 + 走代理");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void detailLegacySingleBackdropStillYieldsCarouselList() {
+        subscription.setMetaProvider("tmdb");
+        subscription.setMetaId("12345");
+        MetadataDetails details = new MetadataDetails();
+        details.setBackdrop("https://media.themoviedb.org/t/p/w780/primary.jpg"); // 老订阅快照:只有主图
+        Mockito.when(metadataService.cachedDetails(Mockito.eq("tmdb"), Mockito.eq("12345"), Mockito.any()))
+                .thenReturn(details);
+        Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(7)).thenReturn(List.of());
+        Mockito.when(episodeSourceRepository.findNumberAndSource(7)).thenReturn(List.of());
+        Mockito.when(episodeRepository.findBySubscriptionIdOrderByNumber(7)).thenReturn(List.of());
+
+        Map<String, Object> media = (Map<String, Object>) service.detail(1, 7).get("media");
+
+        assertEquals(List.of(proxied("https://media.themoviedb.org/t/p/original/primary.jpg")),
+                media.get("backdrops"), "无候选时主图兜底成单元素列表,前端轮播逻辑零分支");
+    }
+
+    @Test
+    void upgradeBackdropUrlOnlyRewritesTmdbSizeSegment() {
+        assertEquals("https://media.themoviedb.org/t/p/original/a.jpg",
+                MediaSubscriptionService.upgradeBackdropUrl("https://media.themoviedb.org/t/p/w780/a.jpg"));
+        assertEquals("https://example.com/w780/a.jpg",
+                MediaSubscriptionService.upgradeBackdropUrl("https://example.com/w780/a.jpg"), "非 TMDB 图床不动");
+        assertNull(MediaSubscriptionService.upgradeBackdropUrl(null));
+    }
+
+    private static String proxied(String url) {
+        return "/images?url=" + java.net.URLEncoder.encode(url, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     @Test

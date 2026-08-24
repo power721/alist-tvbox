@@ -46,7 +46,7 @@ class TmdbMetadataProviderScheduleTest {
     void upcomingKeepsYesterdayAiredEpisodes() {
         LocalDate today = LocalDate.now(ZONE);
         String key = Constants.TMDB_API_KEY;
-        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521?api_key=" + key + "&language=zh-CN"))
+        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521?api_key=" + key + "&language=zh-CN&append_to_response=images"))
                 .andRespond(withSuccess("{\"id\":9521,\"name\":\"慕兰之战\",\"status\":\"Returning Series\"}",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/alternative_titles?api_key=" + key))
