@@ -643,7 +643,8 @@ public class MediaSubscriptionCheckService {
             if (subscription == null || MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus())) {
                 return;
             }
-            if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus()) && !reopenEnded(subscription)) {
+            if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
+                    && !reopenEnded(subscription) && !staleSeasonReopen(subscription)) {
                 subscription.setNextCheckTime(System.currentTimeMillis() + 24 * 3600_000L); // 每日复查一次
                 subscriptionRepository.save(subscription);
                 return;
@@ -665,9 +666,26 @@ public class MediaSubscriptionCheckService {
         }
     }
 
+    /**
+     * ENDED 订阅的换季残留重开:旧季集源行冒领集数把 {@link #shouldReopen} 堵死
+     * (本地 = 官方总数,永不满足"官方 > 本地"),主源复核对裸标题合集("2季全"解析不出季号)也放行 ——
+     * 换季后订阅永远停在 ENDED,点「检查」只刷元数据就返回(线上:末日地堡 S1 改 S3,doCheck 从未执行)。
+     * 残留检测命中即回 ACTIVE 走完整巡检,doCheck 开头的同一检测会全量重置并按本季重搜重挂。
+     */
+    boolean staleSeasonReopen(MediaSubscription subscription) {
+        if (!staleSeasonInventory(subscription)) {
+            return false;
+        }
+        subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
+        subscription.setStallCount(0);
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_RESUMED,
+                "检测到换季资源残留,重开按本季重新搜索");
+        log.info("subscription {} reopened: stale season inventory", subscription.getId());
+        return true;
+    }
+
     /** ENDED 订阅每日轻量复查(只刷元数据,不列源不搜索):官方已播/手填期望超过本地集数 = 加更或集数修正,自动回 ACTIVE。 */
-    boolean reopenEnded(MediaSubscription subscription) {
-        refreshMetadata(subscription);
+    boolean reopenEnded(MediaSubscription subscription) {        refreshMetadata(subscription);
         if (!shouldReopen(subscription)) {
             // 异剧污染回滚:真人版同名资源把 currentEpisodes 撑过官方集数,反而把上面的重开条件堵死
             // (本地 37 > 官方 26 永不重开)。主源集号超范围 = 误挂异剧,重开走完整巡检

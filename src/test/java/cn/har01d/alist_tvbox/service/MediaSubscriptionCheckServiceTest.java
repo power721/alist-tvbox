@@ -1963,6 +1963,33 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void staleSeasonReopenForms() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setSeason(3);
+        fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        MediaSubscriptionEpisode s1Episode = new MediaSubscriptionEpisode();
+        s1Episode.setId(101);
+        s1Episode.setSeason(1);
+        s1Episode.setNumber(1);
+        MediaSubscriptionEpisodeSource s1Row = new MediaSubscriptionEpisodeSource();
+        s1Row.setEpisodeId(101);
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1)).thenReturn(List.of(s1Episode));
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(List.of(s1Row));
+
+        assertTrue(fixture.service.staleSeasonReopen(fixture.subscription),
+                "ENDED+旧季行冒领:强制重开(shouldReopen 被本地=官方堵死,唯一出路)");
+        assertEquals(MediaSubscription.STATUS_ACTIVE, fixture.subscription.getStatus());
+        assertEquals(0, fixture.subscription.getStallCount());
+
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(List.of());
+        fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        assertFalse(fixture.service.staleSeasonReopen(fixture.subscription), "无残留:维持每日轻量复查");
+        assertEquals(MediaSubscription.STATUS_ENDED, fixture.subscription.getStatus());
+    }
+
+    @Test
     void resetInventoryForSeasonClearsWorld() {
         Fixture fixture = new Fixture();
         MediaSubscription subscription = fixture.subscription;
