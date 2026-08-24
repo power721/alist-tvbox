@@ -574,7 +574,7 @@
                    clearable style="width: 132px" @change="onNavFilterChange">
           <el-option v-for="option in f.value" :key="option.v" :label="option.n" :value="option.v"/>
         </el-select>
-        <span class="sub-text">共 {{ navTotal }} 条 · TMDB 条目自动绑定元数据,豆瓣条目按剧名订阅</span>
+        <span class="sub-text">共 {{ navTotal }} 条 · 点击追更补充季/网盘等信息:TMDB 条目自动绑定元数据,豆瓣条目自动匹配条目</span>
       </div>
       <div class="nav-grid" v-loading="navLoading">
         <div v-for="item in navList" :key="item.vod_id" class="nav-card">
@@ -588,9 +588,7 @@
             <span v-if="item.type_name">{{ item.type_name }}</span>
           </div>
           <el-button v-if="isNavSubscribed(item)" size="small" disabled>已追更</el-button>
-          <el-button v-else size="small" type="primary"
-                     :loading="navSubscribing === item.vod_id" :disabled="!!navSubscribing"
-                     @click="navSubscribe(item)">追更</el-button>
+          <el-button v-else size="small" type="primary" @click="navSubscribe(item)">追更</el-button>
         </div>
       </div>
       <div class="nav-pager" v-if="navPageCount > 1">
@@ -895,7 +893,8 @@ const navPageCount = ref(1)
 const navTotal = ref(0)
 const navLoading = ref(false)
 const navSubscribed = ref<Set<string>>(new Set())
-const navSubscribing = ref('')
+/** 从片单追更打开新建对话框的条目:创建成功后标记"已追更",对话框关闭即解除 */
+const navPending = ref<any>(null)
 
 onMounted(() => {
   loadAll()
@@ -915,7 +914,7 @@ onMounted(() => {
   })
 })
 
-// ---------- 片单追更(csp_PianDan 片单导航榜单选剧一键订阅) ----------
+// ---------- 片单追更(csp_PianDan 片单导航榜单选剧,预填新建订阅对话框) ----------
 
 const openNavigation = () => {
   navigationVisible.value = true
@@ -980,45 +979,45 @@ const isNavSubscribed = (item: any) => {
   return navSubscribed.value.has(item.vod_name) || subscriptions.value.some(s => s.name === item.vod_name)
 }
 
+/** 追更按钮 → 打开新建订阅对话框预填榜单条目,由用户补充(季/网盘/过滤等)后确认创建 */
 const navSubscribe = (item: any) => {
   // season 只是"未标注季号时"的默认值:榜单条目名常带季号(如"诛仙 第四季"),
   // 后端 create() 会用 TextUtils.resolveSeason 从名称改写它 —— 此处不再自行判定季号。
-  const body: any = {name: item.vod_name, keyword: item.vod_name, season: 1}
+  handleAdd()
+  form.value.name = item.vod_name
+  form.value.keyword = item.vod_name
+  metaKeyword.value = item.vod_name
+  navPending.value = item
   const vodId = String(item.vod_id || '')
-  navSubscribing.value = vodId
-  const create = () => axios.post('/api/media-subscriptions', body).then(() => {
-    navSubscribed.value.add(item.vod_name)
-    ElMessage.success(`已订阅「${item.vod_name}」,开始首次搜索(稍后刷新查看结果)`)
-  }).catch(error => {
-    ElMessage.error('订阅失败:' + (error.response?.data?.message || error.message))
-  }).finally(() => {
-    navSubscribing.value = ''
-  })
   if (vodId.startsWith('tmdb:')) {
-    // tmdb:tv:{id} / tmdb:movie:{id}:绑定元数据,官方集数/播出日程驱动追更
-    const parts = vodId.split(':')
-    body.metaProvider = 'tmdb'
-    body.metaId = parts[2] || null
-    if (!body.metaId) {
-      navSubscribing.value = ''
-      ElMessage.warning('条目缺少 TMDB 标识,无法绑定元数据')
-      return
+    // tmdb:tv:{id} / tmdb:movie:{id}:绑定元数据,官方集数/播出日程驱动追更;
+    // 缺标识时不绑定,用户在对话框按标题提交即纯标题订阅
+    const metaId = vodId.split(':')[2]
+    if (metaId) {
+      form.value.metaProvider = 'tmdb'
+      form.value.metaId = metaId
     }
-    create()
     return
   }
-  // 豆瓣条目:榜单 API 不带 subject id,按标题搜 suggest 自动绑定(封面/官方集数/播出日程随之生效);
-  // 匹配要求名称严格相等且年份一致(防同名翻拍误绑),搜不到/失败则退回纯标题订阅
+  // 豆瓣条目:榜单 API 不带 subject id,按标题预搜 suggest 自动选中严格匹配项
+  // (名称相等+年份一致,防同名翻拍误绑);结果同步列出供用户改选/换源,留空提交则纯标题订阅
+  metaProvider.value = 'douban'
+  metaSearching.value = true
   axios.get('/api/media-subscriptions/meta/search', {params: {keyword: item.vod_name, provider: 'douban'}})
       .then(response => {
-        const hit = ((response.data.items || []) as any[]).find(m =>
+        metaResults.value = response.data.items || []
+        const hit = metaResults.value.find((m: any) =>
             m.provider === 'douban' && m.name === item.vod_name
             && (!item.vod_year || !m.year || m.year === item.vod_year))
         if (hit && /^\d+$/.test(String(hit.id))) {
-          body.doubanId = Number(hit.id)
+          form.value.metaProvider = 'douban'
+          form.value.metaId = String(hit.id)
+          form.value.doubanId = Number(hit.id)
         }
       }).catch(() => {
-      }).finally(() => create())
+      }).finally(() => {
+        metaSearching.value = false
+      })
 }
 
 const loadAll = () => {
@@ -1147,6 +1146,10 @@ const selectMeta = (item: any) => {
   if (form.value.metaProvider === item.provider && form.value.metaId === item.id) {
     form.value.metaProvider = null
     form.value.metaId = null
+    // 片单预填/链接解析的豆瓣绑定同时落在 doubanId 上:取消选中时一并解除
+    if (item.provider === 'douban' && form.value.doubanId === Number(item.id)) {
+      form.value.doubanId = null
+    }
   } else {
     form.value.metaProvider = item.provider
     form.value.metaId = item.id
@@ -1208,12 +1211,20 @@ const save = () => {
       : axios.post('/api/media-subscriptions', body)
   request.then(() => {
     ElMessage.success(form.value.id ? '已保存' : '已创建,开始首次搜索(稍后刷新查看结果)')
+    if (!form.value.id && navPending.value) {
+      navSubscribed.value.add(navPending.value.vod_name)
+    }
     formVisible.value = false
     schedule(loadAll, 3000)
   }).finally(() => {
     saving.value = false
   })
 }
+
+// 对话框关闭即解除片单条目关联:取消/未保存不误标"已追更",之后再手动新建也不受牵连
+watch(formVisible, visible => {
+  if (!visible) navPending.value = null
+})
 
 const preview = () => {
   const keyword = form.value.keyword || form.value.name
