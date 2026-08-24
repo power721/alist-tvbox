@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.entity;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.List;
@@ -12,8 +13,12 @@ public interface MediaSubscriptionEpisodeSourceRepository extends JpaRepository<
 
     Optional<MediaSubscriptionEpisodeSource> findByEpisodeIdAndResourceId(int episodeId, int resourceId);
 
+    /** 派生删除 = 先 select 再逐个 em.remove,必须在事务里执行(巡检后台线程无外围事务会抛 TransactionRequiredException)。 */
+    @Transactional
     void deleteByResourceId(int resourceId);
 
+    /** 同 {@link #deleteByResourceId}:声明方法级事务,无外围事务时自开、有则加入。 */
+    @Transactional
     void deleteByResourceIdIn(Collection<Integer> resourceIds);
 
     long countByResourceId(int resourceId);
