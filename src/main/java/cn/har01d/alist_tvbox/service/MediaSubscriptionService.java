@@ -1563,6 +1563,9 @@ public class MediaSubscriptionService {
         if (details != null && details.getExternalIds() != null) {
             details.getExternalIds().forEach((provider, metaId) -> appendMetaLink(links, provider, metaId));
         }
+        if (details != null && details.getPlayLinks() != null) {
+            details.getPlayLinks().forEach(links::putIfAbsent); // 官方播放地址(爱奇艺/优酷/腾讯视频)
+        }
         media.put("links", links);
         // 订阅侧快照兜底:元数据未拉到/字段缺时详情页仍有官方集数与下集播出时间
         media.put("officialEpisodes", subscription.getOfficialEpisodes());

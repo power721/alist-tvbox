@@ -48,6 +48,8 @@ public class MetadataDetails {
     private java.util.Map<String, String> ratings;
     /** 跨源条目 id(provider → id,如豆瓣订阅桥接后含 {"tmdb":"123"}):详情页外链跳转用 */
     private java.util.Map<String, String> externalIds;
+    /** 官方播放平台链接(平台名→播放页,如 {"爱奇艺":"https://www.iqiyi.com/v_xx.html"}):豆瓣「在哪儿看」桥接产出,详情页 links 展开 */
+    private java.util.Map<String, String> playLinks;
     /** 导演 */
     private List<String> directors;
     /** 编剧 */

@@ -39,6 +39,7 @@ class PlayScheduleBridgeTest {
     private static final ZoneId ZONE = ZoneId.of(Constants.ZONE_ID);
     private static final String REXXAR = "https://m.douban.com/rexxar/api/v2/tv/36406417";
     private static final String REXXAR_36810153 = "https://m.douban.com/rexxar/api/v2/tv/36810153";
+    private static final String REXXAR_36624136 = "https://m.douban.com/rexxar/api/v2/tv/36624136";
     private static final String TENCENT_EPISODE =
             "https://pbaccess.video.qq.com/trpc.universal_backend_service.page_server_rpc.PageServer/GetPageData"
                     + "?video_appid=3000010&vplatform=2&vversion_name=8.2.96";
@@ -87,6 +88,8 @@ class PlayScheduleBridgeTest {
         assertEquals(at(today.minusDays(1), LocalTime.of(12, 0)), details.getUpcoming().get(0).getAirTime(),
                 "upcoming 日程同步校正");
         assertEquals(1, details.getAiredEpisodes(), "已播集按校正后时刻重数(昨日 12:00 已过)");
+        assertEquals(Map.of("爱奇艺", "https://www.iqiyi.com/v_19hly1wd1gg.html"), details.getPlayLinks(),
+                "播放地址剥豆瓣引流参数并升级 https");
         server.verify();
     }
 
@@ -108,6 +111,8 @@ class PlayScheduleBridgeTest {
 
         assertEquals(at(today.minusDays(1), LocalTime.of(12, 0)), details.getEpisodes().get(0).getAirTime());
         assertEquals(at(today.plusDays(1), LocalTime.of(12, 0)), details.getNextAirTime());
+        assertEquals(Map.of("优酷", "https://www.youku.com/show/id_fcad042e84ef43ce8309.html"), details.getPlayLinks(),
+                "小程序 scheme 抠 showId 构造 show 页链接(浏览器访问 302 落播放页)");
         server.verify();
     }
 
@@ -138,12 +143,14 @@ class PlayScheduleBridgeTest {
         assertEquals(at(today.minusDays(1), LocalTime.of(18, 0)), details.getEpisodes().get(0).getAirTime(),
                 "20:00 校正为腾讯更新文案的 18:00");
         assertEquals(at(today.plusDays(1), LocalTime.of(18, 0)), details.getNextAirTime());
+        assertEquals(Map.of("腾讯视频", "https://v.qq.com/x/cover/mzc00200seo6p1w.html"), details.getPlayLinks(),
+                "小程序 scheme 抠 cid 构造 cover 页链接");
         server.verify();
     }
 
-    /** 完结剧形态(庆余年第二季实测):sub_title=「会员看全集」无时刻词 → 不校正。 */
+    /** 完结剧形态(庆余年第二季实测):sub_title=「会员看全集」无时刻词 → 时刻不校正,播放链接照带。 */
     @Test
-    void tencentEndedShowWithoutClockSkips() {
+    void tencentEndedShowGivesLinksWithoutClock() {
         LocalDate today = LocalDate.now(ZONE);
         server.expect(once(), requestTo(REXXAR)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"vendors\":[{\"title\":\"腾讯视频\",\"url\":"
@@ -160,6 +167,8 @@ class PlayScheduleBridgeTest {
         bridge.refine(details);
 
         assertEquals(before, details.getEpisodes().get(0).getAirTime(), "完结剧无排播文案,20:00 保留");
+        assertEquals(Map.of("腾讯视频", "https://v.qq.com/x/cover/mzc002002kqssyu.html"), details.getPlayLinks(),
+                "无时刻仍有官方播放地址");
         server.verify();
     }
 
@@ -178,16 +187,58 @@ class PlayScheduleBridgeTest {
         server.verify();
     }
 
-    /** 无分集日程(未桥接 TMDB 的纯豆瓣详情):没有可校正对象,不发请求。 */
+    /**
+     * 线上悬案形态(douban 36624136,咪咕+优酷双源完结剧):咪咕 vendors url 本就是 https 播放页
+     * 直接入 links(不尝试时刻路 —— 不打腾讯 GetPageData);优酷小程序 scheme 抠 showId。
+     */
     @Test
-    void noEpisodesSkips() {
-        MetadataDetails details = scheduled(LocalDate.now(ZONE));
+    void miguVendorUrlGoesToLinksWithoutClockProbe() {
+        LocalDate today = LocalDate.now(ZONE);
+        server.expect(once(), requestTo(REXXAR_36624136)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"vendors\":[{\"title\":\"咪咕视频\",\"episodes_info\":\"17集全\","
+                                + "\"url\":\"https://m.miguvideo.com/mgs/msite/prd/detail.html?cid=965887286&pwId=PRO_3358b609d33b4eeda90df21a3ad8a573&pkgId=null\"},"
+                                + "{\"title\":\"优酷视频\",\"episodes_info\":\"17集全\","
+                                + "\"url\":\"douban://douban.com/goToWXMiniProgram?path=/pages/play/play%3FshowId%3Dacbefaed57994c07b881\"}]}",
+                        MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("https://www.youku.com/show/id_acbefaed57994c07b881.html"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "window.__INITIAL_DATA__={\"pageMap\":{\"extra\":{\"videoPublishTime\":\"2026-07-19 12:00:00\"}}};",
+                        MediaType.TEXT_HTML));
+
+        MetadataDetails details = scheduled(today);
+        details.setId("36624136");
+        details.setName("悬案");
+        details.getExternalIds().put(DoubanMetadataProvider.NAME, "36624136");
+        bridge.refine(details);
+
+        assertEquals(Map.of(
+                "咪咕视频", "https://m.miguvideo.com/mgs/msite/prd/detail.html?cid=965887286&pwId=PRO_3358b609d33b4eeda90df21a3ad8a573&pkgId=null",
+                "优酷", "https://www.youku.com/show/id_acbefaed57994c07b881.html"), details.getPlayLinks(),
+                "咪咕 https 直链原样入 links,优酷抠 showId 拼 show 页");
+        assertEquals(at(today.plusDays(1), LocalTime.of(12, 0)), details.getNextAirTime(),
+                "时刻从优酷路取,咪咕不参与");
+        server.verify();
+    }
+
+    /** 无分集日程(未桥接 TMDB 的纯豆瓣详情):没有可校正对象时刻不动,官方播放地址照常带出。 */
+    @Test
+    void noEpisodesStillGivesPlayLinks() {
+        LocalDate today = LocalDate.now(ZONE);
+        server.expect(once(), requestTo(REXXAR)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"vendors\":[{\"title\":\"腾讯视频\",\"url\":"
+                        + "\"douban://douban.com/goToWXMiniProgram?path=preload_play/play/index?cid=mzc00200seo6p1w\"}]}",
+                        MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(TENCENT_EPISODE)).andExpect(method(HttpMethod.POST))
+                .andRespond(withServerError()); // 时刻路失败不影响链接(clock null + links 并存)
+        MetadataDetails details = scheduled(today);
         details.setEpisodes(null);
         long before = details.getNextAirTime();
 
         bridge.refine(details);
 
-        assertEquals(before, details.getNextAirTime());
+        assertEquals(before, details.getNextAirTime(), "无日程时刻不动");
+        assertEquals(Map.of("腾讯视频", "https://v.qq.com/x/cover/mzc00200seo6p1w.html"), details.getPlayLinks());
         server.verify();
     }
 
@@ -208,9 +259,9 @@ class PlayScheduleBridgeTest {
         server.verify();
     }
 
-    /** 爱奇艺分集列表只有预告/花絮(type=3)无正片:取不到时刻,不校正。 */
+    /** 爱奇艺分集列表只有预告/花絮(type=3)无正片:取不到时刻不校正,播放链接照带。 */
     @Test
-    void iqiyiPreviewOnlyYieldsNoClock() {
+    void iqiyiPreviewOnlyGivesLinksWithoutClock() {
         LocalDate today = LocalDate.now(ZONE);
         server.expect(once(), requestTo(REXXAR)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"vendors\":[{\"title\":\"爱奇艺视频\","
@@ -228,6 +279,7 @@ class PlayScheduleBridgeTest {
         assertEquals(before, details.getEpisodes().get(0).getAirTime(), "无正片时刻不动");
         assertTrue(details.getUpcoming().get(0).getAirTime() == at(today.minusDays(1), LocalTime.of(20, 0)),
                 "upcoming 保留 20:00");
+        assertEquals(Map.of("爱奇艺", "https://www.iqiyi.com/v_19hly1wd1gg.html"), details.getPlayLinks());
         server.verify();
     }
 

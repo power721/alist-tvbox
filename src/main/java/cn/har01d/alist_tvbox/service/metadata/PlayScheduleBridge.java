@@ -33,33 +33,42 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 平台排播时刻桥接:TMDB/豆瓣/Bangumi 的日程只有日期,时刻统一按当日 20:00 填,而各剧实际排播
- * 时刻不同(师兄太稳健 12:00),时间轴展示/已播判定/播出前休眠/播后短轮全部偏晚。豆瓣条目
- * 「在哪儿看」的 vendors(rexxar tv 接口,游客可用)给出各播放平台入口,从平台页取真实 HH:mm:
+ * 平台播放源桥接:①排播时刻 —— TMDB/豆瓣/Bangumi 的日程只有日期,时刻统一按当日 20:00 填,而各剧
+ * 实际排播时刻不同(师兄太稳健 12:00),时间轴展示/已播判定/播出前休眠/播后短轮全部偏晚;②官方
+ * 播放地址 —— 豆瓣条目「在哪儿看」的 vendors(rexxar tv 接口,游客可用)给出各平台入口,构造为
+ * 播放页 URL 写入 {@code MetadataDetails.playLinks}(详情页 links 展开;完结剧/无日程剧同样适用,
+ * 不依赖排播时刻命中)。两路同一份 vendors 数据零额外请求:
  * <ul>
  * <li>爱奇艺:vendors url 是 www 域名播放页,但 www 对无 JS 客户端只回空壳页 —— 换 m 域名同路径
  * 即完整 SSR;分集条目 type=1 正片(3=预告/花絮)的 issueTime 取最近 8 集时刻众数。免费转免线
- * 更新时刻会略早(次日 11:50 vs VIP 12:00)且数量少,众数天然压掉;</li>
+ * 更新时刻会略早(次日 11:50 vs VIP 12:00)且数量少,众数天然压掉;播放链接剥豆瓣引流参数
+ * (vfm/fv)并升级 https;</li>
  * <li>优酷:vendors url 是豆瓣小程序 scheme(showId 以明文/URL 编码形态嵌在 path 里),抠出 showId
- * 请求 youku.com/show/id_{showId}.html,302 落到播放页(游客直出 __INITIAL_DATA__),
- * videoPublishTime(本集上线时刻)即排播时刻。</li>
+ * 构造 show 页链接(浏览器访问 302 落到播放页);排播时刻请求同一 show 页(游客直出
+ * __INITIAL_DATA__)取 videoPublishTime(本集上线时刻)。</li>
+ * <li>腾讯视频(花开锦绣 36810153 实测):vendors url 小程序 scheme 抠 cid 构造 cover 页链接;
+ * 排播时刻走 pbaccess GetPageData(游客 POST)分集列表 module_params.sub_title 更新文案
+ * (「会员周一至周三18点更新1集,周四至周日18点更新2集,SVIP抢先看1集…」)抽 HH:mm —— 分集条目的
+ * publish_date 已普遍不回填(花开锦绣 0/56、庆余年S2 0/34 实测)不可依赖,完结剧文案无时刻词
+ * (「会员看全集」)自然跳过,时刻只在文案字段内找不扫全文(duration 等数字形态会误命中)。</li>
+ * <li>咪咕视频(悬案 36624136 实测):vendors url 本就是 https 播放页(m 站 detail 页)直接入
+ * links;分集数据是低代码平台 XHR 异步拉(壳页零数据、网关接口未逆向),时刻路不接 —— 咪咕
+ * 同播剧爱优腾路已覆盖。</li>
  * </ul>
- * 校正动作复用 {@link BilibiliScheduleRefiner#applyScheduleClock}:只换时分、日期不动(TMDB 排播日
+ * 时刻校正复用 {@link BilibiliScheduleRefiner#applyScheduleClock}:只换时分、日期不动(TMDB 排播日
  * 与官方一致),airedEpisodes/nextAirTime 按校正后时刻重数。豆瓣 subject id 取自 externalIds
  * (豆瓣源自带;TMDB/Bangumi 订阅经 {@link RatingBridge} 桥接后带上),因此必须挂在
  * ratingBridge.enrich 之后;桥接不到豆瓣则跳过。命中与未命中各缓存 6h(负缓存防完播剧反复
- * refresh 打爆外网),失败静默保留原时刻,不炸详情主链。与 B站 refiner 的顺序:平台桥挂后
- * (国产剧爱优腾为正源,两路时刻同剧一致时后跑覆盖无碍)。腾讯视频路:GetPageData 官方分集
- * 列表(游客可用)的 module_params.sub_title 更新文案(「会员周一至周三18点更新1集,周四至周日
- * 18点更新2集,SVIP抢先看1集…」)抽 HH:mm;分集条目的 publish_date 已普遍不回填(花开锦绣
- * 0/56、庆余年S2 0/34 实测)不可依赖,完结剧文案无时刻(「会员看全集」)自然跳过。芒果等平台
- * 页面结构未验证,暂不接。
- *
+ * refresh 打爆外网),失败静默不炸详情主链。与 B站 refiner 的顺序:平台桥挂后(国产剧爱优腾为
+ * 正源,两路时刻同剧一致时后跑覆盖无碍)。芒果等平台页面结构未验证,暂不接。
  * <p>不依赖任何 MetadataProvider(直连接口)—— 与 RatingBridge 同规,防构造环。
  */
 @Slf4j
 @Component
 public class PlayScheduleBridge {
+    /** 桥接产物:排播时刻(可 null —— 完结剧/无排播文案只有链接)+ 官方播放地址(平台名→播放页)。 */
+    record PlaySources(LocalTime clock, Map<String, String> playLinks) {
+    }
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final ZoneId ZONE = ZoneId.of(Constants.ZONE_ID);
     private static final String REXXAR_URL = "https://m.douban.com/rexxar/api/v2/tv/";
@@ -80,18 +89,20 @@ public class PlayScheduleBridge {
     private static final int RECENT_LIMIT = 8;
 
     private final RestTemplate restTemplate;
-    /** 豆瓣 subject id → 平台排播时刻(Optional.empty 负缓存:无播放源/页面失败,6h 后重试)。 */
-    private final Cache<String, Optional<LocalTime>> clockCache = Caffeine.newBuilder()
+    /** 豆瓣 subject id → 播放源(Optional.empty 负缓存:无播放源/页面失败,6h 后重试)。 */
+    private final Cache<String, Optional<PlaySources>> sourceCache = Caffeine.newBuilder()
             .maximumSize(300).expireAfterWrite(Duration.ofHours(6)).build();
 
     public PlayScheduleBridge(MetadataHttp metadataHttp) {
         this.restTemplate = metadataHttp.create();
     }
 
-    /** provider 详情尾部接入(ratingBridge 之后):把播出时刻校正为平台真实排播 HH:mm;未命中/失败静默跳过。 */
+    /**
+     * provider 详情尾部接入(ratingBridge 之后):官方播放地址写入 playLinks(不依赖日程与时刻,
+     * 完结剧同样带出),有分集日程且拿到排播时刻时把播出时刻校正为平台真实 HH:mm;未命中/失败静默。
+     */
     void refine(MetadataDetails details) {
-        if (details == null || details.getEpisodes() == null || details.getEpisodes().isEmpty()
-                || StringUtils.isBlank(details.getName())) {
+        if (details == null || StringUtils.isBlank(details.getName())) {
             return;
         }
         String doubanId = details.getExternalIds() == null ? null
@@ -100,9 +111,16 @@ public class PlayScheduleBridge {
             return; // 未经豆瓣桥接:拿不到「在哪儿看」入口
         }
         try {
-            LocalTime clock = clockCache.get(doubanId, this::fetchClock).orElse(null);
-            if (clock == null) {
+            PlaySources sources = sourceCache.get(doubanId, this::fetchPlaySources).orElse(null);
+            if (sources == null) {
                 return;
+            }
+            if (!sources.playLinks().isEmpty()) {
+                details.setPlayLinks(sources.playLinks());
+            }
+            LocalTime clock = sources.clock();
+            if (clock == null || details.getEpisodes() == null || details.getEpisodes().isEmpty()) {
+                return; // 只有链接:无排播文案或无日程可校正
             }
             BilibiliScheduleRefiner.applyScheduleClock(details, clock, System.currentTimeMillis());
             log.info("play schedule refine: {} air time clock -> {}", details.getName(), clock);
@@ -111,30 +129,86 @@ public class PlayScheduleBridge {
         }
     }
 
-    /** 豆瓣「在哪儿看」vendors 逐平台取时刻,先到先用(平台页失败自然落到下一家)。 */
-    private Optional<LocalTime> fetchClock(String doubanId) {
+    /** 豆瓣「在哪儿看」vendors:逐平台收集播放链接,clock 取首个命中(平台页失败自然落到下一家)。 */
+    private Optional<PlaySources> fetchPlaySources(String doubanId) {
         JsonNode body = httpGetJson(REXXAR_URL + doubanId);
         JsonNode vendors = body == null ? null : body.path("vendors");
         if (vendors == null || !vendors.isArray()) {
             return Optional.empty();
         }
+        LocalTime clock = null;
+        Map<String, String> playLinks = new LinkedHashMap<>();
         for (JsonNode vendor : vendors) {
-            String title = vendor.path("title").asText("");
-            String url = vendor.path("url").asText("");
-            LocalTime clock = null;
-            if (title.contains("爱奇艺")) {
-                clock = iqiyiClock(url);
-            } else if (title.contains("优酷")) {
-                clock = youkuClock(url);
-            } else if (title.contains("腾讯")) {
-                clock = tencentClock(url);
+            String platform = platformName(vendor.path("title").asText(""));
+            if (platform == null) {
+                continue;
             }
-            if (clock != null) {
-                log.info("play schedule bridge: douban {} vendor {} clock {}", doubanId, title, clock);
-                return Optional.of(clock);
+            String url = vendor.path("url").asText("");
+            String playUrl = switch (platform) {
+                case "爱奇艺" -> iqiyiPlayUrl(url);
+                case "优酷" -> youkuPlayUrl(url);
+                case "腾讯视频" -> tencentPlayUrl(url);
+                case "咪咕视频" -> url.contains("miguvideo.com") ? url : null;
+                default -> null;
+            };
+            if (playUrl != null) {
+                playLinks.putIfAbsent(platform, playUrl);
+            }
+            if (clock == null) {
+                clock = switch (platform) {
+                    case "爱奇艺" -> iqiyiClock(url);
+                    case "优酷" -> youkuClock(url);
+                    case "腾讯视频" -> tencentClock(url);
+                    default -> null; // 咪咕等未逆向时刻路的平台不尝试
+                };
+                if (clock != null) {
+                    log.info("play schedule bridge: douban {} vendor {} clock {}", doubanId, platform, clock);
+                }
             }
         }
-        return Optional.empty();
+        if (clock == null && playLinks.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new PlaySources(clock, playLinks));
+    }
+
+    /** 平台标准名(links 标签),未接入的平台返回 null。 */
+    private static String platformName(String title) {
+        if (title.contains("爱奇艺")) {
+            return "爱奇艺";
+        }
+        if (title.contains("优酷")) {
+            return "优酷";
+        }
+        if (title.contains("腾讯")) {
+            return "腾讯视频";
+        }
+        if (title.contains("咪咕")) {
+            return "咪咕视频";
+        }
+        return null;
+    }
+
+    /** 爱奇艺播放页:剥豆瓣引流参数(vfm/fv)升级 https。 */
+    private static String iqiyiPlayUrl(String url) {
+        if (!url.contains("iqiyi.com/v_")) {
+            return null;
+        }
+        int query = url.indexOf('?');
+        String clean = query > 0 ? url.substring(0, query) : url;
+        return clean.startsWith("http://") ? "https://" + clean.substring("http://".length()) : clean;
+    }
+
+    /** 优酷 show 页:浏览器访问 302 落到播放页。 */
+    private static String youkuPlayUrl(String url) {
+        Matcher matcher = YK_SHOW_ID.matcher(url);
+        return matcher.find() ? "https://www.youku.com/show/id_" + matcher.group(1) + ".html" : null;
+    }
+
+    /** 腾讯 cover 页。 */
+    private static String tencentPlayUrl(String url) {
+        Matcher matcher = TX_CID.matcher(url);
+        return matcher.find() ? "https://v.qq.com/x/cover/" + matcher.group(1) + ".html" : null;
     }
 
     private LocalTime iqiyiClock(String url) {
