@@ -258,7 +258,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="previewVisible" title="匹配预览(dry-run,未订阅)" width="800" top="3vh">
+    <el-dialog v-model="previewVisible" :title="form.id ? '匹配预览(dry-run,按当前表单条件试算,未保存)' : '匹配预览(dry-run,未订阅)'" width="800" top="3vh">
       <el-table :data="previewItems" border v-loading="previewing" max-height="480">
         <el-table-column prop="title" label="资源" min-width="260" show-overflow-tooltip/>
         <el-table-column prop="drive" label="盘" width="90"/>
