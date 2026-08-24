@@ -1,7 +1,11 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResourceRepository;
@@ -15,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
@@ -95,5 +100,62 @@ class MediaSubscriptionFollowTest {
 
         verify(resourceRepository, never()).save(any());
         verify(checkService).checkAsync(1, 3);
+    }
+
+    // ---------- 换季重置(2026-08-24):《末日地堡》第1季改第3季后点检查,候选/挂载/集数仍是第一季口径 ----------
+    // 旧季的集源行继续冒领集号(computeMissing 判"已齐"→永不搜索新季),明标旧季候选永久躺在池里。
+    // 季号一变即整体清空,首轮巡检按新季重搜重挂。
+
+    @Test
+    void seasonChangeResetsPoolAndTriggersRescan() {
+        ShareService shareService = Mockito.mock(ShareService.class);
+        when(checkService.allowedCandidateDrives(any())).thenReturn(java.util.Set.of());
+        MediaSubscriptionService resetService = new MediaSubscriptionService(
+                subscriptionRepository, resourceRepository,
+                Mockito.mock(MediaSubscriptionEventRepository.class),
+                Mockito.mock(MediaSubscriptionEpisodeRepository.class),
+                Mockito.mock(MediaSubscriptionEpisodeSourceRepository.class),
+                null, null, null, null, shareService, null, checkService, null, null,
+                new AppProperties(), new ObjectMapper(), null, null);
+        MediaSubscription subscription = subscription();
+        subscription.setSeason(1);
+        subscription.setShareId(5);
+        subscription.setMountPath("/追剧/3-测试剧");
+        when(subscriptionRepository.findById(3)).thenReturn(Optional.of(subscription));
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(21);
+        primary.setShareId(51);
+        MediaSubscriptionResource aux = new MediaSubscriptionResource();
+        aux.setId(22);
+        aux.setShareId(52);
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(3)).thenReturn(List.of(primary, aux));
+
+        MediaSubscriptionRequest request = new MediaSubscriptionRequest();
+        request.setSeason(3);
+        resetService.update(1, 3, request);
+
+        assertEquals(3, subscription.getSeason());
+        // 重置细节(删行/重置快照/事件)委托 checkService.resetInventoryForSeason —— 行为由 CheckServiceTest 覆盖
+        verify(checkService).resetInventoryForSeason(subscription, 3);
+        // 无事务上下文:远程卸载与重搜同步执行(订阅 shareId 5 + 资源行 51/52 去重)
+        verify(shareService).deleteShare(5);
+        verify(shareService).deleteShare(51);
+        verify(shareService).deleteShare(52);
+        verify(checkService).checkAsync(1, 3);
+    }
+
+    @Test
+    void sameSeasonUpdateSkipsReset() {
+        when(checkService.allowedCandidateDrives(any())).thenReturn(java.util.Set.of());
+        MediaSubscription subscription = subscription();
+        subscription.setSeason(1);
+        when(subscriptionRepository.findById(3)).thenReturn(Optional.of(subscription));
+
+        MediaSubscriptionRequest request = new MediaSubscriptionRequest();
+        request.setSeason(1);
+        service.update(1, 3, request);
+
+        verify(resourceRepository, never()).deleteBySubscriptionId(anyInt());
+        verify(checkService, never()).checkAsync(anyInt(), anyInt());
     }
 }

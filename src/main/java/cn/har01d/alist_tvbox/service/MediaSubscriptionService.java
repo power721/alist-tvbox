@@ -205,6 +205,7 @@ public class MediaSubscriptionService {
             return toDto(subscription);
         }
         boolean searchRelevant = false;
+        Integer previousSeason = subscription.getSeason();
         if (StringUtils.isNotBlank(request.getName())) {
             subscription.setName(StringUtils.abbreviate(request.getName().trim(), 250));
         }
@@ -256,8 +257,58 @@ public class MediaSubscriptionService {
             subscription.setNextCheckTime(System.currentTimeMillis());
         }
         subscription.setUpdatedTime(System.currentTimeMillis());
+        int oldSeason = previousSeason == null || previousSeason <= 0 ? 1 : previousSeason;
+        if (request.getSeason() != null && request.getSeason() > 0 && request.getSeason() != oldSeason) {
+            resetForSeasonChange(uid, subscription, oldSeason, request.getSeason());
+        }
         subscriptionRepository.save(subscription);
         return toDto(subscription);
+    }
+
+    /**
+     * 换季重置:旧季的资源池/挂载/集源行对新季全是误导 —— 明标旧季的候选继续躺在列表里,
+     * 裸标题旧资源的集源行继续冒领集号(computeMissing 判"已齐"→永不搜索新季),主源顶着的
+     * 也是旧季内容。季号一变即整体清空,首轮巡检按新季重搜重挂。
+     * <p>
+     * DB 清理在本事务内原子完成;远程卸载是 N 次 HTTP 往返,提交后异步执行(行锁不横跨远程调用,
+     * 与 delete 同规),卸载失败仅记日志 —— 挂载 share 已无行引用,由既有清理兜底。
+     */
+    private void resetForSeasonChange(int uid, MediaSubscription subscription, int oldSeason, int newSeason) {
+        int id = subscription.getId();
+        List<Integer> shareIds = new ArrayList<>();
+        for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(id)) {
+            if (resource.getShareId() != null) {
+                shareIds.add(resource.getShareId());
+            }
+        }
+        if (subscription.getShareId() != null) {
+            shareIds.add(subscription.getShareId());
+        }
+        checkService.resetInventoryForSeason(subscription, newSeason);
+        List<Integer> sharesToUnmount = List.copyOf(new java.util.LinkedHashSet<>(shareIds));
+        Runnable cleanup = () -> {
+            for (Integer shareId : sharesToUnmount) {
+                try {
+                    shareService.deleteShare(shareId);
+                } catch (Exception e) {
+                    log.warn("unmount share after season change failed: {} {}", shareId, e.getMessage());
+                }
+            }
+            checkService.checkAsync(uid, id);
+        };
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            cleanup.run();
+                        }
+                    });
+        } else {
+            cleanup.run();
+        }
+        log.info("media subscription {} season changed {} -> {}: pool reset",
+                id, oldSeason, newSeason);
     }
 
     public void delete(int uid, int id) {

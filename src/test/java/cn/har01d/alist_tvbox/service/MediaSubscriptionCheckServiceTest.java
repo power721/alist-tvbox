@@ -940,7 +940,7 @@ class MediaSubscriptionCheckServiceTest {
     void realShareFailureIsStillTreatedAsBad() {
         // 夸克「分享地址已失效」是真失效,必须继续判死 —— 别把限流保护扩大成"什么都不判死"
         assertFalse(MediaSubscriptionCheckService.isThrottleError("/追剧/悬案 [dbid-36624136]: 分享地址已失效"));
-        assertFalse(MediaSubscriptionCheckService.isThrottleError("资源无可识别的剧集文件:某标题"));
+        assertFalse(MediaSubscriptionCheckService.isThrottleError("疑似同名异剧(无可识别的本季剧集文件):某标题"));
         assertFalse(MediaSubscriptionCheckService.isThrottleError("挂载失败:https://pan.quark.cn/s/x"));
         assertFalse(MediaSubscriptionCheckService.isThrottleError(null));
     }
@@ -1820,6 +1820,197 @@ class MediaSubscriptionCheckServiceTest {
         alienNoMeta.setTitle("[英剧]悬案解码 第一季 Dept. Q Season 1 (2025)");
         fixture.subscription.setMetaProvider(null); // 未绑元数据:门禁关闭
         assertTrue(fixture.service.belongsToShow(fixture.subscription, alienNoMeta), "未绑元数据无从判定:放行");
+    }
+
+    // ---------- 季号门禁(2026-08-24):订阅《末日地堡》第1季改第3季后点检查,候选/挂载仍是第一季资源 ----------
+    // 标题明标「第一季」的资源同剧不同季,对本订阅就是"异剧":标题/年份门禁全放行(名字剥季缀后匹配、
+    // 集号也不超官方总集数),只有季号门禁拦得住。裸标题(无季标记)不判 —— 内容是哪季无从得知。
+
+    @Test
+    void belongsToShowSeasonGateForms() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("末日地堡");
+        fixture.subscription.setSeason(3);
+        MediaSubscriptionResource s1 = new MediaSubscriptionResource();
+        s1.setTitle("末日地堡第一季");
+        assertFalse(fixture.service.belongsToShow(fixture.subscription, s1), "明标第1季:对第3季订阅是异季资源");
+
+        MediaSubscriptionResource s2 = new MediaSubscriptionResource();
+        s2.setTitle("末日地堡 第二季 4K");
+        assertFalse(fixture.service.belongsToShow(fixture.subscription, s2), "明标第2季:拒");
+
+        MediaSubscriptionResource s3 = new MediaSubscriptionResource();
+        s3.setTitle("末日地堡 第三季 4K");
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, s3), "明标本季:放行");
+
+        MediaSubscriptionResource bare = new MediaSubscriptionResource();
+        bare.setTitle("末日地堡 (2023)");
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, bare), "裸标题无从判定:放行");
+
+        MediaSubscriptionResource collection = new MediaSubscriptionResource();
+        collection.setTitle("末日地堡 第1-2季合集");
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, collection), "跨季区间(解析不定季):放行");
+
+        fixture.subscription.setSeason(1);
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, s1), "第1季订阅:第1季资源放行");
+        assertFalse(fixture.service.belongsToShow(fixture.subscription, s3), "门禁双向:第1季订阅拒第3季资源");
+
+        fixture.subscription.setSeason(null);
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, s2), "订阅未指定季:门禁关闭");
+    }
+
+    @Test
+    void purgeForeignSeasonResourcesRemovesStaleSeasonRows() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("末日地堡");
+        fixture.subscription.setSeason(3);
+        MediaSubscriptionResource mountedS1 = new MediaSubscriptionResource();
+        mountedS1.setId(11);
+        mountedS1.setTitle("末日地堡第一季");
+        mountedS1.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        mountedS1.setShareId(21);
+        mountedS1.setMountPath("/追剧/.sources/uc@x@");
+        MediaSubscriptionResource candidateS1 = new MediaSubscriptionResource();
+        candidateS1.setId(12);
+        candidateS1.setTitle("末日地堡 第一季");
+        candidateS1.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource bare = new MediaSubscriptionResource();
+        bare.setId(13);
+        bare.setTitle("末日地堡");
+        bare.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource rightSeason = new MediaSubscriptionResource();
+        rightSeason.setId(14);
+        rightSeason.setTitle("末日地堡 第三季 4K");
+        rightSeason.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(mountedS1, candidateS1, bare, rightSeason));
+
+        fixture.service.purgeForeignSeasonResources(fixture.subscription);
+
+        Mockito.verify(fixture.resourceRepository).delete(mountedS1);
+        Mockito.verify(fixture.resourceRepository).delete(candidateS1);
+        Mockito.verify(fixture.resourceRepository, Mockito.never()).delete(bare);
+        Mockito.verify(fixture.resourceRepository, Mockito.never()).delete(rightSeason);
+        Mockito.verify(fixture.shareService).deleteShare(21); // 有挂载的才远程卸载
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.eq(5));
+        Mockito.verify(fixture.episodeSourceRepository).deleteByResourceIdIn(List.of(11));
+        Mockito.verify(fixture.episodeSourceRepository).deleteByResourceIdIn(List.of(12));
+        assertNull(fixture.subscription.getShareId(), "主源被清:shareId 置空走 ensureSource 重挂");
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository).save(events.capture());
+        assertTrue(events.getValue().getDetail().contains("其它季资源 2 条"),
+                "事件汇总清理条数: " + events.getValue().getDetail());
+    }
+
+    @Test
+    void activateEmptyFilesRejectedAsForeignShow() {
+        // activate 挂上后列不出本季任何文件:消息带 FOREIGN_SHOW_MARK,activateNextCandidate 的
+        // 异剧分流退役不拉黑 —— 按瞬时故障累积会把换季残留的活链接烧成跨订阅黑名单
+        assertTrue(MediaSubscriptionCheckService.isForeignShowRejection("疑似同名异剧(无可识别的本季剧集文件):末日地堡第一季"));
+        assertFalse(MediaSubscriptionCheckService.isThrottleError("疑似同名异剧(无可识别的本季剧集文件):末日地堡第一季"));
+    }
+
+    // ---------- 改季残留检测(2026-08-24 二轮,线上末日地堡 S1→S3 播放实锤) ----------
+    // 改季发生在重置功能上线之前,编辑路径不会再触发 —— 「检查」必须自己发现"集源行还挂在旧季
+    // episode 行上"(可用性聚合不按季过滤,S1 的 LISTED 行冒领 S3 集号:逻辑线路标题是新季分集
+    // 标题、点开播的是 S01E01)并就地全量重置,存量订阅点一次检查即恢复。
+
+    @Test
+    void staleSeasonInventoryForms() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setSeason(3);
+        MediaSubscriptionEpisode s1Episode = new MediaSubscriptionEpisode();
+        s1Episode.setId(101);
+        s1Episode.setSeason(1);
+        s1Episode.setNumber(1);
+        MediaSubscriptionEpisode s3Episode = new MediaSubscriptionEpisode();
+        s3Episode.setId(301);
+        s3Episode.setSeason(3);
+        s3Episode.setNumber(1);
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1))
+                .thenReturn(List.of(s1Episode, s3Episode));
+        MediaSubscriptionEpisodeSource s1Row = new MediaSubscriptionEpisodeSource();
+        s1Row.setEpisodeId(101);
+        MediaSubscriptionEpisodeSource s3Row = new MediaSubscriptionEpisodeSource();
+        s3Row.setEpisodeId(301);
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(List.of(s3Row));
+        assertFalse(fixture.service.staleSeasonInventory(fixture.subscription), "集源行全挂本季:无残留");
+
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(List.of(s1Row, s3Row));
+        assertTrue(fixture.service.staleSeasonInventory(fixture.subscription), "旧季 LIVE 行冒领集号:残留");
+
+        MediaSubscriptionEpisode special = new MediaSubscriptionEpisode();
+        special.setId(1);
+        special.setSeason(0); // 特别篇 season=0:合法跨季附属,不算残留
+        special.setNumber(1);
+        MediaSubscriptionEpisodeSource specialRow = new MediaSubscriptionEpisodeSource();
+        specialRow.setEpisodeId(1);
+        Mockito.when(fixture.episodeRepository.findBySubscriptionIdOrderByNumber(1)).thenReturn(List.of(special));
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(List.of(specialRow));
+        assertFalse(fixture.service.staleSeasonInventory(fixture.subscription), "特别篇不算残留");
+
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(List.of());
+        assertFalse(fixture.service.staleSeasonInventory(fixture.subscription), "无 LIVE 行:无从判定");
+
+        fixture.subscription.setSeason(null);
+        Mockito.when(fixture.episodeSourceRepository.findBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(List.of(s1Row));
+        assertFalse(fixture.service.staleSeasonInventory(fixture.subscription), "订阅未指定季:门禁关闭");
+    }
+
+    @Test
+    void resetInventoryForSeasonClearsWorld() {
+        Fixture fixture = new Fixture();
+        MediaSubscription subscription = fixture.subscription;
+        subscription.setSeason(3);
+        subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        subscription.setShareId(5);
+        subscription.setCurrentEpisodes(10);
+        subscription.setMaxEpisode(10);
+        subscription.setMetaSyncTime(123L);
+        subscription.setCaughtUpEpisode(10);
+        subscription.setCoverUrl("https://example/old-season.jpg");
+        MediaSubscriptionResource stale = new MediaSubscriptionResource();
+        stale.setId(21);
+        stale.setShareId(51);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(stale));
+
+        fixture.service.resetInventoryForSeason(subscription, 3);
+
+        Mockito.verify(fixture.episodeSourceRepository).deleteByResourceIdIn(List.of(21));
+        Mockito.verify(fixture.episodeRepository).deleteBySubscriptionId(1);
+        Mockito.verify(fixture.resourceRepository).deleteBySubscriptionId(1);
+        assertNull(subscription.getShareId(), "主源挂载引用断开");
+        assertNull(subscription.getCoverUrl(), "旧季封面快照作废");
+        assertNull(subscription.getMetaSyncTime(), "旧季元数据快照作废,首轮巡检重拉");
+        assertNull(subscription.getCaughtUpEpisode(), "追平门槛按旧季观看进度累计,新季口径作废");
+        assertEquals(0, subscription.getCurrentEpisodes());
+        assertNull(subscription.getMaxEpisode());
+        assertEquals(0, subscription.getStallCount());
+        assertEquals(MediaSubscription.STATUS_ACTIVE, subscription.getStatus(), "旧季完结状态随换季作废");
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository).save(events.capture());
+        assertTrue(events.getValue().getDetail().contains("第3季"), "事件说明换季重置: " + events.getValue().getDetail());
+    }
+
+    @Test
+    void purgeForeignSeasonResourcesSkipsWhenSeasonUnknown() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("末日地堡");
+        fixture.subscription.setSeason(null); // 未指定季:门禁关闭,池子不动
+        MediaSubscriptionResource s1 = new MediaSubscriptionResource();
+        s1.setId(11);
+        s1.setTitle("末日地堡第一季");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(s1));
+
+        fixture.service.purgeForeignSeasonResources(fixture.subscription);
+
+        Mockito.verify(fixture.resourceRepository, Mockito.never()).delete(Mockito.any());
+        Mockito.verify(fixture.eventRepository, Mockito.never()).save(Mockito.any());
     }
 
     // ---------- 集号范围门禁(2026-08-23):真人版《仙剑奇侠传三》37 集顶在动画版订阅(官方 26 集)上 ----------

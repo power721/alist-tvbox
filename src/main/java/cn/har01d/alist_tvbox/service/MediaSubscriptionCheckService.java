@@ -366,6 +366,108 @@ public class MediaSubscriptionCheckService {
         });
     }
 
+    /**
+     * 存量池季号清洗:标题明确标注其它季的资源行(换季前搜入的"末日地堡第一季"这类)逐轮清出 ——
+     * 入池过滤只挡新搜索结果,旧行没人清会永久躺在候选列表里(用户改季后点检查,候选还全是第一季)。
+     * 裸标题(无季标记)行不判:内容是哪季无从得知,交给挂载侧 season 口径的文件解析与 hollow 换源自愈。
+     * 行删除不拉黑 link —— 资源没死,只是不属于本季,别的订阅(追其它季)照常可用。
+     */
+    void purgeForeignSeasonResources(MediaSubscription subscription) {
+        if (subscription.getSeason() == null || subscription.getSeason() <= 0) {
+            return;
+        }
+        List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId());
+        List<Integer> purgedIds = new ArrayList<>();
+        List<String> purgedTitles = new ArrayList<>();
+        boolean primaryPurged = false;
+        for (MediaSubscriptionResource resource : resources) {
+            Integer titleSeason = TextUtils.parseTitleSeason(resource.getTitle());
+            if (titleSeason == null || titleSeason.equals(subscription.getSeason())) {
+                continue;
+            }
+            if (StringUtils.isNotBlank(resource.getMountPath())) {
+                try {
+                    shareService.deleteShare(resource.getShareId());
+                } catch (Exception e) {
+                    log.warn("purge foreign-season share failed: {} {}", resource.getShareId(), e.getMessage());
+                }
+            }
+            episodeSourceRepository.deleteByResourceIdIn(List.of(resource.getId()));
+            resourceRepository.delete(resource);
+            purgedIds.add(resource.getId());
+            purgedTitles.add(StringUtils.defaultIfBlank(resource.getTitle(), resource.getLink()));
+            if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())) {
+                primaryPurged = true; // 主源被清:固定路径挂载已卸,shareId 置空走 ensureSource 重挂
+            }
+        }
+        if (purgedIds.isEmpty()) {
+            return;
+        }
+        if (primaryPurged) {
+            subscription.setShareId(null);
+        }
+        forget(subscription.getId(), purgedIds);
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                "清理其它季资源 " + purgedIds.size() + " 条(当前订阅:第" + subscription.getSeason() + "季):"
+                        + String.join("、", purgedTitles), false);
+    }
+
+    /**
+     * 换季全量重置的 DB 部分(纯本地,可在事务内调用):清资源池/集源行/分集日历行,重置集数与
+     * 元数据快照(封面/日程/追平标记都是旧季口径)。资源行的 shareId 卸载由调用方处理 ——
+     * 远程卸载是 HTTP 往返,坐在编辑事务里会横跨行锁(与 delete 同规)。
+     */
+    void resetInventoryForSeason(MediaSubscription subscription, int newSeason) {
+        int id = subscription.getId();
+        List<Integer> resourceIds = resourceRepository.findBySubscriptionIdOrderByScoreDesc(id).stream()
+                .map(MediaSubscriptionResource::getId)
+                .toList();
+        episodeSourceRepository.deleteByResourceIdIn(resourceIds);
+        episodeRepository.deleteBySubscriptionId(id);
+        resourceRepository.deleteBySubscriptionId(id);
+        subscription.setShareId(null);
+        subscription.setCoverUrl(null); // 封面/日程快照是旧季口径,清空让首轮巡检按新季重拉
+        subscription.setMetaSyncTime(null);
+        subscription.setCurrentEpisodes(0);
+        subscription.setMaxEpisode(null);
+        subscription.setStallCount(0);
+        subscription.setCaughtUpEpisode(null); // 追平门槛按旧季观看进度累计,新季口径作废
+        if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
+            subscription.setStatus(MediaSubscription.STATUS_ACTIVE); // 换季=追新季,旧季完结状态随之作废
+        }
+        forget(id, resourceIds);
+        addEvent(id, MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                "换季重置:已清空资源池与集数,按第" + newSeason + "季重新搜索", false);
+    }
+
+    /**
+     * 改季残留检测:改季只 setSeason,旧季的集源行不清 —— 行挂在旧季 episode 行(season 列)上,
+     * 而可用性聚合不按季过滤,旧季行继续冒领集号:播放列表顶着新季分集标题、点开却是旧季文件
+     * (线上:末日地堡 S1→S3,逻辑线路第 1 集"你是谁?"播的是 S01E01)。命中即全量重置自愈,
+     * 覆盖"改季发生在重置功能上线之前"的存量订阅 —— 点一次「检查」即恢复,无需删订重订。
+     */
+    boolean staleSeasonInventory(MediaSubscription subscription) {
+        if (subscription.getSeason() == null || subscription.getSeason() <= 0) {
+            return false;
+        }
+        List<MediaSubscriptionEpisodeSource> live = episodeSourceRepository
+                .findBySubscriptionAndStatesIn(subscription.getId(), LIVE_STATES);
+        if (live.isEmpty()) {
+            return false;
+        }
+        Map<Integer, Integer> seasonByEpisodeId = new HashMap<>();
+        for (MediaSubscriptionEpisode episode : episodeRepository.findBySubscriptionIdOrderByNumber(subscription.getId())) {
+            seasonByEpisodeId.put(episode.getId(), episode.getSeason());
+        }
+        for (MediaSubscriptionEpisodeSource row : live) {
+            Integer season = seasonByEpisodeId.get(row.getEpisodeId());
+            if (season != null && season > 0 && season != subscription.getSeason()) {
+                return true; // 特别篇 season=0 不算:合法的跨季附属内容
+            }
+        }
+        return false;
+    }
+
     /** 订阅删除后清理全部内存态(限频/轮次/冷却 Map 按订阅/资源 id 键控,不清理即无界泄漏)。 */
     public void forget(int subscriptionId, List<Integer> resourceIds) {
         inFlight.remove(subscriptionId);
@@ -604,6 +706,29 @@ public class MediaSubscriptionCheckService {
 
     private void doCheck(MediaSubscription subscription) {
         subscription.setLastCheckTime(System.currentTimeMillis());
+        purgeForeignSeasonResources(subscription);
+        if (staleSeasonInventory(subscription)) {
+            // 改季残留(改季发生在重置功能之前):旧季集源行冒领集号,先卸全部挂载再全量重置,
+            // 随后 shareId=null 自然落 ensureSource 分支按本季重搜重挂
+            List<Integer> shareIds = new ArrayList<>();
+            for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId())) {
+                if (resource.getShareId() != null) {
+                    shareIds.add(resource.getShareId());
+                }
+            }
+            if (subscription.getShareId() != null) {
+                shareIds.add(subscription.getShareId());
+            }
+            int season = subscription.getSeason();
+            resetInventoryForSeason(subscription, season);
+            for (Integer shareId : new java.util.LinkedHashSet<>(shareIds)) {
+                try {
+                    shareService.deleteShare(shareId);
+                } catch (Exception e) {
+                    log.warn("unmount share after season change failed: {} {}", shareId, e.getMessage());
+                }
+            }
+        }
         refreshMetadata(subscription);
 
         if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
@@ -651,11 +776,16 @@ public class MediaSubscriptionCheckService {
         // 集源同步:主源行落库(新文件 LISTED、消失文件 MISSING),补缺挂载原位刷新,
         // 刷不出内容的死挂载就地退役 —— 缺陷 4"旧快照冒领集数"的数据层终结
         MediaSubscriptionResource primary = primaryResource(subscription);
-        if (primary != null && !belongsToShow(subscription, primary, files.keySet())) {
+        // 空壳主源:挂载列不出任何本季可识别文件 —— 换季后旧季合集的常态(「第一/二季」目录被
+        // otherSeasonDir 拒入、S01Eyy 被 parseEpisode(season) 拒收),列目录不报错、失效探测也正常,
+        // 唯一信号就是文件集为空。与误挂异剧同路换源,不让空壳拖到下轮。
+        boolean primaryHollow = primary != null && files.isEmpty();
+        if (primary != null && (!belongsToShow(subscription, primary, files.keySet()) || primaryHollow)) {
             // 误挂异业主源(线上:「悬案解码」2025 顶在「悬案」2026 的固定路径上):列目录/流探测都正常,
             // 巡检没有天然失效信号 —— 用与候选池同一套归属+年份门禁就地复核(集号用本轮清洗后的
             // 文件集,防噪声剔除上线前的存量毒行 142 误判主体正确的主源),不符即换源;
             // activate 会把旧主源降级回候选池(行落 MISSING,不进黑名单:链接没死,只是不属于本剧)。
+            String alienReason = primaryHollow ? "主源无可识别的本季剧集文件:" : "主源与剧集不符(误挂异剧):";
             if (!activateNextCandidate(subscription)) {
                 fillPool(subscription, true, null);
                 activateNextCandidate(subscription);
@@ -665,12 +795,12 @@ public class MediaSubscriptionCheckService {
                 // 每轮都强制全量搜索+推一条错误事件,直到偶然召回同剧候选才解套
                 syncInventory(subscription, primary, subscription.getMountPath(), files);
                 addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR,
-                        "主源与剧集不符(误挂异剧):" + StringUtils.defaultString(primary.getTitle()) + ",暂无同剧候选,待补池换源");
+                        alienReason + StringUtils.defaultString(primary.getTitle()) + ",暂无同剧候选,待补池换源");
                 scheduleNext(subscription);
                 return;
             }
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
-                    "主源与剧集不符(误挂异剧):" + StringUtils.defaultString(primary.getTitle()) + ",已自动换源");
+                    alienReason + StringUtils.defaultString(primary.getTitle()) + ",已自动换源");
             primary = primaryResource(subscription);
             try {
                 files = listEpisodeFiles(subscription);
@@ -1356,6 +1486,11 @@ public class MediaSubscriptionCheckService {
         List<String> names = matchNames(subscription);
         if (!names.isEmpty() && !matchesTitle(names, title)) {
             return false;
+        }
+        Integer titleSeason = TextUtils.parseTitleSeason(title);
+        if (subscription.getSeason() != null && subscription.getSeason() > 0
+                && titleSeason != null && !titleSeason.equals(subscription.getSeason())) {
+            return false; // 标题明确标注其它季:同剧不同季,对本订阅就是"异剧"(换季后旧季资源继续挂载/顶主源)
         }
         return titleYearMatches(metaYear(subscription), names, title);
     }
@@ -2736,7 +2871,9 @@ public class MediaSubscriptionCheckService {
         stripForeignEpisodeNoise(subscription, files);
         if (files.isEmpty()) {
             deleteJustMountedShareQuietly(share, "no recognizable episode files");
-            throw new IllegalStateException("资源无可识别的剧集文件:" + resource.getTitle());
+            // 带 FOREIGN_SHOW_MARK:换季后旧季资源挂上即空(季目录/集号全被 season 口径拒收),
+            // 链接活着,走异剧分流退役不拉黑;按瞬时故障累积会把活链接烧成跨订阅黑名单
+            throw new IllegalStateException(FOREIGN_SHOW_MARK + "(无可识别的本季剧集文件):" + resource.getTitle());
         }
         if (episodeNumbersForeign(subscription, files.keySet())) {
             // 同名异剧(真人版集数>动画版官方总集数):卸掉刚挂的分享再抛 —— 固定路径不能残留异剧文件,
