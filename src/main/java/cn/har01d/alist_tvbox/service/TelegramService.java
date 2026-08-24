@@ -1522,8 +1522,11 @@ public class TelegramService {
 
         String html = getHtml(url);
 
+        return parseWebMessages(Jsoup.parse(html), username);
+    }
+
+    List<Message> parseWebMessages(Document doc, String username) {
         List<Message> list = new ArrayList<>();
-        Document doc = Jsoup.parse(html);
         Elements elements = doc.select("div.tgme_container div.tgme_widget_message_wrap");
         for (Element element : elements) {
             Element photo = element.selectFirst("a.tgme_widget_message_photo_wrap");
@@ -1532,7 +1535,14 @@ public class TelegramService {
                 String style = photo.attr("style");
                 cover = style.replaceAll(".*background-image:url\\('(.*?)'\\).*", "$1");
             }
-            String id = element.selectFirst(".tgme_widget_message").attr("data-post").split("/")[1];
+            Element message = element.selectFirst(".tgme_widget_message");
+            String post = message != null ? message.attr("data-post") : "";
+            String[] parts = post.split("/");
+            if (parts.length < 2 || !parts[1].matches("\\d+")) {
+                log.debug("Skip message with invalid data-post '{}'", post);
+                continue;
+            }
+            String id = parts[1];
             Element elTime = element.selectFirst("time");
             String time = elTime != null ? elTime.attr("datetime") : null;
             list.add(new Message(Integer.parseInt(id), username, getTextWithNewlines(element.select(".tgme_widget_message_text").first()), time, cover));

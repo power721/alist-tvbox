@@ -18,6 +18,9 @@ import org.springframework.http.converter.json.MappingJackson2HttpMessageConvert
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
+import org.jsoup.Jsoup;
+
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -376,6 +379,64 @@ class TelegramServiceTest {
         service.validateChannels();
 
         server.verify();
+    }
+
+    @Test
+    void parseWebMessagesParsesIdTextTimeAndCover() {
+        TelegramService service = createService(new AppProperties(), new RestTemplate(), mock(TelegramChannelRepository.class));
+
+        var messages = service.parseWebMessages(Jsoup.parse("""
+                <div class="tgme_container"><div class="tgme_widget_message_wrap">
+                  <a class="tgme_widget_message_photo_wrap" style="width:320px;background-image:url('https://cdn.example/a.jpg')"></a>
+                  <div class="tgme_widget_message" data-post="chan/101">
+                    <div class="tgme_widget_message_text">标题 https://pan.quark.cn/s/abc</div>
+                    <time datetime="2026-08-24T10:00:00Z"></time>
+                  </div>
+                </div></div>
+                """), "chan");
+
+        assertThat(messages).hasSize(1);
+        assertThat(messages.getFirst().getId()).isEqualTo(101);
+        assertThat(messages.getFirst().getChannel()).isEqualTo("chan");
+        assertThat(messages.getFirst().getContent()).contains("pan.quark.cn");
+        assertThat(messages.getFirst().getTime()).isEqualTo(Instant.parse("2026-08-24T10:00:00Z"));
+        assertThat(messages.getFirst().getCover()).isEqualTo("https://cdn.example/a.jpg");
+    }
+
+    @Test
+    void parseWebMessagesSkipsWrapWithoutInnerMessageNode() {
+        TelegramService service = createService(new AppProperties(), new RestTemplate(), mock(TelegramChannelRepository.class));
+
+        var messages = service.parseWebMessages(Jsoup.parse("""
+                <div class="tgme_container">
+                  <div class="tgme_widget_message_wrap"></div>
+                  <div class="tgme_widget_message_wrap">
+                    <div class="tgme_widget_message" data-post="chan/102">
+                      <div class="tgme_widget_message_text">https://pan.quark.cn/s/def</div>
+                    </div>
+                  </div>
+                </div>
+                """), "chan");
+
+        assertThat(messages).extracting(cn.har01d.alist_tvbox.dto.tg.Message::getId).containsExactly(102);
+    }
+
+    @Test
+    void parseWebMessagesSkipsMalformedDataPost() {
+        TelegramService service = createService(new AppProperties(), new RestTemplate(), mock(TelegramChannelRepository.class));
+
+        var messages = service.parseWebMessages(Jsoup.parse("""
+                <div class="tgme_container">
+                  <div class="tgme_widget_message_wrap">
+                    <div class="tgme_widget_message" data-post="no-separator"></div>
+                  </div>
+                  <div class="tgme_widget_message_wrap">
+                    <div class="tgme_widget_message" data-post="chan/not-a-number"></div>
+                  </div>
+                </div>
+                """), "chan");
+
+        assertThat(messages).isEmpty();
     }
 
     private TelegramService createService(AppProperties appProperties, RestTemplate restTemplate, TelegramChannelRepository channelRepository) {
