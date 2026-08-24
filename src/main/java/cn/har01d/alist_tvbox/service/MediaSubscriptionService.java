@@ -1035,6 +1035,7 @@ public class MediaSubscriptionService {
      */
     public Map<String, Object> playEpisode(int uid, int subscriptionId, int episode, String client, String type) {
         MediaSubscription subscription = getOwned(uid, subscriptionId);
+        boolean getSub = wantsSubtitles(subscription);
         // 候选清单:转存各账号盘(实时列目录,自有盘无集源行) → 集源行索引(VERIFIED 优先、资源分序)
         List<MediaSubscriptionCheckService.EpisodeFile> transferFiles = new ArrayList<>();
         if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
@@ -1051,7 +1052,7 @@ public class MediaSubscriptionService {
         for (MediaSubscriptionCheckService.EpisodeFile file : transferFiles) {
             attempted++;
             try {
-                Map<String, Object> result = tvBoxService.getPlayUrl(1, file.dir() + "/" + file.name(), true, client, type);
+                Map<String, Object> result = tvBoxService.getPlayUrl(1, file.dir() + "/" + file.name(), getSub, client, type);
                 kickPreheatAhead(uid, subscriptionId, episode);
                 return result;
             } catch (Exception e) {
@@ -1066,7 +1067,7 @@ public class MediaSubscriptionService {
             attempted++;
             String path = candidate.resource().getMountPath() + "/" + candidate.source().getRelPath();
             try {
-                Map<String, Object> result = tvBoxService.getPlayUrl(1, path, true, client, type);
+                Map<String, Object> result = tvBoxService.getPlayUrl(1, path, getSub, client, type);
                 checkService.recordPlaySuccess(candidate.source());
                 kickPreheatAhead(uid, subscriptionId, episode);
                 return result;
@@ -1096,6 +1097,40 @@ public class MediaSubscriptionService {
         } catch (Exception e) {
             log.debug("trigger preheat ahead for subscription {} failed: {}", subscriptionId, e.getMessage());
         }
+    }
+
+    /** 播放期是否查找外挂字幕:字幕查找(getSubtitle)要列一次文件所在目录,而网盘分享的外挂字幕
+     * 几乎只出现在非华语资源(国产剧内嵌)——元数据地区明确非中国(番剧/欧美剧)才查,
+     * 中国/港台/未绑元数据/无地区数据都不查,省掉播放链路里唯一一次目录列举。 */
+    boolean wantsSubtitles(MediaSubscription subscription) {
+        if (StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
+            return false;
+        }
+        try {
+            MetadataDetails details = metadataService.cachedDetails(
+                    subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+            List<String> countries = details == null ? null : details.getCountries();
+            if (countries == null || countries.isEmpty()) {
+                return false;
+            }
+            return countries.stream().noneMatch(MediaSubscriptionService::isChineseMarket);
+        } catch (Exception e) {
+            log.debug("load countries for subtitle gate of subscription {} failed: {}",
+                    subscription.getId(), e.getMessage());
+            return false;
+        }
+    }
+
+    /** 地区是否华语市场:TMDB 用 ISO 码(CN/TW/HK),豆瓣用中文(中国大陆/中国香港…),港台分享同样极少外挂字幕。 */
+    static boolean isChineseMarket(String country) {
+        if (StringUtils.isBlank(country)) {
+            return false;
+        }
+        String normalized = country.trim();
+        String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+        return "cn".equals(lower) || "tw".equals(lower) || "hk".equals(lower)
+                || normalized.contains("中国") || "china".equals(lower)
+                || lower.startsWith("hong kong") || lower.startsWith("taiwan");
     }
 
     /** 多源合并播放(§4.5,需求 1):按集号合并,优先级 转存副本(自有盘)> 主源 > 补缺源,排序成单一播放列表。
