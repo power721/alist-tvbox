@@ -159,6 +159,11 @@ public class MediaSubscriptionTransferService {
         boolean anySuccess = false;  // 含"无需转存"(返回 0)——账号本来就已补齐也算成功
         boolean anyFailure = false;
         for (TransferTarget target : targets) {
+            // 配额按"每个转存任务"计:多目标逐盘各起一个任务,逐目标复查防剩余 1 个名额被同一订阅的多个盘吃穿
+            if (quotaLeft() <= 0) {
+                log.info("transfer quota exhausted, stop at target {} of subscription {}", target.name(), subscription.getId());
+                break;
+            }
             try {
                 Integer transferred = transferToAccount(subscription, target);
                 if (transferred != null) {

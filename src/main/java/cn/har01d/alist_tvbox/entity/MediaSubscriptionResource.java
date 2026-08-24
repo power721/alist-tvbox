@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.TableGenerator;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -26,7 +28,7 @@ import lombok.ToString;
 @RequiredArgsConstructor
 @Entity
 @TableGenerator(name = "tableGenerator", table = "id_generator", pkColumnName = "entity_name", valueColumnName = "next_id", allocationSize = 1)
-@jakarta.persistence.Table(name = "media_subscription_resource", uniqueConstraints = @UniqueConstraint(name = "uk_msub_resource", columnNames = {"subscription_id", "link"}))
+@jakarta.persistence.Table(name = "media_subscription_resource", uniqueConstraints = @UniqueConstraint(name = "uk_msub_resource", columnNames = {"subscription_id", "link_hash"}))
 public class MediaSubscriptionResource {
     /** 池内未挂载,可探测/激活 */
     public static final String STATE_CANDIDATE = "CANDIDATE";
@@ -46,6 +48,35 @@ public class MediaSubscriptionResource {
 
     @Column(nullable = false, length = 1024)
     private String link;
+
+    /** link 的 SHA-256 hex:(subscription_id, link_hash) 唯一索引数据源。MySQL 整列唯一索引受
+     *  InnoDB 3072 字节键长限制只能建 760 字符前缀,前缀相同的长分享链会被误判重复;哈希全链唯一。
+     *  算法与 V34 迁移回填一致(小写 hex,UTF-8),不可改动否则新旧行哈希口径分叉。 */
+    @Column(name = "link_hash", length = 64)
+    private String linkHash;
+
+    @PrePersist
+    @PreUpdate
+    void refreshLinkHash() {
+        this.linkHash = hashOf(link);
+    }
+
+    public static String hashOf(String link) {
+        if (link == null) {
+            return null;
+        }
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(link.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                hex.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
 
     private Integer type;
 

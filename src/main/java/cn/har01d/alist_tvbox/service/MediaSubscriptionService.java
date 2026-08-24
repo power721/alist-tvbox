@@ -667,13 +667,53 @@ public class MediaSubscriptionService {
         return template;
     }
 
-    /** b23.tv 等短链展开:JDK 连接手动读 Location 逐跳跟随(≤5 跳)。 */
+    /** 元数据链接解析允许服务端发起请求的平台官方域:白名单域外/非 https 一律不发请求,防借道探测内网(SSRF)。 */
+    private static final java.util.Set<String> META_LINK_DOMAINS = java.util.Set.of(
+            "b23.tv", "bilibili.com", "youku.com", "iqiyi.com");
+
+    /** https 且 host 为白名单域或其子域;解析失败按不通过处理(调用方不会发起请求)。 */
+    static boolean isAllowedMetaLinkUrl(String url) {
+        try {
+            java.net.URI uri = java.net.URI.create(url.trim());
+            if (!"https".equalsIgnoreCase(uri.getScheme())) {
+                return false;
+            }
+            String host = uri.getHost();
+            if (host == null) {
+                return false;
+            }
+            String lower = host.toLowerCase(java.util.Locale.ROOT);
+            return META_LINK_DOMAINS.stream().anyMatch(d -> lower.equals(d) || lower.endsWith("." + d));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** b23.tv 短链精确判定:host 精确等于 b23.tv/www.b23.tv。旧 contains("b23.tv") 会被
+     *  http://127.0.0.1/b23.tv 之类借道,让短链展开先打到内网地址。 */
+    static boolean isShortLink(String url) {
+        try {
+            java.net.URI uri = java.net.URI.create(url.trim());
+            if (!"https".equalsIgnoreCase(uri.getScheme())) {
+                return false;
+            }
+            String host = uri.getHost();
+            return host != null && ("b23.tv".equalsIgnoreCase(host) || "www.b23.tv".equalsIgnoreCase(host));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** b23.tv 等短链展开:JDK 连接手动读 Location 逐跳跟随(≤5 跳);入口与每一跳都过白名单,跳向其它域不再请求。 */
     private String expandShortLink(String url) {
-        if (!url.contains("b23.tv")) {
+        if (!isShortLink(url)) {
             return url;
         }
         String current = url;
         for (int i = 0; i < 5; i++) {
+            if (!isAllowedMetaLinkUrl(current)) {
+                return current;
+            }
             try {
                 java.net.HttpURLConnection connection = (java.net.HttpURLConnection) java.net.URI.create(current).toURL().openConnection();
                 connection.setInstanceFollowRedirects(false);
@@ -705,8 +745,12 @@ public class MediaSubscriptionService {
         return headers;
     }
 
-    /** 页面服务端 <title> 提取与清洗:取首段、去"第N集…"尾巴、压缩空白。B站页面带用户 cookie 提升成功率。 */
+    /** 页面服务端 <title> 提取与清洗:取首段、去"第N集…"尾巴、压缩空白。B站页面带用户 cookie 提升成功率。
+     *  链接来自用户输入而平台正则不锚定 host(https://内网地址/#youku.com/... 也能命中),请求前必须过白名单。 */
     private String fetchPageTitle(String url) {
+        if (!isAllowedMetaLinkUrl(url)) {
+            throw new BadRequestException("页面解析仅支持 B站/优酷/爱奇艺官方 https 链接");
+        }
         try {
             org.springframework.http.HttpHeaders headers = browserHeaders();
             if (url.contains("bilibili.com")) {
@@ -1861,15 +1905,22 @@ public class MediaSubscriptionService {
                 }
                 MediaSubscriptionDto dto = create(uid, request);
                 if (StringUtils.isNotBlank(link)) {
-                    MediaSubscriptionResource resource = new MediaSubscriptionResource();
-                    resource.setSubscriptionId(dto.getId());
-                    resource.setLink(StringUtils.abbreviate(link.trim(), 1000)); // 列 VARCHAR(1024),站点链接无界
-                    resource.setTitle(StringUtils.abbreviate(name.trim(), 250));
-                    resource.setScore(1000); // 订阅即所见:当前源优先
-                    resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
-                    resource.setCreatedTime(System.currentTimeMillis());
-                    resourceRepository.save(resource);
-                    checkService.activateAsync(uid, dto.getId(), resource.getId());
+                    String normalized = StringUtils.abbreviate(link.trim(), 1000); // 列 VARCHAR(1024),站点链接无界
+                    // create 对同名订阅幂等复用,资源同样要幂等:重试/另一入口重复 follow 时直接复用已有行,
+                    // 再插一行会撞 (subscription_id, link) 唯一索引把整个事务打挂 —— 已存在则视为 no-op
+                    MediaSubscriptionResource resource =
+                            resourceRepository.findBySubscriptionIdAndLink(dto.getId(), normalized).orElse(null);
+                    if (resource == null) {
+                        resource = new MediaSubscriptionResource();
+                        resource.setSubscriptionId(dto.getId());
+                        resource.setLink(normalized);
+                        resource.setTitle(StringUtils.abbreviate(name.trim(), 250));
+                        resource.setScore(1000); // 订阅即所见:当前源优先
+                        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+                        resource.setCreatedTime(System.currentTimeMillis());
+                        resourceRepository.save(resource);
+                        checkService.activateAsync(uid, dto.getId(), resource.getId());
+                    }
                 } else {
                     checkService.checkAsync(uid, dto.getId());
                 }

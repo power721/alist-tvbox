@@ -1093,10 +1093,10 @@ const handleEdit = (row: SubscriptionDto) => {
     maxEpisodeSizeMb: row.filter?.maxEpisodeSizeMb ?? 0,
     weights: { ...(row.filter?.weights || {}) },
   }
+  // 编辑沿用订阅已绑定的源:重置成 TMDB 会让后续搜索走错源、易被误绑;仅新建(handleAdd)才强制 TMDB
   metaProvider.value = row.metaProvider || 'douban'
   metaKeyword.value = ''
   metaResults.value = []
-  metaProvider.value = 'tmdb' // 新建对话框不沿用上次编辑遗留的 tab/链接
   metaLink.value = ''
   formVisible.value = true
 }

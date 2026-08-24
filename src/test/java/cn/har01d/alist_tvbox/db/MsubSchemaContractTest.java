@@ -54,8 +54,9 @@ class MsubSchemaContractTest {
                 "account_id", "account_ids", "mount_path", "share_id", "expected_episodes",
                 "current_episodes", "max_episode", "caught_up_episode", "schedule", "cross_drive", "status", "stall_count",
                 "check_interval_hours", "next_check_time", "last_check_time", "created_time", "updated_time");
-        // MediaSubscriptionResource:validity/active/gap/episode_list 已 drop,state 新增
-        assertColumns("media_subscription_resource", "id", "subscription_id", "link", "type", "source",
+        // MediaSubscriptionResource:validity/active/gap/episode_list 已 drop,state 新增;
+        // link_hash 为 V34 全链唯一键(MySQL 前缀索引只比前 760 字符)
+        assertColumns("media_subscription_resource", "id", "subscription_id", "link", "link_hash", "type", "source",
                 "title", "password", "episodes_found", "score", "state", "mount_path", "share_id",
                 "checked_time", "created_time");
         assertColumns("msub_episode", "id", "subscription_id", "season", "number", "title", "air_time", "aired");
@@ -94,6 +95,64 @@ class MsubSchemaContractTest {
                 + " VALUES (11, 1, 1, 17)");
         assertUniqueViolation("INSERT INTO msub_episode_source (id, episode_id, resource_id, rel_path)"
                 + " VALUES (21, 10, 3, 'dup.mkv')");
+    }
+
+    @Test
+    void resourceLinkHashBackfilledAndPinsFullLinkUniqueness() throws Exception {
+        String prefix = "https://pan.example/s/" + "a".repeat(800) + "?token="; // > 760 字符前缀相同、尾巴不同
+        try (PreparedStatement ps = connection.prepareStatement(
+                "INSERT INTO media_subscription_resource (id, subscription_id, link, link_hash, created_time)"
+                        + " VALUES (30, 5, ?, ?, 1)")) {
+            ps.setString(1, prefix + "sig-a");
+            ps.setString(2, cn.har01d.alist_tvbox.entity.MediaSubscriptionResource.hashOf(prefix + "sig-a"));
+            ps.executeUpdate();
+        }
+        // 同 (subscription_id, link_hash) 撞唯一索引(链接文本不同也拦:哈希才是唯一键)
+        String hashA = cn.har01d.alist_tvbox.entity.MediaSubscriptionResource.hashOf(prefix + "sig-a");
+        assertUniqueViolation("INSERT INTO media_subscription_resource (id, subscription_id, link, link_hash, created_time)"
+                + " VALUES (31, 5, 'https://another.example/link', '" + hashA + "', 1)");
+        // 评审场景:两条链接前 760 字符完全一致(旧 MySQL 前缀唯一索引会误拒),哈希不同应都能入库
+        try (PreparedStatement ps = connection.prepareStatement(
+                "INSERT INTO media_subscription_resource (id, subscription_id, link, link_hash, created_time)"
+                        + " VALUES (32, 5, ?, ?, 1)")) {
+            ps.setString(1, prefix + "sig-b");
+            ps.setString(2, cn.har01d.alist_tvbox.entity.MediaSubscriptionResource.hashOf(prefix + "sig-b"));
+            ps.executeUpdate();
+        }
+    }
+
+    @Test
+    void v34BackfillsLinkHashOfRowsCreatedBeforeIt() throws Exception {
+        // 独立库先只迁移到 V33(建 media_subscription_resource 但无 link_hash),插入存量行后再放行 V34,
+        // 验证回填与唯一索引重建:回填口径 = 实体 hashOf(小写 hex SHA-256/UTF-8)
+        String url = "jdbc:h2:mem:msubv34_" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
+        try (Connection legacy = DriverManager.getConnection(url, "sa", "")) {
+            migrateTo(url, "33");
+            try (PreparedStatement ps = legacy.prepareStatement(
+                    "INSERT INTO media_subscription_resource (id, subscription_id, link, created_time)"
+                            + " VALUES (40, 5, 'https://pan.example/s/abc?pwd=1', 1)")) {
+                ps.executeUpdate();
+            }
+            migrateTo(url, null);
+            try (ResultSet rs = legacy.createStatement()
+                    .executeQuery("SELECT link_hash FROM media_subscription_resource WHERE id = 40")) {
+                assertTrue(rs.next());
+                assertEquals(cn.har01d.alist_tvbox.entity.MediaSubscriptionResource.hashOf("https://pan.example/s/abc?pwd=1"),
+                        rs.getString(1));
+            }
+        }
+    }
+
+    private void migrateTo(String url, String target) {
+        var configure = Flyway.configure()
+                .dataSource(url, "sa", "")
+                .locations("classpath:db/migration/h2", "classpath:db/migration/common",
+                        "classpath:db/migration/current")
+                .baselineOnMigrate(true);
+        if (target != null) {
+            configure.target(target);
+        }
+        configure.load().migrate();
     }
 
     private void assertColumns(String table, String... columns) throws SQLException {
