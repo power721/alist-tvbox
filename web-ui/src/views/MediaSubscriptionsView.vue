@@ -507,10 +507,6 @@
           </el-select>
           <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
         </el-form-item>
-        <el-form-item label="分集标题">
-          <el-switch v-model="notifyForm.episodeTitles"/>
-          <span class="sub-text" style="margin-left:8px">TVBox 剧集列表显示「集数. 标题(大小)」替代文件名;分集标题来自元数据(需 TMDB 桥接),无分集标题的集保留文件名</span>
-        </el-form-item>
         <span class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关);盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
           </el-tab-pane>
           <el-tab-pane label="盘链" name="panlian">
@@ -847,7 +843,6 @@ const notifyForm = ref({
   chatId: '',
   doubanCookie: '',
   archiveDays: 0,
-  episodeTitles: false,
   vipAccounts: [] as number[],
   mainDrives: [] as number[],
   extendedDrives: [] as number[],
@@ -1443,7 +1438,6 @@ const openNotify = () => {
     notifyForm.value.chatId = settings['msub_telegram_chat_id'] || ''
     notifyForm.value.doubanCookie = settings['douban_cookie'] || ''
     notifyForm.value.archiveDays = parseInt(settings['msub_archive_days'] || '0') || 0
-    notifyForm.value.episodeTitles = ['true', '1'].includes(settings['msub_episode_titles'] || '')
     notifyForm.value.vipAccounts = (settings['msub_vip_accounts'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
     notifyForm.value.mainDrives = (settings['msub_main_drives'] || '')
@@ -1480,7 +1474,6 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
     axios.post('/api/settings', {name: 'douban_cookie', value: notifyForm.value.doubanCookie}),
     axios.post('/api/settings', {name: 'msub_archive_days', value: String(notifyForm.value.archiveDays)}),
-    axios.post('/api/settings', {name: 'msub_episode_titles', value: notifyForm.value.episodeTitles ? 'true' : 'false'}),
     axios.post('/api/settings', {name: 'msub_vip_accounts', value: notifyForm.value.vipAccounts.join(',')}),
     axios.post('/api/settings', {
       name: 'msub_main_drives',
