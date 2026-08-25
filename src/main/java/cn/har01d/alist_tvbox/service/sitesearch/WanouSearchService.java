@@ -324,8 +324,8 @@ public class WanouSearchService {
             url = url.substring(0, url.length() - 1);
         }
         Matcher password = PASSWORD_IN_TEXT.matcher(text);
-        if (password.find() && !url.contains("pwd=") && !url.contains("password=") && !url.contains("#")) {
-            url += (url.contains("?") ? "&" : "?") + "password=" + password.group(1);
+        if (password.find() && !url.contains("#")) { // 锚点后拼参数无效,不折
+            url = SiteSearchSupport.appendPasswordParam(url, password.group(1), "password=");
         }
         urls.add(url);
     }

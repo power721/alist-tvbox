@@ -1,5 +1,7 @@
 # 追剧系统(自动追更)设计
 
+> **🆕 站点搜索四源公共支撑收口 + 偏好三级继承文档修正(2026-08-25,全分支评审遗留两项)**:①评审轮「站搜抽基类另行安排」落地——盘链/观影/蜗牛三源的成片复制(Config 凭证判定 `hasCredentials/canLogin`、登录失败冷却骨架 `loginFailed`+冷却字段、提取码折叠、host 归一化、Cookie 拼接、盘型数字判定、Setting 读取)收口为 `service.sitesearch` 包级四件:`SiteCredentials`(接口,各源 record Config 实现,凭证判定收默认方法)、`LoginCooldown`(登录失败进入冷却+告警一处)、`Resp`(HTTP 原语顶层化,服务覆写 `http()` 打桩口径不变)、`SiteSearchSupport`(静态工具)。**取组合不取继承基类**:四源登录舞步/反爬机制各异(PanLian multipart、GuanYing PoW+多镜像、Woniu 打码续期),抽基类只会 Refused Bequest。行为保持:盘链按盘折参数(百度/迅雷/123→`pwd=`、115→`password=`)与密码 URL 预编码原样、玩偶锚点(`#`)不折保留;顺带把玩偶防重折守卫从 `pwd=/password=` 补齐到 `passcode=`(与其余源同口径)。既有四测试类 41 条零改动全过(匿名子类经包作用域直接解析顶层 `Resp`),全量 916 绿。②§4.7「偏好三级继承:订阅 `filter_config` > 用户默认(`user_preference`) > 系统默认」经核实系死代码——`user_preference` 表与 GET/POST `/preference` 仅存储(preferenceRepository 全局仅此两处,订阅创建/筛选解析零消费),前端零调用、页头偏好 UI 未做,「预设档位单选」同样未实现;按评审结论**改文档不改代码**(删接口即 API break):§4.7/§5/§8/§9 与 guide 对应表述全部改为「现状:订阅 `filter_config` 留空直达系统默认,三级继承与档位未实现、`/preference` 仅存储」,并录入「留待」清单。
+
 > **🆕 完结订阅播放失败自愈:播放失败标记越过 ENDED 轻查短路(2026-08-25)**:完结≠看完——ENDED 判定只看剧集完结,与观看进度无关,而 `check()` 对 ENDED 订阅短路(轻查只刷元数据比对集数,不列源不搜索,手动「检查」同样被短路),能发现资源失效的完整巡检(`doCheck` 里的失效确认/换源/补搜)对 ENDED 永不执行;详情页 `resyncPrimaryInventory` 又「只列不判」(失败静默跳过)。结果:完结剧没看完、分享失效后系统零感知,播放列表/挂载/集源行全显示正常,用户每次点开同一集都撞死源,且 `playEpisode` 失败触发的 `checkAsync` 也被短路空转。修:播放期是信噪比最高的失效信号——`playEpisode` 全候选失败(attempted>0)时 `markPlaybackFailure`(内存 Set)先于 `checkAsync` 打标;`check()` 的 ENDED 分支据此越过轻查短路,回 ACTIVE(与加更/换季残留/异剧三条重开路口径一致)+清 stallCount+RESUMED 事件「播放失败,重开完整巡检检查资源」,走完整 doCheck(失效退役→池内换源→池空补搜);巡检尾部 `shouldAutoEnd` 在资源恢复正常后重新完结,状态自动归位。标记消费即摘除(check 开头 remove,单次生效),`forget`/`onDeleted` 同步清理;对 ACTIVE 订阅无额外作用(下轮巡检本来就跑,标记被无害消费)。单测两条(无标记维持轻查短路不列目录+次日复查/标记命中回 ACTIVE 跑完整巡检+RESUMED 事件)。
 > **🆕 同日追加:仍在追看的完结剧每日完整巡检**:播放失败是被动的(用户撞了死源才触发),主动侧补「仍在追看」判定 `watchingRecently`——近 7 天(`RECENT_PLAY_WINDOW_MS`)有播放记录(`History.updatedAt`,缺失回落 `createTime`)且未看完(观看进度 < 本地可用集数,进度复用 `watchedEpisode` 的 msubep 逻辑链接解析)的 ENDED 订阅,轻查短路放行,**保持 ENDED 状态直接跑完整 doCheck**(与播放失败路不同:不翻转 ACTIVE——每日跑若翻 ACTIVE 会被 shouldAutoEnd 反复重新完结,事件刷屏;`!ENDED` 守卫天然防重)。看完或越窗(7 天没再看)回落每日轻查,不为闲置完结剧花巡检开销。单测两条(3/12 集近播→完整巡检列目录/看完 12/12 或 30 天未播→维持短路),全量 914 绿。
 
@@ -110,7 +112,7 @@
 > **缺老集补全链路三修复(2026-08-23,修"盗妖行只找到10集且不补充")**:线上「盗妖行」新订阅首轮换到 score 最高的百度分享——标题「更54集」实际目录只留尾部 10 集(33-38,40,53-55),缺 45 个老集,但用户侧表现为"只找到10集、没有补充",且下一轮巡检排到 24h 后。三个环节叠加,逐一修复:①**首轮巡检提前收工**——`doCheck` 对无主源订阅在 `ensureSource` 挂上主源后直接 `scheduleNext+return`,缺集检测/补缺/分盘线路全部跳过;改为挂上主源继续走完整流程(挂不上才 return),首轮即探测补缺(单测 `firstRoundFillsGapsAfterMountingPrimary`:主源尾部5集+全集候选,首轮 check 后全集资源 MOUNTED、currentEpisodes=55)。②**播出前休眠让位**——`scheduleNext` 见"下一集后天播"把 nextCheckTime 排到 min(播出+15min, now+24h)=24h 后,该假设只对"追新集"成立,忽略老集缺口;新增 `behindAiredEpisodes`(officialEpisodes>currentEpisodes 快照,官方无数据/本地未知不判缺)判定,缺官方已播老集时不停留休眠分支、落到常规退避间隔(6h 起),让 fillGaps 尽早跑(单测 `scheduleNextPreAirSleepYieldsToAiredGap`/`scheduleNextPreAirSleepKeptWhenAiredCaughtUp`/`behindAiredEpisodesRequiresBothSides`)。③**分盘线路落行后轻刷集数快照**——详情触发的 `ensureDriveLinesAsync` 挂夸克/UC 备用线路时 probeShare 已把全集行(1-55)落库,但 `currentEpisodes` 停在首轮 activate 写的 10,列表 remarks「10/60集」要等下轮巡检才追平(数据齐了、显示没齐);尾部接 `refreshEpisodeCounters`(行并集口径轻刷 currentEpisodes/maxEpisode,已一致不写库,单测 `refreshEpisodeCountersSyncsFromLiveRows`)。播放列表装配本就实时列举 主源∪补挂载,分盘挂载后刷新详情即可见全集,不受本条影响。全量 806 绿。
 
 > 关键类:`MediaSubscriptionService`(CRUD/内容/合并播放/收件箱/导出导入/动作)、`MediaSubscriptionCheckService`(巡检/换源/补缺/探测/打分/通知)、`MediaSubscriptionTransferService`(转存/归档)、`web/MediaSubscriptionController`、`web/TelegramController`(msub 分支/操作组端点/首页分类)、`service/metadata/*`、迁移 `V20__MediaSubscription` + `V21__MediaSubscriptionMeta` + `V22__MediaSubscriptionMetaFix`(V21 曾因带引号小写列名在 H2 上导致 Column not found,V22 自愈,详见 `MediaSubscriptionMigrationTest`)。
-> 留待:集→源映射仅动态计算+接口固化展示(未落表,设计标注条件性);搜索成功率等指标在追剧页 `/stats`(未嵌入 SystemInfo 页);转存空间水位依赖事后校验发现(未做转存前预估)。
+> 留待:集→源映射仅动态计算+接口固化展示(未落表,设计标注条件性);搜索成功率等指标在追剧页 `/stats`(未嵌入 SystemInfo 页);转存空间水位依赖事后校验发现(未做转存前预估);用户默认偏好三级继承/预设档位/页头偏好 UI(`/preference` 仅存储未接入,§4.7)。
 >
 > **审查轮(2026-08-19)修复**:删除订阅连补缺挂载一起清理(原只删主源,-补N 泄漏);合并播放列表解析容忍 URL 内嵌 `#storageId=` 片段(原按 `#` 切分会截断,含回归测试);全部元数据 RestTemplate 统一带超时(`MetadataHttp`,防外部平台挂起卡死巡检线程),官方平台 provider 补 6h 缓存;V22 修复限定 H2(PG/MySQL 上旧 V21 小写列是正确约定,不可误删);spider 拦截抽取 `MediaSubscribeInterceptor` 并接入 TgWeb(同服务 /tg-search);导入批次内同名去重、归档事件独立类型 ARCHIVED、copy 轮询复用登录 token。
 >
@@ -233,7 +235,7 @@ PlaylistMerger 按集号合并多个源的清单:**转存副本(如有) > 主源
 
 ### 4.7 用户偏好与打分模型(ResourceRanker)
 
-不同用户对体积/码率的取舍不同(原盘党 vs 省流量党),偏好做**三级继承:订阅 `filter_config` > 用户默认(`user_preference`) > 系统默认**。订阅里留空的维度自动沿用上级,避免每个订阅重复填。
+不同用户对体积/码率的取舍不同(原盘党 vs 省流量党)。**现状:偏好只看订阅 `filter_config`,留空维度直接用系统默认**——设计的**三级继承:订阅 `filter_config` > 用户默认(`user_preference`) > 系统默认**未实现:`user_preference` 仅 `/preference` 存储接口、无消费方、无前端入口(§5);接入后订阅留空维度自动沿用上级,避免每个订阅重复填。
 
 **偏好维度**:
 
@@ -250,7 +252,7 @@ PlaylistMerger 按集号合并多个源的清单:**转存副本(如有) > 主源
 - 软打分(加权和排序): 单集平均体积贴近偏好带中心(高斯衰减 —— 过小扣"画质不足",过大扣"浪费空间")、估算码率达标度、盘类型序位、资源新近度、集数完整度。
 - 输入数据:单集体积来自挂载列表时的文件大小快照(§4.4 清单已含),码率为估算值(见上);TG-Search `media.quality` 在挂载前即可先粗筛一轮,减少无效挂载。
 
-**预设档位**(用户不必填数字):`极致画质`(体积上不封顶、码率优先)/ `均衡`(默认,1080P 2~4GB)/ `省流量`(≤1.5GB、720P 可接受)。档位只是参数预填,可继续自定义。
+**预设档位**(用户不必填数字;**未实现**,当前仅逐项自定义):`极致画质`(体积上不封顶、码率优先)/ `均衡`(默认,1080P 2~4GB)/ `省流量`(≤1.5GB、720P 可接受)。档位只是参数预填,可继续自定义。
 
 **降级阶梯**: 偏好内的源不存在或缺集时,按 `偏好内 > 降一档清晰度 > 任意可用` 逐级放宽;降级选择写事件(如 `第5集无符合偏好的来源,已选用1080P备选`),**不静默降级**。
 
@@ -307,9 +309,9 @@ PlaylistMerger 按集号合并多个源的清单:**转存副本(如有) > 主源
 
 `subscription_id`、`type`(`NEW_EPISODE / SOURCE_INVALID / SOURCE_REPLACED / GAP_FILLED / TRANSFER_DONE / TRANSFER_FAILED / ENDED / ERROR`)、`detail`(TEXT)、`created_time`。前端小红点 + 时间线即由此驱动。
 
-### user_preference(用户默认偏好)
+### user_preference(用户默认偏好;未接入)
 
-`uid`(UNIQUE)、`config`(TEXT JSON,字段与订阅 `filter_config` 同构 + 当前档位名)。订阅 `filter_config` 各维度可空,空则继承本表;本表未设置则用系统默认(§11)。
+`uid`(UNIQUE)、`config`(TEXT JSON,字段与订阅 `filter_config` 同构 + 当前档位名)。**现状仅存储**:表与 `/preference` 读写在,但订阅筛选解析不消费、前端无入口;设计意图是订阅 `filter_config` 空维度继承本表、本表未设置再走系统默认(§11)——接入前订阅空维度一律系统默认。
 
 ## 6. 关键流程
 
@@ -392,8 +394,8 @@ PlaylistMerger 按集号合并多个源的清单:**转存副本(如有) > 主源
 | DELETE | `/{id}` | 删除(?keepFiles=true 保留转存文件,默认 true) |
 | POST | `/{id}/check` | 手动触发检查(创建 Task) |
 | POST | `/{id}/pause` / `/{id}/resume` | 暂停/恢复 |
-| GET | `/preference` | 当前用户默认偏好 |
-| POST | `/preference` | 保存用户默认偏好(新订阅预填) |
+| GET | `/preference` | 当前用户默认偏好(仅存储,未接入订阅筛选) |
+| POST | `/preference` | 保存用户默认偏好(仅存储;新订阅预填未实现) |
 | GET | `/{id}/events` | 事件时间线 |
 | GET | `/{id}/resources` | 候选池(含各源集数覆盖) |
 | POST | `/{id}/resources/{rid}/activate` | 手动换源 |
@@ -414,8 +416,8 @@ PlaylistMerger 按集号合并多个源的清单:**转存副本(如有) > 主源
 - 新页面 `web-ui/src/views/MediaSubscriptionsView.vue` + 路由 `/media-subscriptions`,菜单名"追剧"(注意:现有"订阅"菜单是 TVBox 配置订阅,勿混);`App.vue` 桌面导航 + 移动 drawer 两处注册,gate `account.authenticated`(USER 亦可用)。
 - 列表:卡片/表格混合 —— 封面(豆瓣)、名称、进度(`第 12 集 / 共 24 集` + 进度条)、模式徽章(挂载/转存)、状态(追更中/已完结/异常/已暂停)、最近更新时间;操作:立即检查、暂停/恢复、换源(抽屉)、删除。
 - 详情抽屉:三个页签 —— 集数清单(缺失集高亮 + 该集来源盘)、候选资源表(分数/有效性/覆盖集数/一键启用)、事件时间线。
-- 新建对话框:名称 + 元数据条目搜索选择(全部/豆瓣/TMDB/Bangumi 源页签,显示来源徽章/总集数/更新状态,按编辑距离预选最优,可"更换条目")、筛选条件(预设档位单选 + 自定义:盘类型偏好排序、清晰度下限、单集体积带、码率下限、关键词包含/排除;留空的维度继承用户默认偏好 §4.7)、模式单选(选"转存"时出现 DriverAccount 下拉,复用 AccountsView 数据源)、检查周期。
-- 页头「偏好设置」入口:编辑用户默认偏好(档位 + 自定义参数),所有新订阅预填。
+- 新建对话框:名称 + 元数据条目搜索选择(全部/豆瓣/TMDB/Bangumi 源页签,显示来源徽章/总集数/更新状态,按编辑距离预选最优,可"更换条目")、筛选条件(自定义:盘类型偏好排序、清晰度下限、单集体积带、码率下限、关键词包含/排除;留空的维度走系统默认——用户默认偏好继承与预设档位未实现 §4.7)、模式单选(选"转存"时出现 DriverAccount 下拉,复用 AccountsView 数据源)、检查周期。
+- 页头「偏好设置」入口(未实现):编辑用户默认偏好(档位 + 自定义参数),所有新订阅预填——`/preference` 接口已备,前端入口与预填逻辑待做。
 - 体验细节(操作组/预览/收件箱/批量操作等)见 §10。
 - 验证:web-ui lint 已知损坏,统一用 `npm run build`(含 vue-tsc)。
 

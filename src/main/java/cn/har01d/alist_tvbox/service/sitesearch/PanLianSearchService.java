@@ -14,7 +14,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.net.IDN;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -63,7 +62,7 @@ public class PanLianSearchService {
     private final OkHttpClient httpClient = new OkHttpClient();
     /** 登录态 Cookie:配置 Cookie 直接用,账号密码登录后内存缓存 */
     private volatile String sessionCookie = "";
-    private volatile long loginCooldownUntil;
+    private final LoginCooldown loginCooldown = new LoginCooldown();
     private volatile boolean warnedNoCredentials;
 
     public PanLianSearchService(SettingRepository settingRepository, ObjectMapper objectMapper) {
@@ -71,18 +70,7 @@ public class PanLianSearchService {
         this.objectMapper = objectMapper;
     }
 
-    private record Config(String host, String username, String password, String cookie) {
-        boolean hasCredentials() {
-            return StringUtils.isNotBlank(cookie) || (StringUtils.isNotBlank(username) && StringUtils.isNotBlank(password));
-        }
-
-        boolean canLogin() {
-            return StringUtils.isNotBlank(username) && StringUtils.isNotBlank(password);
-        }
-    }
-
-    /** HTTP 原语(可覆写供单测打桩):状态码 + Set-Cookie 列表 + 响应体。 */
-    protected record Resp(int code, List<String> setCookies, String body) {
+    private record Config(String host, String username, String password, String cookie) implements SiteCredentials {
     }
 
     public List<Message> search(String keyword) {
@@ -186,7 +174,7 @@ public class PanLianSearchService {
                     continue;
                 }
                 String type = Message.parseType(url);
-                if (type == null || !isNumeric(type)) {
+                if (type == null || !SiteSearchSupport.isNumeric(type)) {
                     continue; // 只留可挂载的网盘分享;磁力/电驴/未知类型对候选池无意义
                 }
                 Message message = new Message();
@@ -227,21 +215,14 @@ public class PanLianSearchService {
         if (StringUtils.isBlank(url) || StringUtils.isBlank(password)) {
             return url;
         }
-        String lowered = url.toLowerCase();
-        if (lowered.contains("pwd=") || lowered.contains("password=") || lowered.contains("passcode=")) {
-            return url;
-        }
         String type = Message.parseType(url);
         String param = switch (type == null ? "" : type) {
             case "10", "2", "3" -> "pwd="; // baidu / xunlei / 123
             case "8" -> "password="; // 115
             default -> null;
         };
-        if (param == null) {
-            return url;
-        }
-        String encoded = URLEncoder.encode(password, StandardCharsets.UTF_8);
-        return url + (url.contains("?") ? "&" : "?") + param + encoded;
+        return param == null ? url
+                : SiteSearchSupport.appendPasswordParam(url, URLEncoder.encode(password, StandardCharsets.UTF_8), param);
     }
 
     static String buildKeyword(String vodName) {
@@ -271,8 +252,7 @@ public class PanLianSearchService {
     }
 
     private synchronized boolean login(Config config) {
-        long now = System.currentTimeMillis();
-        if (now < loginCooldownUntil || !config.canLogin()) {
+        if (loginCooldown.blocked() || !config.canLogin()) {
             return false;
         }
         try {
@@ -285,7 +265,7 @@ public class PanLianSearchService {
             if (page.code() != 200) {
                 return loginFailed("login page http " + page.code());
             }
-            Map<String, String> cookies = parseCookies(page.setCookies());
+            Map<String, String> cookies = SiteSearchSupport.parseCookies(page.setCookies());
             RequestBody body = new MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart("username", config.username())
@@ -300,7 +280,7 @@ public class PanLianSearchService {
                     .header("Origin", config.host())
                     .header("Referer", config.host() + "/pages/login.php")
                     .header("X-Requested-With", "XMLHttpRequest")
-                    .header("Cookie", joinCookies(cookies))
+                    .header("Cookie", SiteSearchSupport.joinCookies(cookies))
                     .post(body)
                     .build());
             if (resp.code() != 200) {
@@ -311,8 +291,8 @@ public class PanLianSearchService {
                 String reason = payload.path("msg").asText(payload.path("message").asText(""));
                 return loginFailed("账号密码被拒绝:" + reason);
             }
-            cookies.putAll(parseCookies(resp.setCookies()));
-            String cookie = joinCookies(cookies);
+            cookies.putAll(SiteSearchSupport.parseCookies(resp.setCookies()));
+            String cookie = SiteSearchSupport.joinCookies(cookies);
             if (cookie.isBlank()) {
                 return loginFailed("登录成功但未取到 Cookie");
             }
@@ -325,33 +305,8 @@ public class PanLianSearchService {
     }
 
     private boolean loginFailed(String reason) {
-        loginCooldownUntil = System.currentTimeMillis() + LOGIN_COOLDOWN_MS;
         sessionCookie = "";
-        log.warn("盘链登录失败:{},{} 分钟内不再重试", reason, LOGIN_COOLDOWN_MS / 60_000);
-        return false;
-    }
-
-    private static Map<String, String> parseCookies(List<String> setCookies) {
-        Map<String, String> cookies = new LinkedHashMap<>();
-        for (String header : setCookies == null ? List.<String>of() : setCookies) {
-            String pair = StringUtils.substringBefore(header, ";").trim();
-            int eq = pair.indexOf('=');
-            if (eq > 0) {
-                cookies.put(pair.substring(0, eq).trim(), pair.substring(eq + 1).trim());
-            }
-        }
-        return cookies;
-    }
-
-    private static String joinCookies(Map<String, String> cookies) {
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> entry : cookies.entrySet()) {
-            if (sb.length() > 0) {
-                sb.append("; ");
-            }
-            sb.append(entry.getKey()).append('=').append(entry.getValue());
-        }
-        return sb.toString();
+        return loginCooldown.fail("盘链", reason, LOGIN_COOLDOWN_MS);
     }
 
     private String goCookie() {
@@ -389,65 +344,19 @@ public class PanLianSearchService {
 
     private Config loadConfig() {
         return new Config(
-                normalizeHost(setting(HOST_SETTING)),
-                setting(USERNAME_SETTING).trim(),
-                setting(PASSWORD_SETTING),
-                setting(COOKIE_SETTING).trim());
+                normalizeHost(SiteSearchSupport.setting(settingRepository, HOST_SETTING)),
+                SiteSearchSupport.setting(settingRepository, USERNAME_SETTING).trim(),
+                SiteSearchSupport.setting(settingRepository, PASSWORD_SETTING),
+                SiteSearchSupport.setting(settingRepository, COOKIE_SETTING).trim());
     }
 
-    private String setting(String name) {
-        if (settingRepository == null) {
-            return "";
-        }
-        return settingRepository.findById(name).map(s -> StringUtils.defaultString(s.getValue())).orElse("");
-    }
-
-    /** 站点地址归一化:补 scheme、IDNA 编码中文域名、去路径(py _normalize_host;
-     * 不能先过 URI.create——Java URI 拒绝非 ASCII 主机)。 */
+    /** 站点地址归一化:空/非法回落内置域名(内核见 {@link SiteSearchSupport#normalizeHost})。 */
     static String normalizeHost(String value) {
-        String host = StringUtils.trimToEmpty(value).replaceAll("/+$", "");
-        if (host.isEmpty()) {
-            return DEFAULT_HOST;
-        }
-        String lower = host.toLowerCase();
-        String scheme = "https";
-        if (lower.startsWith("http://")) {
-            scheme = "http";
-            host = host.substring(7);
-        } else if (lower.startsWith("https://")) {
-            host = host.substring(8);
-        }
-        int cut = StringUtils.indexOfAny(host, '/', '?', '#');
-        if (cut >= 0) {
-            host = host.substring(0, cut);
-        }
-        String port = "";
-        int colon = host.lastIndexOf(':');
-        if (colon > 0 && host.indexOf(':') == colon) {
-            port = host.substring(colon);
-            host = host.substring(0, colon);
-        }
-        if (host.isEmpty()) {
-            return DEFAULT_HOST;
-        }
-        try {
-            return scheme + "://" + IDN.toASCII(host) + port;
-        } catch (Exception e) {
-            return DEFAULT_HOST;
-        }
+        return SiteSearchSupport.normalizeHost(value, DEFAULT_HOST);
     }
 
     private String userAgent() {
         return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
-    }
-
-    private static boolean isNumeric(String value) {
-        try {
-            Integer.parseInt(value);
-            return true;
-        } catch (NumberFormatException e) {
-            return false;
-        }
     }
 
     protected Resp http(Request request) throws IOException {

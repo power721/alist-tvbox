@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.math.BigInteger;
-import java.net.IDN;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -74,7 +73,7 @@ public class GuanYingSearchService {
     /** 全镜像共享的 Cookie 状态(所有域名同一后端,Python 同策略) */
     private final Map<String, String> cookies = new LinkedHashMap<>();
     private volatile boolean seededConfigCookie;
-    private volatile long loginCooldownUntil;
+    private final LoginCooldown loginCooldown = new LoginCooldown();
     private volatile String activeHost = "";
     private volatile boolean warnedNoCredentials;
 
@@ -83,21 +82,10 @@ public class GuanYingSearchService {
         this.objectMapper = objectMapper;
     }
 
-    private record Config(List<String> hosts, String username, String password, String cookie) {
-        boolean hasCredentials() {
-            return StringUtils.isNotBlank(cookie) || (StringUtils.isNotBlank(username) && StringUtils.isNotBlank(password));
-        }
-
-        boolean canLogin() {
-            return StringUtils.isNotBlank(username) && StringUtils.isNotBlank(password);
-        }
+    private record Config(List<String> hosts, String username, String password, String cookie) implements SiteCredentials {
     }
 
     record Item(String dtype, String rid, String title, String remarks) {
-    }
-
-    /** HTTP 原语(可覆写供单测打桩):状态码 + Set-Cookie 列表 + 响应体。 */
-    protected record Resp(int code, List<String> setCookies, String body) {
     }
 
     public List<Message> search(String keyword) {
@@ -144,7 +132,7 @@ public class GuanYingSearchService {
                         continue;
                     }
                     String type = Message.parseType(url);
-                    if (type == null || !isNumeric(type)) {
+                    if (type == null || !SiteSearchSupport.isNumeric(type)) {
                         continue; // 只留可挂载的网盘分享;磁力/未知盘对候选池无意义
                     }
                     String name = names.path(i).asText("").trim();
@@ -357,8 +345,7 @@ public class GuanYingSearchService {
     }
 
     private synchronized boolean login(Config config) {
-        long now = System.currentTimeMillis();
-        if (now < loginCooldownUntil || !config.canLogin()) {
+        if (loginCooldown.blocked() || !config.canLogin()) {
             return false;
         }
         try {
@@ -400,9 +387,7 @@ public class GuanYingSearchService {
     }
 
     private boolean loginFailed(String reason) {
-        loginCooldownUntil = System.currentTimeMillis() + LOGIN_COOLDOWN_MS;
-        log.warn("观影登录失败:{},{} 分钟内不再重试", reason, LOGIN_COOLDOWN_MS / 60_000);
-        return false;
+        return loginCooldown.fail("观影", reason, LOGIN_COOLDOWN_MS);
     }
 
     // ---------- Cookie 状态 ----------
@@ -423,14 +408,7 @@ public class GuanYingSearchService {
 
     private String cookieHeader() {
         synchronized (cookies) {
-            StringBuilder sb = new StringBuilder();
-            for (Map.Entry<String, String> entry : cookies.entrySet()) {
-                if (sb.length() > 0) {
-                    sb.append("; ");
-                }
-                sb.append(entry.getKey()).append('=').append(entry.getValue());
-            }
-            return sb.toString();
+            return SiteSearchSupport.joinCookies(cookies);
         }
     }
 
@@ -550,89 +528,31 @@ public class GuanYingSearchService {
 
     /** 结构化提取码折进 ?password=(已有 pwd=/password=/passcode= 不重复折,py _append_password)。 */
     static String appendPassword(String url, String code) {
-        String raw = StringUtils.trimToEmpty(url);
-        String password = StringUtils.trimToEmpty(code);
-        if (raw.isEmpty() || password.isEmpty()) {
-            return raw;
-        }
-        String lowered = raw.toLowerCase();
-        if (lowered.contains("pwd=") || lowered.contains("password=") || lowered.contains("passcode=")) {
-            return raw;
-        }
-        return raw + (raw.contains("?") ? "&" : "?") + "password=" + password;
+        return SiteSearchSupport.appendPasswordParam(url, code, "password=");
     }
 
     // ---------- 配置 ----------
 
     private Config loadConfig() {
         Config config = new Config(
-                normalizeHosts(setting(HOST_SETTING)),
-                setting(USERNAME_SETTING).trim(),
-                setting(PASSWORD_SETTING),
-                setting(COOKIE_SETTING).trim());
+                normalizeHosts(SiteSearchSupport.setting(settingRepository, HOST_SETTING)),
+                SiteSearchSupport.setting(settingRepository, USERNAME_SETTING).trim(),
+                SiteSearchSupport.setting(settingRepository, PASSWORD_SETTING),
+                SiteSearchSupport.setting(settingRepository, COOKIE_SETTING).trim());
         seedConfigCookie(config);
         return config;
-    }
-
-    private String setting(String name) {
-        if (settingRepository == null) {
-            return "";
-        }
-        return settingRepository.findById(name).map(s -> StringUtils.defaultString(s.getValue())).orElse("");
     }
 
     /** 站点列表:逗号/竖线/换行分隔,逐个归一化(补 scheme + IDNA)去重;空 = 内置 8 镜像。 */
     static List<String> normalizeHosts(String value) {
         LinkedHashSet<String> hosts = new LinkedHashSet<>();
         for (String raw : StringUtils.defaultString(value).split("[\\s,，|]+")) {
-            String host = normalizeHost(raw);
+            String host = SiteSearchSupport.normalizeHost(raw, "");
             if (!host.isEmpty()) {
                 hosts.add(host);
             }
         }
-        return hosts.isEmpty() ? DEFAULT_HOSTS.stream().map(GuanYingSearchService::normalizeHost).toList() : List.copyOf(hosts);
-    }
-
-    private static String normalizeHost(String value) {
-        String host = StringUtils.trimToEmpty(value).replaceAll("/+$", "");
-        if (host.isEmpty()) {
-            return "";
-        }
-        String lower = host.toLowerCase();
-        String scheme = "https";
-        if (lower.startsWith("http://")) {
-            scheme = "http";
-            host = host.substring(7);
-        } else if (lower.startsWith("https://")) {
-            host = host.substring(8);
-        }
-        int cut = StringUtils.indexOfAny(host, '/', '?', '#');
-        if (cut >= 0) {
-            host = host.substring(0, cut);
-        }
-        String port = "";
-        int colon = host.lastIndexOf(':');
-        if (colon > 0 && host.indexOf(':') == colon) {
-            port = host.substring(colon);
-            host = host.substring(0, colon);
-        }
-        if (host.isEmpty()) {
-            return "";
-        }
-        try {
-            return scheme + "://" + IDN.toASCII(host) + port;
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    private static boolean isNumeric(String value) {
-        try {
-            Integer.parseInt(value);
-            return true;
-        } catch (NumberFormatException e) {
-            return false;
-        }
+        return hosts.isEmpty() ? DEFAULT_HOSTS.stream().map(host -> SiteSearchSupport.normalizeHost(host, "")).toList() : List.copyOf(hosts);
     }
 
     protected Resp http(Request request) throws IOException {

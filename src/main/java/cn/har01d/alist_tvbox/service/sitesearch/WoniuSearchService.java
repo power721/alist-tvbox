@@ -70,7 +70,7 @@ public class WoniuSearchService {
     private volatile String cookie = "";
     private volatile String activeHost = "";
     private volatile boolean seededConfigCookie;
-    private volatile long reloginCooldownUntil;
+    private final LoginCooldown loginCooldown = new LoginCooldown();
     private volatile boolean warnedNoCredentials;
 
     public WoniuSearchService(SettingRepository settingRepository, ObjectMapper objectMapper) {
@@ -78,25 +78,13 @@ public class WoniuSearchService {
         this.objectMapper = objectMapper;
     }
 
-    private record Config(String host, String username, String password, String cookie) {
-        boolean hasCredentials() {
-            return StringUtils.isNotBlank(cookie) || (StringUtils.isNotBlank(username) && StringUtils.isNotBlank(password));
-        }
-
-        boolean canLogin() {
-            return StringUtils.isNotBlank(username) && StringUtils.isNotBlank(password);
-        }
-
+    private record Config(String host, String username, String password, String cookie) implements SiteCredentials {
         List<String> hosts() {
             return StringUtils.isNotBlank(host) ? List.of(host) : DEFAULT_HOSTS;
         }
     }
 
     record Card(String vodId, String title, String remarks) {
-    }
-
-    /** HTTP 原语(可覆写供单测打桩):状态码 + Set-Cookie 列表 + 响应体。 */
-    protected record Resp(int code, List<String> setCookies, String body) {
     }
 
     public List<Message> search(String keyword) {
@@ -131,7 +119,7 @@ public class WoniuSearchService {
                 }
                 for (String[] link : collectPanLinks(doc)) {
                     String type = Message.parseType(link[1]);
-                    if (type == null || !isNumeric(type)) {
+                    if (type == null || !SiteSearchSupport.isNumeric(type)) {
                         continue;
                     }
                     Message message = new Message();
@@ -177,8 +165,7 @@ public class WoniuSearchService {
 
     /** POST /user/login.html:user_name/user_pwd → code=="1",只保留最小凭证集。 */
     private synchronized boolean login(Config config) {
-        long now = System.currentTimeMillis();
-        if (now < reloginCooldownUntil || !config.canLogin()) {
+        if (loginCooldown.blocked() || !config.canLogin()) {
             return false;
         }
         try {
@@ -199,24 +186,15 @@ public class WoniuSearchService {
                 return loginFailed(payload.path("msg").asText("登录失败"));
             }
             Map<String, String> auth = new LinkedHashMap<>();
-            for (String header : resp.setCookies()) {
-                String pair = StringUtils.substringBefore(header, ";").trim();
-                int eq = pair.indexOf('=');
-                if (eq > 0 && AUTH_COOKIE_KEYS.contains(pair.substring(0, eq).trim())) {
-                    auth.put(pair.substring(0, eq).trim(), pair.substring(eq + 1).trim());
+            SiteSearchSupport.parseCookies(resp.setCookies()).forEach((name, value) -> {
+                if (AUTH_COOKIE_KEYS.contains(name)) {
+                    auth.put(name, value);
                 }
-            }
+            });
             if (!auth.containsKey("user_check")) {
                 return loginFailed("登录成功但未取得登录凭证(user_check)");
             }
-            StringBuilder sb = new StringBuilder();
-            for (Map.Entry<String, String> entry : auth.entrySet()) {
-                if (sb.length() > 0) {
-                    sb.append("; ");
-                }
-                sb.append(entry.getKey()).append('=').append(entry.getValue());
-            }
-            cookie = sb.toString();
+            cookie = SiteSearchSupport.joinCookies(auth);
             log.info("蜗牛登录成功(username={})", config.username());
             return true;
         } catch (Exception e) {
@@ -225,9 +203,7 @@ public class WoniuSearchService {
     }
 
     private boolean loginFailed(String reason) {
-        reloginCooldownUntil = System.currentTimeMillis() + RELOGIN_COOLDOWN_MS;
-        log.warn("蜗牛登录失败:{},{} 分钟内不再重试", reason, RELOGIN_COOLDOWN_MS / 60_000);
-        return false;
+        return loginCooldown.fail("蜗牛", reason, RELOGIN_COOLDOWN_MS);
     }
 
     // ---------- 解析 ----------
@@ -288,7 +264,7 @@ public class WoniuSearchService {
                     continue;
                 }
                 String type = Message.parseType(url); // 采集即按盘规则过滤(py _pan_info)
-                if (type == null || !isNumeric(type)) {
+                if (type == null || !SiteSearchSupport.isNumeric(type)) {
                     continue;
                 }
                 links.add(new String[]{title, url});
@@ -310,10 +286,10 @@ public class WoniuSearchService {
 
     private Config loadConfig() {
         Config config = new Config(
-                normalizeHost(setting(HOST_SETTING)),
-                setting(USERNAME_SETTING).trim(),
-                setting(PASSWORD_SETTING).trim(),
-                normalizeCookie(setting(COOKIE_SETTING)));
+                normalizeHost(SiteSearchSupport.setting(settingRepository, HOST_SETTING)),
+                SiteSearchSupport.setting(settingRepository, USERNAME_SETTING).trim(),
+                SiteSearchSupport.setting(settingRepository, PASSWORD_SETTING).trim(),
+                normalizeCookie(SiteSearchSupport.setting(settingRepository, COOKIE_SETTING)));
         if (seededConfigCookie || config.cookie().isEmpty()) {
             return config;
         }
@@ -324,13 +300,6 @@ public class WoniuSearchService {
             }
         }
         return config;
-    }
-
-    private String setting(String name) {
-        if (settingRepository == null) {
-            return "";
-        }
-        return settingRepository.findById(name).map(s -> StringUtils.defaultString(s.getValue())).orElse("");
     }
 
     /** Cookie 归一化:剥 "Cookie:" 前缀,按 ;/换行 拆分,只留含 = 的段。 */
@@ -442,15 +411,6 @@ public class WoniuSearchService {
             return resp.code() == 200 ? System.currentTimeMillis() - start : -1;
         } catch (Exception e) {
             return -1;
-        }
-    }
-
-    private static boolean isNumeric(String value) {
-        try {
-            Integer.parseInt(value);
-            return true;
-        } catch (NumberFormatException e) {
-            return false;
         }
     }
 
