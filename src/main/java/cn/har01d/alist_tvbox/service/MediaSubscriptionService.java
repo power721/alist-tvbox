@@ -1203,6 +1203,9 @@ public class MediaSubscriptionService {
         // 立刻异步补救(先查池换源,池空才搜索),否则用户重试多少次都是同一个死源。
         if (attempted > 0) {
             try {
+                // ENDED 订阅的 check() 会轻查短路(不换源不搜索),先打播放失败标越过短路跑完整巡检,
+                // 否则完结剧没看完、分享失效后用户重试多少次都是同一个死源
+                checkService.markPlaybackFailure(subscriptionId);
                 checkService.checkAsync(uid, subscriptionId);
             } catch (Exception e) {
                 log.warn("trigger recovery for subscription {} failed: {}", subscriptionId, e.getMessage());

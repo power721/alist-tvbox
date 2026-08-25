@@ -185,6 +185,11 @@ public class MediaSubscriptionCheckService {
      * 搜索+挂载可达数分钟,期间删除若巡检不感知,会继续搜索、把已删剧的挂载重新建回 AList,
      * 尾部对 detached 实体的 save 更会把无 @Version 的整行 INSERT 复活(线上 #40)。 */
     private final Set<Integer> deleted = ConcurrentHashMap.newKeySet();
+    /** 播放全源失败标记(订阅 id):ENDED 订阅不再跑完整巡检,分享失效后系统无感知、用户每次播放都撞死源 ——
+     * playEpisode 全候选失败时打标,check() 的 ENDED 轻查短路据此放行一次完整巡检(换源+补搜)。 */
+    private final Set<Integer> playbackFailed = ConcurrentHashMap.newKeySet();
+    /** 「仍在追看」判定的近期播放窗口:完结剧 7 天内有播放才参与资源维护,越窗回落每日轻查。 */
+    private static final long RECENT_PLAY_WINDOW_MS = 7L * 24 * 3600_000;
     /** 封面预热去重(订阅 id):列表接口发现快照缺失时后台补拉,同订阅不堆积重复任务 */
     private final Set<Integer> coverPrewarmInFlight = ConcurrentHashMap.newKeySet();
     /** 缺集补搜关键词轮次(0=整季,1+=单集),内存态即可 */
@@ -475,6 +480,11 @@ public class MediaSubscriptionCheckService {
         return false;
     }
 
+    /** 播放全源失败打标(播放期是信噪比最高的失效信号):对 ACTIVE 订阅无额外作用(下轮巡检本来就跑),对 ENDED 订阅则越过轻查短路跑一次完整巡检。 */
+    public void markPlaybackFailure(int subscriptionId) {
+        playbackFailed.add(subscriptionId);
+    }
+
     /** 订阅删除入口(delete() 在卸载/删行前调用):打取消标记并清内存态,进行中的巡检
      * 在下一道阶段检查点({@link #stopIfDeleted})收工。 */
     public void onDeleted(int subscriptionId) {
@@ -535,6 +545,7 @@ public class MediaSubscriptionCheckService {
     /** 订阅删除后清理全部内存态(限频/轮次/冷却 Map 按订阅/资源 id 键控,不清理即无界泄漏)。 */
     public void forget(int subscriptionId, List<Integer> resourceIds) {
         inFlight.remove(subscriptionId);
+        playbackFailed.remove(subscriptionId);
         coverPrewarmInFlight.remove(subscriptionId);
         preheatAheadInFlight.remove(subscriptionId);
         gapSearchRounds.remove(subscriptionId);
@@ -714,11 +725,25 @@ public class MediaSubscriptionCheckService {
             if (subscription == null || MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus())) {
                 return;
             }
-            if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
-                    && !reopenEnded(subscription) && !staleSeasonReopen(subscription)) {
-                subscription.setNextCheckTime(System.currentTimeMillis() + 24 * 3600_000L); // 每日复查一次
-                saveUnlessDeleted(id, subscription);
-                return;
+            boolean playbackFailure = playbackFailed.remove(id);
+            if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
+                if (!playbackFailure && !reopenEnded(subscription) && !staleSeasonReopen(subscription)) {
+                    if (!watchingRecently(subscription)) {
+                        subscription.setNextCheckTime(System.currentTimeMillis() + 24 * 3600_000L); // 每日复查一次
+                        saveUnlessDeleted(id, subscription);
+                        return;
+                    }
+                    // 完结≠看完:仍在追看的完结剧,资源可播性照在播维护(轻查只看集数,发现不了死源)。
+                    // 保持 ENDED 直接跑完整巡检 —— shouldAutoEnd 的 !ENDED 守卫不会重复写完结事件
+                }
+                if (playbackFailure) {
+                    // 播放全源失败 = 资源可播性出问题,轻查(只看集数)永远发现不了 —— 回 ACTIVE 走完整巡检;
+                    // 巡检尾部 shouldAutoEnd 会在资源恢复正常后重新完结,状态口径与其它重开路一致
+                    subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
+                    subscription.setStallCount(0);
+                    addEvent(id, MediaSubscriptionEvent.TYPE_RESUMED, "播放失败,重开完整巡检检查资源");
+                    log.info("subscription {} reopened: playback failure", id);
+                }
             }
             doCheck(subscription);
             saveUnlessDeleted(id, subscription);
@@ -1044,6 +1069,38 @@ public class MediaSubscriptionCheckService {
             return Integer.parseInt(matcher.group(1));
         }
         return history.getEpisode() > 0 ? history.getEpisode() + 1 : 0; // 选集下标从 0 起
+    }
+
+    /**
+     * ENDED 订阅是否仍在追看:近 {@link #RECENT_PLAY_WINDOW_MS} 内有播放记录,且未看完
+     * (观看进度 < 本地可用集数)。完结≠看完 —— 这类订阅的资源可播性须照在播维护,
+     * 分享失效才能被巡检发现并换源;看完/越窗没再看则回落每日轻查,不为闲置完结剧花巡检开销。
+     */
+    boolean watchingRecently(MediaSubscription subscription) {
+        if (historyRepository == null) {
+            return false;
+        }
+        int watched = watchedEpisode(subscription);
+        if (watched <= 0) {
+            return false; // 没有观看进度 = 没在追看
+        }
+        int local = liveEpisodeNumbers(subscription).size();
+        if (local > 0 && watched >= local) {
+            return false; // 已看完
+        }
+        try {
+            String vodId = MediaSubscriptionService.VOD_ID_PREFIX + subscription.getId();
+            long threshold = System.currentTimeMillis() - RECENT_PLAY_WINDOW_MS;
+            for (History history : historyRepository.findByUidAndVodId(subscription.getUid(), vodId)) {
+                long time = history.getUpdatedAt() != null ? history.getUpdatedAt() : history.getCreateTime();
+                if (time >= threshold) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("read play history of subscription {} failed: {}", subscription.getId(), e.getMessage());
+        }
+        return false;
     }
 
     /** 版本升级提醒(§10.7):主源无 4K 而池中出现 4K 完整候选 → 提示(不自动替换)。 */

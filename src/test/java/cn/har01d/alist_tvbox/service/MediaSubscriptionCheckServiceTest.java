@@ -49,6 +49,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -2761,6 +2762,110 @@ class MediaSubscriptionCheckServiceTest {
                 Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()); // 不再列目录搜索
     }
 
+    // ---------- ENDED 订阅播放失败自愈:完结≠看完,分享失效须能重开完整巡检 ----------
+
+    @Test
+    void endedSubscriptionSkipsFullCheckWithoutPlaybackFailure() {
+        // 完结且无播放失败信号:维持轻查短路(不列目录不搜索),次日再查
+        Fixture fixture = new Fixture();
+        fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        long now = System.currentTimeMillis();
+        fixture.service.check(1);
+        Mockito.verify(fixture.aListService, Mockito.never()).listFiles(Mockito.any(), Mockito.anyString(),
+                Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()); // 完整巡检未跑
+        assertEquals(MediaSubscription.STATUS_ENDED, fixture.subscription.getStatus());
+        assertClose(now + 24 * 3600_000L, fixture.subscription.getNextCheckTime());
+    }
+
+    @Test
+    void playbackFailureReopensEndedSubscriptionForFullCheck() {
+        // 播放全源失败:轻查只看集数发现不了可播性问题,须越过短路回 ACTIVE 走完整巡检
+        Fixture fixture = new Fixture();
+        fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(11);
+        primary.setSubscriptionId(1);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(primary));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new RuntimeException("share not found"));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(new FsResponse());
+        fixture.service.markPlaybackFailure(1);
+
+        fixture.service.check(1);
+
+        assertNotNull(fixture.subscription.getLastCheckTime(), "完整巡检 doCheck 已执行");
+        assertNotEquals(MediaSubscription.STATUS_ENDED, fixture.subscription.getStatus(), "不能再停在 ENDED 轻查路径");
+        ArgumentCaptor<MediaSubscriptionEvent> captor = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository, Mockito.atLeastOnce()).save(captor.capture());
+        assertTrue(captor.getAllValues().stream().anyMatch(e -> MediaSubscriptionEvent.TYPE_RESUMED.equals(e.getType())),
+                "播放失败重开须留 RESUMED 事件");
+    }
+
+    @Test
+    void endedStillWatchingRunsFullCheck() {
+        // 完结≠看完:7 天内有播放且未看完(看了 3/12 集)→ 保持 ENDED 跑完整巡检,资源失效能被发现
+        Fixture fixture = new Fixture();
+        fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        fixture.subscription.setUid(1);
+        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(
+                        Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(new ArrayList<>(episodeRange(1, 12)));
+        Mockito.when(fixture.historyRepository.findByUidAndVodId(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(List.of(playHistory("msubep-1-3", System.currentTimeMillis())));
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(11);
+        primary.setSubscriptionId(1);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(primary));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new RuntimeException("share not found"));
+
+        fixture.service.check(1);
+
+        assertNotNull(fixture.subscription.getLastCheckTime(), "仍在追看的完结剧须跑完整巡检");
+        Mockito.verify(fixture.aListService, Mockito.atLeastOnce()).listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
+                Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean());
+    }
+
+    @Test
+    void endedStaleOrWatchedThroughSkipsFullCheck() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        fixture.subscription.setUid(1);
+        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(
+                        Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(new ArrayList<>(episodeRange(1, 12)));
+        long now = System.currentTimeMillis();
+
+        // 看完(12/12):即使昨天还在播也不必维护资源
+        Mockito.when(fixture.historyRepository.findByUidAndVodId(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(List.of(playHistory("msubep-1-12", now)));
+        fixture.service.check(1);
+        assertNull(fixture.subscription.getLastCheckTime(), "已看完的完结剧维持轻查短路");
+
+        // 没看完(3/12)但 30 天没播:闲置完结剧不花巡检开销
+        Mockito.when(fixture.historyRepository.findByUidAndVodId(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(List.of(playHistory("msubep-1-3", now - 30L * 24 * 3600_000)));
+        fixture.service.check(1);
+        assertNull(fixture.subscription.getLastCheckTime(), "越窗未再看的完结剧维持轻查短路");
+        Mockito.verify(fixture.aListService, Mockito.never()).listFiles(Mockito.any(), Mockito.anyString(),
+                Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean());
+    }
+
+    private static cn.har01d.alist_tvbox.entity.History playHistory(String episodeUrl, long updatedAt) {
+        cn.har01d.alist_tvbox.entity.History history = new cn.har01d.alist_tvbox.entity.History();
+        history.setEpisodeUrl(episodeUrl);
+        history.setUpdatedAt(updatedAt);
+        return history;
+    }
+
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
         final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
@@ -2773,8 +2878,10 @@ class MediaSubscriptionCheckServiceTest {
         final SettingRepository settingRepository = Mockito.mock(SettingRepository.class);
         final AListService aListService = Mockito.mock(AListService.class);
         final TelegramService telegramService = Mockito.mock(TelegramService.class);
-        final ShareService shareService = Mockito.mock(ShareService.class);
-        final MetadataService metadataService = Mockito.mock(MetadataService.class);
+    final ShareService shareService = Mockito.mock(ShareService.class);
+    final MetadataService metadataService = Mockito.mock(MetadataService.class);
+    final cn.har01d.alist_tvbox.entity.HistoryRepository historyRepository =
+            Mockito.mock(cn.har01d.alist_tvbox.entity.HistoryRepository.class);
         final MediaSubscriptionCheckService service;
         final MediaSubscription subscription = new MediaSubscription();
 
@@ -2787,7 +2894,7 @@ class MediaSubscriptionCheckServiceTest {
                     Mockito.mock(IndexTemplateRepository.class), settingRepository,
                     shareService, aListService, telegramService, null, null, null, null,
                     metadataService, Mockito.mock(AutoUpdateExecutor.class),
-                    Mockito.mock(cn.har01d.alist_tvbox.entity.HistoryRepository.class),
+                    historyRepository,
                     appProperties, new ObjectMapper());
             subscription.setId(1);
             subscription.setName("测试剧");
