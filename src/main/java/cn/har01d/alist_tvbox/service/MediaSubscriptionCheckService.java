@@ -365,6 +365,38 @@ public class MediaSubscriptionCheckService {
             submitCheck(subscription.getId());
         }
         retryErrors();
+        cleanupEventsDaily();
+    }
+
+    /** 上次事件清理时间(内存态,sweep 串行调度无需原子):sweep 每小时跑,清理本身每日一次足够。 */
+    private volatile long lastEventCleanupTime;
+
+    /**
+     * 事件保留期清理(100+ 订阅规模):全局 90 天 + 每订阅最新 200 条,双条件先到先清。
+     * 事件流是排障用流水,前端只展示每订阅最近 100 条,超额行纯属膨胀。
+     */
+    void cleanupEventsDaily() {
+        long now = System.currentTimeMillis();
+        if (now - lastEventCleanupTime < 24 * 3600_000L) {
+            return;
+        }
+        lastEventCleanupTime = now;
+        try {
+            eventRepository.deleteByCreatedTimeLessThan(now - 90L * 24 * 3600_000);
+            for (MediaSubscription subscription : subscriptionRepository.findAll()) {
+                List<MediaSubscriptionEvent> latest = eventRepository
+                        .findTop201BySubscriptionIdOrderByIdDesc(subscription.getId());
+                if (latest.size() <= 200) {
+                    continue;
+                }
+                List<Integer> doomed = latest.subList(200, latest.size()).stream()
+                        .map(MediaSubscriptionEvent::getId)
+                        .toList();
+                eventRepository.deleteAllById(doomed);
+            }
+        } catch (Exception e) {
+            log.warn("event retention cleanup failed: {}", e.getMessage());
+        }
     }
 
     /** 提交单订阅检查到并发池:任务彼此隔离,一个订阅失败只记日志不拖累其它。 */
@@ -728,11 +760,13 @@ public class MediaSubscriptionCheckService {
             boolean playbackFailure = playbackFailed.remove(id);
             if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
                 if (!playbackFailure && !reopenEnded(subscription) && !staleSeasonReopen(subscription)) {
-                    if (!watchingRecently(subscription)) {
-                        subscription.setNextCheckTime(System.currentTimeMillis() + 24 * 3600_000L); // 每日复查一次
-                        saveUnlessDeleted(id, subscription);
-                        return;
-                    }
+                if (!watchingRecently(subscription)) {
+                    // 完结看完:官方加重重开场景每日一查纯属浪费,拉长到每周(重开路 playEpisode
+                    // 失败/加更/换季残留/异剧四条都由即时信号触发,不依赖这轮轻查)
+                    subscription.setNextCheckTime(System.currentTimeMillis() + 7 * 24 * 3600_000L);
+                    saveUnlessDeleted(id, subscription);
+                    return;
+                }
                     // 完结≠看完:仍在追看的完结剧,资源可播性照在播维护(轻查只看集数,发现不了死源)。
                     // 保持 ENDED 直接跑完整巡检 —— shouldAutoEnd 的 !ENDED 守卫不会重复写完结事件
                 }

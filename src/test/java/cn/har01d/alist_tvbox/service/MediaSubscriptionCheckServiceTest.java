@@ -2766,7 +2766,7 @@ class MediaSubscriptionCheckServiceTest {
 
     @Test
     void endedSubscriptionSkipsFullCheckWithoutPlaybackFailure() {
-        // 完结且无播放失败信号:维持轻查短路(不列目录不搜索),次日再查
+        // 完结且无播放失败信号:维持轻查短路(不列目录不搜索),每周再查(100+ 规模:闲置完结剧不花日查开销)
         Fixture fixture = new Fixture();
         fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
         long now = System.currentTimeMillis();
@@ -2774,7 +2774,7 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verify(fixture.aListService, Mockito.never()).listFiles(Mockito.any(), Mockito.anyString(),
                 Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()); // 完整巡检未跑
         assertEquals(MediaSubscription.STATUS_ENDED, fixture.subscription.getStatus());
-        assertClose(now + 24 * 3600_000L, fixture.subscription.getNextCheckTime());
+        assertClose(now + 7 * 24 * 3600_000L, fixture.subscription.getNextCheckTime());
     }
 
     @Test

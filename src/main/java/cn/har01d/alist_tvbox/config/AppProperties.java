@@ -95,7 +95,9 @@ public class AppProperties {
     public static class Subscription {
         private boolean enabled = true;
         private int checkIntervalHours = 6;
-        private int maxChecksPerRound = 10;
+        /** 每轮 sweep 取的到期订阅上限(按 nextCheckTime 升序,ACTIVE/ENDED 各取 N):100+ 订阅规模的吞吐上限,
+         *  提高不怕积压 —— 到期早的天然优先,池满排队下小时继续,tryLock 防重复执行 */
+        private int maxChecksPerRound = 30;
         private int candidatePoolSize = 5;
         /** 分层配额:每个主网盘保底席位(主网盘打分领先是结构性的,不给保底则备用盘永远进不了池) */
         private int mainDrivePoolSize = 3;
@@ -160,7 +162,7 @@ public class AppProperties {
         /** 玩偶聚合:整源搜索总超时(秒) */
         private int wanouTimeoutSeconds = 45;
         /** 订阅巡检并发度:到期订阅并发检查,多个订阅的搜索不再互相排队(源侧压力不放大,见 searchExecutor) */
-        private int checkConcurrency = 3;
+        private int checkConcurrency = 4;
     }
 
     public static Map<String, Map<String, Object>> copyLocalProxyConfig(Map<String, Map<String, Object>> source) {

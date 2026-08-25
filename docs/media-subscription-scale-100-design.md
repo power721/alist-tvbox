@@ -1,6 +1,7 @@
 # 追剧系统 100+ 订阅规模扩容设计
 
-> 状态：设计稿（未实现）。基线：feat/media-subscription 分支，914 测试全绿。
+> 状态：已实现（914 测试全绿，web-ui build 过）。实现时修正两点：①排播对齐（播出前休眠 +15min、播后短轮窗口）在 `scheduleNext` 中本已存在，P1 实际增量仅为"完结看完轻查 24h→7 天"；②jitter 未做——到期任务按 nextCheckTime 升序排队 + tryLock 防重，整点踩踏无害，且随机量会击穿现有精确断言。P2 落地为 maxChecksPerRound 10→30、checkConcurrency 3→4（到期升序取任务 + 每小时 sweep + tryLock 本就构成预算制，无需额外时间窗逻辑）。
+> 基线：feat/media-subscription 分支。
 > 关联文档：`docs/media-subscription-design.md`（主设计，顶部有历轮优化补记）。
 
 ## 1. 背景与问题

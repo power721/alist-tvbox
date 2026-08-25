@@ -47,6 +47,14 @@
 
     <div class="page-card">
       <div class="batch-bar" v-if="subscriptions.length">
+        <el-select v-model="statusFilter" size="small" style="width: 110px" placeholder="全部状态">
+          <el-option label="全部状态" value=""/>
+          <el-option label="追更中" value="ACTIVE"/>
+          <el-option label="已完结" value="ENDED"/>
+          <el-option label="已暂停" value="PAUSED"/>
+          <el-option label="异常" value="ERROR"/>
+        </el-select>
+        <el-divider direction="vertical"/>
         <el-button size="small" @click="selectAll">全选</el-button>
         <el-button size="small" @click="selectNone">全不选</el-button>
         <el-button size="small" @click="invertSelection">反选</el-button>
@@ -58,7 +66,7 @@
         <span class="sub-text" style="margin-left: 10px">已选 {{ selected.length }} 项</span>
       </div>
       <div class="table-scroll-wrapper">
-        <el-table ref="tableRef" :data="subscriptions" border style="width: 100%; min-width: 1100px" v-loading="loading"
+        <el-table ref="tableRef" :data="filteredSubscriptions" border style="width: 100%; min-width: 1100px" v-loading="loading"
                   @selection-change="(rows: any[]) => selected = rows">
           <el-table-column type="selection" width="42"/>
           <el-table-column label="剧名" min-width="230">
@@ -793,6 +801,10 @@ const globalMainDrivesLabel = computed(() => globalMainDrives.value.length
     : '(未配置)')
 
 const subscriptions = ref<SubscriptionDto[]>([])
+// 状态筛选(100+ 订阅规模):列表页按状态收敛;全选/批量操作天然只作用于过滤后的可见行
+const statusFilter = ref('')
+const filteredSubscriptions = computed(() =>
+  statusFilter.value ? subscriptions.value.filter(s => s.status === statusFilter.value) : subscriptions.value)
 const stats = ref<any>(null)
 const inboxItems = ref<any[]>([])
 const inboxExpanded = ref(false)
