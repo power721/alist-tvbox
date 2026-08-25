@@ -2649,12 +2649,18 @@ public class MediaSubscriptionCheckService {
                 return;
             }
             try {
-                resyncPrimaryInventory(subscription);
-                ensureDriveLines(subscription, liveEpisodeNumbers(subscription));
+                // 锁内取新实体:排队等锁期间完整巡检可能已整行保存(元数据/调度/状态),旧实体再
+                // save 会把这些字段回滚覆盖 —— check(id)/refreshAiringDue 同款口径
+                MediaSubscription current = subscriptionRepository.findById(subscriptionId).orElse(null);
+                if (current == null || MediaSubscription.STATUS_PAUSED.equals(current.getStatus())) {
+                    return;
+                }
+                resyncPrimaryInventory(current);
+                ensureDriveLines(current, liveEpisodeNumbers(current));
                 if (stopIfDeleted(subscriptionId)) {
                     return;
                 }
-                refreshEpisodeCounters(subscription);
+                refreshEpisodeCounters(current);
             } catch (Exception e) {
                 log.warn("ensure drive lines for subscription {} failed: {}", subscriptionId, e.getMessage());
             } finally {

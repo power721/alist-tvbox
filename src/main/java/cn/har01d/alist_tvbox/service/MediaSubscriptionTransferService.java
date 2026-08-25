@@ -143,6 +143,14 @@ public class MediaSubscriptionTransferService {
 
     /** 增量转存(多网盘目标):逐账号只 copy 目标目录缺的集;按源目录分组提交 AList copy 任务并等待完成,事后校验。 */
     void transfer(MediaSubscription subscription) {
+        // 入口实体可能取自数分钟前(单线程执行器里 sweepDue 一轮多订阅排队):重取最新行,
+        // 已删即收工 —— 无 @Version,detached save 会把已删行整行 INSERT 复活;模式被编辑改掉也以最新为准
+        MediaSubscription current = subscriptionRepository.findById(subscription.getId()).orElse(null);
+        if (current == null) {
+            log.info("transfer subscription {} skipped: deleted", subscription.getId());
+            return;
+        }
+        subscription = current;
         if (!MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
             return;
         }
@@ -163,6 +171,11 @@ public class MediaSubscriptionTransferService {
             if (quotaLeft() <= 0) {
                 log.info("transfer quota exhausted, stop at target {} of subscription {}", target.name(), subscription.getId());
                 break;
+            }
+            // 单盘转存要等 AList copy 数分钟,期间订阅可能被删:不再往下一盘继续拷
+            if (subscriptionRepository.findById(subscription.getId()).isEmpty()) {
+                log.info("transfer subscription {} aborted: deleted", subscription.getId());
+                return;
             }
             try {
                 Integer transferred = transferToAccount(subscription, target);
@@ -327,8 +340,8 @@ public class MediaSubscriptionTransferService {
                     }
                 });
                 if (!broken.isEmpty()) {
+                    // 损坏标记是集源行级落库,订阅行无字段改动不再 save —— detached save 只会把转存期间的过期快照 merge 回去
                     checkService.markTransferBroken(subscription, broken);
-                    subscriptionRepository.save(subscription);
                     log.info("subscription {} marked {} broken episodes (listed but not copyable)", subscription.getId(), broken.size());
                 }
             }
@@ -437,10 +450,15 @@ public class MediaSubscriptionTransferService {
 
     /** 转存不可用时自动降级挂载模式,追更不中断(§10.6 空间水位同理)。 */
     private void downgradeToFOLLOW(MediaSubscription subscription, String reason) {
-        subscription.setMode(MediaSubscription.MODE_FOLLOW);
-        subscription.setUpdatedTime(System.currentTimeMillis());
-        subscriptionRepository.save(subscription);
-        checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "已降级为挂载模式(" + reason + "),追更不中断");
+        // 调用前可能已历数分钟转存:重取最新行再改,已删即跳过(detached save 复活整行),也避免覆盖巡检刚写的字段
+        MediaSubscription current = subscriptionRepository.findById(subscription.getId()).orElse(null);
+        if (current == null) {
+            return;
+        }
+        current.setMode(MediaSubscription.MODE_FOLLOW);
+        current.setUpdatedTime(System.currentTimeMillis());
+        subscriptionRepository.save(current);
+        checkService.addEvent(current.getId(), MediaSubscriptionEvent.TYPE_ERROR, "已降级为挂载模式(" + reason + "),追更不中断");
     }
 
     /** 逐级确保目标目录存在(已存在时 listFiles 成功即跳过)。 */
@@ -573,10 +591,15 @@ public class MediaSubscriptionTransferService {
                     String targetDir = targetDir(subscription, target);
                     aListService.remove(site, targetDir);
                 }
-                subscription.setMode(MediaSubscription.MODE_FOLLOW);
-                subscription.setUpdatedTime(System.currentTimeMillis());
-                subscriptionRepository.save(subscription);
-                checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ARCHIVED,
+                // 上面远端删除要数分钟,期间订阅可能被删:落库前重取,不复活已删行
+                MediaSubscription current = subscriptionRepository.findById(subscription.getId()).orElse(null);
+                if (current == null) {
+                    continue;
+                }
+                current.setMode(MediaSubscription.MODE_FOLLOW);
+                current.setUpdatedTime(System.currentTimeMillis());
+                subscriptionRepository.save(current);
+                checkService.addEvent(current.getId(), MediaSubscriptionEvent.TYPE_ARCHIVED,
                         "已归档:完结 " + days + " 天,转存文件已释放");
                 log.info("archived subscription {} transfer folder", subscription.getId());
             } catch (Exception e) {

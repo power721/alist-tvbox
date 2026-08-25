@@ -38,6 +38,7 @@ import static org.mockito.Mockito.when;
  */
 class MediaSubscriptionTransferQuotaTest {
 
+    private final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
     private final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
     private final DriverAccountRepository accountRepository = Mockito.mock(DriverAccountRepository.class);
     private final AccountRepository aliAccountRepository = Mockito.mock(AccountRepository.class);
@@ -48,7 +49,7 @@ class MediaSubscriptionTransferQuotaTest {
     private final TaskService taskService = Mockito.mock(TaskService.class);
 
     private MediaSubscriptionTransferService service(AppProperties appProperties) {
-        return new MediaSubscriptionTransferService(Mockito.mock(MediaSubscriptionRepository.class),
+        return new MediaSubscriptionTransferService(subscriptionRepository,
                 resourceRepository, accountRepository, aliAccountRepository, siteRepository,
                 Mockito.mock(SettingRepository.class), shareRepository, aListService, checkService,
                 taskService, null, appProperties);
@@ -79,6 +80,7 @@ class MediaSubscriptionTransferQuotaTest {
         appProperties.getSubscription().setMaxTransfersPerDay(1); // 只剩 1 个名额,订阅却配了 2 个目标盘
         MediaSubscriptionTransferService transferService = service(appProperties);
 
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription()));
         when(accountRepository.findById(1)).thenReturn(Optional.of(account(1, "/盘A")));
         when(accountRepository.findById(2)).thenReturn(Optional.of(account(2, "/盘B")));
         when(siteRepository.findById(1)).thenReturn(Optional.of(mock(Site.class)));
@@ -113,9 +115,41 @@ class MediaSubscriptionTransferQuotaTest {
         appProperties.getSubscription().setMaxTransfersPerDay(0);
         MediaSubscriptionTransferService transferService = service(appProperties);
 
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription()));
+
         transferService.transfer(subscription());
 
         verify(accountRepository, Mockito.never()).findById(anyInt());
         verify(taskService, Mockito.never()).addSubscriptionTask(anyString());
+    }
+
+    // 转存与删除并发:无 @Version,detached 实体 save 已删行 = 整行 INSERT 复活(线上 #40 同族)
+    @Test
+    void transferSkippedWhenSubscriptionDeleted() {
+        MediaSubscriptionTransferService transferService = service(new AppProperties());
+
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.empty());
+
+        transferService.transfer(subscription());
+
+        verify(accountRepository, Mockito.never()).findById(anyInt());
+        verify(taskService, Mockito.never()).addSubscriptionTask(anyString());
+        verify(subscriptionRepository, Mockito.never()).save(any());
+        verify(checkService, Mockito.never()).addEvent(anyInt(), anyString(), anyString());
+    }
+
+    @Test
+    void downgradeSkippedWhenSubscriptionDeletedDuringTransfer() {
+        MediaSubscriptionTransferService transferService = service(new AppProperties());
+        MediaSubscription subscription = subscription();
+        subscription.setAccountIds("[\"pan:1\"]");
+        // 入口取到活行,降级落库前(可能已历数分钟转存)订阅被删 → 不 save 复活、不写降级事件
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription)).thenReturn(Optional.empty());
+
+        transferService.transfer(subscription);
+
+        verify(subscriptionRepository, Mockito.never()).save(any());
+        verify(checkService, Mockito.never()).addEvent(anyInt(), anyString(),
+                org.mockito.ArgumentMatchers.contains("降级"));
     }
 }
