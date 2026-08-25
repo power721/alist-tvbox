@@ -803,6 +803,8 @@ const selected = ref<any[]>([])
 const formVisible = ref(false)
 const saving = ref(false)
 const form = ref<any>({})
+// 编辑前的原季号:保存时季号有变要确认换季重置(旧季挂载/进度清空,按新季重搜)
+const originalSeason = ref<number | null>(null)
 const metaProvider = ref('tmdb')
 const metaKeyword = ref('')
 const metaSearching = ref(false)
@@ -1039,6 +1041,7 @@ const loadAll = () => {
 }
 
 const handleAdd = () => {
+  originalSeason.value = null
   form.value = {
     name: '',
     keyword: '',
@@ -1069,6 +1072,7 @@ const handleAdd = () => {
 }
 
 const handleEdit = (row: SubscriptionDto) => {
+  originalSeason.value = row.season ?? 1
   form.value = {
     id: row.id,
     name: row.name,
@@ -1204,6 +1208,19 @@ const save = () => {
     ElMessage.warning('转存模式需选择至少一个网盘账号')
     return
   }
+  // 换季是不可逆的整体重置,先告知后果再保存(取消则不动)
+  if (form.value.id && originalSeason.value && form.value.season !== originalSeason.value) {
+    ElMessageBox.confirm(
+        `季号将从第 ${originalSeason.value} 季改为第 ${form.value.season} 季:旧季的挂载、候选资源与观看进度会被清空,并立即按新季重新搜索挂载。确定切换?`,
+        '切换季号', {type: 'warning'})
+        .then(doSave)
+        .catch(() => {})
+    return
+  }
+  doSave()
+}
+
+const doSave = () => {
   saving.value = true
   const body = buildBody()
   const request = form.value.id

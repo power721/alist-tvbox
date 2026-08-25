@@ -2150,10 +2150,19 @@ public class MediaSubscriptionService {
         // 目录名带元数据 id:全局唯一防同名剧冲突,刮削器(Emby/Jellyfin/TMM)可精准匹配;
         // 未绑定元数据时兜底内部 id。仅在创建时定名,存量订阅不改(固定路径不动)
         String tag = metaIdTag(subscription);
+        // 季后缀(第 2 季起):同一 TMDB tv id 跨季共用,不带季号时并行多季订阅(含「多季联动」入口)
+        // 会生成同一路径互相覆盖挂载;仅创建时定名,存量订阅路径不动
+        String seasonSuffix = seasonSuffix(subscription);
         if (tag != null) {
-            return Constants.SUBSCRIPTION_MOUNT_ROOT + slug + " " + tag;
+            return Constants.SUBSCRIPTION_MOUNT_ROOT + slug + " " + tag + seasonSuffix;
         }
-        return Constants.SUBSCRIPTION_MOUNT_ROOT + subscription.getId() + "-" + slug;
+        return Constants.SUBSCRIPTION_MOUNT_ROOT + subscription.getId() + "-" + slug + seasonSuffix;
+    }
+
+    /** 挂载目录季后缀:第 2 季起追加 " Sxx",首季/未标注不加(保持既有首季路径形态)。 */
+    private static String seasonSuffix(MediaSubscription subscription) {
+        Integer season = subscription.getSeason();
+        return season != null && season > 1 ? String.format(" S%02d", season) : "";
     }
 
     /** 元数据 id 目录标签:豆瓣 [dbid-x] / TMDB [tmdbid-x] / Bangumi [bgmid-x];未绑定返回 null。 */
