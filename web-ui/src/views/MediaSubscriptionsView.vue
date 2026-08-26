@@ -198,7 +198,7 @@
         </el-form-item>
         <el-form-item v-if="form.mode === 'TRANSFER'" label="转存网盘">
           <el-select v-model="form.accountIds" multiple placeholder="可多选,同时转存到多个网盘" style="width: 100%">
-            <el-option v-for="account in accounts" :key="'pan:' + account.id"
+            <el-option v-for="account in transferAccounts" :key="'pan:' + account.id"
                        :label="account.name + '(' + account.type + ')'" :value="'pan:' + account.id"/>
             <el-option v-for="account in aliAccounts" :key="'ali:' + account.id"
                        :label="(account.nickname || '阿里#' + account.id) + '(阿里)'"
@@ -824,6 +824,11 @@ const metaResults = ref<any[]>([])
 const metaLink = ref('')
 const resolvingLink = ref(false)
 const accounts = ref<any[]>([])
+/** 仅中转目标无服务端转存能力(与后端 resolveTargets 的 relayOnly 同口径):不列入转存网盘;历史已选中的保留显示便于取消 */
+const relayOnlyTypes = new Set(['QUARK_TV', 'UC_TV', 'OPEN115'])
+const transferAccounts = computed(() =>
+    (accounts.value || []).filter((account: any) =>
+        !relayOnlyTypes.has(account.type) || (form.value.accountIds || []).includes('pan:' + account.id)))
 const previewVisible = ref(false)
 const previewing = ref(false)
 const previewItems = ref<any[]>([])
