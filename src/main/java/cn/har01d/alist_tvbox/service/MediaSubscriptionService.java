@@ -1781,6 +1781,7 @@ public class MediaSubscriptionService {
             episodeItems.add(item);
         }
         result.put("episodes", episodeItems);
+        log.debug("details: {}", result);
         return result;
     }
 

@@ -204,7 +204,7 @@
                        :label="(account.nickname || '阿里#' + account.id) + '(阿里)'"
                        :value="'ali:' + account.id" :disabled="!aliSelectable(account)"/>
           </el-select>
-          <span class="sub-text">转存到各网盘 /追剧/ 目录下;全部失败才降级挂载模式</span>
+          <span class="sub-text">转存到各网盘 /我的追剧/ 目录下;全部失败才降级挂载模式</span>
         </el-form-item>
         <el-form-item v-if="form.mode === 'TRANSFER'" label="跨网盘转存">
           <el-switch v-model="form.crossDrive"/>
