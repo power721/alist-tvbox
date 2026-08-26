@@ -287,18 +287,23 @@
           </template>
         </el-table-column>
         <el-table-column prop="episodesFound" label="集数" width="70"/>
-        <el-table-column label="角色" width="90">
+        <el-table-column label="角色" width="120">
           <template #default="scope">
             <el-tag v-if="scope.row.primary" size="small" type="success">主源</el-tag>
             <el-tag v-else-if="scope.row.state === 'MOUNTED'" size="small" type="warning">补缺</el-tag>
+            <el-tag v-if="scope.row.pinned" size="small" type="danger" style="margin-left: 4px">钉选</el-tag>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="90">
+        <el-table-column fixed="right" label="操作" width="130">
           <template #default="scope">
             <el-button v-if="scope.row.state === 'CANDIDATE'" link type="primary" size="small"
                        @click="activateResource(scope.row)">启用</el-button>
             <el-button v-else-if="scope.row.state === 'MOUNTED' && !scope.row.primary" link type="primary" size="small"
                        @click="activateResource(scope.row)">转主源</el-button>
+            <el-button v-if="scope.row.pinned" link type="danger" size="small"
+                       @click="unpinResource(scope.row)">取消钉选</el-button>
+            <el-button v-else link type="danger" size="small"
+                       @click="pinResource(scope.row)">钉选</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -689,6 +694,8 @@ interface ResourceDto {
   /** 挂载生命周期:CANDIDATE/MOUNTED/RETIRED/REJECTED(可用性由集源行聚合,不再落在资源上) */
   state: string | null
   primary: boolean
+  /** 手动钉选:换源候选序置顶、归属复核豁免(用户否决自动换源) */
+  pinned: boolean
 }
 
 interface EventDto {
@@ -1355,6 +1362,23 @@ const activateResource = (resource: ResourceDto) => {
     ElMessage.success('已开始换源,稍后刷新')
     schedule(loadResources, 6000)
     schedule(loadAll, 8000)
+  })
+}
+
+const pinResource = (resource: ResourceDto) => {
+  if (!current.value) return
+  axios.post(`/api/media-subscriptions/${current.value.id}/resources/${resource.id}/pin`).then(() => {
+    ElMessage.success('已钉选为主源,自动换源不再覆盖')
+    schedule(loadResources, 6000)
+    schedule(loadAll, 8000)
+  })
+}
+
+const unpinResource = (resource: ResourceDto) => {
+  if (!current.value) return
+  axios.post(`/api/media-subscriptions/${current.value.id}/resources/${resource.id}/unpin`).then(() => {
+    ElMessage.success('已取消钉选,恢复自动换源')
+    schedule(loadResources, 2000)
   })
 }
 

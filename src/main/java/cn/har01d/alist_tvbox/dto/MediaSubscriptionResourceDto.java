@@ -17,6 +17,8 @@ public class MediaSubscriptionResourceDto {
     private String state;
     /** 是否主源(挂在订阅固定路径上的那个 MOUNTED 资源) */
     private boolean primary;
+    /** 手动钉选:换源候选序置顶、归属复核豁免(用户否决自动换源) */
+    private boolean pinned;
     private Long checkedTime;
     private long createdTime;
 }

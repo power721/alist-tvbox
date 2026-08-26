@@ -37,6 +37,8 @@ public class MediaSubscriptionEvent {
     public static final String TYPE_RESUMED = "RESUMED";
     /** 详情页"检查更新"(轻量):刷新元数据后官方已播 vs 本地已有的结论,不含资源搜索/挂载 */
     public static final String TYPE_UPDATE_CHECK = "UPDATE_CHECK";
+    /** 用户钉选/取消钉选主源(用户自发动作,只进事件流不外发通知) */
+    public static final String TYPE_PINNED = "PINNED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")

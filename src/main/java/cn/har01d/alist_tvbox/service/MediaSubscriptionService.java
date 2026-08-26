@@ -421,6 +421,7 @@ public class MediaSubscriptionService {
             dto.setState(r.getState());
             dto.setPrimary(MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
                     && subscription.getMountPath() != null && subscription.getMountPath().equals(r.getMountPath()));
+            dto.setPinned(Boolean.TRUE.equals(r.getPinned()));
             dto.setCheckedTime(r.getCheckedTime());
             dto.setCreatedTime(r.getCreatedTime());
             return dto;

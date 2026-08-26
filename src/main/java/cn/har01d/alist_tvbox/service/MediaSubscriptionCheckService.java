@@ -785,6 +785,53 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 手动激活候选池中的指定资源(异步换源)。 */
+    /** 钉选:立即激活为主源并标记永久优先 —— 归属复核不再自动换走,换源候选序置顶;
+     * 失效退役不清除钉选,恢复可用后优先回归。每订阅一个钉选位,钉新清旧。
+     * 激活失败钉选保留(下轮换源仍优先试它),失败原因经 activateAsync 既有事件上报。 */
+    public void pinAsync(int uid, int id, int resourceId) {
+        MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
+        if (subscription == null || subscription.getUid() != uid) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
+        }
+        MediaSubscriptionResource resource = resourceRepository.findById(resourceId).orElse(null);
+        if (resource == null || resource.getSubscriptionId() != id) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("候选资源不存在: " + resourceId);
+        }
+        applyPin(id, resourceId);
+        addEvent(id, MediaSubscriptionEvent.TYPE_PINNED,
+                "已钉选主源:" + StringUtils.defaultIfBlank(resource.getTitle(), resource.getLink())
+                        + "(自动换源不再覆盖,取消钉选恢复自动)", false);
+        activateAsync(uid, id, resourceId);
+    }
+
+    /** 取消钉选:只清标记,当前挂载不动,自动换源恢复。 */
+    public void unpinAsync(int uid, int id, int resourceId) {
+        MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
+        if (subscription == null || subscription.getUid() != uid) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
+        }
+        MediaSubscriptionResource resource = resourceRepository.findById(resourceId).orElse(null);
+        if (resource == null || resource.getSubscriptionId() != id) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("候选资源不存在: " + resourceId);
+        }
+        if (Boolean.TRUE.equals(resource.getPinned())) {
+            resource.setPinned(false);
+            resourceRepository.save(resource);
+        }
+        addEvent(id, MediaSubscriptionEvent.TYPE_PINNED, "已取消钉选,恢复自动换源", false);
+    }
+
+    /** 钉选置位(同步):目标行置 true、同订阅其余行清 false(每订阅一个钉选位)。 */
+    void applyPin(int id, int resourceId) {
+        for (MediaSubscriptionResource r : resourceRepository.findBySubscriptionIdOrderByScoreDesc(id)) {
+            boolean pin = r.getId().equals(resourceId);
+            if (pin != Boolean.TRUE.equals(r.getPinned())) {
+                r.setPinned(pin);
+                resourceRepository.save(r);
+            }
+        }
+    }
+
     public void activateAsync(int uid, int id, int resourceId) {
         MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
         if (subscription == null || subscription.getUid() != uid) {
@@ -929,7 +976,8 @@ public class MediaSubscriptionCheckService {
             // (本地 37 > 官方 26 永不重开)。主源集号超范围 = 误挂异剧,重开走完整巡检
             // (doCheck 的归属复核会自动换正确源,集数快照/maxEpisode 随之归位)。
             MediaSubscriptionResource primary = primaryResource(subscription);
-            if (primary != null && !belongsToShow(subscription, primary)) {
+            if (primary != null && !Boolean.TRUE.equals(primary.getPinned())
+                    && !belongsToShow(subscription, primary)) {
                 subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
                 subscription.setStallCount(0);
                 addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_RESUMED,
@@ -1042,7 +1090,12 @@ public class MediaSubscriptionCheckService {
         // otherSeasonDir 拒入、S01Eyy 被 parseEpisode(season) 拒收),列目录不报错、失效探测也正常,
         // 唯一信号就是文件集为空。与误挂异剧同路换源,不让空壳拖到下轮。
         boolean primaryHollow = primary != null && files.isEmpty();
-        if (primary != null && (!belongsToShow(subscription, primary, files.keySet()) || primaryHollow)) {
+        boolean primaryBelongs = primary == null || belongsToShow(subscription, primary, files.keySet());
+        if (primary != null && !primaryBelongs && !primaryHollow && Boolean.TRUE.equals(primary.getPinned())) {
+            log.info("subscription {} pinned primary failed ownership recheck, kept (user override): {}",
+                    subscription.getId(), primary.getTitle());
+        }
+        if (primary != null && shouldReplacePrimary(primary, primaryBelongs, primaryHollow)) {
             // 误挂异业主源(线上:「悬案解码」2025 顶在「悬案」2026 的固定路径上):列目录/流探测都正常,
             // 巡检没有天然失效信号 —— 用与候选池同一套归属+年份门禁就地复核(集号用本轮清洗后的
             // 文件集,防噪声剔除上线前的存量毒行 142 误判主体正确的主源),不符即换源;
@@ -1831,6 +1884,16 @@ public class MediaSubscriptionCheckService {
      * (26+142)会把主体正确的主源误判异剧 —— doCheck 复核主源时应传本轮清洗后的文件集,
      * 行层面的毒数据由随后的 syncInventory 重列洗掉。
      */
+    /** 主源复核是否须换源:空壳(列不出本季文件)必换 —— 挂不上内容的钉选没有意义,换季重置
+     * 语义也依赖它;误挂异剧(归属门禁不符)换源但<b>钉选豁免</b>:钉选是用户对自动判定的否决,
+     * 归属门禁的误杀止步于此(失效换源不受影响,链接真死照常换走,钉选保留待回归)。 */
+    static boolean shouldReplacePrimary(MediaSubscriptionResource primary, boolean belongs, boolean hollow) {
+        if (hollow) {
+            return true;
+        }
+        return !belongs && !Boolean.TRUE.equals(primary.getPinned());
+    }
+
     boolean belongsToShow(MediaSubscription subscription, MediaSubscriptionResource resource, Set<Integer> observedEpisodes) {
         if (resource.getId() != null && episodeNumbersForeign(subscription, observedEpisodes, metaGenres(subscription))) {
             return false; // 同名真人版等异剧:标题/年份门禁放行,集号超出官方总集数是唯一信号
@@ -3079,32 +3142,43 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** 换源时的主源候选序:分数优先之上,把集源行已知含「待看集」(watched+1)的候选整体提前 ——
-     * 主源刚失效,用户要续看的正是那一集,已知覆盖的确定性优先于高分候选的未知覆盖
-     * (借鉴追更助手 coversExpectedEpisode 信号)。观看进度未知/无人已知覆盖/全部已知覆盖 →
+    /** 换源时的主源候选序,分数序之上两层提前:①钉选候选置顶(用户指定压过一切自动判定,
+     * 失效换源后钉选行保留,恢复可用即优先回归);②集源行已知含「待看集」(watched+1)的候选提前
+     * —— 主源刚失效,用户要续看的正是那一集,已知覆盖的确定性优先于高分候选的未知覆盖
+     * (借鉴追更助手 coversExpectedEpisode 信号)。无人钉选且观看进度未知/无人已知覆盖/全部已知覆盖 →
      * 分数序不变;单集链接不受此影响被提前:usableAsPrimary 仍会把它挡在主源外。 */
     List<MediaSubscriptionResource> primaryCandidates(MediaSubscription subscription) {
         List<MediaSubscriptionResource> candidates = candidatesOrdered(subscription);
-        int nextWatch = watchedEpisode(subscription) + 1;
-        if (nextWatch <= 1 || candidates.size() < 2) {
+        if (candidates.size() < 2) {
             return candidates;
         }
+        int nextWatch = watchedEpisode(subscription) + 1;
+        List<MediaSubscriptionResource> pinned = new ArrayList<>();
         List<MediaSubscriptionResource> covering = new ArrayList<>();
         List<MediaSubscriptionResource> rest = new ArrayList<>();
         for (MediaSubscriptionResource resource : candidates) {
-            if (coverageOf(resource).contains(nextWatch)) {
+            if (Boolean.TRUE.equals(resource.getPinned())) {
+                pinned.add(resource);
+            } else if (nextWatch > 1 && coverageOf(resource).contains(nextWatch)) {
                 covering.add(resource);
             } else {
                 rest.add(resource);
             }
         }
-        if (covering.isEmpty() || rest.isEmpty()) {
+        if (pinned.isEmpty() && (covering.isEmpty() || rest.isEmpty())) {
             return candidates;
         }
-        log.info("subscription {} primary candidates: {} 个已知覆盖待看第{}集,提前于分数序",
-                subscription.getId(), covering.size(), nextWatch);
-        covering.addAll(rest);
-        return covering;
+        if (!pinned.isEmpty()) {
+            log.info("subscription {} pinned candidate tops primary order", subscription.getId());
+        } else {
+            log.info("subscription {} primary candidates: {} 个已知覆盖待看第{}集,提前于分数序",
+                    subscription.getId(), covering.size(), nextWatch);
+        }
+        List<MediaSubscriptionResource> result = new ArrayList<>(candidates.size());
+        result.addAll(pinned);
+        result.addAll(covering);
+        result.addAll(rest);
+        return result;
     }
 
     /** 按分数依次尝试候选,失败退役换下一个;成功则重挂到同一固定路径。 */

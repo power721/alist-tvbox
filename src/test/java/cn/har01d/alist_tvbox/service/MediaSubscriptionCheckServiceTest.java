@@ -2642,6 +2642,124 @@ class MediaSubscriptionCheckServiceTest {
         assertFalse(fixture.service.reopenEnded(fixture.subscription), "正常完结:不重开");
     }
 
+    // ---------- 手动钉选主源(2026-08-27,借鉴追更助手 exportManual:用户指定压过自动判定)----------
+    // 钉选 = 换源候选序置顶 + 主源归属复核豁免(误挂异剧不再自动换走);失效换源不受影响,
+    // 钉选行保留,恢复可用后优先回归;每订阅一个钉选位,钉新清旧。
+
+    @Test
+    void shouldReplacePrimaryForms() {
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        assertFalse(MediaSubscriptionCheckService.shouldReplacePrimary(primary, true, false),
+                "归属正常:不换");
+        assertTrue(MediaSubscriptionCheckService.shouldReplacePrimary(primary, false, false),
+                "误挂异剧:换源");
+        primary.setPinned(true);
+        assertFalse(MediaSubscriptionCheckService.shouldReplacePrimary(primary, false, false),
+                "钉选豁免归属复核:用户否决自动判定");
+        assertTrue(MediaSubscriptionCheckService.shouldReplacePrimary(primary, true, true),
+                "空壳主源(列不出本季文件)不豁免:挂不上内容的钉选没有意义");
+        assertTrue(MediaSubscriptionCheckService.shouldReplacePrimary(primary, false, true),
+                "空壳 + 异剧:必换");
+    }
+
+    @Test
+    void activateTopsPinnedCandidateRegardlessOfScore() {
+        // 钉选候选(分数 100)置顶于高分候选(120)之前接管主源;观看进度未知也不影响钉选层
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource high = new MediaSubscriptionResource();
+        high.setId(61);
+        high.setSubscriptionId(1);
+        high.setLink("https://pan.quark.cn/s/high");
+        high.setTitle("测试剧 4K 全集");
+        high.setType(5);
+        high.setScore(120);
+        high.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource pinned = new MediaSubscriptionResource();
+        pinned.setId(62);
+        pinned.setSubscriptionId(1);
+        pinned.setLink("https://pan.baidu.com/s/pinned");
+        pinned.setTitle("测试剧 (2025) 4K 全集");
+        pinned.setType(10);
+        pinned.setScore(100);
+        pinned.setPinned(true);
+        pinned.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(high, pinned));
+        RowStore store = new RowStore();
+        store.install(fixture);
+        Share mount = new Share();
+        mount.setId(66);
+        Mockito.when(fixture.shareRepository.findByPath("/追剧/1-测试剧"))
+                .thenReturn(null).thenReturn(mount).thenReturn(mount);
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(s01EpisodeFiles(12)));
+
+        assertTrue(fixture.service.activateNextCandidate(fixture.subscription));
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, pinned.getState(), "钉选候选压过分数序接管主源");
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, high.getState(), "高分候选不被先试");
+    }
+
+    @Test
+    void reopenEndedKeepsPinnedAlienPrimary() {
+        // ENDED 异剧重开路径的钉选豁免:用户钉住的"异剧"主源保持 ENDED,不被重开换源
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("仙剑奇侠传三");
+        fixture.subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        fixture.subscription.setOfficialTotal(26);
+        fixture.subscription.setOfficialEpisodes(26);
+        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(
+                        Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(new ArrayList<>(episodeRange(1, 37)));
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(51);
+        primary.setTitle("仙剑奇侠传三 2160P");
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        primary.setPinned(true);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(primary));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(
+                        Mockito.eq(51), Mockito.anyCollection()))
+                .thenReturn(new ArrayList<>(episodeRange(1, 37)));
+
+        assertFalse(fixture.service.reopenEnded(fixture.subscription), "钉选主源:异剧重开豁免");
+        assertEquals(MediaSubscription.STATUS_ENDED, fixture.subscription.getStatus(), "保持 ENDED");
+        Mockito.verify(fixture.eventRepository, Mockito.never()).save(Mockito.any());
+    }
+
+    @Test
+    void applyPinClearsOtherPinsAndUnpinRestores() {
+        // 钉选位唯一:applyPin 目标置位、其余清除(只写有变化的行);unpinAsync 清标记并发事件
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource stale = new MediaSubscriptionResource();
+        stale.setId(71);
+        stale.setSubscriptionId(1);
+        stale.setPinned(true);
+        MediaSubscriptionResource target = new MediaSubscriptionResource();
+        target.setId(72);
+        target.setSubscriptionId(1);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(stale, target));
+        Mockito.when(fixture.resourceRepository.findById(72)).thenReturn(Optional.of(target));
+
+        fixture.service.applyPin(1, 72);
+
+        assertTrue(Boolean.TRUE.equals(target.getPinned()), "目标行钉选置位");
+        assertFalse(Boolean.TRUE.equals(stale.getPinned()), "旧钉选位清除");
+        assertEquals(2, Mockito.mockingDetails(fixture.resourceRepository).getInvocations().stream()
+                        .filter(i -> "save".equals(i.getMethod().getName())).count(), "两行各保存一次");
+
+        fixture.service.unpinAsync(0, 1, 72);
+
+        assertFalse(Boolean.TRUE.equals(target.getPinned()), "取消钉选清除标记");
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository).save(events.capture());
+        assertEquals(MediaSubscriptionEvent.TYPE_PINNED, events.getValue().getType());
+        assertTrue(String.valueOf(events.getValue().getDetail()).contains("取消钉选"));
+    }
+
     private static Set<Integer> episodeRange(int from, int to) {
         Set<Integer> numbers = new TreeSet<>();
         for (int i = from; i <= to; i++) {

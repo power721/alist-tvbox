@@ -105,6 +105,10 @@ public class MediaSubscriptionResource {
     @Column(name = "checked_time")
     private Long checkedTime;
 
+    /** 手动钉选(用户指定主源):换源候选序置顶、归属复核豁免(用户否决自动判定);
+     * 每订阅至多一个,失效退役不清除 —— 恢复可用后优先回归。null 视为未钉选。 */
+    private Boolean pinned;
+
     @Column(name = "created_time", nullable = false)
     private long createdTime;
 }

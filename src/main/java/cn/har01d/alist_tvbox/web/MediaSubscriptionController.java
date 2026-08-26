@@ -127,6 +127,20 @@ public class MediaSubscriptionController {
         return Map.of("started", true);
     }
 
+    /** 钉选资源为主源:立即挂载,自动换源不再覆盖(归属复核豁免、候选序置顶)。 */
+    @PostMapping("/{id}/resources/{resourceId}/pin")
+    public Map<String, Object> pin(@PathVariable int id, @PathVariable int resourceId) {
+        checkService.pinAsync(currentUid(), id, resourceId);
+        return Map.of("started", true);
+    }
+
+    /** 取消钉选:清除标记,当前挂载不动,自动换源恢复。 */
+    @PostMapping("/{id}/resources/{resourceId}/unpin")
+    public Map<String, Object> unpin(@PathVariable int id, @PathVariable int resourceId) {
+        checkService.unpinAsync(currentUid(), id, resourceId);
+        return Map.of("success", true);
+    }
+
     /** 手动转存增量(TRANSFER 模式)。 */
     @PostMapping("/{id}/transfer")
     public Map<String, Object> transfer(@PathVariable int id) {
