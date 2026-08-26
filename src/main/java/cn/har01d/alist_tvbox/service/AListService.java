@@ -302,7 +302,7 @@ public class AListService {
 
     /**
      * 分享服务端转存(同步,网盘侧秒传,不经服务器字节中转):把 srcDir 下的文件/目录转存到 dstDir。
-     * 源挂载驱动需实现服务端转存契约(夸克/UC/百度分享→同族账号),
+     * 源挂载驱动需实现服务端转存契约(夸克/UC/115/百度分享→同族账号;115 仅 cookie 版账号),
      * 不支持时端点返回错误,由调用方回退 copy 字节中转。
      */
     public void shareSave(Site site, String srcDir, List<String> names, String dstDir) {

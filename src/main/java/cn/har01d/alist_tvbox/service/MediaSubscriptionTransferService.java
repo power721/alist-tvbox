@@ -320,7 +320,7 @@ public class MediaSubscriptionTransferService {
             // 全新剧且支持服务端转存:覆盖缺集最多的源目录整目录秒转到固定根目录,
             // 再把分享原名目录 rename 成规范剧目录名(带元数据 id 标签,刮削按 id 匹配);
             // 其余源目录的缺集随后走文件模式补齐
-            if (!target.tv() && !dirExists(site, targetDir)) {
+            if (!target.relayOnly() && !dirExists(site, targetDir)) {
                 String primary = byDir.entrySet().stream()
                         .max(Comparator.comparingInt(e -> e.getValue().size()))
                         .map(Map.Entry::getKey).orElse(null);
@@ -343,7 +343,7 @@ public class MediaSubscriptionTransferService {
                 ensureDirs(site, targetDir);
             }
             for (var entry : byDir.entrySet()) {
-                if (!target.tv() && serverSavable(sourceTypeFor(sourceTypes, entry.getKey()), dstType)) {
+                if (!target.relayOnly() && serverSavable(sourceTypeFor(sourceTypes, entry.getKey()), dstType)) {
                     try {
                         shareSaveObjects(site, entry.getKey(), entry.getValue(), targetDir);
                         continue;
@@ -411,11 +411,14 @@ public class MediaSubscriptionTransferService {
                     DriverAccount account = accountRepository.findById(Integer.parseInt(id.startsWith("pan:") ? id.substring(4) : id)).orElse(null);
                     if (account != null) {
                         DriverType type = account.getType();
+                        // 仅字节中转的目标:TV 账号无服务端转存;115 开放平台无分享接收接口,仅 cookie 版账号可转存
+                        boolean relayOnly = type == DriverType.QUARK_TV || type == DriverType.UC_TV
+                                || type == DriverType.OPEN115;
                         result.add(new TransferTarget("pan:" + account.getId(),
                                 StringUtils.defaultIfBlank(account.getName(), "账号#" + account.getId()),
                                 Storage.getMountPath(account),
                                 MediaSubscriptionCheckService.driveCode(type),
-                                type == DriverType.QUARK_TV || type == DriverType.UC_TV));
+                                relayOnly));
                     }
                 }
             } catch (NumberFormatException ignored) {
@@ -475,9 +478,9 @@ public class MediaSubscriptionTransferService {
         return tag == null ? base : base + " " + tag;
     }
 
-    /** 源分享类型与目标账号同族(夸克 5/UC 7/百度 10)才支持服务端转存;TV 账号由调用方排除。 */
+    /** 源分享类型与目标账号同族(夸克 5/UC 7/115 8/百度 10)才支持服务端转存;TV/开放平台账号由 relayOnly 排除。 */
     private static boolean serverSavable(Integer srcType, int dstType) {
-        return srcType != null && srcType == dstType && (dstType == 5 || dstType == 7 || dstType == 10);
+        return srcType != null && srcType == dstType && (dstType == 5 || dstType == 7 || dstType == 8 || dstType == 10);
     }
 
     /** 目录是否存在(listFiles 失败视为不存在,含 object not found)。 */
@@ -545,8 +548,9 @@ public class MediaSubscriptionTransferService {
     }
 
     /** 转存目标:网盘账号(DriverAccount,"pan:{id}")或阿里独立账号表(Account,"ali:{id}");
-     * mountPath 为 AList 挂载根,shareType 为分享类型码(跨盘路由/盘线路用),tv 标记 TV 账号(不支持服务端转存)。 */
-    public record TransferTarget(String key, String name, String mountPath, Integer shareType, boolean tv) {
+     * mountPath 为 AList 挂载根,shareType 为分享类型码(跨盘路由/盘线路用),
+     * relayOnly 标记无服务端转存能力的目标(TV 账号/开放平台 115),只走字节中转 copy。 */
+    public record TransferTarget(String key, String name, String mountPath, Integer shareType, boolean relayOnly) {
         public String drive() {
             return shareType == null || shareType < 0 ? null : DriveId.toDrive(shareType);
         }
