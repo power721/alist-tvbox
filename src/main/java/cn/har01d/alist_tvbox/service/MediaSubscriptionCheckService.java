@@ -4696,13 +4696,30 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    private String joinNumbers(List<Integer> numbers) {
+    /** 集号列表文案:连续段(≥3)压成区间 —— 千集动漫"第1,2,3,…,1000 集"的动态长到没法看,压成"第1-1000 集"。 */
+    static String joinNumbers(List<Integer> numbers) {
+        List<Integer> sorted = numbers.stream().distinct().sorted().toList();
         StringBuilder sb = new StringBuilder();
-        for (int number : numbers) {
-            if (!sb.isEmpty()) {
-                sb.append(",");
+        int i = 0;
+        while (i < sorted.size()) {
+            int start = i;
+            while (i + 1 < sorted.size() && sorted.get(i + 1) == sorted.get(i) + 1) {
+                i++;
             }
-            sb.append(number);
+            if (i - start >= 2) {
+                if (!sb.isEmpty()) {
+                    sb.append(",");
+                }
+                sb.append(sorted.get(start)).append("-").append(sorted.get(i));
+            } else {
+                for (int j = start; j <= i; j++) {
+                    if (!sb.isEmpty()) {
+                        sb.append(",");
+                    }
+                    sb.append(sorted.get(j));
+                }
+            }
+            i++;
         }
         return sb.toString();
     }

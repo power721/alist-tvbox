@@ -3122,6 +3122,20 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verify(fixture.transferService, Mockito.never()).transferAsync(Mockito.anyInt(), Mockito.anyInt());
     }
 
+    @Test
+    void joinNumbersCompressesConsecutiveRuns() {
+        // 千集动漫整源覆盖:动态文案逐集列出会长到没法看,连续段(≥3)压成区间
+        assertEquals("1-36", MediaSubscriptionCheckService.joinNumbers(IntStream.rangeClosed(1, 36).boxed().toList()));
+        assertEquals("1-1000", MediaSubscriptionCheckService.joinNumbers(IntStream.rangeClosed(1, 1000).boxed().toList()));
+        // 稀疏覆盖:只压连续段,散点保持逗号;乱序输入先排再去重
+        assertEquals("4,8,11-15,19,21,29,31,33-36", MediaSubscriptionCheckService.joinNumbers(
+                new ArrayList<>(List.of(36, 8, 11, 12, 13, 14, 15, 4, 19, 21, 29, 31, 33, 34, 35))));
+        // 两集连续不压(等长,保持原样),单集/空集照旧
+        assertEquals("1,2", MediaSubscriptionCheckService.joinNumbers(List.of(1, 2)));
+        assertEquals("5", MediaSubscriptionCheckService.joinNumbers(List.of(5)));
+        assertEquals("", MediaSubscriptionCheckService.joinNumbers(List.of()));
+    }
+
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
         final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
