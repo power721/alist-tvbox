@@ -7,4 +7,5 @@ public enum TaskType {
     SYNC_META,
     DOWNLOAD,
     INDEX115,
+    SUBSCRIPTION,
 }

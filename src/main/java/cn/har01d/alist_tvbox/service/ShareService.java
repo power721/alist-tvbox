@@ -1614,6 +1614,11 @@ public class ShareService {
                     if (invalid(status)) {
                         int id = item.get("id").asInt();
                         String path = item.get("mount_path").asText();
+                        // 追剧订阅的固定挂载:失效不删,由订阅巡检换源(重挂同一 mount_path),删了会断播放历史
+                        if (path.startsWith(Constants.SUBSCRIPTION_MOUNT_ROOT)) {
+                            log.info("skip subscription share (auto re-source by media subscription check): {} {}", id, path);
+                            continue;
+                        }
                         log.warn("delete invalid share: {} {} reason: {}", id, path, status);
                         deleteShare(id);
                         count++;
@@ -1648,6 +1653,7 @@ public class ShareService {
                 || status.contains("分享不存在")
                 || status.contains("文件不存在")
                 || status.contains("文件没有被分享")
+                || status.contains("分享无法访问")
                 ;
     }
 

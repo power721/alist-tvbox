@@ -68,6 +68,8 @@ public class WebSecurityConfiguration {
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/live/follows", "/api/live/follows/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        .requestMatchers("/api/media-subscriptions", "/api/media-subscriptions/**")
+                        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/users/**", "/api/tenants/**", "/api/files/**", "/api/alist/alias/**")
                         .hasAuthority(Role.ADMIN.name())
                         .requestMatchers("/api/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())

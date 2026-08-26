@@ -428,6 +428,17 @@ public class DoubanService {
 
     public Movie getByName(String name, Integer year) {
         try {
+            // [dbid-x] 目录标记(追剧转存目录自带豆瓣 id):直读精确命中;未命中也剥离标记,防污染名称匹配
+            String dbid = TextUtils.parseMetaIdTag(name, "dbid");
+            if (dbid != null) {
+                Movie tagged = movieRepository.findById(Integer.valueOf(dbid)).orElse(null);
+                if (tagged != null) {
+                    log.debug("match by dbid tag: {}", dbid);
+                    return tagged;
+                }
+            }
+            name = TextUtils.stripMetaIdTags(name);
+
             Alias alias = aliasRepository.findById(name).orElse(null);
             if (alias != null) {
                 log.debug("name: {} alias: {}", name, alias.getAlias());

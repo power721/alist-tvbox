@@ -414,7 +414,8 @@ public class TmdbService {
         return new HashSet<>();
     }
 
-    private static final Pattern TMDBID = Pattern.compile("\\{tmdbid-(\\d+)}");
+    // 削刮命名 {tmdbid-x} 与追剧转存目录 [tmdbid-x] 两种标记
+    private static final Pattern TMDBID = Pattern.compile("[\\[{]tmdbid-(\\d+)[\\]}]");
 
     private Tmdb handleIndexLine(int id, String line, String type, boolean force, Set<String> failed) {
         String[] parts = line.split("#");
@@ -557,6 +558,17 @@ public class TmdbService {
 
     public Tmdb getByName(String name) {
         try {
+            // [tmdbid-x]/{tmdbid-x} 标记直读本地库(无 type 上下文,先 tv 后 movie);未命中剥离标记走名称匹配
+            String tmdbId = TextUtils.parseMetaIdTag(name, "tmdbid");
+            if (tmdbId != null) {
+                Tmdb tagged = tmdbRepository.findByTypeAndTmdbId("tv", Integer.valueOf(tmdbId))
+                        .or(() -> tmdbRepository.findByTypeAndTmdbId("movie", Integer.valueOf(tmdbId)))
+                        .orElse(null);
+                if (tagged != null) {
+                    return tagged;
+                }
+            }
+            name = TextUtils.stripMetaIdTags(name);
             name = TextUtils.cleanMediaTitle(name);
             name = TextUtils.fixName(name);
             Tmdb movie = findFirstMovieByName(name);

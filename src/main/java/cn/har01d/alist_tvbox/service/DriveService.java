@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.Video;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.FileNameInfo;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -19,8 +20,10 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Browse drive shares / discovery resources one directory at a time (no recursive flattening),
@@ -105,6 +108,8 @@ public class DriveService {
                 files.add(toVideo(site, rootPath, entry));
             }
         }
+        sortByName(directories, DriveDirectory::getName);
+        sortByName(files, Video::getName);
         response.setDirectories(directories);
         response.setFiles(files);
         log.debug("resolve drive response={}", response);
@@ -132,6 +137,7 @@ public class DriveService {
                 files.add(toVideo(site, dirPath, entry));
             }
         }
+        sortByName(files, Video::getName);
         log.debug("files list response={}", files);
         return files;
     }
@@ -159,6 +165,16 @@ public class DriveService {
             return List.of();
         }
         return response.getFiles();
+    }
+
+    /** Natural-order sort (episode numbers, 上/中/下 chapters); drive APIs return entries in
+     *  unspecified order (often upload time), e.g. 上集/下集/中集. */
+    private static <T> void sortByName(List<T> list, Function<T, String> nameExtractor) {
+        try {
+            list.sort(Comparator.comparing(nameExtractor.andThen(FileNameInfo::new)));
+        } catch (Exception e) {
+            log.warn("sort error: {}", e.getMessage());
+        }
     }
 
     private Video toVideo(Site site, String dirPath, FsInfo entry) {

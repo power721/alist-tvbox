@@ -98,6 +98,7 @@ onMounted(() => {
           <el-menu-item index="/users" v-if="account.authenticated && show && full && store.admin">用户</el-menu-item>
           <el-menu-item index="/search" v-if="account.authenticated && (full || !store.admin)">搜索</el-menu-item>
           <el-menu-item index="/vod" v-if="account.authenticated && show && (full || !store.admin)">播放</el-menu-item>
+          <el-menu-item index="/media-subscriptions" v-if="account.authenticated && show && (full || !store.admin)">追剧</el-menu-item>
           <el-menu-item index="/live" v-if="account.authenticated && (full || !store.admin)">直播</el-menu-item>
           <el-menu-item index="/about" v-if="account.authenticated && store.admin">关于</el-menu-item>
           <div class="flex-grow" />
@@ -139,6 +140,7 @@ onMounted(() => {
           <el-menu-item index="/search" v-if="account.authenticated && (full || !store.admin)" @click="navigate('/search')">搜索</el-menu-item>
           <el-menu-item index="/vod" v-if="account.authenticated && show && (full || !store.admin)" @click="navigate('/vod')">播放</el-menu-item>
           <el-menu-item index="/live" v-if="account.authenticated && (full || !store.admin)" @click="navigate('/live')">直播</el-menu-item>
+          <el-menu-item index="/media-subscriptions" v-if="account.authenticated && show && (full || !store.admin)" @click="navigate('/media-subscriptions')">追剧</el-menu-item>
           <el-menu-item index="/about" v-if="account.authenticated && store.admin" @click="navigate('/about')">关于</el-menu-item>
           <el-menu-item index="/user" v-if="account.authenticated" @click="navigate('/user')">用户</el-menu-item>
           <el-menu-item index="/system" v-if="account.authenticated && store.admin" @click="navigate('/system')">系统</el-menu-item>

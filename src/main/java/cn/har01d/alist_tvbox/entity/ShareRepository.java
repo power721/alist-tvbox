@@ -25,4 +25,6 @@ public interface ShareRepository extends JpaRepository<Share, Integer> {
     List<Share> findByTempTrue();
 
     Optional<Share> findByTypeAndShareId(Integer type, String shareId);
+
+    List<Share> findByTypeAndShareIdAndTempTrue(Integer type, String shareId);
 }

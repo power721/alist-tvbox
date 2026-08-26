@@ -444,13 +444,46 @@ public class RemoteSearchService {
                 .collect(Collectors.toSet());
     }
 
+    /**
+     * 可检链接总数超过全局阈值时的降级选样:按盘类型各取排序在前的前 N 条送检,
+     * 总量仍受全局阈值约束,保证各盘(尤其主网盘如百度/夸克)的头部分享照常被预检,
+     * 未选中的链接不参与检测、原样保留在结果里。
+     */
+    private List<Message> selectPanSouCheckCandidates(List<Message> checkable) {
+        int budget = appProperties.getPanSouLinkCheckMaxCount();
+        int perTypeLimit = appProperties.getPanSouLinkCheckMaxPerTypeCount();
+        Map<String, Integer> takenByType = new java.util.HashMap<>();
+        List<Message> selected = new ArrayList<>();
+        for (Message message : checkable) {
+            if (selected.size() >= budget) {
+                break;
+            }
+            String type = getPanSouCloudType(message.getType());
+            int taken = takenByType.getOrDefault(type, 0);
+            if (taken >= perTypeLimit) {
+                continue;
+            }
+            takenByType.put(type, taken + 1);
+            selected.add(message);
+        }
+        log.debug("filterInvalidPanSouLinks over threashold, per-type sample {} of {} (perTypeLimit={})",
+                selected.size(), checkable.size(), perTypeLimit);
+        return selected;
+    }
+
     public List<Message> filterInvalidPanSouLinks(List<Message> messages) {
         if (!appProperties.isPanSouLinkCheckEnabled() || messages.isEmpty()) {
             return messages;
         }
         List<Message> checkable = selectCheckable(messages);
         log.debug("filterInvalidPanSouLinks totla={} checkable={} threashold={}", messages.size(), checkable.size(), appProperties.getPanSouLinkCheckMaxCount());
-        if (checkable.isEmpty() || checkable.size() > appProperties.getPanSouLinkCheckMaxCount()) {
+        if (checkable.isEmpty()) {
+            return messages;
+        }
+        List<Message> toCheck = checkable.size() > appProperties.getPanSouLinkCheckMaxCount()
+                ? selectPanSouCheckCandidates(checkable)
+                : checkable;
+        if (toCheck.isEmpty()) {
             return messages;
         }
 
@@ -459,7 +492,7 @@ public class RemoteSearchService {
         long startedAt = System.currentTimeMillis();
         ObjectNode response = null;
         try {
-            response = checkPanSouLinks(buildPanSouLinkCheckRequest(checkable));
+            response = checkPanSouLinks(buildPanSouLinkCheckRequest(toCheck));
         } catch (Exception e) {
             log.warn("check PanSou search links failed", e);
         }
@@ -474,7 +507,7 @@ public class RemoteSearchService {
                 }
             });
         }
-        logPanSouLinkCheck(checkable, states, startedAt);
+        logPanSouLinkCheck(toCheck, states, startedAt);
         if (states.isEmpty()) {
             return messages;
         }

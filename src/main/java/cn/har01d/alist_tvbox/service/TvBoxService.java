@@ -1791,6 +1791,16 @@ public class TvBoxService {
     }
 
     public MovieList getDetail(String ac, String tid, String title, String keyword, Integer depth) {
+        return doGetDetail(ac, tid, title, keyword, depth, false);
+    }
+
+    /** skipMetadata=true:调用方自带元数据(追剧订阅),跳过按名/路径的豆瓣/TMDB 匹配,只装配播放列表。 */
+    public MovieList getDetail(String ac, String tid, String title, String keyword, Integer depth, boolean skipMetadata) {
+        return doGetDetail(ac, tid, title, keyword, depth, skipMetadata);
+    }
+
+    /** 核心实现为 private:重载间委托不经 Mockito spy 代理(严格打桩会把未桩的同名重载自调用判为参数不匹配)。 */
+    private MovieList doGetDetail(String ac, String tid, String title, String keyword, Integer depth, boolean skipMetadata) {
         if (tid.startsWith("http://") || tid.startsWith("https://")) {
             // 网盘分享链接(TVBox 历史记录 / 多端播放同步回放):挂载后建播放列表,
             // 由记录里的 episode 索引驱动续播。同 ParseService.drive / RemoteSearchService.detail。
@@ -1844,7 +1854,7 @@ public class TvBoxService {
         }
         updateShareTime(path);
         if (path.contains(PLAYLIST)) {
-            return getPlaylist(ac, site, path, title, keyword, depth);
+            return getPlaylist(ac, site, path, title, keyword, depth, skipMetadata);
         }
 
         MovieList result = new MovieList();
@@ -2038,6 +2048,10 @@ public class TvBoxService {
     }
 
     public MovieList getPlaylist(String ac, Site site, String path, String title, String keyword, Integer depth) {
+        return getPlaylist(ac, site, path, title, keyword, depth, false);
+    }
+
+    public MovieList getPlaylist(String ac, Site site, String path, String title, String keyword, Integer depth, boolean skipMetadata) {
         log.info("load playlist {}:{} {}", site.getId(), site.getName(), path);
         String newPath = getParent(path);
         if (!tenantService.valid(newPath)) {
@@ -2093,21 +2107,29 @@ public class TvBoxService {
         }
 
         boolean matched = false;
-        if (StringUtils.isNotBlank(title)) {
-            movieDetail.setVod_name(title);
-            matched = setMovieInfo(site, movieDetail, title, newPath, true);
-        }
-        if (!matched && StringUtils.isNotBlank(keyword)
-                && !StringUtils.equalsIgnoreCase(StringUtils.trim(title), StringUtils.trim(keyword))) {
-            movieDetail.setVod_name(keyword);
-            matched = setMovieInfo(site, movieDetail, keyword, newPath, true);
-        }
-        if (!matched) {
-            movieDetail.setVod_name(fsDetail.getName());
-            matched = setMovieInfo(site, movieDetail, fsDetail.getName(), newPath, true);
-        }
-        if (!matched && (StringUtils.isNotBlank(title) || StringUtils.isNotBlank(keyword))) {
-            movieDetail.setVod_name(preferredName);
+        if (skipMetadata) {
+            // 追剧订阅等自带元数据的调用方:挂载路径名常带资源后缀(如 [dbid-xxx]-补1),
+            // 按名匹配豆瓣/TMDB 既慢又易错,直接跳过;名称/封面/状态由调用方用订阅数据覆写
+            if (StringUtils.isNotBlank(title)) {
+                movieDetail.setVod_name(title);
+            }
+        } else {
+            if (StringUtils.isNotBlank(title)) {
+                movieDetail.setVod_name(title);
+                matched = setMovieInfo(site, movieDetail, title, newPath, true);
+            }
+            if (!matched && StringUtils.isNotBlank(keyword)
+                    && !StringUtils.equalsIgnoreCase(StringUtils.trim(title), StringUtils.trim(keyword))) {
+                movieDetail.setVod_name(keyword);
+                matched = setMovieInfo(site, movieDetail, keyword, newPath, true);
+            }
+            if (!matched) {
+                movieDetail.setVod_name(fsDetail.getName());
+                matched = setMovieInfo(site, movieDetail, fsDetail.getName(), newPath, true);
+            }
+            if (!matched && (StringUtils.isNotBlank(title) || StringUtils.isNotBlank(keyword))) {
+                movieDetail.setVod_name(preferredName);
+            }
         }
 
         FilesList filesList = dfs(site, newPath, ac, "", depth);
@@ -2150,6 +2172,9 @@ public class TvBoxService {
         }
         if (depth > 1) {
             folders.addAll(fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList());
+            // 版本文件夹(HQ.DV/SDR 双压包的两个 Season 目录)按画质兼容性排序:DV/HDR 标记组靠后,
+            // 组序先到先得的消费方(追剧合并 putIfAbsent/分盘线路)自然取到非 DV 版,防杜比视界 P5 绿屏
+            folders.sort(Comparator.comparingInt(TextUtils::picturePenalty));
         }
         log.info("load media files from folders: {}", folders);
         int source = 0;
@@ -2162,7 +2187,7 @@ public class TvBoxService {
                             .filter(e -> e.getType() != 1)
                             .filter(e -> isMediaFormat(e.getName()))
                             .toList();
-                    subfolders = fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList();
+                    subfolders = new ArrayList<>(fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList());
                 }
                 Map<String, FsInfo> map = new HashMap<>();
                 for (var file : files) {
@@ -2213,6 +2238,8 @@ public class TvBoxService {
                     result.getFolders().add(fixSourceName(parent + "/" + folder));
                 }
 
+                // 同 folders:嵌套版本目录(HQ.DV/SDR)兼容性差的靠后
+                subfolders.sort(Comparator.comparingInt(TextUtils::picturePenalty));
                 for (String name : subfolders) {
                     try {
                         var sub = dfs(site, path + "/" + folder + "/" + name, ac, folder + "/" + name, depth - 1);

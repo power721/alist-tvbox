@@ -62,6 +62,8 @@ public class TelegramController {
     @GetMapping("/tg-search/{token}")
     public Object browse(@PathVariable String token, String id, String t, String ac, String wd, String title, boolean web, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         subscriptionService.checkToken(token);
+        // 旧"我的追更"详情/列表/操作组通道(msub:{id}、t=msub、$msub$)已下线:TVBox 入口收敛到 csp_Media(/media/{token})。
+        // 原此处的 resolveUid(每请求一次用户查询)只服务那些已下线路径,一并移除
         if (StringUtils.isNotBlank(id)) {
             return telegramService.detail(id, ac, title, wd);
         } else if (StringUtils.isNotBlank(t)) {

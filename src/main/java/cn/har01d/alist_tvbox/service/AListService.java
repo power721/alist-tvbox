@@ -276,6 +276,83 @@ public class AListService {
         logError(response);
     }
 
+    /** 创建目录(已存在时 AList 返回 500,调用方自行容忍)。 */
+    public void mkdir(Site site, String path) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("path", path);
+        String url = getUrl(site) + "/api/fs/mkdir";
+        log.debug("call api: {} request: {}", url, data);
+        LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
+        logError(response);
+    }
+
+    /** 提交跨存储复制任务(异步,AList copy task);成功返回 true。 */
+    public boolean copy(Site site, String srcDir, String dstDir, List<String> names) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("src_dir", srcDir);
+        data.put("dst_dir", dstDir);
+        data.put("names", names);
+        data.put("overwrite", false);
+        String url = getUrl(site) + "/api/fs/copy";
+        log.info("submit copy task: {} -> {} ({} files)", srcDir, dstDir, names.size());
+        LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
+        logError(response);
+        return true;
+    }
+
+    /**
+     * 分享服务端转存(同步,网盘侧秒传,不经服务器字节中转):把 srcDir 下的文件/目录转存到 dstDir。
+     * 源挂载驱动需实现服务端转存契约(全部分享盘族→同族账号;115 仅 cookie 版账号),
+     * 不支持时端点返回错误,由调用方回退 copy 字节中转。
+     */
+    public void shareSave(Site site, String srcDir, List<String> names, String dstDir) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("src_dir", srcDir);
+        data.put("names", names);
+        data.put("dst_dir", dstDir);
+        String url = getUrl(site) + "/api/fs/share/save";
+        log.info("share save: {}/{} -> {} ({} objects)", srcDir, names, dstDir, names.size());
+        LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
+        logError(response);
+    }
+
+    /**
+     * 轮询 AList copy 任务直至全部完成或超时。
+     *
+     * @return true = 无未完成任务(视为完成;失败靠调用方事后校验目标文件发现)
+     */
+    public boolean awaitCopyTasks(Site site, long timeoutMillis) {
+        String url = getUrl(site) + "/api/admin/task/copy/undone";
+        String token = login(site); // 轮询期间复用同一 token,避免每 3s 登录一次
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                HttpHeaders headers = new HttpHeaders();
+                headers.set(HttpHeaders.AUTHORIZATION, token);
+                ResponseEntity<com.fasterxml.jackson.databind.JsonNode> response =
+                        restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(null, headers),
+                                com.fasterxml.jackson.databind.JsonNode.class);
+                // 任务列表接口返回裸数组 data;分页接口才是 data.content 包裹,两种都要兼容,
+                // 否则解析落空会把"任务还没注册进列表"误判成"全部完成"
+                var data = response.getBody() == null ? null : response.getBody().path("data");
+                var content = data != null && data.isArray() ? data
+                        : (data == null ? null : data.path("content"));
+                if (content == null || !content.isArray() || content.isEmpty()) {
+                    return true;
+                }
+                log.info("copy tasks running: {}", content.size());
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (Exception e) {
+                log.warn("poll copy tasks failed: {}", e.getMessage());
+                return false;
+            }
+        }
+        return false;
+    }
+
     public FsDetail getFile(Site site, String path) {
         int version = getVersion(site);
         if (version == 2) {

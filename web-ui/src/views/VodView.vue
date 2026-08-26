@@ -133,8 +133,9 @@
             <el-table-column prop="source_label" label="来源" width="160" v-if="isHistory&&historySource==='sync'"/>
             <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
             <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
-            <el-table-column width="90" v-if="isHistory">
+            <el-table-column width="140" v-if="isHistory">
               <template #default="scope">
+                <el-button link type="success" @click.stop="followSubscription(scope.row)">追更</el-button>
                 <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
               </template>
             </el-table-column>
@@ -218,8 +219,9 @@
             <el-table-column prop="source_label" label="来源" width="160" v-if="isHistory&&historySource==='sync'"/>
             <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
             <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
-            <el-table-column width="90" v-if="isHistory">
+            <el-table-column width="140" v-if="isHistory">
               <template #default="scope">
+                <el-button link type="success" @click.stop="followSubscription(scope.row)">追更</el-button>
                 <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
               </template>
             </el-table-column>
@@ -2250,6 +2252,25 @@ const showDelete = (data: VodItem) => {
   batch.value = false
   clean.value = false
   deleteVisible.value = true
+}
+
+// 播放记录"一键追更"(§10.1):按剧名订阅,由订阅系统自动搜索追更
+const followingNames = new Set<string>()
+
+const followSubscription = (row: any) => {
+  if (!row.vod_name) {
+    ElMessage.warning('缺少剧名,无法订阅')
+    return
+  }
+  if (followingNames.has(row.vod_name)) {
+    return // 提交中防连点;后端 create 同名同季幂等兜底
+  }
+  followingNames.add(row.vod_name)
+  axios.post('/api/media-subscriptions/follow', {name: row.vod_name}).then(() => {
+    ElMessage.success(`已订阅追更「${row.vod_name}」,稍后到追剧页查看`)
+  }).finally(() => {
+    followingNames.delete(row.vod_name)
+  })
 }
 
 const showPush = () => {

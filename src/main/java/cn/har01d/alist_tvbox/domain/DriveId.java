@@ -8,6 +8,13 @@ import java.util.Map;
 public final class DriveId {
     private static final Map<Integer, String> TYPE_TO_DRIVE = new LinkedHashMap<>();
     private static final Map<String, Integer> DRIVE_TO_TYPE = new LinkedHashMap<>();
+    /** 盘 key → 展示名(TVBox 线路名/事件文案);未知 key 原样展示 */
+    private static final Map<String, String> DISPLAY_NAMES = Map.ofEntries(
+            Map.entry("baidu", "百度网盘"), Map.entry("quark", "夸克网盘"), Map.entry("ali", "阿里云盘"),
+            Map.entry("115", "115网盘"), Map.entry("uc", "UC网盘"), Map.entry("189", "天翼云盘"),
+            Map.entry("123", "123云盘"), Map.entry("139", "移动云盘"), Map.entry("thunder", "迅雷云盘"),
+            Map.entry("pikpak", "PikPak"), Map.entry("duck", "广雅网盘"), Map.entry("local", "本地"),
+            Map.entry("strm", "STRM"));
 
     static {
         register(0, "ali");
@@ -54,6 +61,10 @@ public final class DriveId {
 
     public static String toDrive(int type) {
         return TYPE_TO_DRIVE.getOrDefault(type, String.valueOf(type));
+    }
+
+    public static String displayName(String drive) {
+        return drive == null ? null : DISPLAY_NAMES.getOrDefault(drive, drive);
     }
 
     public static String normalize(String value) {
