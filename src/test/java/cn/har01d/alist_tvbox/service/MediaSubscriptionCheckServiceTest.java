@@ -63,7 +63,7 @@ class MediaSubscriptionCheckServiceTest {
 
     private final MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            new AppProperties(), new ObjectMapper());
+            new AppProperties(), new ObjectMapper(), (MediaSubscriptionNotificationService) null);
 
     @Test
     void seasonEpisodePattern() {
@@ -3166,7 +3166,7 @@ class MediaSubscriptionCheckServiceTest {
                     shareService, aListService, telegramService, null, null, null, null,
                     metadataService, Mockito.mock(AutoUpdateExecutor.class),
                     historyRepository,
-                    appProperties, new ObjectMapper(), transferService);
+                    appProperties, new ObjectMapper(), transferService, null);
             subscription.setId(1);
             subscription.setName("测试剧");
             subscription.setStatus(MediaSubscription.STATUS_ACTIVE);

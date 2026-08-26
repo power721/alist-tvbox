@@ -156,6 +156,18 @@ public class MediaSubscription {
     private Long updatedTime;
 
     /**
+     * Telegram 消息绑定:该订阅的通知卡片绑定的 bot 消息 id(首条 sendMessage 返回,
+     * 后续事件 editMessageText 编辑同一条消息,不刷屏)。null=尚未发过。
+     * 绑定在 tg_chat_id 对应的 chat 内有效 —— 配置换 chat 后旧 id 失效,自动重发换绑。
+     */
+    @Column(name = "tg_message_id")
+    private Long tgMessageId;
+
+    /** 绑定消息所在的 chat_id(设置项 msub_telegram_chat_id 的快照),用于检测 chat 变更 */
+    @Column(name = "tg_chat_id", length = 64)
+    private String tgChatId;
+
+    /**
      * 本季官方集数已全部播完:已播 ≥ 总集数(>0)且无下集播出时间。
      * officialStatus 是剧级的(多季剧本季播完时整部剧仍 RETURNING),完结判定与展示要走这个季口径。
      */

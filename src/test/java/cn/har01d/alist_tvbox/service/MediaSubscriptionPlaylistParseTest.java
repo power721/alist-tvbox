@@ -28,7 +28,8 @@ class MediaSubscriptionPlaylistParseTest {
 
     private final MediaSubscriptionCheckService checkService = new MediaSubscriptionCheckService(
             null, null, null, null, null, null, null, null, null, null, emptySettings(),
-            null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+            null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper(),
+            (MediaSubscriptionNotificationService) null);
 
     /** 全局 Setting 空 stub:未配置 msub_main_drives */
     private static SettingRepository emptySettings() {
@@ -236,7 +237,8 @@ class MediaSubscriptionPlaylistParseTest {
                 .thenReturn(java.util.Optional.of(global));
         MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
                 null, null, null, null, null, null, null, null, null, null, settingRepository,
-                null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+                null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper(),
+                (MediaSubscriptionNotificationService) null);
 
         MediaSubscription subscription = new MediaSubscription();
         assertEquals(List.of("quark", "115"), service.mainDrives(subscription), "订阅未覆盖时用全局配置");
@@ -284,7 +286,8 @@ class MediaSubscriptionPlaylistParseTest {
                 .thenReturn(List.of());
         MediaSubscriptionCheckService probed = new MediaSubscriptionCheckService(
                 null, null, null, null, rows, null, null, null, null, null, emptySettings(),
-                null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper());
+                null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper(),
+                (MediaSubscriptionNotificationService) null);
         MediaSubscriptionResource single = new MediaSubscriptionResource();
         single.setId(4);
         single.setTitle("📺 悬案 (2026) S01E16 ✨4K WEB-DL AAC");

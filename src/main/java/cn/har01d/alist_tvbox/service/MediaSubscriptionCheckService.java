@@ -184,6 +184,8 @@ public class MediaSubscriptionCheckService {
     private final ObjectMapper objectMapper;
     /** 巡检/换源后联动增量转存;延迟取用以破与 TransferService 的构造循环。测试裸实例为 null。 */
     private final ObjectProvider<MediaSubscriptionTransferService> transferServiceProvider;
+    /** Telegram 通知(同剧编辑同一条消息+outbox 重试);裸实例测试为 null(事件仍落站内时间线,只是不外发)。 */
+    private final MediaSubscriptionNotificationService notificationService;
 
     private final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
     /** 已删除订阅的取消标记(delete() 卸载/删行前第一时间打上):订阅创建即触发首轮巡检,
@@ -254,8 +256,10 @@ public class MediaSubscriptionCheckService {
                                          HistoryRepository historyRepository,
                                          AppProperties appProperties,
                                          ObjectMapper objectMapper,
-                                         ObjectProvider<MediaSubscriptionTransferService> transferServiceProvider) {
+                                         ObjectProvider<MediaSubscriptionTransferService> transferServiceProvider,
+                                         MediaSubscriptionNotificationService notificationService) {
         this.transferServiceProvider = transferServiceProvider;
+        this.notificationService = notificationService;
         this.subscriptionRepository = subscriptionRepository;
         this.resourceRepository = resourceRepository;
         this.eventRepository = eventRepository;
@@ -312,14 +316,15 @@ public class MediaSubscriptionCheckService {
                                          HistoryRepository historyRepository,
                                          AppProperties appProperties,
                                          ObjectMapper objectMapper,
-                                         MediaSubscriptionTransferService transferService) {
+                                         MediaSubscriptionTransferService transferService,
+                                         MediaSubscriptionNotificationService notificationService) {
         this(subscriptionRepository, resourceRepository, eventRepository, episodeRepository,
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
                 guanYingSearchService, woniuSearchService, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper,
-                fixedProvider(transferService));
+                fixedProvider(transferService), notificationService);
     }
 
     private static ObjectProvider<MediaSubscriptionTransferService> fixedProvider(
@@ -358,13 +363,15 @@ public class MediaSubscriptionCheckService {
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          HistoryRepository historyRepository,
                                          AppProperties appProperties,
-                                         ObjectMapper objectMapper) {
+                                         ObjectMapper objectMapper,
+                                         MediaSubscriptionNotificationService notificationService) {
         this(subscriptionRepository, resourceRepository, eventRepository, episodeRepository,
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
                 guanYingSearchService, woniuSearchService, metadataService, autoUpdateExecutor,
-                historyRepository, appProperties, objectMapper, (MediaSubscriptionTransferService) null);
+                historyRepository, appProperties, objectMapper, (MediaSubscriptionTransferService) null,
+                notificationService);
     }
 
     @PreDestroy
@@ -4742,50 +4749,11 @@ public class MediaSubscriptionCheckService {
             event.setCreatedTime(System.currentTimeMillis());
             eventRepository.save(event);
             log.info("media subscription {} event: {} {}", subscriptionId, type, detail);
-            if (push) {
-                notifyTelegram(subscriptionId, type, detail);
+            if (push && notificationService != null) {
+                notificationService.onEvent(subscriptionId, type);
             }
         } catch (Exception e) {
             log.warn("add event failed: {}", e.getMessage());
-        }
-    }
-
-    /** Telegram 通知专用(带超时;builder 走 classpath 探测的 Jackson2 转换器即可) */
-    private final org.springframework.web.client.RestTemplate notifyRestTemplate =
-            new cn.har01d.alist_tvbox.service.metadata.MetadataHttp(null).create();
-
-    /** 可选 Telegram Bot 通知(P3):Setting msub_telegram_bot_token / msub_telegram_chat_id,配好即启用;只推重要事件。 */
-    private void notifyTelegram(int subscriptionId, String type, String detail) {
-        if (!MediaSubscriptionEvent.TYPE_NEW_EPISODE.equals(type)
-                && !MediaSubscriptionEvent.TYPE_ERROR.equals(type)
-                && !MediaSubscriptionEvent.TYPE_ENDED.equals(type)
-                && !MediaSubscriptionEvent.TYPE_TRANSFER_DONE.equals(type)) {
-            return;
-        }
-        try {
-            String token = settingRepository.findById("msub_telegram_bot_token").map(s -> s.getValue()).orElse(null);
-            String chatId = settingRepository.findById("msub_telegram_chat_id").map(s -> s.getValue()).orElse(null);
-            if (StringUtils.isBlank(token) || StringUtils.isBlank(chatId)) {
-                return;
-            }
-            String name = subscriptionRepository.findById(subscriptionId).map(MediaSubscription::getName).orElse("#" + subscriptionId);
-            String text = "📺 " + name + "\n" + detail;
-            java.net.URI uri = java.net.URI.create("https://api.telegram.org/bot" + token + "/sendMessage");
-            var body = objectMapper.createObjectNode();
-            body.put("chat_id", chatId);
-            body.put("text", text);
-            java.util.concurrent.CompletableFuture.runAsync(() -> {
-                try {
-                    var headers = new org.springframework.http.HttpHeaders();
-                    headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
-                    notifyRestTemplate.exchange(uri, org.springframework.http.HttpMethod.POST,
-                            new org.springframework.http.HttpEntity<>(body.toString(), headers), String.class);
-                } catch (Exception e) {
-                    log.debug("telegram notify failed: {}", e.getMessage());
-                }
-            });
-        } catch (Exception e) {
-            log.debug("telegram notify skipped: {}", e.getMessage());
         }
     }
 
