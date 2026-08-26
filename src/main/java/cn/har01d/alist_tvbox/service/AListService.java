@@ -301,6 +301,22 @@ public class AListService {
     }
 
     /**
+     * 分享服务端转存(同步,网盘侧秒传,不经服务器字节中转):把 srcDir 下的文件/目录转存到 dstDir。
+     * 源挂载驱动需实现服务端转存契约(夸克/UC/百度分享→同族账号),
+     * 不支持时端点返回错误,由调用方回退 copy 字节中转。
+     */
+    public void shareSave(Site site, String srcDir, List<String> names, String dstDir) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("src_dir", srcDir);
+        data.put("names", names);
+        data.put("dst_dir", dstDir);
+        String url = getUrl(site) + "/api/fs/share/save";
+        log.info("share save: {}/{} -> {} ({} objects)", srcDir, names, dstDir, names.size());
+        LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
+        logError(response);
+    }
+
+    /**
      * 轮询 AList copy 任务直至全部完成或超时。
      *
      * @return true = 无未完成任务(视为完成;失败靠调用方事后校验目标文件发现)
@@ -316,7 +332,11 @@ public class AListService {
                 ResponseEntity<com.fasterxml.jackson.databind.JsonNode> response =
                         restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(null, headers),
                                 com.fasterxml.jackson.databind.JsonNode.class);
-                var content = response.getBody() == null ? null : response.getBody().path("data").path("content");
+                // 任务列表接口返回裸数组 data;分页接口才是 data.content 包裹,两种都要兼容,
+                // 否则解析落空会把"任务还没注册进列表"误判成"全部完成"
+                var data = response.getBody() == null ? null : response.getBody().path("data");
+                var content = data != null && data.isArray() ? data
+                        : (data == null ? null : data.path("content"));
                 if (content == null || !content.isArray() || content.isEmpty()) {
                     return true;
                 }
