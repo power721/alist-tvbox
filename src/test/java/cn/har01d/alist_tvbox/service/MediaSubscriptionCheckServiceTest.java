@@ -2493,6 +2493,92 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verifyNoInteractions(fixture.deadLinkRepository); // 异剧不拉黑:链接没死,真人版订阅可能正用着;
     }
 
+    // ---------- 待看集覆盖入主源排序(2026-08-27,借鉴追更助手 coversExpectedEpisode)----------
+    // 换源时用户要续看的正是 watched+1 那集:集源行已知含待看集的候选提前于分数序;
+    // 观看进度未知(无播放记录)时零侵入,维持原分数序。
+
+    @Test
+    void activatePrefersCandidateCoveringNextWatchEpisode() {
+        // 看过第4集:集源行已知含第5集的低分候选(100)先于高分但覆盖未知的候选(120)接管主源
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.historyRepository.findByUidAndVodId(Mockito.anyInt(), Mockito.eq("msub:1")))
+                .thenReturn(List.of(playHistory("msubep-1-4", System.currentTimeMillis())));
+        MediaSubscriptionResource high = new MediaSubscriptionResource();
+        high.setId(61);
+        high.setSubscriptionId(1);
+        high.setLink("https://pan.quark.cn/s/high");
+        high.setTitle("测试剧 4K 全集");
+        high.setType(5);
+        high.setScore(120);
+        high.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource covering = new MediaSubscriptionResource();
+        covering.setId(62);
+        covering.setSubscriptionId(1);
+        covering.setLink("https://pan.baidu.com/s/next5");
+        covering.setTitle("测试剧 (2025) 4K 全集");
+        covering.setType(10);
+        covering.setScore(100);
+        covering.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(high, covering));
+        RowStore store = new RowStore();
+        store.install(fixture);
+        store.addEpisodeAndRow(62, 4, MediaSubscriptionEpisodeSource.STATE_LISTED);
+        store.addEpisodeAndRow(62, 5, MediaSubscriptionEpisodeSource.STATE_LISTED);
+        Share mount = new Share();
+        mount.setId(66);
+        Mockito.when(fixture.shareRepository.findByPath("/追剧/1-测试剧"))
+                .thenReturn(null).thenReturn(mount).thenReturn(mount);
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(s01EpisodeFiles(12)));
+
+        assertTrue(fixture.service.activateNextCandidate(fixture.subscription));
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, covering.getState(), "已知覆盖待看集的低分候选接管主源");
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, high.getState(), "高分但覆盖未知的候选不被先试");
+    }
+
+    @Test
+    void activateKeepsScoreOrderWithoutWatchProgress() {
+        // 无播放记录(进度未知):待看集信号零侵入,高分候选先试先挂
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource high = new MediaSubscriptionResource();
+        high.setId(61);
+        high.setSubscriptionId(1);
+        high.setLink("https://pan.quark.cn/s/high");
+        high.setTitle("测试剧 4K 全集");
+        high.setType(5);
+        high.setScore(120);
+        high.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionResource covering = new MediaSubscriptionResource();
+        covering.setId(62);
+        covering.setSubscriptionId(1);
+        covering.setLink("https://pan.baidu.com/s/next5");
+        covering.setTitle("测试剧 (2025) 4K 全集");
+        covering.setType(10);
+        covering.setScore(100);
+        covering.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(high, covering));
+        RowStore store = new RowStore();
+        store.install(fixture);
+        store.addEpisodeAndRow(62, 4, MediaSubscriptionEpisodeSource.STATE_LISTED);
+        store.addEpisodeAndRow(62, 5, MediaSubscriptionEpisodeSource.STATE_LISTED);
+        Share mount = new Share();
+        mount.setId(66);
+        Mockito.when(fixture.shareRepository.findByPath("/追剧/1-测试剧"))
+                .thenReturn(null).thenReturn(mount).thenReturn(mount);
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(s01EpisodeFiles(12)));
+
+        assertTrue(fixture.service.activateNextCandidate(fixture.subscription));
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, high.getState(), "进度未知:高分候选先试先挂");
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, covering.getState(), "低分候选维持原位");
+    }
+
     @Test
     void belongsToShowFlagsEpisodeRangeOverflow() {
         // 已挂资源归属复核:标题无年份(标题/年份门禁放行形态),集号超出官方总集数即判异剧

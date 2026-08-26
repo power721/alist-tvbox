@@ -3079,11 +3079,39 @@ public class MediaSubscriptionCheckService {
         }
     }
 
+    /** 换源时的主源候选序:分数优先之上,把集源行已知含「待看集」(watched+1)的候选整体提前 ——
+     * 主源刚失效,用户要续看的正是那一集,已知覆盖的确定性优先于高分候选的未知覆盖
+     * (借鉴追更助手 coversExpectedEpisode 信号)。观看进度未知/无人已知覆盖/全部已知覆盖 →
+     * 分数序不变;单集链接不受此影响被提前:usableAsPrimary 仍会把它挡在主源外。 */
+    List<MediaSubscriptionResource> primaryCandidates(MediaSubscription subscription) {
+        List<MediaSubscriptionResource> candidates = candidatesOrdered(subscription);
+        int nextWatch = watchedEpisode(subscription) + 1;
+        if (nextWatch <= 1 || candidates.size() < 2) {
+            return candidates;
+        }
+        List<MediaSubscriptionResource> covering = new ArrayList<>();
+        List<MediaSubscriptionResource> rest = new ArrayList<>();
+        for (MediaSubscriptionResource resource : candidates) {
+            if (coverageOf(resource).contains(nextWatch)) {
+                covering.add(resource);
+            } else {
+                rest.add(resource);
+            }
+        }
+        if (covering.isEmpty() || rest.isEmpty()) {
+            return candidates;
+        }
+        log.info("subscription {} primary candidates: {} 个已知覆盖待看第{}集,提前于分数序",
+                subscription.getId(), covering.size(), nextWatch);
+        covering.addAll(rest);
+        return covering;
+    }
+
     /** 按分数依次尝试候选,失败退役换下一个;成功则重挂到同一固定路径。 */
     boolean activateNextCandidate(MediaSubscription subscription) {
         int current = liveEpisodeNumbers(subscription).size();
         Set<String> throttled = new java.util.HashSet<>(); // 本轮已撞风控的盘,后续候选直接跳过
-        for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
+        for (MediaSubscriptionResource resource : primaryCandidates(subscription)) {
             if (usableAsPrimary(resource, current)) {
                 String drive = driveOf(resource);
                 if (throttled.contains(drive) || isDriveThrottled(drive)) {
