@@ -43,6 +43,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -179,6 +181,8 @@ public class MediaSubscriptionCheckService {
     private final HistoryRepository historyRepository;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
+    /** 巡检/换源后联动增量转存;@Lazy 代理破与 TransferService 的构造循环(它构造注入本服务)。测试裸实例为 null。 */
+    private final MediaSubscriptionTransferService transferService;
 
     private final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
     /** 已删除订阅的取消标记(delete() 卸载/删行前第一时间打上):订阅创建即触发首轮巡检,
@@ -225,6 +229,7 @@ public class MediaSubscriptionCheckService {
         return thread;
     });
 
+    @Autowired
     public MediaSubscriptionCheckService(MediaSubscriptionRepository subscriptionRepository,
                                          MediaSubscriptionResourceRepository resourceRepository,
                                          MediaSubscriptionEventRepository eventRepository,
@@ -247,7 +252,9 @@ public class MediaSubscriptionCheckService {
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          HistoryRepository historyRepository,
                                          AppProperties appProperties,
-                                         ObjectMapper objectMapper) {
+                                         ObjectMapper objectMapper,
+                                         @Lazy MediaSubscriptionTransferService transferService) {
+        this.transferService = transferService;
         this.subscriptionRepository = subscriptionRepository;
         this.resourceRepository = resourceRepository;
         this.eventRepository = eventRepository;
@@ -278,6 +285,38 @@ public class MediaSubscriptionCheckService {
             thread.setDaemon(true);
             return thread;
         });
+    }
+
+    /** 兼容旧签名(单测裸实例无转存联动)。 */
+    public MediaSubscriptionCheckService(MediaSubscriptionRepository subscriptionRepository,
+                                         MediaSubscriptionResourceRepository resourceRepository,
+                                         MediaSubscriptionEventRepository eventRepository,
+                                         MediaSubscriptionEpisodeRepository episodeRepository,
+                                         MediaSubscriptionEpisodeSourceRepository episodeSourceRepository,
+                                         DeadLinkRepository deadLinkRepository,
+                                         ShareRepository shareRepository,
+                                         SiteRepository siteRepository,
+                                         cn.har01d.alist_tvbox.entity.DriverAccountRepository driverAccountRepository,
+                                         IndexTemplateRepository indexTemplateRepository,
+                                         SettingRepository settingRepository,
+                                         ShareService shareService,
+                                         AListService aListService,
+                                         TelegramService telegramService,
+                                         WanouSearchService wanouSearchService,
+                                         PanLianSearchService panLianSearchService,
+                                         GuanYingSearchService guanYingSearchService,
+                                         WoniuSearchService woniuSearchService,
+                                         MetadataService metadataService,
+                                         AutoUpdateExecutor autoUpdateExecutor,
+                                         HistoryRepository historyRepository,
+                                         AppProperties appProperties,
+                                         ObjectMapper objectMapper) {
+        this(subscriptionRepository, resourceRepository, eventRepository, episodeRepository,
+                episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
+                driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
+                aListService, telegramService, wanouSearchService, panLianSearchService,
+                guanYingSearchService, woniuSearchService, metadataService, autoUpdateExecutor,
+                historyRepository, appProperties, objectMapper, null);
     }
 
     @PreDestroy
@@ -722,6 +761,7 @@ public class MediaSubscriptionCheckService {
                     return;
                 }
                 subscriptionRepository.save(current);
+                scheduleTransferAfterCheck(current);
             } catch (Exception e) {
                 log.warn("activate resource {} failed: {}", resourceId, e.getMessage());
                 if (stopIfDeleted(id)) {
@@ -781,6 +821,7 @@ public class MediaSubscriptionCheckService {
             }
             doCheck(subscription);
             saveUnlessDeleted(id, subscription);
+            scheduleTransferAfterCheck(subscription);
         } catch (Exception e) {
             MediaSubscription failed = subscriptionRepository.findById(id).orElse(null);
             if (failed == null) {
@@ -798,6 +839,18 @@ public class MediaSubscriptionCheckService {
         } finally {
             inFlight.remove(id);
         }
+    }
+
+    /** 巡检/手动换源完成后 TRANSFER 订阅立即排队增量转存(设计口径「发现新集后 copy」):
+     *  此前只有每小时 :40 自愈 sweep 和手动按钮两个入口,新建订阅首轮巡检把源挂载齐后
+     *  要空等最长一小时才轮到转存,用户侧观感即「建了订阅根本没转存」。
+     *  transferAsync 自身幂等(目标已齐即空手而归,不占日配额),与 :40 sweep 的并发
+     *  由转存单线程执行器串行化,无需去重。 */
+    private void scheduleTransferAfterCheck(MediaSubscription subscription) {
+        if (transferService == null || !MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
+            return;
+        }
+        transferService.transferAsync(subscription.getUid(), subscription.getId());
     }
 
     /**

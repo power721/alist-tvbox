@@ -2866,6 +2866,26 @@ class MediaSubscriptionCheckServiceTest {
         return history;
     }
 
+    // ---------- 巡检联动转存:设计口径「发现新集后 copy」——新建订阅首轮巡检挂载完即转,
+    // 不再空等每小时 :40 的自愈 sweep(线上:订阅建完 3 分钟用户查看,「根本没有转存」) ----------
+
+    @Test
+    void transferModeSubscriptionQueuesTransferAfterCheck() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setUid(7);
+        fixture.subscription.setMode(MediaSubscription.MODE_TRANSFER);
+        fixture.service.check(1);
+        Mockito.verify(fixture.transferService).transferAsync(7, 1);
+    }
+
+    @Test
+    void nonTransferModeSubscriptionDoesNotQueueTransfer() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setUid(7);
+        fixture.service.check(1);
+        Mockito.verify(fixture.transferService, Mockito.never()).transferAsync(Mockito.anyInt(), Mockito.anyInt());
+    }
+
     private static class Fixture {
         final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
         final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
@@ -2882,6 +2902,7 @@ class MediaSubscriptionCheckServiceTest {
     final MetadataService metadataService = Mockito.mock(MetadataService.class);
     final cn.har01d.alist_tvbox.entity.HistoryRepository historyRepository =
             Mockito.mock(cn.har01d.alist_tvbox.entity.HistoryRepository.class);
+    final MediaSubscriptionTransferService transferService = Mockito.mock(MediaSubscriptionTransferService.class);
         final MediaSubscriptionCheckService service;
         final MediaSubscription subscription = new MediaSubscription();
 
@@ -2895,7 +2916,7 @@ class MediaSubscriptionCheckServiceTest {
                     shareService, aListService, telegramService, null, null, null, null,
                     metadataService, Mockito.mock(AutoUpdateExecutor.class),
                     historyRepository,
-                    appProperties, new ObjectMapper());
+                    appProperties, new ObjectMapper(), transferService);
             subscription.setId(1);
             subscription.setName("测试剧");
             subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
