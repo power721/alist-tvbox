@@ -42,9 +42,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -54,6 +54,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -181,8 +182,8 @@ public class MediaSubscriptionCheckService {
     private final HistoryRepository historyRepository;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
-    /** 巡检/换源后联动增量转存;@Lazy 代理破与 TransferService 的构造循环(它构造注入本服务)。测试裸实例为 null。 */
-    private final MediaSubscriptionTransferService transferService;
+    /** 巡检/换源后联动增量转存;延迟取用以破与 TransferService 的构造循环。测试裸实例为 null。 */
+    private final ObjectProvider<MediaSubscriptionTransferService> transferServiceProvider;
 
     private final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
     /** 已删除订阅的取消标记(delete() 卸载/删行前第一时间打上):订阅创建即触发首轮巡检,
@@ -253,8 +254,8 @@ public class MediaSubscriptionCheckService {
                                          HistoryRepository historyRepository,
                                          AppProperties appProperties,
                                          ObjectMapper objectMapper,
-                                         @Lazy MediaSubscriptionTransferService transferService) {
-        this.transferService = transferService;
+                                         ObjectProvider<MediaSubscriptionTransferService> transferServiceProvider) {
+        this.transferServiceProvider = transferServiceProvider;
         this.subscriptionRepository = subscriptionRepository;
         this.resourceRepository = resourceRepository;
         this.eventRepository = eventRepository;
@@ -287,6 +288,53 @@ public class MediaSubscriptionCheckService {
         });
     }
 
+    /** 供裸实例测试直接提供转存服务。 */
+    public MediaSubscriptionCheckService(MediaSubscriptionRepository subscriptionRepository,
+                                         MediaSubscriptionResourceRepository resourceRepository,
+                                         MediaSubscriptionEventRepository eventRepository,
+                                         MediaSubscriptionEpisodeRepository episodeRepository,
+                                         MediaSubscriptionEpisodeSourceRepository episodeSourceRepository,
+                                         DeadLinkRepository deadLinkRepository,
+                                         ShareRepository shareRepository,
+                                         SiteRepository siteRepository,
+                                         cn.har01d.alist_tvbox.entity.DriverAccountRepository driverAccountRepository,
+                                         IndexTemplateRepository indexTemplateRepository,
+                                         SettingRepository settingRepository,
+                                         ShareService shareService,
+                                         AListService aListService,
+                                         TelegramService telegramService,
+                                         WanouSearchService wanouSearchService,
+                                         PanLianSearchService panLianSearchService,
+                                         GuanYingSearchService guanYingSearchService,
+                                         WoniuSearchService woniuSearchService,
+                                         MetadataService metadataService,
+                                         AutoUpdateExecutor autoUpdateExecutor,
+                                         HistoryRepository historyRepository,
+                                         AppProperties appProperties,
+                                         ObjectMapper objectMapper,
+                                         MediaSubscriptionTransferService transferService) {
+        this(subscriptionRepository, resourceRepository, eventRepository, episodeRepository,
+                episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
+                driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
+                aListService, telegramService, wanouSearchService, panLianSearchService,
+                guanYingSearchService, woniuSearchService, metadataService, autoUpdateExecutor,
+                historyRepository, appProperties, objectMapper,
+                fixedProvider(transferService));
+    }
+
+    private static ObjectProvider<MediaSubscriptionTransferService> fixedProvider(
+            MediaSubscriptionTransferService transferService) {
+        if (transferService == null) {
+            return null;
+        }
+        return new ObjectProvider<>() {
+            @Override
+            public MediaSubscriptionTransferService getObject() {
+                return transferService;
+            }
+        };
+    }
+
     /** 兼容旧签名(单测裸实例无转存联动)。 */
     public MediaSubscriptionCheckService(MediaSubscriptionRepository subscriptionRepository,
                                          MediaSubscriptionResourceRepository resourceRepository,
@@ -316,7 +364,7 @@ public class MediaSubscriptionCheckService {
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
                 guanYingSearchService, woniuSearchService, metadataService, autoUpdateExecutor,
-                historyRepository, appProperties, objectMapper, null);
+                historyRepository, appProperties, objectMapper, (MediaSubscriptionTransferService) null);
     }
 
     @PreDestroy
@@ -847,10 +895,13 @@ public class MediaSubscriptionCheckService {
      *  transferAsync 自身幂等(目标已齐即空手而归,不占日配额),与 :40 sweep 的并发
      *  由转存单线程执行器串行化,无需去重。 */
     private void scheduleTransferAfterCheck(MediaSubscription subscription) {
-        if (transferService == null || !MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
+        if (transferServiceProvider == null || !MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
             return;
         }
-        transferService.transferAsync(subscription.getUid(), subscription.getId());
+        MediaSubscriptionTransferService transferService = transferServiceProvider.getIfAvailable();
+        if (transferService != null) {
+            transferService.transferAsync(subscription.getUid(), subscription.getId());
+        }
     }
 
     /**
@@ -3726,8 +3777,7 @@ public class MediaSubscriptionCheckService {
         List<String> names = matchNames(subscription);
         Integer metaYear = metaYear(subscription);
         List<String> genres = metaGenres(subscription);
-        int irrelevant = 0;
-        int offPool = 0;
+        PoolDropAudit audit = new PoolDropAudit();
         Set<String> allowedDrives = allowedCandidateDrives(subscription);
         List<Scored> scored = new ArrayList<>();
         String activeLink = existing.stream()
@@ -3736,35 +3786,37 @@ public class MediaSubscriptionCheckService {
                 .map(MediaSubscriptionResource::getLink).findFirst().orElse(null);
         for (Message message : messages) {
             if (StringUtils.isBlank(message.getLink()) || !PAN_TYPES.contains(StringUtils.defaultString(message.getType()))) {
+                audit.drop(PoolDrop.NON_PAN);
                 continue;
             }
             if (!driveAllowed(allowedDrives, driveKeyOf(message))) {
-                offPool++; // 白名单以外的盘:默认只有主网盘的源,扩展盘须显式配置
+                audit.drop(PoolDrop.OFF_POOL); // 白名单以外的盘:默认只有主网盘的源,扩展盘须显式配置
                 continue;
             }
             String title = StringUtils.defaultIfBlank(message.getName(), message.getLink());
             if (matchesKeywords(title, filter == null ? null : filter.getExcludeKeywords())) {
+                audit.drop(PoolDrop.EXCLUDED, title);
                 continue;
             }
             if (activeLink != null && activeLink.equals(message.getLink())) {
                 continue;
             }
             if (!names.isEmpty() && !matchesTitle(names, title)) {
-                irrelevant++; // 标题与剧名/别名均不沾边,大概率是同名召回噪声,挡在池外省去挂载试错
+                audit.drop(PoolDrop.TITLE, title); // 标题与剧名/别名均不沾边,大概率是同名召回噪声,挡在池外省去挂载试错
                 continue;
             }
             if (!titleYearMatches(metaYear, names, title)) {
-                irrelevant++; // 标题标注年份与元数据年份全不符,且剧名仅子串嵌入(前缀异剧)
+                audit.drop(PoolDrop.YEAR, title); // 标题标注年份与元数据年份全不符,且剧名仅子串嵌入(前缀异剧)
                 continue;
             }
             if (titleProgressForeign(subscription, title) || liveActionForeign(genres, title)) {
-                irrelevant++; // 宣称集数显著超出官方总集数(真人版全集包)/动画订阅的显式「真人版」资源
+                audit.drop(PoolDrop.FOREIGN, title); // 宣称集数显著超出官方总集数(真人版全集包)/动画订阅的显式「真人版」资源
                 continue;
             }
             Integer titleSeason = parseTitleSeason(title);
             if (subscription.getSeason() != null && subscription.getSeason() > 0
                     && titleSeason != null && !titleSeason.equals(subscription.getSeason())) {
-                irrelevant++; // 标题明确标注其它季(常见同名剧前季资源)
+                audit.drop(PoolDrop.SEASON, title); // 标题明确标注其它季(常见同名剧前季资源)
                 continue;
             }
             scored.add(score(subscription, message, title, filter));
@@ -3777,25 +3829,31 @@ public class MediaSubscriptionCheckService {
         PoolQuota quota = new PoolQuota(mainDrives(subscription), appProperties.getSubscription());
         int added = 0;
         Set<Integer> takenEpisodes = new java.util.HashSet<>();
-        for (Scored candidate : scored) {
+        for (int i = 0; i < scored.size(); i++) {
             if (quota.exhausted()) {
+                audit.drop(PoolDrop.TOTAL_QUOTA, scored.size() - i); // 分层配额全部坐满,剩余候选整体截断
                 break;
             }
+            Scored candidate = scored.get(i);
             String link = candidate.message.getLink();
             if (isDeadLink(link)) {
+                audit.drop(PoolDrop.DEAD);
                 continue; // 失效黑名单:别的订阅已用取链事实证明它死了,不再入池
             }
             String drive = driveKeyOf(candidate.message);
             if (!quota.take(drive)) {
+                audit.drop(PoolDrop.DRIVE_QUOTA);
                 continue; // 该盘席位已满:让位给还没有候选的盘
             }
             Integer bareEpisode = singleEpisodeOf(candidate.title);
             if (bareEpisode != null && takenEpisodes.contains(bareEpisode)) {
                 quota.giveBack(drive);
+                audit.drop(PoolDrop.EPISODE_DUP);
                 continue; // 同集单集链接一席:席位留给不同集/整季资源,防 115 每集一链刷满池
             }
             if (resourceRepository.findBySubscriptionIdAndLink(subscription.getId(), link).isPresent()) {
                 quota.giveBack(drive);
+                audit.drop(PoolDrop.DUPLICATE);
                 continue;
             }
             MediaSubscriptionResource resource = new MediaSubscriptionResource();
@@ -3818,13 +3876,10 @@ public class MediaSubscriptionCheckService {
         }
         if (added > 0) {
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_POOL_FILLED,
-                    "候选池新增 " + added + " 个资源(" + keyword + (irrelevant > 0 ? ",过滤 " + irrelevant + " 条不相关结果" : "")
-                            + (offPool > 0 ? ",拦 " + offPool + " 条非白名单盘" : "") + ")");
+                    "候选池新增 " + added + " 个资源(" + keyword + ")" + audit.suffix());
         } else if (force) {
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_POOL_FILLED,
-                    "搜索无新增候选(共 " + messages.size() + " 条结果"
-                            + (irrelevant > 0 ? ",过滤 " + irrelevant + " 条不相关结果" : "")
-                            + (offPool > 0 ? ",拦 " + offPool + " 条非白名单盘" : "") + ")");
+                    "搜索无新增候选(共 " + messages.size() + " 条结果)" + audit.suffix());
         }
     }
 
@@ -3900,6 +3955,81 @@ public class MediaSubscriptionCheckService {
 
         boolean exhausted() {
             return remaining.values().stream().allMatch(left -> left <= 0);
+        }
+    }
+
+    /** 入池落选原因;标题类门禁留样例(缩略标题前 2 条),机械性原因(配额/死链/重复)只计数。 */
+    enum PoolDrop {
+        NON_PAN("非网盘结果", false),
+        OFF_POOL("非白名单盘", false),
+        EXCLUDED("命中排除词", true),
+        TITLE("剧名不符", true),
+        YEAR("年份不符", true),
+        FOREIGN("异剧形态", true),
+        SEASON("它季资源", true),
+        DEAD("死链", false),
+        DRIVE_QUOTA("盘席满", false),
+        EPISODE_DUP("同集去重", false),
+        DUPLICATE("已在池", false),
+        TOTAL_QUOTA("总配额满", false);
+
+        final String label;
+        final boolean sampled;
+
+        PoolDrop(String label, boolean sampled) {
+            this.label = label;
+            this.sampled = sampled;
+        }
+    }
+
+    /**
+     * 入池落选审计:POOL_FILLED 事件此前只报"过滤 N 条不相关结果",配额挤掉/死链/同集去重
+     * 这些 drop 是黑盒,线上排障("为什么没选它")只能翻 DEBUG 日志。分原因计数 + 标题门禁
+     * 样例直接写进事件详情,不参与任何入池决策。
+     */
+    static final class PoolDropAudit {
+        private final EnumMap<PoolDrop, Integer> counts = new EnumMap<>(PoolDrop.class);
+        private final Map<PoolDrop, List<String>> samples = new EnumMap<>(PoolDrop.class);
+
+        void drop(PoolDrop reason) {
+            counts.merge(reason, 1, Integer::sum);
+        }
+
+        void drop(PoolDrop reason, String title) {
+            drop(reason);
+            if (reason.sampled) {
+                List<String> list = samples.computeIfAbsent(reason, k -> new ArrayList<>());
+                if (list.size() < 2) {
+                    list.add(StringUtils.abbreviate(title, 40));
+                }
+            }
+        }
+
+        void drop(PoolDrop reason, int count) {
+            counts.merge(reason, count, Integer::sum);
+        }
+
+        /** 事件详情后缀:";拦截:剧名不符 3(例:xx、yy)、非白名单盘 2";零落选返回空串。 */
+        String suffix() {
+            if (counts.isEmpty()) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder(";拦截:");
+            for (PoolDrop reason : PoolDrop.values()) {
+                int n = counts.getOrDefault(reason, 0);
+                if (n <= 0) {
+                    continue;
+                }
+                if (sb.length() > ";拦截:".length()) {
+                    sb.append('、');
+                }
+                sb.append(reason.label).append(' ').append(n);
+                List<String> list = samples.get(reason);
+                if (list != null && !list.isEmpty()) {
+                    sb.append("(例:").append(String.join("、", list)).append(')');
+                }
+            }
+            return sb.toString();
         }
     }
 

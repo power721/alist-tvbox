@@ -764,6 +764,10 @@ class MediaSubscriptionCheckServiceTest {
         ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
         Mockito.verify(fixture.resourceRepository).save(captor.capture());
         assertEquals("苍兰诀 第01-08集 4K", captor.getValue().getTitle());
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository).save(events.capture());
+        assertTrue(events.getValue().getDetail().contains("剧名不符 1(例:乘风破浪 全12集 4K)"),
+                "落选审计分原因计数并带样例: " + events.getValue().getDetail());
     }
 
     @Test
