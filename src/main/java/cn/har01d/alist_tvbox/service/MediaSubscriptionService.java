@@ -37,6 +37,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -206,6 +208,8 @@ public class MediaSubscriptionService {
         }
         boolean searchRelevant = false;
         Integer previousSeason = subscription.getSeason();
+        String previousMode = subscription.getMode();
+        String previousAccountIds = subscription.getAccountIds();
         if (StringUtils.isNotBlank(request.getName())) {
             subscription.setName(StringUtils.abbreviate(request.getName().trim(), 250));
         }
@@ -262,6 +266,24 @@ public class MediaSubscriptionService {
             resetForSeasonChange(uid, subscription, oldSeason, request.getSeason());
         }
         subscriptionRepository.save(subscription);
+        // 编辑切入 TRANSFER(如挂载模式改转存)或转存目标账号变化:立即排队增量转存,
+        // 不再等下一轮巡检/每小时 :40 sweep。afterCommit 再提交:transfer() 入口 findById
+        // 要读已提交的新 mode,事务提交前抢先执行会读到旧 FOLLOW 静默跳过(单测直调无事务,兜底同步执行)
+        if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                && (!MediaSubscription.MODE_TRANSFER.equals(previousMode)
+                        || !Objects.equals(previousAccountIds, subscription.getAccountIds()))) {
+            int subscriptionId = subscription.getId();
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        transferService.transferAsync(uid, subscriptionId);
+                    }
+                });
+            } else {
+                transferService.transferAsync(uid, subscriptionId);
+            }
+        }
         return toDto(subscription);
     }
 
