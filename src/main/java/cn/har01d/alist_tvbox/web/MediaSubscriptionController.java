@@ -43,10 +43,10 @@ public class MediaSubscriptionController {
         this.pianDanService = pianDanService;
     }
 
-    /** 片单追更:片单导航分类(豆瓣/TMDB 榜单与筛选定义)。管理端代理,走登录态鉴权,免 vod token。 */
+    /** 片单追更:片单导航分类(豆瓣/TMDB 榜单与筛选定义,排除电影类目——追更只对剧集/综艺有意义)。管理端代理,走登录态鉴权,免 vod token。 */
     @GetMapping("/navigation")
     public Object navigationCategories() {
-        return pianDanService.category();
+        return pianDanService.subscriptionCategory();
     }
 
     /** 片单追更:分类条目列表。ac 固定 web(豆瓣封面走 /images 代理防盗链)。 */

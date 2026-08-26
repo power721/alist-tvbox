@@ -62,7 +62,7 @@ class MediaSubscriptionControllerTest {
         category.setType_id("douban:hot_tv");
         category.setType_name("豆瓣·热门电视");
         categoryList.getCategories().add(category);
-        when(pianDanService.category()).thenReturn(categoryList);
+        when(pianDanService.subscriptionCategory()).thenReturn(categoryList);
 
         mockMvc.perform(get("/api/media-subscriptions/navigation"))
                 .andExpect(status().isOk())

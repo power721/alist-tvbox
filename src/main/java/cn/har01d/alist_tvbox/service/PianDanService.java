@@ -97,6 +97,37 @@ public class PianDanService {
         return "lite".equals(categoryMode()) ? buildLiteCategory() : buildFullCategory();
     }
 
+    /** 片单追更分类:排除电影类目(追更只对剧集/综艺的集数有意义);lite 榜单、趋势、动漫筛选里的电影选项一并隐藏。
+     * 电视端 csp_PianDan 导航仍走 category() 全量,电影分类在电视浏览场景是正当用途。 */
+    public CategoryList subscriptionCategory() {
+        CategoryList result = category();
+        result.getCategories().removeIf(category -> movieCategoryId(category.getType_id()));
+        removeMovieFilterValues(result.getFilters().get(DOUBAN_PREFIX + "billboard"), "billboard");
+        removeMovieFilterValues(result.getFilters().get(TMDB_PREFIX + "trending"), "mediaType");
+        removeMovieFilterValues(result.getFilters().get(TMDB_PREFIX + "anime"), "kind");
+        result.setTotal(result.getCategories().size());
+        result.setLimit(result.getCategories().size());
+        return result;
+    }
+
+    /** 纯电影分类(豆瓣 hot_movie/suggestion_movie/movie_* 榜单与 TMDB movie/discover_movie/platform_movie);trending/anime 等混合类目不算。 */
+    private static boolean movieCategoryId(String typeId) {
+        String id = StringUtils.removeStart(StringUtils.removeStart(typeId, DOUBAN_PREFIX), TMDB_PREFIX);
+        return id.startsWith("movie_") || id.equals("movie") || id.equals("hot_movie")
+                || id.equals("suggestion_movie") || id.equals("discover_movie") || id.equals("platform_movie");
+    }
+
+    private static void removeMovieFilterValues(List<Filter> filters, String key) {
+        if (filters == null) {
+            return;
+        }
+        for (Filter filter : filters) {
+            if (key.equals(filter.getKey())) {
+                filter.getValue().removeIf(value -> movieCategoryId(value.getV()));
+            }
+        }
+    }
+
     private CategoryList buildFullCategory() {
         CategoryList result = new CategoryList();
         CategoryList douban = telegramService.categoryDouban();

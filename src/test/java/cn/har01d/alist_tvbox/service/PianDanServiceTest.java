@@ -543,6 +543,62 @@ class PianDanServiceTest {
         server.verify();
     }
 
+    @Test
+    void subscriptionCategoryExcludesMovieCategoriesAndMovieFilterOptions() {
+        CategoryList douban = new CategoryList();
+        douban.setCategories(List.of(
+                doubanCategory("hot_tv", "热门电视剧"),
+                doubanCategory("hot_movie", "热门电影"),
+                doubanCategory("movie_top250", "电影Top250"),
+                doubanCategory("suggestion_movie", "电影推荐"),
+                doubanCategory("tv_korean", "韩剧")
+        ));
+        when(telegramService.categoryDouban()).thenReturn(douban);
+
+        CategoryList result = service.subscriptionCategory();
+
+        assertThat(result.getCategories())
+                .extracting(Category::getType_id)
+                .doesNotContain(
+                        "douban:hot_movie", "douban:movie_top250", "douban:suggestion_movie",
+                        "tmdb:movie_popular", "tmdb:movie_top_rated", "tmdb:movie_now_playing", "tmdb:movie_upcoming",
+                        "tmdb:platform_movie", "tmdb:discover_movie")
+                .contains("douban:hot_tv", "douban:tv_korean", "tmdb:tv_popular", "tmdb:tv_on_the_air",
+                        "tmdb:trending", "tmdb:anime", "tmdb:variety", "tmdb:platform_tv", "tmdb:discover_tv");
+        assertThat(result.getCategories().get(0).getType_id()).isEqualTo("douban:hot_tv");
+        assertThat(result.getTotal()).isEqualTo(result.getCategories().size());
+        assertThat(result.getFilters().get("tmdb:trending").get(0).getValue())
+                .extracting(FilterValue::getV)
+                .containsExactly("all", "tv");
+        assertThat(result.getFilters().get("tmdb:anime").stream()
+                .filter(filter -> "kind".equals(filter.getKey())).findFirst().orElseThrow().getValue())
+                .extracting(FilterValue::getV)
+                .containsExactly("tv");
+    }
+
+    @Test
+    void subscriptionCategoryLiteModeExcludesMovieBillboardOptions() {
+        when(subscriptionSourceService.getBuiltinExtend("csp_PianDan")).thenReturn("{\"mode\":\"lite\"}");
+        CategoryList douban = new CategoryList();
+        douban.setCategories(List.of(
+                doubanCategory("hot_movie", "热门电影"),
+                doubanCategory("hot_tv", "热门电视剧")
+        ));
+        when(telegramService.categoryDouban()).thenReturn(douban);
+
+        CategoryList result = service.subscriptionCategory();
+
+        assertThat(result.getCategories())
+                .extracting(Category::getType_id)
+                .doesNotContain("douban:hot_movie", "tmdb:movie", "tmdb:discover_movie")
+                .contains("douban:hot_tv", "douban:billboard", "tmdb:tv", "tmdb:discover_tv");
+        assertThat(result.getFilters().get("douban:billboard").get(0).getValue())
+                .extracting(FilterValue::getV)
+                .doesNotContain("movie_top250", "movie_real_time_hotest", "movie_weekly_best", "suggestion_movie")
+                .contains("tv_real_time_hotest", "tv_chinese_best_weekly", "suggestion_tv");
+        assertThat(result.getTotal()).isEqualTo(result.getCategories().size());
+    }
+
     private Category doubanCategory(String typeId, String name) {
         Category category = new Category();
         category.setType_id(typeId);
