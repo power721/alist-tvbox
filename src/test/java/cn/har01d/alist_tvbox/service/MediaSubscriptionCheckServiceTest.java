@@ -2283,6 +2283,34 @@ class MediaSubscriptionCheckServiceTest {
         assertFalse(MediaSubscriptionCheckService.titleProgressForeign(unknown, "随便 全999集"), "官方未知:门禁关闭");
     }
 
+    // ---------- 非剧本内容豁免(2026-08-27,借鉴 Node.js 追更助手 shouldUseTmdbReferenceScoring)----------
+    // TMDB 对综艺/纪实的季总集数登记天然不可靠(随录随播、加更/删减常态),集数类门禁对这类
+    // 内容整体豁免;只认 genres 正向证据(不做标题词兜底:「新闻女王」是剧本剧),genres 缺失不豁免。
+
+    @Test
+    void varietyShowEpisodeGatesRelaxed() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialTotal(12);
+        subscription.setOfficialEpisodes(12); // TMDB 登记 12/12 已播完,实际播出 20 集
+        List<String> variety = List.of("真人秀");
+        assertTrue(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 20)),
+                "剧本内容对照组:已播完+超 8 集 = 异剧");
+        assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 20), variety),
+                "综艺:登记总集数不可靠,集号超界不再是异剧信号");
+        assertTrue(MediaSubscriptionCheckService.titleProgressForeign(subscription, "乘风破浪 全20集 4K"),
+                "剧本内容对照组:宣称 20 > 登记 12 且已播完 = 拒");
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "乘风破浪 全20集 4K", variety),
+                "综艺:「全N集」宣称不据以拒");
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = episodeFiles(1, 12);
+        files.put(16, episodeFile(16)); // 断裂跳号(13-15 缺):剧本形态是噪声,综艺形态是常态缺号
+        MediaSubscriptionCheckService.stripForeignEpisodeNoise(subscription, files, variety);
+        assertTrue(files.containsKey(16), "综艺:断裂跳号不剔(整季缺号是常态)");
+        assertFalse(MediaSubscriptionCheckService.nonScriptedContent(List.of("剧情", "悬疑")),
+                "剧本类型不豁免");
+        assertFalse(MediaSubscriptionCheckService.nonScriptedContent(List.of()),
+                "genres 缺失(豆瓣纯源):不豁免,门禁维持");
+    }
+
     @Test
     void episodeDurationForeignForms() {
         // 线上形态:真人版单集 45min(duration 2700s,夸克返回)vs 动画版官方 20min
