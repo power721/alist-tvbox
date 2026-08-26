@@ -478,9 +478,11 @@ public class MediaSubscriptionTransferService {
         return tag == null ? base : base + " " + tag;
     }
 
-    /** 源分享类型与目标账号同族(夸克 5/UC 7/115 8/百度 10)才支持服务端转存;TV/开放平台账号由 relayOnly 排除。 */
+    /** 源分享类型与目标账号同族即支持服务端转存(阿里 0/迅雷 2/123 3/夸克 5/UC 7/115 8/天翼 9/百度 10/光鸭 12/移动 6);TV/开放平台账号由 relayOnly 排除。 */
     private static boolean serverSavable(Integer srcType, int dstType) {
-        return srcType != null && srcType == dstType && (dstType == 5 || dstType == 7 || dstType == 8 || dstType == 10);
+        return srcType != null && srcType == dstType
+                && (dstType == 0 || dstType == 2 || dstType == 3 || dstType == 5 || dstType == 6
+                || dstType == 7 || dstType == 8 || dstType == 9 || dstType == 10 || dstType == 12);
     }
 
     /** 目录是否存在(listFiles 失败视为不存在,含 object not found)。 */

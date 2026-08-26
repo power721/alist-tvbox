@@ -347,4 +347,227 @@ class MediaSubscriptionTransferQuotaTest {
                 eq(java.util.List.of("第01集.mkv")));
         verify(aListService).awaitCopyTasks(any(), anyLong());
     }
+
+    // 天翼分享(类型 9)→ 天翼账号:同族服务端转存(第五族),同样不回退 copy
+    @Test
+    void cloud189EpisodesSavedServerSide() {
+        MediaSubscriptionTransferService transferService = service(new AppProperties());
+        MediaSubscription subscription = subscription();
+        subscription.setAccountIds("[\"pan:6\"]");
+        subscription.setMountPath("/分享/剧名");
+
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription));
+        when(accountRepository.findById(6)).thenReturn(Optional.of(account(6, "/天翼盘", DriverType.CLOUD189)));
+        when(siteRepository.findById(1)).thenReturn(Optional.of(mock(Site.class)));
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(java.util.List.of());
+        cn.har01d.alist_tvbox.entity.Share share = mock(cn.har01d.alist_tvbox.entity.Share.class);
+        when(share.getType()).thenReturn(9);
+        when(shareRepository.findByPath("/分享/剧名")).thenReturn(share);
+
+        TreeMap<Integer, EpisodeFile> sources = new TreeMap<>();
+        sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
+        when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
+        when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
+        when(checkService.walkEpisodes(any(), any(), eq("/天翼盘/我的追剧/测试剧"), anyLong()))
+                .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
+
+        Task task = mock(Task.class);
+        when(task.getId()).thenReturn(77);
+        when(taskService.addSubscriptionTask(anyString())).thenReturn(task);
+
+        transferService.transfer(subscription);
+
+        verify(aListService).shareSave(any(), eq("/分享/剧名"),
+                eq(java.util.List.of("第01集.mkv")), eq("/天翼盘/我的追剧/测试剧"));
+        verify(aListService, Mockito.never()).copy(any(), anyString(), anyString(), any());
+        verify(aListService, Mockito.never()).awaitCopyTasks(any(), anyLong());
+        verify(checkService).addEvent(eq(9),
+                eq(cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent.TYPE_TRANSFER_DONE), anyString());
+    }
+
+    // 迅雷分享(类型 2)→ 迅雷账号:同族服务端转存(第六族),同样不回退 copy
+    @Test
+    void thunderEpisodesSavedServerSide() {
+        MediaSubscriptionTransferService transferService = service(new AppProperties());
+        MediaSubscription subscription = subscription();
+        subscription.setAccountIds("[\"pan:7\"]");
+        subscription.setMountPath("/分享/剧名");
+
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription));
+        when(accountRepository.findById(7)).thenReturn(Optional.of(account(7, "/迅雷盘", DriverType.THUNDER)));
+        when(siteRepository.findById(1)).thenReturn(Optional.of(mock(Site.class)));
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(java.util.List.of());
+        cn.har01d.alist_tvbox.entity.Share share = mock(cn.har01d.alist_tvbox.entity.Share.class);
+        when(share.getType()).thenReturn(2);
+        when(shareRepository.findByPath("/分享/剧名")).thenReturn(share);
+
+        TreeMap<Integer, EpisodeFile> sources = new TreeMap<>();
+        sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
+        when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
+        when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
+        when(checkService.walkEpisodes(any(), any(), eq("/迅雷盘/我的追剧/测试剧"), anyLong()))
+                .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
+
+        Task task = mock(Task.class);
+        when(task.getId()).thenReturn(77);
+        when(taskService.addSubscriptionTask(anyString())).thenReturn(task);
+
+        transferService.transfer(subscription);
+
+        verify(aListService).shareSave(any(), eq("/分享/剧名"),
+                eq(java.util.List.of("第01集.mkv")), eq("/迅雷盘/我的追剧/测试剧"));
+        verify(aListService, Mockito.never()).copy(any(), anyString(), anyString(), any());
+        verify(aListService, Mockito.never()).awaitCopyTasks(any(), anyLong());
+        verify(checkService).addEvent(eq(9),
+                eq(cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent.TYPE_TRANSFER_DONE), anyString());
+    }
+
+    // 123 分享(类型 3)→ 123 账号(cookie/goapi 或开放平台/MD5 秒传,Go 侧分支):同族服务端转存(第七族)
+    @Test
+    void pan123EpisodesSavedServerSide() {
+        MediaSubscriptionTransferService transferService = service(new AppProperties());
+        MediaSubscription subscription = subscription();
+        subscription.setAccountIds("[\"pan:8\"]");
+        subscription.setMountPath("/分享/剧名");
+
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription));
+        when(accountRepository.findById(8)).thenReturn(Optional.of(account(8, "/123盘", DriverType.PAN123)));
+        when(siteRepository.findById(1)).thenReturn(Optional.of(mock(Site.class)));
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(java.util.List.of());
+        cn.har01d.alist_tvbox.entity.Share share = mock(cn.har01d.alist_tvbox.entity.Share.class);
+        when(share.getType()).thenReturn(3);
+        when(shareRepository.findByPath("/分享/剧名")).thenReturn(share);
+
+        TreeMap<Integer, EpisodeFile> sources = new TreeMap<>();
+        sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
+        when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
+        when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
+        when(checkService.walkEpisodes(any(), any(), eq("/123盘/我的追剧/测试剧"), anyLong()))
+                .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
+
+        Task task = mock(Task.class);
+        when(task.getId()).thenReturn(77);
+        when(taskService.addSubscriptionTask(anyString())).thenReturn(task);
+
+        transferService.transfer(subscription);
+
+        verify(aListService).shareSave(any(), eq("/分享/剧名"),
+                eq(java.util.List.of("第01集.mkv")), eq("/123盘/我的追剧/测试剧"));
+        verify(aListService, Mockito.never()).copy(any(), anyString(), anyString(), any());
+        verify(checkService).addEvent(eq(9),
+                eq(cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent.TYPE_TRANSFER_DONE), anyString());
+    }
+
+    // 光鸭分享(类型 12)→ 光鸭账号:同族服务端转存(第八族),同样不回退 copy
+    @Test
+    void guangyaEpisodesSavedServerSide() {
+        MediaSubscriptionTransferService transferService = service(new AppProperties());
+        MediaSubscription subscription = subscription();
+        subscription.setAccountIds("[\"pan:9\"]");
+        subscription.setMountPath("/分享/剧名");
+
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription));
+        when(accountRepository.findById(9)).thenReturn(Optional.of(account(9, "/光鸭盘", DriverType.GUANGYA)));
+        when(siteRepository.findById(1)).thenReturn(Optional.of(mock(Site.class)));
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(java.util.List.of());
+        cn.har01d.alist_tvbox.entity.Share share = mock(cn.har01d.alist_tvbox.entity.Share.class);
+        when(share.getType()).thenReturn(12);
+        when(shareRepository.findByPath("/分享/剧名")).thenReturn(share);
+
+        TreeMap<Integer, EpisodeFile> sources = new TreeMap<>();
+        sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
+        when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
+        when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
+        when(checkService.walkEpisodes(any(), any(), eq("/光鸭盘/我的追剧/测试剧"), anyLong()))
+                .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
+
+        Task task = mock(Task.class);
+        when(task.getId()).thenReturn(77);
+        when(taskService.addSubscriptionTask(anyString())).thenReturn(task);
+
+        transferService.transfer(subscription);
+
+        verify(aListService).shareSave(any(), eq("/分享/剧名"),
+                eq(java.util.List.of("第01集.mkv")), eq("/光鸭盘/我的追剧/测试剧"));
+        verify(aListService, Mockito.never()).copy(any(), anyString(), anyString(), any());
+        verify(checkService).addEvent(eq(9),
+                eq(cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent.TYPE_TRANSFER_DONE), anyString());
+    }
+
+    // 阿里分享(类型 0)→ 阿里独立账号表目标(ali:{id} 分支):同族服务端转存(第九族,九族齐)
+    @Test
+    void aliEpisodesSavedServerSide() {
+        MediaSubscriptionTransferService transferService = service(new AppProperties());
+        MediaSubscription subscription = subscription();
+        subscription.setAccountIds("[\"ali:10\"]");
+        subscription.setMountPath("/分享/剧名");
+
+        cn.har01d.alist_tvbox.entity.Account aliAccount = new cn.har01d.alist_tvbox.entity.Account();
+        aliAccount.setId(10);
+        aliAccount.setNickname("主账号");
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription));
+        when(aliAccountRepository.count()).thenReturn(1L);
+        when(aliAccountRepository.findById(10)).thenReturn(Optional.of(aliAccount));
+        when(siteRepository.findById(1)).thenReturn(Optional.of(mock(Site.class)));
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(java.util.List.of());
+        cn.har01d.alist_tvbox.entity.Share share = mock(cn.har01d.alist_tvbox.entity.Share.class);
+        when(share.getType()).thenReturn(0);
+        when(shareRepository.findByPath("/分享/剧名")).thenReturn(share);
+
+        TreeMap<Integer, EpisodeFile> sources = new TreeMap<>();
+        sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
+        when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
+        when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
+        String aliTargetDir = "/\uD83D\uDCC0我的阿里云盘/主账号/资源盘/我的追剧/测试剧";
+        when(checkService.walkEpisodes(any(), any(), eq(aliTargetDir), anyLong()))
+                .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
+
+        Task task = mock(Task.class);
+        when(task.getId()).thenReturn(77);
+        when(taskService.addSubscriptionTask(anyString())).thenReturn(task);
+
+        transferService.transfer(subscription);
+
+        verify(aListService).shareSave(any(), eq("/分享/剧名"),
+                eq(java.util.List.of("第01集.mkv")), eq(aliTargetDir));
+        verify(aListService, Mockito.never()).copy(any(), anyString(), anyString(), any());
+        verify(checkService).addEvent(eq(9),
+                eq(cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent.TYPE_TRANSFER_DONE), anyString());
+    }
+
+    // 移动云盘分享(类型 6)→ 移动云盘账号:同族服务端转存(第十族,分享盘族全数接齐)
+    @Test
+    void pan139EpisodesSavedServerSide() {
+        MediaSubscriptionTransferService transferService = service(new AppProperties());
+        MediaSubscription subscription = subscription();
+        subscription.setAccountIds("[\"pan:11\"]");
+        subscription.setMountPath("/分享/剧名");
+
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription));
+        when(accountRepository.findById(11)).thenReturn(Optional.of(account(11, "/移动盘", DriverType.PAN139)));
+        when(siteRepository.findById(1)).thenReturn(Optional.of(mock(Site.class)));
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(java.util.List.of());
+        cn.har01d.alist_tvbox.entity.Share share = mock(cn.har01d.alist_tvbox.entity.Share.class);
+        when(share.getType()).thenReturn(6);
+        when(shareRepository.findByPath("/分享/剧名")).thenReturn(share);
+
+        TreeMap<Integer, EpisodeFile> sources = new TreeMap<>();
+        sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
+        when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
+        when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
+        when(checkService.walkEpisodes(any(), any(), eq("/移动盘/我的追剧/测试剧"), anyLong()))
+                .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
+
+        Task task = mock(Task.class);
+        when(task.getId()).thenReturn(77);
+        when(taskService.addSubscriptionTask(anyString())).thenReturn(task);
+
+        transferService.transfer(subscription);
+
+        verify(aListService).shareSave(any(), eq("/分享/剧名"),
+                eq(java.util.List.of("第01集.mkv")), eq("/移动盘/我的追剧/测试剧"));
+        verify(aListService, Mockito.never()).copy(any(), anyString(), anyString(), any());
+        verify(checkService).addEvent(eq(9),
+                eq(cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent.TYPE_TRANSFER_DONE), anyString());
+    }
 }
