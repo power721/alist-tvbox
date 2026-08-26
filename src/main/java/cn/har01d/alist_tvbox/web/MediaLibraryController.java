@@ -91,6 +91,7 @@ public class MediaLibraryController {
         Category item = new Category();
         item.setType_id(typeId);
         item.setType_name(typeName);
+        item.setType_flag(0);
         return item;
     }
 }
