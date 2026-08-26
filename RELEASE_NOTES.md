@@ -1,4 +1,4 @@
-# Release Notes - 1.57.1
+# Release Notes - 1.57.2
 
 ## 新增
 
@@ -17,3 +17,4 @@
 ## 修复
 
 - 修复native image
+- 修复追剧播放记录同步
