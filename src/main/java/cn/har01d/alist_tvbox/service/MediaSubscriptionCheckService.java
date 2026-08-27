@@ -4572,26 +4572,31 @@ public class MediaSubscriptionCheckService {
      */
     static List<String> matchNames(String name, String keyword, String aliases) {
         List<String> names = new ArrayList<>();
-        addName(names, name);
-        addName(names, keyword);
+        // 剧名/关键词的单字中文(如"蝉")必须纳入:否则只剩英文别名时,中文资源标题全被误判剧名不符
+        addName(names, name, true);
+        addName(names, keyword, true);
         // 裸剧名:剥掉"第N季/SN/Season N"后缀,让不同季号写法的候选都能命中
-        addName(names, TextUtils.stripSeasonSuffix(name));
-        addName(names, TextUtils.stripSeasonSuffix(keyword));
+        addName(names, TextUtils.stripSeasonSuffix(name), true);
+        addName(names, TextUtils.stripSeasonSuffix(keyword), true);
         if (StringUtils.isNotBlank(aliases)) {
             for (String alias : aliases.split("\\n")) {
-                addName(names, alias);
+                addName(names, alias, false);
             }
         }
         return names;
     }
 
-    /** 纳入匹配名单:去空白、去重、长度 ≥2;纯季号词(如"第四季")会命中任意同季别剧,必须排除。 */
-    private static void addName(List<String> names, String value) {
+    /**
+     * 纳入匹配名单:去空白、去重;纯季号词(如"第四季")会命中任意同季别剧,必须排除。
+     * 长度门槛 ≥2,仅正主剧名(allowSingleCjk)豁免单字中文;别名单字(如"短")子串误命中面大,维持门槛。
+     */
+    private static void addName(List<String> names, String value, boolean allowSingleCjk) {
         if (StringUtils.isBlank(value)) {
             return;
         }
         String trimmed = value.trim();
-        if (trimmed.length() < 2 || names.contains(trimmed) || TextUtils.isBareSeasonMarker(trimmed)) {
+        if ((trimmed.length() < 2 && !(allowSingleCjk && TextUtils.isChinese(trimmed)))
+                || names.contains(trimmed) || TextUtils.isBareSeasonMarker(trimmed)) {
             return;
         }
         names.add(trimmed);
@@ -4626,7 +4631,7 @@ public class MediaSubscriptionCheckService {
         }
         for (String name : names) {
             String n = normalizeForMatch(name);
-            if (n.length() >= 2 && normalized.contains(n)) {
+            if ((n.length() >= 2 || TextUtils.isChinese(n)) && normalized.contains(n)) {
                 return true;
             }
         }

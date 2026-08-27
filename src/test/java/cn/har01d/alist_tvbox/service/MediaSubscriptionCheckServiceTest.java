@@ -805,6 +805,26 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(MediaSubscriptionCheckService.matchesTitle(List.of(), "随便什么标题"));
     }
 
+    // ---------- 线上事故回归:单字中文剧名 ----------
+    // 订阅《蝉》(2026,name/keyword 均单字):元数据别名快照只留下英文名等 ≥2 字别名,
+    // 单字中文名被长度门槛排除出匹配名单 → matchesTitle 只认别名,759 条搜索结果中
+    // 453 条中文标题(如"蝉 全21集 [2026][4K]")全被判"剧名不符",订阅 ERROR 无资源。
+
+    @Test
+    void matchNamesKeepsSingleCharChineseName() {
+        List<String> names = MediaSubscriptionCheckService.matchNames("蝉", "蝉", "Cicada");
+        assertTrue(names.contains("蝉"), "单字中文剧名必须进入匹配名单");
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "蝉 全21集 [2026][4K]"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "【4K】蝉 更新至16集 夸克"));
+    }
+
+    @Test
+    void matchNamesStillRejectsSingleLatinChar() {
+        // 单拉丁字符会子串命中大量无关标题,长度门槛必须保留
+        List<String> names = MediaSubscriptionCheckService.matchNames("A", "A", null);
+        assertTrue(names.isEmpty());
+    }
+
     // ---------- 缺陷 5 回归:剧名带季号后缀时的归属匹配 ----------
     // 线上事故:订阅名/关键词均为"诛仙 第四季",搜索召回 31 条,全部被判不相关。
     // 根因 ①"最长片段"启发式按字符长度取到了"第四季"(3字)而非"诛仙"(2字);
