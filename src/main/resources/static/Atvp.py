@@ -197,6 +197,7 @@ class Spider(HostSpider):
         self._backend_api = ""
         self._vod_token = ""
         self._localProxyConfig = {}
+        self._localProxyBase = None
         self._detail_result_cache = {}
         self._search_keyword_cache = {}
         self._play_context_cache = {}
@@ -1333,10 +1334,53 @@ class Spider(HostSpider):
         body = str(rsp.text or "")
         if rsp.status_code != 200 or not body.strip():
             raise ValueError(f"Atvp play failed: {play_id}")
-        # proxy = self.post("http://localhost:5000/player", json={"playerContent": body, "taskSeed": play_id, "localProxyConfig": self._localProxyConfig}, timeout=10)
-        # if proxy.status_code == 200:
-        #     return proxy.json()
+        # 播放结果的本地代理改写在 playerContent 出口统一做(与 Java 侧 PyProxy 行为对等)
         return self._run_filters("play", json.loads(body), self._build_player_context(play_id=play_id))
+
+    def _resolve_local_proxy_base(self):
+        # 探测同设备 spring.jar(全局 spider)里 VideoStreamProxy 的监听端口(5000 起找可用,可能漂移)。
+        # 未运行(如播放器没加载 spring.jar)时返回 None,由调用方降级直连。失败结果短缓存,避免每次播放都全端口扫。
+        if self._localProxyBase is not None:
+            return self._localProxyBase or None
+        for port in range(5000, 5010):
+            base = f"http://127.0.0.1:{port}"
+            try:
+                rsp = self.fetch(base + "/status", timeout=1)
+                if rsp.status_code == 200:
+                    self._localProxyBase = base
+                    self.log(f"Atvp local proxy detected at {base}")
+                    return base
+            except Exception:
+                continue
+        self._localProxyBase = ""
+        return None
+
+    def _apply_local_proxy(self, result, play_id):
+        # 把播放结果交给 VideoStreamProxy 的 /player 接口改写:url/multiUrls 换成本地分片代理地址(多账号加速)。
+        # 任何失败(未配置/无代理/非200/坏JSON)原样返回,降级语义与 Java 侧 proxyPlayerContent 一致;
+        # parse!=0、天翼、未启用盘位等跳过逻辑由 /player 内部处理。
+        if not isinstance(result, dict) or not self._localProxyConfig:
+            return result
+        if not str(result.get("url") or "").startswith(("http://", "https://")):
+            return result
+        base = self._resolve_local_proxy_base()
+        if not base:
+            return result
+        try:
+            task_seed = str(play_id or "task").replace("/", "_")
+            rsp = self.post(base + "/player", json={
+                "playerContent": json.dumps(result, ensure_ascii=False),
+                "taskSeed": task_seed,
+                "localProxyConfig": self._localProxyConfig,
+            }, timeout=10)
+            if rsp.status_code != 200:
+                return result
+            proxied = rsp.json()
+            return proxied if isinstance(proxied, dict) else result
+        except Exception as e:
+            self.log(f"Atvp local proxy rewrite failed: {e}")
+            return result
+
 
     def _empty_category_result(self):
         return {
@@ -1634,7 +1678,9 @@ class Spider(HostSpider):
         else:
             result = self._require_inner().playerContent(flag, id, vipFlags)
             result = self._normalize_player_content(result)
-        return self._run_filters("player", result, self._build_player_context(flag, id, vipFlags))
+        result = self._run_filters("player", result, self._build_player_context(flag, id, vipFlags))
+        # 出口统一过本地分片代理(后端 1@ 线路与插件自身直链都覆盖,与 Java 侧 PyProxy 对等)
+        return self._apply_local_proxy(result, vid)
 
     def liveContent(self, url):
         return self._require_inner().liveContent(url)

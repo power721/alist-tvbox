@@ -203,7 +203,7 @@ class SubscriptionServiceTest {
         assertThat(SubscriptionService.selectPluginApi(plugin, false, "http://atv"))
                 .isEqualTo("csp_PyProxy");
         assertThat(payload)
-                .containsEntry("loader", "http://atv/Atvp.py?v=resume-group-v1")
+                .containsEntry("loader", "http://atv/Atvp.py?v=local-proxy-v1")
                 .containsEntry("source", "http://atv/plugins/web/7.py")
                 .containsEntry("raw", true)
                 .containsEntry("api", "http://atv")
@@ -229,20 +229,20 @@ class SubscriptionServiceTest {
                 plugin, "http://atv", "web", "", "secret", true, localProxyConfig);
 
         assertThat(SubscriptionService.selectPluginApi(plugin, true, "http://atv"))
-                .isEqualTo("http://atv/Atvp.py?v=resume-group-v1");
+                .isEqualTo("http://atv/Atvp.py?v=local-proxy-v1");
         assertThat(SubscriptionService.selectPluginApi(plugin, false, "http://atv"))
                 .isEqualTo("csp_PyProxy");
         assertThat(payload)
                 .containsEntry("source", "http://atv/plugins/web/8.txt")
                 .containsEntry("token", "-")
-                .doesNotContainKey("loader");
-        assertThat(payload.get("local_proxy_config"))
-                .isEqualTo(new HashMap<>());
+                .doesNotContainKey("loader")
+                // Python 原生模式同样下发代理配置:Atvp.py 依此声明 client-proxy 并经本地 /player 改写播放地址
+                .containsEntry("local_proxy_config", localProxyConfig);
 
         Map<String, Object> javaPayload = SubscriptionService.buildPluginExtPayload(
                 plugin, "http://atv", "web", "", "secret", false, localProxyConfig);
         assertThat(javaPayload)
-                .containsEntry("loader", "http://atv/Atvp.py?v=resume-group-v1")
+                .containsEntry("loader", "http://atv/Atvp.py?v=local-proxy-v1")
                 .containsEntry("local_proxy_config", localProxyConfig);
     }
 

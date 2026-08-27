@@ -90,7 +90,7 @@ import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 public class SubscriptionService {
     private static final String PLUGIN_RUN_MODE = "plugin_run_mode";
     private static final String PLUGIN_RUN_MODE_PYTHON = "python";
-    private static final String ATVP_RUNTIME_REVISION = "resume-group-v1";
+    private static final String ATVP_RUNTIME_REVISION = "local-proxy-v1";
     private static final String AUTO_UPDATE_PG = "auto_update_pg";
     private static final String AUTO_UPDATE_ZX = "auto_update_zx";
     private static final String AUTO_UPDATE_XS = "auto_update_xs";
@@ -1582,7 +1582,9 @@ public class SubscriptionService {
         map.put("playbackSourceKind", "spider_plugin");
         map.put("playbackSourceKey", pluginSiteKey(plugin));
         map.put("playbackSourceName", plugin.getName());
-        map.put("local_proxy_config", rawPython || !nativePython ? localProxyConfig : new HashMap<>());
+        // 代理配置对所有运行模式下发:Java 转发由 PyProxy 读它调 VideoStreamProxy;
+        // Python 原生由 Atvp.py 读它,向后端声明 client-proxy 取直链,再经本地 /player 接口改写为分片代理地址。
+        map.put("local_proxy_config", localProxyConfig);
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             map.put("data", plugin.getExtend());
         }
