@@ -160,6 +160,64 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(9, service.parseEpisode("show.09.v2.mp4", null));
     }
 
+    // ---------- 单集最小体积接线(2026-08-27):过滤器字段后端从未消费,手填 200MB 形同虚设 ----------
+    // 语义 = 偏好层而非硬门:同集存在达标文件时小版本不得顶上;该集只有小文件时照收
+    // (实在找不到合规资源才忽略限制,线上:柯南 1173-1216 仅 130-160MB、1217+ 有 4K 版,
+    // 硬门会把前段整段丢掉);显式调低于全局底线则覆盖底线;垃圾防护底线(默认 20MB)保留。
+
+    @Test
+    void episodeSizePolicyForms() {
+        MediaSubscription subscription = new MediaSubscription();
+        MediaSubscriptionCheckService.EpisodeSizePolicy policy = service.episodeSizePolicy(subscription);
+        assertEquals(20L * 1024 * 1024, policy.floorBytes(), "无过滤:全局 20MB 底线");
+        assertEquals(0, policy.preferredBytes());
+        subscription.setFilterConfig("{\"minEpisodeSizeMb\":200,\"maxEpisodeSizeMb\":0}");
+        policy = service.episodeSizePolicy(subscription);
+        assertEquals(20L * 1024 * 1024, policy.floorBytes(), "调高 = 偏好层,底线不动");
+        assertEquals(200L * 1024 * 1024, policy.preferredBytes());
+        assertTrue(policy.preferredHit(200L * 1024 * 1024));
+        assertFalse(policy.preferredHit(199L * 1024 * 1024));
+        subscription.setFilterConfig("{\"minEpisodeSizeMb\":5}");
+        policy = service.episodeSizePolicy(subscription);
+        assertEquals(5L * 1024 * 1024, policy.floorBytes(), "显式调低:覆盖全局底线");
+        assertEquals(0, policy.preferredBytes());
+        subscription.setFilterConfig("{\"maxEpisodeSizeMb\":1000}");
+        policy = service.episodeSizePolicy(subscription);
+        assertEquals(1000L * 1024 * 1024, policy.maxBytes());
+        assertEquals(0, policy.preferredBytes(), "单集上限独立接线,不产生偏好层");
+    }
+
+    @Test
+    void minEpisodeSizePreferenceAppliedPerEpisode() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setFilterConfig("{\"minEpisodeSizeMb\":200}");
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(filesOfSize(
+                        new String[]{"1173.mp4", "1178国语.mp4", "1178国语4K.mp4", "1180国语.mp4", "1211国语4K.mp4", "1211国语.mp4"},
+                        145, 139, 500, 5, 500, 190));
+        var files = fixture.service.episodeFilesAt("/追剧/1-测试剧", fixture.subscription);
+        assertEquals(3, files.size());
+        assertEquals(145L * 1024 * 1024, files.get(1173).size(), "该集只有不达标文件:照收(缺额兜底)");
+        assertEquals("1178国语4K.mp4", files.get(1178).name(), "同集存在达标文件:小版本不得顶上(小在前也会被顶换)");
+        assertEquals("1211国语4K.mp4", files.get(1211).name(), "达标文件先到:不达标后来者不得顶上");
+        assertFalse(files.containsKey(1180), "低于硬底线(全局 20MB 垃圾防护):仍然硬拒");
+    }
+
+    private static FsResponse filesOfSize(String[] names, long... sizeMb) {
+        FsResponse response = new FsResponse();
+        List<FsInfo> list = new ArrayList<>();
+        for (int i = 0; i < names.length; i++) {
+            FsInfo info = new FsInfo();
+            info.setName(names[i]);
+            info.setType(0);
+            info.setSize(sizeMb[i] * 1024 * 1024);
+            list.add(info);
+        }
+        response.setFiles(list);
+        return response;
+    }
+
     // ---------- 缺陷 12 回归:方括号技术标注段(夸克 4K 转码命名)不得污染集号 ----------
     // 线上事故(邻人可疑 2026,三集迷你剧):文件名「上集：喜迁新居，竟遇“诡”邻 [322155_maxplus_50fps_tv_6.72GB].mkv」
     // 末号规则取到体积 6.72 的 72,三集各成 45/60/72(maxEpisode=72),与官方 3 集对不上,详情页分集全缺失。

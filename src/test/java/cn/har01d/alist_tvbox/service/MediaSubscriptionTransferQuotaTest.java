@@ -96,9 +96,9 @@ class MediaSubscriptionTransferQuotaTest {
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
         // 目标盘 A:转存前为空(缺 1 集 → 起任务),事后校验集齐;目标盘 B 首查也为空 ——
         // 若配额没拦住,同样会走到起任务,addSubscriptionTask 就会被调两次
-        when(checkService.walkEpisodes(any(), any(), eq("/盘A/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/盘A/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
-        when(checkService.walkEpisodes(any(), any(), eq("/盘B/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/盘B/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>());
 
         Task task = mock(Task.class);
@@ -179,7 +179,7 @@ class MediaSubscriptionTransferQuotaTest {
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
         // 首查目标剧目录缺 1 集;事后校验集齐
-        when(checkService.walkEpisodes(any(), any(), eq("/盘A/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/盘A/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
         // 目标剧目录不存在(dirExists 探测抛错)
         when(aListService.listFiles(any(), eq("/盘A/我的追剧/测试剧"), anyInt(), anyInt()))
@@ -221,7 +221,7 @@ class MediaSubscriptionTransferQuotaTest {
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
         // 目标已有第 2 集,缺第 1 集;转存后校验集齐(目录存在:listFiles 默认 mock 不抛错)
-        when(checkService.walkEpisodes(any(), any(), eq("/盘A/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/盘A/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(java.util.Set.of(2)), new TreeSet<>(java.util.Set.of(1, 2)));
 
         Task task = mock(Task.class);
@@ -260,7 +260,7 @@ class MediaSubscriptionTransferQuotaTest {
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
         // 目标剧目录已存在(缺 1 集);转存后校验集齐
-        when(checkService.walkEpisodes(any(), any(), eq("/百度盘/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/百度盘/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
 
         Task task = mock(Task.class);
@@ -296,7 +296,7 @@ class MediaSubscriptionTransferQuotaTest {
         sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
-        when(checkService.walkEpisodes(any(), any(), eq("/115盘/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/115盘/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
 
         Task task = mock(Task.class);
@@ -332,7 +332,7 @@ class MediaSubscriptionTransferQuotaTest {
         sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
-        when(checkService.walkEpisodes(any(), any(), eq("/115开放/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/115开放/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
 
         Task task = mock(Task.class);
@@ -368,7 +368,7 @@ class MediaSubscriptionTransferQuotaTest {
         sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
-        when(checkService.walkEpisodes(any(), any(), eq("/天翼盘/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/天翼盘/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
 
         Task task = mock(Task.class);
@@ -405,7 +405,7 @@ class MediaSubscriptionTransferQuotaTest {
         sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
-        when(checkService.walkEpisodes(any(), any(), eq("/迅雷盘/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/迅雷盘/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
 
         Task task = mock(Task.class);
@@ -442,7 +442,7 @@ class MediaSubscriptionTransferQuotaTest {
         sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
-        when(checkService.walkEpisodes(any(), any(), eq("/123盘/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/123盘/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
 
         Task task = mock(Task.class);
@@ -478,7 +478,7 @@ class MediaSubscriptionTransferQuotaTest {
         sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
-        when(checkService.walkEpisodes(any(), any(), eq("/光鸭盘/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/光鸭盘/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
 
         Task task = mock(Task.class);
@@ -519,7 +519,7 @@ class MediaSubscriptionTransferQuotaTest {
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
         String aliTargetDir = "/\uD83D\uDCC0我的阿里云盘/主账号/资源盘/我的追剧/测试剧";
-        when(checkService.walkEpisodes(any(), any(), eq(aliTargetDir), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq(aliTargetDir), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
 
         Task task = mock(Task.class);
@@ -555,7 +555,7 @@ class MediaSubscriptionTransferQuotaTest {
         sources.put(1, new EpisodeFile(1, "/分享/剧名", "第01集.mkv", 500_000_000L, 0));
         when(checkService.walkEpisodeFiles(any(), anyBoolean())).thenReturn(sources);
         when(checkService.maxEpisodeBytes(any())).thenReturn(0L);
-        when(checkService.walkEpisodes(any(), any(), eq("/移动盘/我的追剧/测试剧"), anyLong()))
+        when(checkService.walkEpisodes(any(), any(), eq("/移动盘/我的追剧/测试剧"), any()))
                 .thenReturn(new TreeSet<>(), new TreeSet<>(java.util.Set.of(1)));
 
         Task task = mock(Task.class);

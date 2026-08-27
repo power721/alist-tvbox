@@ -1568,7 +1568,7 @@ public class MediaSubscriptionService {
         if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
             for (var target : transferService.transferredTargets(uid, id)) {
                 Set<Integer> covered = checkService.walkEpisodesAt(target.path(), subscription.getSeason(),
-                        checkService.maxEpisodeBytes(subscription));
+                        checkService.episodeSizePolicy(subscription));
                 covered.forEach(e -> {
                     sources.putIfAbsent(e, "转存:" + target.account());
                     matrix.computeIfAbsent(e, k -> new ArrayList<>()).add(new java.util.LinkedHashMap<>(Map.of(

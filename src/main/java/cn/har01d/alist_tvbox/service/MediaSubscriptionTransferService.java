@@ -536,11 +536,11 @@ public class MediaSubscriptionTransferService {
         }
     }
 
-    /** 目标目录已转存的集数(容忍目录暂不存在;沿用订阅的单集大小上限保持口径一致)。 */
+    /** 目标目录已转存的集数(容忍目录暂不存在;沿用订阅的单集体积策略保持口径一致)。 */
     private Set<Integer> listTargetEpisodes(Site site, MediaSubscription subscription, String targetDir) {
         try {
             return checkService.walkEpisodes(site, subscription.getSeason(), targetDir,
-                    checkService.maxEpisodeBytes(subscription));
+                    checkService.episodeSizePolicy(subscription));
         } catch (Exception e) {
             return new TreeSet<>();
         }

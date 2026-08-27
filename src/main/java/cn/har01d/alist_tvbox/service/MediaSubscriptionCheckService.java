@@ -1983,7 +1983,7 @@ public class MediaSubscriptionCheckService {
             TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
             try {
                 collectEpisodeFiles(site(), subscription.getSeason(), resource.getMountPath(), 1, files,
-                        maxEpisodeBytes(subscription), true);
+                        episodeSizePolicy(subscription), true);
             } catch (Exception e) {
                 log.info("aux mount refresh failed, retire: {} {}", resource.getMountPath(), e.getMessage());
                 retireResource(subscription, resource, e.getMessage(), false);
@@ -2964,7 +2964,7 @@ public class MediaSubscriptionCheckService {
         try {
             TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
             collectEpisodeFiles(site(), subscription.getSeason(), share.getPath(), 1, files,
-                    maxEpisodeBytes(subscription), true);
+                    episodeSizePolicy(subscription), true);
             stripForeignEpisodeNoise(subscription, files, genres);
             if (files.isEmpty()) {
                 throw new IllegalStateException("资源无可识别的剧集文件:" + resource.getTitle());
@@ -3348,7 +3348,7 @@ public class MediaSubscriptionCheckService {
         }
         TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
         try {
-            collectEpisodeFiles(site(), subscription.getSeason(), mountPath, 1, files, maxEpisodeBytes(subscription), true);
+            collectEpisodeFiles(site(), subscription.getSeason(), mountPath, 1, files, episodeSizePolicy(subscription), true);
         } catch (Exception e) {
             // 列目录失败同样要卸刚挂分享:固定路径不能残留孤儿挂载(追剧索引会收录它),
             // 且此时 resource.shareId 还没指向新 share,调用方退役删的是旧 share,孤儿没人清
@@ -3471,7 +3471,7 @@ public class MediaSubscriptionCheckService {
     TreeMap<Integer, EpisodeFile> listEpisodeFiles(MediaSubscription subscription) {
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         collectEpisodeFiles(site(), subscription.getSeason(), subscription.getMountPath(), 1, result,
-                maxEpisodeBytes(subscription), true);
+                episodeSizePolicy(subscription), true);
         stripForeignEpisodeNoise(subscription, result, metaGenres(subscription));
         return result;
     }
@@ -3499,16 +3499,56 @@ public class MediaSubscriptionCheckService {
         return (long) filter.getMaxEpisodeSizeMb() * 1024 * 1024;
     }
 
-    Set<Integer> walkEpisodes(Site site, Integer season, String path, long maxEpisodeBytes) {
+    /**
+     * 订阅的集文件体积三段策略。过滤器里的「单集最小体积」({@code minEpisodeSizeMb})此前后端
+     * 从未消费(只有 maxEpisodeSizeMb 接了线),用户手填 200MB 形同虚设 —— 现接成<b>偏好层</b>
+     * 而非硬门:配置高于全局底线(默认 20MB,垃圾/样片防护)时,达标文件优先入选与同集择优,
+     * 某集只有不达标文件时照收(实在找不到合规资源才忽略限制,线上:柯南主源 1173-1216 仅
+     * 130-160MB、1217+ 有 4K 版,硬门会把前段整段丢掉);配置低于全局底线视为用户显式调低
+     * 底线,直接覆盖。
+     */
+    EpisodeSizePolicy episodeSizePolicy(MediaSubscription subscription) {
+        long floor = (long) appProperties.getSubscription().getMinEpisodeSizeMb() * 1024 * 1024;
+        long preferred = 0;
+        MediaSubscriptionFilter filter = parseFilter(subscription);
+        Integer minMb = filter == null ? null : filter.getMinEpisodeSizeMb();
+        if (minMb != null && minMb > 0) {
+            long bytes = (long) minMb * 1024 * 1024;
+            if (bytes <= floor) {
+                floor = bytes;
+            } else {
+                preferred = bytes;
+            }
+        }
+        return new EpisodeSizePolicy(floor, preferred, maxEpisodeBytes(subscription));
+    }
+
+    /** 集文件体积三段策略:floor 硬底线(垃圾/样片防护)/preferred 偏好线(用户配的
+     * 最小体积:达标优先、缺额兜底,0=无偏好层)/max 单集上限(0=不限)。 */
+    record EpisodeSizePolicy(long floorBytes, long preferredBytes, long maxBytes) {
+        boolean hardRejected(long size) {
+            return size < floorBytes;
+        }
+
+        boolean overMax(long size) {
+            return maxBytes > 0 && size > maxBytes;
+        }
+
+        boolean preferredHit(long size) {
+            return preferredBytes <= 0 || size >= preferredBytes;
+        }
+    }
+
+    Set<Integer> walkEpisodes(Site site, Integer season, String path, EpisodeSizePolicy policy) {
         TreeSet<Integer> episodes = new TreeSet<>();
-        walk(site, season, path, 1, episodes, maxEpisodeBytes);
+        walk(site, season, path, 1, episodes, policy);
         return episodes;
     }
 
     /** 任意挂载路径的集数清单(转存目录等非本订阅挂载点)。目录不存在/为空返回空集而非抛错。 */
-    public Set<Integer> walkEpisodesAt(String path, Integer season, long maxEpisodeBytes) {
+    public Set<Integer> walkEpisodesAt(String path, Integer season, EpisodeSizePolicy policy) {
         try {
-            return walkEpisodes(site(), season, path, maxEpisodeBytes);
+            return walkEpisodes(site(), season, path, policy);
         } catch (Exception e) {
             return new TreeSet<>();
         }
@@ -3518,7 +3558,7 @@ public class MediaSubscriptionCheckService {
      * 已判 FAILED 的(集, 挂载点)组合跳过 —— 那些文件列得出、取不了链/拷不过去,让其他源供给。 */
     TreeMap<Integer, EpisodeFile> walkEpisodeFiles(MediaSubscription subscription, boolean includeAux) {
         Site site = site();
-        long maxBytes = maxEpisodeBytes(subscription);
+        EpisodeSizePolicy policy = episodeSizePolicy(subscription);
         Map<String, Set<Integer>> failedByMount = new HashMap<>();
         for (MediaSubscriptionResource resource : mountedResources(subscription)) {
             Set<Integer> failed = new TreeSet<>(episodeSourceRepository
@@ -3528,11 +3568,11 @@ public class MediaSubscriptionCheckService {
             }
         }
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
-        collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, maxBytes, true);
+        collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, policy, true);
         if (includeAux) {
             for (MediaSubscriptionResource resource : auxMounts(subscription)) {
                 try {
-                    collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, result, maxBytes, true);
+                    collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, result, policy, true);
                 } catch (Exception e) {
                     log.warn("walk aux files failed: {} {}", resource.getMountPath(), e.getMessage());
                 }
@@ -3556,7 +3596,7 @@ public class MediaSubscriptionCheckService {
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         try {
             collectEpisodeFiles(site(), subscription.getSeason(), path, 1, result,
-                    maxEpisodeBytes(subscription), false);
+                    episodeSizePolicy(subscription), false);
         } catch (Exception e) {
             log.debug("episodeFilesAt {} failed: {}", path, e.getMessage());
         }
@@ -3564,7 +3604,7 @@ public class MediaSubscriptionCheckService {
     }
 
     private void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
-                                     long maxEpisodeBytes, boolean refresh) {
+                                     EpisodeSizePolicy policy, boolean refresh) {
         if (depth > appProperties.getSubscription().getMaxListDepth()) {
             return;
         }
@@ -3573,24 +3613,29 @@ public class MediaSubscriptionCheckService {
         if (files == null || files.isEmpty()) {
             throw new IllegalStateException("目录为空或不可访问: " + path);
         }
-        long minSize = (long) appProperties.getSubscription().getMinEpisodeSizeMb() * 1024 * 1024;
         for (FsInfo file : files) {
             if (file.getType() == 1) {
                 continue;
             }
-            if (file.getSize() < minSize || !isMediaFormat(file.getName()) || EXTRA.matcher(file.getName()).find()) {
+            if (policy.hardRejected(file.getSize()) || !isMediaFormat(file.getName()) || EXTRA.matcher(file.getName()).find()) {
                 continue;
             }
-            if (maxEpisodeBytes > 0 && file.getSize() > maxEpisodeBytes) {
+            if (policy.overMax(file.getSize())) {
                 continue; // 超过单集上限:过滤捆绑大文件/异常资源
             }
             int episode = parseEpisode(file.getName(), season);
             if (episode > 0) {
                 EpisodeFile current = result.get(episode);
-                // 同集多版本(HQ.DV/SDR 双压包两个季文件夹):列举顺序未定义,先到先得会选中 DV 版整屏泛绿;
-                // 惩罚带目录上下文(标记常在季文件夹名上),兼容性差的版本被后来者替换
-                if (current == null || TextUtils.picturePenalty(path + "/" + file.getName())
-                        < TextUtils.picturePenalty(current.dir() + "/" + current.name())) {
+                // 同集多版本两层择优:体积门槛层优先(用户配的最小体积是质量偏好 —— 该集存在
+                // 达标文件时不达标版本不得顶上,该集只有不达标文件时照收,"实在找不到才忽略限制"),
+                // 同层内再按画质惩罚(HQ.DV/SDR 双压包两个季文件夹):列举顺序未定义,先到先得会
+                // 选中 DV 版整屏泛绿;惩罚带目录上下文(标记常在季文件夹名上),兼容性差的版本被后来者替换
+                boolean candidatePreferred = policy.preferredHit(file.getSize());
+                if (current == null
+                        || (candidatePreferred && !policy.preferredHit(current.size()))
+                        || (candidatePreferred == policy.preferredHit(current.size())
+                            && TextUtils.picturePenalty(path + "/" + file.getName())
+                               < TextUtils.picturePenalty(current.dir() + "/" + current.name()))) {
                     result.put(episode, new EpisodeFile(episode, path, file.getName(), file.getSize(), file.getDuration()));
                 }
             }
@@ -3599,7 +3644,7 @@ public class MediaSubscriptionCheckService {
             if (file.getType() == 1 && depth < appProperties.getSubscription().getMaxListDepth()
                     && !EXTRA.matcher(file.getName()).find()
                     && !otherSeasonDir(file.getName(), season)) {
-                collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, maxEpisodeBytes, refresh);
+                collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, policy, refresh);
             }
         }
     }
@@ -3608,7 +3653,7 @@ public class MediaSubscriptionCheckService {
     public record EpisodeFile(int episode, String dir, String name, long size, long duration) {
     }
 
-    private void walk(Site site, Integer season, String path, int depth, Set<Integer> episodes, long maxEpisodeBytes) {
+    private void walk(Site site, Integer season, String path, int depth, Set<Integer> episodes, EpisodeSizePolicy policy) {
         if (depth > appProperties.getSubscription().getMaxListDepth()) {
             return;
         }
@@ -3617,15 +3662,14 @@ public class MediaSubscriptionCheckService {
         if (files == null || files.isEmpty()) {
             throw new IllegalStateException("目录为空或不可访问: " + path);
         }
-        long minSize = (long) appProperties.getSubscription().getMinEpisodeSizeMb() * 1024 * 1024;
         for (FsInfo file : files) {
             if (file.getType() == 1) {
                 continue;
             }
-            if (file.getSize() < minSize || !isMediaFormat(file.getName()) || EXTRA.matcher(file.getName()).find()) {
+            if (policy.hardRejected(file.getSize()) || !isMediaFormat(file.getName()) || EXTRA.matcher(file.getName()).find()) {
                 continue;
             }
-            if (maxEpisodeBytes > 0 && file.getSize() > maxEpisodeBytes) {
+            if (policy.overMax(file.getSize())) {
                 continue; // 超过单集上限:过滤捆绑大文件/异常资源
             }
             int episode = parseEpisode(file.getName(), season);
@@ -3637,7 +3681,7 @@ public class MediaSubscriptionCheckService {
             if (file.getType() == 1 && depth < appProperties.getSubscription().getMaxListDepth()
                     && !EXTRA.matcher(file.getName()).find()
                     && !otherSeasonDir(file.getName(), season)) {
-                walk(site, season, path + "/" + file.getName(), depth + 1, episodes, maxEpisodeBytes);
+                walk(site, season, path + "/" + file.getName(), depth + 1, episodes, policy);
             }
         }
     }
