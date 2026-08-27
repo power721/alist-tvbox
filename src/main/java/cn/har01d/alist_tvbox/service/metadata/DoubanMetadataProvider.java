@@ -298,6 +298,7 @@ public class DoubanMetadataProvider implements MetadataProvider {
         boolean biliClocked = false;
         if (biliScheduleRefiner != null) {
             biliClocked = biliScheduleRefiner.refine(details); // B站独播番剧实际更新时刻(如周六 11:00)校正默认的 20:00
+            biliScheduleRefiner.refineAiredCount(details); // 官方已播集数:B站已上线最大集号取大(豆瓣/TMDB 对连载滞后)
         }
         if (ratingBridge != null) {
             ratingBridge.enrich(details, season); // 补 Bangumi 评分/外链(豆瓣与 TMDB 已就位),失败自静默

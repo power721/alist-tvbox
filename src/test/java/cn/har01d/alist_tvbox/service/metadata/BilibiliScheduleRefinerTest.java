@@ -17,7 +17,9 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -144,6 +146,52 @@ class BilibiliScheduleRefinerTest {
         assertNull(details.getNextAirTime(), "全部已播,nextAirTime 清空");
         assertEquals(today.atTime(11, 0).atZone(ZONE).toInstant().toEpochMilli(),
                 details.getEpisodes().get(1).getAirTime());
+    }
+
+    // ---------- 官方已播集数校正(2026-08-27):TMDB 对超长连载滞后 ----------
+    // 线上形态:柯南 B站已上线到 1270,TMDB 停在 1212/1210,官方"已播"落后现实 60 集。
+    // 口径=已上线最大集号而非计数:B站老集转会员/下架后 status 变化(柯南 status=13 仅
+    // 523 条、首条 751),计数只反映"当前可看",不是官方播出进度。
+
+    @Test
+    void airedCountTakesMaxAiredEpisodeNumberNotCount() {
+        LocalDate today = LocalDate.now(ZONE);
+        server.expect(once(), requestTo(SEARCH_URL)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(searchHtml("凡人修仙传"), MediaType.TEXT_HTML));
+        server.expect(once(), requestTo(SEASON_URL))
+                .andRespond(withSuccess(seasonBody(
+                        episode(1268, 13, today.minusWeeks(2).atTime(11, 0)),
+                        episode(1269, 13, today.minusWeeks(1).atTime(11, 0)),
+                        episode(1270, 13, today.minusDays(2).atTime(11, 0)),
+                        episode(1271, 2, today.plusDays(5).atTime(11, 15)),
+                        "{\"title\":\"特别篇\",\"status\":13,\"pub_time\":"
+                                + today.minusDays(3).atTime(11, 0).atZone(ZONE).toInstant().getEpochSecond() + "}"),
+                        MediaType.APPLICATION_JSON));
+
+        MetadataDetails details = new MetadataDetails();
+        details.setName("凡人修仙传");
+        details.setAiredEpisodes(1210); // TMDB 滞后值
+
+        assertTrue(refiner.refineAiredCount(details));
+        assertEquals(1270, details.getAiredEpisodes(), "已播=B站已上线最大集号,预告与文字条目不参与");
+        assertEquals("ss28747", details.getExternalIds().get("bilibili"), "定位到 ss 即登记外链");
+    }
+
+    @Test
+    void airedCountNeverShrinksFasterSource() {
+        LocalDate today = LocalDate.now(ZONE);
+        server.expect(once(), requestTo(SEARCH_URL)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(searchHtml("凡人修仙传"), MediaType.TEXT_HTML));
+        server.expect(once(), requestTo(SEASON_URL))
+                .andRespond(withSuccess(seasonBody(episode(10, 13, today.minusDays(1).atTime(11, 0))),
+                        MediaType.APPLICATION_JSON));
+
+        MetadataDetails details = new MetadataDetails();
+        details.setName("凡人修仙传");
+        details.setAiredEpisodes(11); // 现值更快(B站尚未同步)
+
+        assertFalse(refiner.refineAiredCount(details), "取大不减小:B站 10 < 现 11 不动");
+        assertEquals(11, details.getAiredEpisodes());
     }
 
     /** TMDB 名称桥接产出的详情形态:分集列表 + 日程快照,时刻均为默认 20:00。 */

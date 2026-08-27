@@ -1528,12 +1528,17 @@ public class MediaSubscriptionCheckService {
     /** 缺口 = 1..base 中本地没有的集;base = max(观测最大, 官方已播, 期望集数)。 */
     Set<Integer> computeMissing(MediaSubscription subscription, Set<Integer> present) {
         int base = present.stream().max(Integer::compareTo).orElse(0);
-        if (subscription.getOfficialEpisodes() != null) {
-            base = Math.max(base, subscription.getOfficialEpisodes());
+        // 官方已播/期望互选取大后被官方总集数夹住:已播数逻辑上不可能超过总集数,
+        // 不夹则上游污染数据(瑞克 S9 官方总 10 完结/已播 11 系 S1 分集桥接污染)会让巡检
+        // 每轮报缺不存在的集、fillGaps 空转攒 stallCount;观测最大集号不参与夹紧(官方滞后)
+        int projected = Math.max(
+                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes(),
+                subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes());
+        Integer total = subscription.getOfficialTotal();
+        if (total != null && total > 0) {
+            projected = Math.min(projected, total);
         }
-        if (subscription.getExpectedEpisodes() != null) {
-            base = Math.max(base, subscription.getExpectedEpisodes());
-        }
+        base = Math.max(base, projected);
         // base 上限保护:官方数据异常时不至于搜几千集(与网页清单 MAX_EPISODE_ROWS 同口径,
         // 旧值 500 把柯南这类 1200+ 集长番的缺集检测整轮废掉 —— 27 个真实缺口从未触发补缺)
         if (base <= 0 || base > MediaSubscriptionService.MAX_EPISODE_ROWS) {

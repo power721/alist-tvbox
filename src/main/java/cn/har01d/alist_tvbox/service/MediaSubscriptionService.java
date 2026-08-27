@@ -1587,10 +1587,11 @@ public class MediaSubscriptionService {
         for (MediaSubscriptionResource resource : resourceRepository.findBySubscriptionIdOrderByScoreDesc(id)) {
             resources.put(resource.getId(), resource);
         }
-        boolean primarySeen = false;
+        boolean rowsSeen = false;
         Map<Integer, List<Integer>> deadByEpisode = new java.util.TreeMap<>();
         Set<String> live = LIVE_EPISODE_STATES;
         for (Object[] pair : episodeSourceRepository.findNumberAndSource(id)) {
+            rowsSeen = true;
             Integer number = (Integer) pair[0];
             MediaSubscriptionEpisodeSource row = (MediaSubscriptionEpisodeSource) pair[1];
             MediaSubscriptionResource resource = resources.get(row.getResourceId());
@@ -1601,9 +1602,6 @@ public class MediaSubscriptionService {
                     && StringUtils.isNotBlank(resource.getMountPath());
             boolean primary = mounted && subscription.getMountPath() != null
                     && subscription.getMountPath().equals(resource.getMountPath());
-            if (primary) {
-                primarySeen = true; // 行已同步(无论状态) —— 首轮巡检前的兜底显示不生效
-            }
             // 只有 LIVE 行算"已有":FAILED(取不了链)的集不能再顶着"主源"的名头显示为已有
             if (live.contains(row.getState())) {
                 if (primary) {
@@ -1627,8 +1625,11 @@ public class MediaSubscriptionService {
                 matrix.computeIfAbsent(number, k -> new ArrayList<>()).add(item);
             }
         }
-        if (!primarySeen) {
-            // 主源行还没同步出来(首轮巡检前):退回 currentEpisodes 显示,避免页签全灰
+        if (!rowsSeen) {
+            // 集源行完全未同步(首轮巡检前):退回 currentEpisodes 显示,避免页签全灰。
+            // 行一旦存在就不再兜底 —— 主源失效/换源后 currentEpisodes 是旧值,
+            // 再兜底会把已不可播的集全部伪造为「主源已有」(线上:主源目录清空后
+            // 1..1243 兜底 + 补缺源真实行 1244..1270,集数清单 1270 行全 present、缺失 0)
             for (int i = 1; i <= (subscription.getCurrentEpisodes() == null ? 0 : subscription.getCurrentEpisodes()); i++) {
                 sources.putIfAbsent(i, "主源");
             }
@@ -1722,14 +1723,16 @@ public class MediaSubscriptionService {
         media.put("officialStatus", subscription.getOfficialStatus());
         media.put("nextAirTime", subscription.getNextAirTime());
         // 观测最大集号一并参与取大:官方统计滞后于资源现实时(柯南官方 1212/资源已到 1270),
-        // 详情页"已播/共"不能倒挂在本地集数之下
+        // 详情页"已播/共"不能倒挂在本地集数之下;已播再被总数夹住 —— 官方已播超过总集数是
+        // 上游污染(瑞克 S9 总 10/已播 11),"已播 11 / 共 10"同样是倒挂
         int observedMax = subscription.getMaxEpisode() == null ? 0 : subscription.getMaxEpisode();
         int metaTotal = details == null || details.getTotalEpisodes() == null ? 0 : details.getTotalEpisodes();
-        media.put("totalEpisodes", Math.max(Math.max(metaTotal,
-                subscription.getOfficialTotal() == null ? 0 : subscription.getOfficialTotal()), observedMax));
+        int total = Math.max(Math.max(metaTotal,
+                subscription.getOfficialTotal() == null ? 0 : subscription.getOfficialTotal()), observedMax);
+        media.put("totalEpisodes", total);
         int metaAired = details == null || details.getAiredEpisodes() == null ? 0 : details.getAiredEpisodes();
-        media.put("airedEpisodes", Math.max(Math.max(metaAired,
-                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes()), observedMax));
+        media.put("airedEpisodes", Math.min(Math.max(Math.max(metaAired,
+                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes()), observedMax), total));
         result.put("media", media);
 
         // 分集合并:本地清单(已有/来源,含转存/主源/补缺)+ 元数据分集(标题/播出时间/剧照/简介)+ 分集行 + 日程快照
@@ -2426,13 +2429,17 @@ public class MediaSubscriptionService {
             }
         }
         int base = present.stream().max(Integer::compareTo).orElse(0);
-        if (subscription.getOfficialEpisodes() != null) {
-            base = Math.max(base, subscription.getOfficialEpisodes());
+        // 官方已播/期望先互选取大,再被官方总集数夹住 —— 已播数逻辑上不可能超过总集数,
+        // 不夹会被上游污染数据凭空造缺口(瑞克 S9:官方总 10 完结,官方已播 11 系 S1 分集
+        // 桥接污染,不夹则"10/10 缺第 11 集"且巡检空转搜不存在的集);观测最大集号不参与夹紧
+        int projected = Math.max(
+                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes(),
+                subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes());
+        Integer total = subscription.getOfficialTotal();
+        if (total != null && total > 0) {
+            projected = Math.min(projected, total);
         }
-        Integer expected = subscription.getExpectedEpisodes();
-        if (expected != null) {
-            base = Math.max(base, expected);
-        }
+        base = Math.max(base, projected);
         if (base <= 0 || base > MAX_EPISODE_ROWS) {
             return List.of();
         }

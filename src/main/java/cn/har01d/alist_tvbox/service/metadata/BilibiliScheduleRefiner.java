@@ -59,12 +59,17 @@ public class BilibiliScheduleRefiner {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /** season 事实:排播时刻众数 + 已上线最大集号(status=13 的 title 数字)。
+     *  已播数只能用最大集号不能用计数 —— 老集转会员/下架后 status 会变(柯南 B站
+     *  已上线到 1270,status=13 却只剩 523 条、首条 751),计数只反映"当前可看"。 */
+    private record SeasonFacts(LocalTime clock, int maxAiredNumber) {}
+
     private final RestTemplate restTemplate;
     /** 剧名 → ss 号(Optional.empty 负缓存:搜不到/标题不匹配/请求失败) */
     private final Cache<String, Optional<String>> seasonCache = Caffeine.newBuilder()
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
-    /** ss 号 → 官方排播时刻(Optional.empty 负缓存:无已上线集/请求失败) */
-    private final Cache<String, Optional<LocalTime>> clockCache = Caffeine.newBuilder()
+    /** ss 号 → season 事实(Optional.empty 负缓存:无已上线集/请求失败) */
+    private final Cache<String, Optional<SeasonFacts>> factsCache = Caffeine.newBuilder()
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
 
     public BilibiliScheduleRefiner(MetadataHttp metadataHttp) {
@@ -148,28 +153,83 @@ public class BilibiliScheduleRefiner {
         }).orElse(null);
     }
 
+    /**
+     * 官方已播集数校正:B站已上线最大集号与现值<b>取大</b> —— TMDB/豆瓣对超长连载滞后
+     * (柯南 B站已上线 1270,TMDB 停在 1212/1210,官方"已播"落后现实 60 集,巡检的
+     * 缺集触发/官方已播提示全跟着滞后);只增不减,不覆盖更快源的更大值;不依赖分集
+     * 列表(episodes 为空的详情同样工作),定位到 ss 即顺带登记 B站条目外链。
+     */
+    boolean refineAiredCount(MetadataDetails details) {
+        if (details == null || StringUtils.isBlank(details.getName())) {
+            return false;
+        }
+        try {
+            String ss = searchSeason(details.getName());
+            if (ss == null) {
+                return false;
+            }
+            recordSeasonId(details, ss);
+            Integer maxAired = airedEpisodeNumber(ss);
+            if (maxAired != null
+                    && (details.getAiredEpisodes() == null || maxAired > details.getAiredEpisodes())) {
+                log.info("bili aired count refine: {} aired episodes {} -> {}",
+                        details.getName(), details.getAiredEpisodes(), maxAired);
+                details.setAiredEpisodes(maxAired);
+                return true;
+            }
+        } catch (Exception e) {
+            log.debug("bili aired count refine {} failed: {}", details.getName(), e.getMessage());
+        }
+        return false;
+    }
+
+    /** B站已上线最大集号;无已上线集/请求失败返回 null(缓存 6h)。 */
+    Integer airedEpisodeNumber(String ss) {
+        SeasonFacts facts = seasonFacts(ss);
+        return facts == null || facts.maxAiredNumber() <= 0 ? null : facts.maxAiredNumber();
+    }
+
+    /** B站正片 title 是集号字符串("1270");文字条目(特别篇等)解析失败返回 0 不参与。 */
+    private static int parseEpisodeTitle(String title) {
+        if (StringUtils.isBlank(title)) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(title.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     /** 官方分集已上线集 pub_time(秒)最近 8 集的 HH:mm 众数(平手取更新)。 */
     LocalTime seasonClock(String ss) {
-        return clockCache.get(ss, key -> {
+        SeasonFacts facts = seasonFacts(ss);
+        return facts == null ? null : facts.clock();
+    }
+
+    private SeasonFacts seasonFacts(String ss) {
+        return factsCache.get(ss, key -> {
             try {
                 ResponseEntity<byte[]> response = restTemplate.exchange(
                         URI.create(SEASON_URL + key.substring(2)),
                         HttpMethod.GET, new HttpEntity<>(null, browserHeaders()), byte[].class);
                 List<Long> times = new ArrayList<>();
+                int maxAired = 0;
                 for (JsonNode episode : MAPPER.readTree(new String(response.getBody(),
                                 java.nio.charset.StandardCharsets.UTF_8)).path("result").path("episodes")) {
                     long pubTime = episode.path("pub_time").asLong(0);
                     if (episode.path("status").asInt() == EPISODE_STATUS_AIRED && pubTime > 0) {
                         times.add(pubTime * 1000);
+                        maxAired = Math.max(maxAired, parseEpisodeTitle(episode.path("title").asText(null)));
                     }
                 }
+                LocalTime best = null;
                 if (!times.isEmpty()) {
                     times.sort(Comparator.reverseOrder());
                     Map<LocalTime, Integer> counts = new LinkedHashMap<>();
                     for (int i = 0; i < Math.min(times.size(), RECENT_LIMIT); i++) {
                         counts.merge(Instant.ofEpochMilli(times.get(i)).atZone(ZONE).toLocalTime(), 1, Integer::sum);
                     }
-                    LocalTime best = null;
                     int bestCount = 0;
                     for (Map.Entry<LocalTime, Integer> entry : counts.entrySet()) {
                         if (entry.getValue() > bestCount) {
@@ -177,10 +237,11 @@ public class BilibiliScheduleRefiner {
                             bestCount = entry.getValue();
                         }
                     }
-                    if (best != null) {
-                        return Optional.of(best);
-                    }
                 }
+                if (best == null && maxAired <= 0) {
+                    return Optional.empty();
+                }
+                return Optional.of(new SeasonFacts(best, maxAired));
             } catch (Exception e) {
                 log.debug("bili season {} failed: {}", key, e.getMessage());
             }

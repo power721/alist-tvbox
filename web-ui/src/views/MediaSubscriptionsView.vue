@@ -102,7 +102,8 @@
               <div class="sub-text danger" v-if="scope.row.missingEpisodes && scope.row.missingEpisodes.length">
                 缺第 {{ compactNumbers(scope.row.missingEpisodes) }} 集
               </div>
-              <div class="sub-text" v-else-if="scope.row.officialEpisodes && scope.row.officialEpisodes > (scope.row.currentEpisodes ?? 0)">
+              <div class="sub-text" v-else-if="scope.row.officialEpisodes && scope.row.officialEpisodes > (scope.row.currentEpisodes ?? 0)
+                  && scope.row.officialEpisodes <= (progressTotal(scope.row) ?? scope.row.officialEpisodes)">
                 官方已播 {{ scope.row.officialEpisodes }} 集
               </div>
             </template>

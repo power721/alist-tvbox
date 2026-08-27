@@ -315,6 +315,8 @@ public class TmdbMetadataProvider implements MetadataProvider {
             if (biliScheduleRefiner != null) {
                 // B站独播番剧实际更新时刻(如盗妖行 周二/四 9:00)校正默认 20:00,并登记 B站条目外链
                 biliClocked = biliScheduleRefiner.refine(details);
+                // 官方已播集数:B站已上线最大集号取大 —— TMDB 对超长连载滞后(柯南停在 1212/1210,B站已到 1270)
+                biliScheduleRefiner.refineAiredCount(details);
             }
             if (playScheduleBridge != null && !biliClocked) {
                 playScheduleBridge.refine(details); // 豆瓣桥接带出播放源后校正爱优腾实际排播时刻;B站已校正则让位(与豆瓣链同规)

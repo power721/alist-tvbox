@@ -120,4 +120,21 @@ class MediaSubscriptionUpdateTransferTest {
 
         assertEquals(List.of(257, 926), dto.getMissingEpisodes());
     }
+
+    @Test
+    void dtoMissingEpisodesClampedByOfficialTotal() {
+        // 瑞克 S9 形态:官方总 10 完结,官方已播 11 系上游 S1 分集桥接污染 ——
+        // 不被总集数夹住会凭空"10/10 缺第 11 集",巡检空转搜不存在的集
+        MediaSubscription sub = subscription(MediaSubscription.MODE_FOLLOW, "[]");
+        sub.setOfficialTotal(10);
+        sub.setOfficialEpisodes(11);
+        sub.setMaxEpisode(10);
+        sub.setCurrentEpisodes(10);
+        when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(anyInt(), anyCollection()))
+                .thenReturn(IntStream.rangeClosed(1, 10).boxed().toList());
+
+        MediaSubscriptionDto dto = service.toDto(sub);
+
+        assertEquals(List.of(), dto.getMissingEpisodes());
+    }
 }

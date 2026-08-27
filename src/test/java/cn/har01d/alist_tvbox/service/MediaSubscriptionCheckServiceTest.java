@@ -167,6 +167,19 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void computeMissingClampsProjectedRangeByOfficialTotal() {
+        // 瑞克 S9 形态:官方总 10 完结、官方已播 11(上游 S1 分集污染)——
+        // 不夹住则巡检每轮报缺第 11 集、fillGaps 空转攒 stallCount
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialTotal(10);
+        subscription.setOfficialEpisodes(11);
+        Set<Integer> present = IntStream.rangeClosed(1, 10).boxed()
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertTrue(service.computeMissing(subscription, present).isEmpty());
+    }
+
+    @Test
     void chineseEpisodeSuffix() {
         assertEquals(3, service.parseEpisode("边水往事.第03集.4K.mkv", null));
         assertEquals(12, service.parseEpisode("边水往事 第12集.mp4", null));
