@@ -468,14 +468,18 @@ class TelegramServiceTest {
 
     @Test
     void listDoubanHotTvRegionUsesRecommendApiPerRegion() {
-        RestTemplate restTemplate = new RestTemplate();
+        // 与生产一致走 RestTemplateBuilder:其 uriTemplateHandler 会把 URL 模板里的 % 二次编码,
+        // 早期版本传 String URL 时 tags 被编成 %25XX 乱码、豆瓣返回 total=0(地区筛选全空)
+        RestTemplate restTemplate = new RestTemplateBuilder().build();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
         TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
 
         server.expect(once(), request -> {
                     assertThat(request.getURI().getPath()).endsWith("/tv/recommend");
-                    // tags=电视剧,日本
-                    assertThat(request.getURI().getQuery()).contains("tags=%E7%94%B5%E8%A7%86%E5%89%A7%2C%E6%97%A5%E6%9C%AC");
+                    // tags=电视剧,日本 —— 未被二次编码(无 %25),且带近期热度排序
+                    assertThat(request.getURI().getRawQuery()).contains("tags=%E7%94%B5%E8%A7%86%E5%89%A7%2C%E6%97%A5%E6%9C%AC");
+                    assertThat(request.getURI().getRawQuery()).contains("sort=U");
+                    assertThat(request.getURI().getRawQuery()).doesNotContain("%25");
                 })
                 .andRespond(withSuccess("""
                         {"total":500,"items":[{"id":"1","title":"日剧",
@@ -484,7 +488,7 @@ class TelegramServiceTest {
         server.expect(once(), request -> {
                     assertThat(request.getURI().getPath()).endsWith("/tv/recommend");
                     // tags=电视剧,韩国 —— 不同地区各自请求,不落同一条缓存
-                    assertThat(request.getURI().getQuery()).contains("tags=%E7%94%B5%E8%A7%86%E5%89%A7%2C%E9%9F%A9%E5%9B%BD");
+                    assertThat(request.getURI().getRawQuery()).contains("tags=%E7%94%B5%E8%A7%86%E5%89%A7%2C%E9%9F%A9%E5%9B%BD");
                 })
                 .andRespond(withSuccess("""
                         {"total":500,"items":[{"id":"2","title":"韩剧",

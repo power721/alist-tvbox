@@ -55,6 +55,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
+import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -942,8 +943,9 @@ public class TelegramService {
         // 近期热播接口不支持地区参数;带地区改走 discover 式 recommend(tags 语法,单国家粒度)
         if (StringUtils.isNotBlank(region) && (type.equals("hot_tv") || type.equals("hot_movie"))) {
             String tags = URLEncoder.encode((type.equals("hot_tv") ? "电视剧" : "电影") + "," + region, StandardCharsets.UTF_8);
+            // sort=U 近期热度:recommend 默认综合排序全是经典老剧,与热门榜单语义不符
             url = "https://m.douban.com/rexxar/api/v2/" + (type.equals("hot_tv") ? "tv" : "movie")
-                    + "/recommend?refresh=0&start=" + start + "&limit=" + size + "&uncollect=false&tags=" + tags;
+                    + "/recommend?refresh=0&start=" + start + "&limit=" + size + "&uncollect=false&sort=U&tags=" + tags;
         }
 
         MovieList result = new MovieList();
@@ -951,7 +953,9 @@ public class TelegramService {
 
         HttpEntity<Void> httpEntity = buildHttpEntity();
 
-        var response = restTemplate.exchange(url, HttpMethod.GET, httpEntity, JsonNode.class);
+        // tags 已 URLEncoder 预编码:传 String 会经 uriTemplateHandler 二次编码(%→%25)使 tags 变乱码,
+        // 豆瓣按乱码 tag 匹配 total=0(地区筛选全空);传 URI 跳过模板编码
+        var response = restTemplate.exchange(URI.create(url), HttpMethod.GET, httpEntity, JsonNode.class);
         int total = response.getBody().get("total").asInt();
         ArrayNode items = (ArrayNode) response.getBody().get("items");
         for (JsonNode item : items) {
