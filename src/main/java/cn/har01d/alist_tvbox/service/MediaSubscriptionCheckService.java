@@ -1228,6 +1228,11 @@ public class MediaSubscriptionCheckService {
         }
         int newest = verified.stream().max(Integer::compareTo).orElse(0);
         int watched = watchedEpisode(subscription);
+        // 回看防护:History 只存当前进度,追平后跳回前面集会把 watched 拉低 —— 追平线以内的
+        // 集都是看过的,追平线抬高 watched,否则回看用户被误判"没追上"而收不到新集推送。
+        if (subscription.getCaughtUpEpisode() != null && subscription.getCaughtUpEpisode() > watched) {
+            watched = subscription.getCaughtUpEpisode();
+        }
         // 追平判定:已看集 >= 本次新增之前的最新集(= 新增里的最小集 - 1)
         int previousNewest = verified.stream().min(Integer::compareTo).orElse(newest) - 1;
         if (watched > 0 && watched < previousNewest) {
@@ -1246,6 +1251,7 @@ public class MediaSubscriptionCheckService {
      * <p>
      * 优先解析 {@code episodeUrl} 里的逻辑链接 {@code msubep-{订阅}-{集}}(它带着真实集号);
      * 解析不出(用户切到了分盘线路、播的是物理地址)时退回 {@code History.episode} 选集下标 +1。
+     * 当前集进度不足(刚点开几十秒的试看)折算为前一集 —— 见 {@link #episodeOfHistory}。
      * 注意 {@code MediaSubscription.maxEpisode} 是<b>资源侧</b>最大集号,与观看进度无关。
      */
     int watchedEpisode(MediaSubscription subscription) {
@@ -1265,12 +1271,29 @@ public class MediaSubscriptionCheckService {
         }
     }
 
+    /**
+     * 播放行折算已看集号:当前集<b>进度不足不算看完</b>,折算为 前一集。
+     * 线上形态:33 集只点开看了几十秒,旧口径按集号直接算看完 → 追平标记被试看抬到 33,
+     * 用户回看时「还没看完的最后一集」从此不亮角标。时长已知看比例(≥70%,含跳片头片尾
+     * 的完整观看;completed 上报会把 position 夹紧到 duration,天然覆盖);时长未知或过短
+     * 用绝对门槛(≥5 分钟),按播放位置判断 —— 位置小只可能发生在片头附近。
+     */
+    private static final long MIN_WATCHED_POSITION_MS = 300_000;
+
     private static int episodeOfHistory(History history) {
         Matcher matcher = MSUBEP_EPISODE.matcher(StringUtils.defaultString(history.getEpisodeUrl()));
-        if (matcher.find()) {
-            return Integer.parseInt(matcher.group(1));
+        int episode = matcher.find() ? Integer.parseInt(matcher.group(1))
+                : history.getEpisode() > 0 ? history.getEpisode() + 1 : 0; // 选集下标从 0 起
+        return substantiallyWatched(history) ? episode : Math.max(episode - 1, 0);
+    }
+
+    private static boolean substantiallyWatched(History history) {
+        long duration = history.getDuration();
+        long position = Math.max(history.getPosition(), 0);
+        if (duration >= MIN_WATCHED_POSITION_MS) {
+            return position * 10 >= duration * 7; // ≥70%
         }
-        return history.getEpisode() > 0 ? history.getEpisode() + 1 : 0; // 选集下标从 0 起
+        return position >= MIN_WATCHED_POSITION_MS;
     }
 
     /**

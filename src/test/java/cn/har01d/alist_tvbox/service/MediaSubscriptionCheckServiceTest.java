@@ -5,6 +5,8 @@ import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.DeadLinkRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.History;
+import cn.har01d.alist_tvbox.entity.HistoryRepository;
 import cn.har01d.alist_tvbox.entity.IndexTemplateRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisode;
@@ -71,6 +73,74 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(5, service.parseEpisode("Show.S01E05.1080p.mkv", 1));
         assertEquals(-1, service.parseEpisode("Show.S01E05.1080p.mkv", 2));
         assertEquals(12, service.parseEpisode("剧名.S02E12.2160p.WEB-DL.mkv", 2));
+    }
+
+    // ---------- 进度感知的观看进度(2026-08-27):刚点开几十秒的试看不算看完 ----------
+    // 线上形态:33 集只看了几十秒就被算成"看完 33 集",追平标记被试看抬到 33,
+    // 用户回看时「还没看完的最后一集」从此不亮角标。当前集进度不足折算前一集。
+
+    @Test
+    void watchedEpisodeRequiresSubstantialProgress() {
+        HistoryRepository historyRepository = Mockito.mock(HistoryRepository.class);
+        MediaSubscriptionCheckService svc = watchService(historyRepository);
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setId(7);
+        subscription.setUid(1);
+
+        // 33 集只看几十秒(45 分钟一集)→ 折算 32,最后一集保持"未看完"
+        Mockito.when(historyRepository.findByUidAndVodId(1, "msub:7"))
+                .thenReturn(List.of(history(33, 30_000, 45 * 60_000L)));
+        assertEquals(32, svc.watchedEpisode(subscription));
+
+        // completed/看完:position 夹紧到 duration → 33
+        Mockito.when(historyRepository.findByUidAndVodId(1, "msub:7"))
+                .thenReturn(List.of(history(33, 45 * 60_000L, 45 * 60_000L)));
+        assertEquals(33, svc.watchedEpisode(subscription));
+
+        // 跳片头片尾的完整观看(24 分钟番在 5 分钟片尾处停止,79%)也算看完
+        Mockito.when(historyRepository.findByUidAndVodId(1, "msub:7"))
+                .thenReturn(List.of(history(33, 1_140_000, 24 * 60_000L)));
+        assertEquals(33, svc.watchedEpisode(subscription));
+    }
+
+    @Test
+    void watchedEpisodeFallsBackToAbsolutePosition() {
+        HistoryRepository historyRepository = Mockito.mock(HistoryRepository.class);
+        MediaSubscriptionCheckService svc = watchService(historyRepository);
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setId(7);
+        subscription.setUid(1);
+
+        // 时长未知:按绝对播放位置判 —— 位置小只可能发生在片头附近
+        Mockito.when(historyRepository.findByUidAndVodId(1, "msub:7"))
+                .thenReturn(List.of(history(33, 6 * 60_000L, 0)));
+        assertEquals(33, svc.watchedEpisode(subscription), "时长未知但已播 6 分钟:算看完");
+
+        Mockito.when(historyRepository.findByUidAndVodId(1, "msub:7"))
+                .thenReturn(List.of(history(33, 90_000, 0)));
+        assertEquals(32, svc.watchedEpisode(subscription), "时长未知只播 90 秒:折算前一集");
+
+        // 下标兜底路径(分盘线路/物理地址,无 msubep 逻辑标记)同折算规则
+        History indexed = new History();
+        indexed.setEpisode(10); // 选集下标从 0 起,第 11 集
+        indexed.setPosition(30_000);
+        indexed.setDuration(45 * 60_000L);
+        Mockito.when(historyRepository.findByUidAndVodId(1, "msub:7")).thenReturn(List.of(indexed));
+        assertEquals(10, svc.watchedEpisode(subscription));
+    }
+
+    private MediaSubscriptionCheckService watchService(HistoryRepository historyRepository) {
+        return new MediaSubscriptionCheckService(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                historyRepository, new AppProperties(), new ObjectMapper(), (MediaSubscriptionNotificationService) null);
+    }
+
+    private static History history(int episode, long positionMs, long durationMs) {
+        History history = new History();
+        history.setEpisodeUrl("/p/token/1@1$msubep-7-" + episode);
+        history.setPosition(positionMs);
+        history.setDuration(durationMs);
+        return history;
     }
 
     @Test
@@ -3249,6 +3319,9 @@ class MediaSubscriptionCheckServiceTest {
         cn.har01d.alist_tvbox.entity.History history = new cn.har01d.alist_tvbox.entity.History();
         history.setEpisodeUrl(episodeUrl);
         history.setUpdatedAt(updatedAt);
+        // 进度感知口径:播放行带足进度(completed 形态 position 夹紧 duration),裸 0/0 会被折算成前一集
+        history.setPosition(45 * 60_000L);
+        history.setDuration(45 * 60_000L);
         return history;
     }
 

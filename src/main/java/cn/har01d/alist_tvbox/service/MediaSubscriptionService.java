@@ -2288,6 +2288,8 @@ public class MediaSubscriptionService {
      * 最新集号登记为追平标记({@code caught_up_episode},读路径惰性维护,只升不降);此后
      * 新播出且未看的集计 "🆕N"(LISTED/VERIFIED 都算已播出;按集号去重,同集多资源行只计一次)。
      * 落后补看途中不亮灯 —— 还差几集没看的人不需要为最新一集亮一次(与通知门槛同哲学);
+     * 回看不回算 —— History 只存当前进度,追平后跳回前面集会把 watched 拉低,追平线以内的
+     * 集都是看过的旧集,须同时越过当前进度与追平线才算"新播出且未看";
      * 该集被播放后 watchedEpisode 追上,角标自动消除 —— vod_remarks 是 TVBox 协议里唯一
      * 保证被渲染的文本位。
      */
@@ -2316,7 +2318,10 @@ public class MediaSubscriptionService {
             if (subscription.getCaughtUpEpisode() == null) {
                 return null; // 从未追平:落后补看途中不出角标,追平后新播出的集才算"新"
             }
-            long unwatchedNew = live.stream().filter(number -> number > watched).distinct().count();
+            // 回看防护:History 当前进度在回跳后低于追平线(33集看完跳回11集),追平线以内的
+            // 集都是看过的旧集 —— "新播出且未看"必须同时越过当前进度与追平线,否则误报 🆕22。
+            int floor = Math.max(watched, subscription.getCaughtUpEpisode());
+            long unwatchedNew = live.stream().filter(number -> number > floor).distinct().count();
             return unwatchedNew > 0 ? "🆕" + unwatchedNew : null;
         } catch (Exception e) {
             log.debug("new episode badge failed: {}", e.getMessage());

@@ -67,6 +67,34 @@ class MediaSubscriptionRemarksTest {
     }
 
     @Test
+    void badgeNotCountedWhenRewoundToEarlierEpisode() {
+        // 线上形态:33集完结追平(标记33)后跳回前面集,History 当前进度掉到11 ——
+        // 12~33 是看过的旧集,不得误报 🆕22
+        subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        subscription.setCurrentEpisodes(33);
+        subscription.setCaughtUpEpisode(33);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(11);
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(java.util.stream.IntStream.rangeClosed(1, 33).boxed().toList());
+
+        assertEquals("33集完结", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
+    @Test
+    void badgeCountsOnlyEpisodesBeyondCaughtUpLineWhileRewatching() {
+        // 回看途中真有新集播出(34):只计追平线之外的 —— 🆕1 而不是 🆕23
+        subscription.setCurrentEpisodes(34);
+        subscription.setCaughtUpEpisode(33);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+        Mockito.when(checkService.watchedEpisode(subscription)).thenReturn(11);
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(java.util.stream.IntStream.rangeClosed(1, 34).boxed().toList());
+
+        assertEquals("🆕1 · 已更新至 34 集", service.contentList(1).getList().getFirst().getVod_remarks());
+    }
+
+    @Test
     void badgeHiddenWhileUserBehindBeforeEverCaughtUp() {
         // 线上诛仙形态:在看第1集、盘上已有3集,从未追平 —— 落后补看途中不亮灯,也不登记追平标记
         subscription.setCurrentEpisodes(3);
