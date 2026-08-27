@@ -911,6 +911,39 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(MediaSubscriptionCheckService.matchesTitle(List.of(), "随便什么标题"));
     }
 
+    // ---------- 线上事故回归:归一化后为空的别名打穿标题门禁 ----------
+    // 订阅航海王(线上 48):别名快照含 ワンピース/ون بيس/Едно Парче 等纯假名/阿拉伯/西里尔别名,
+    // normalizeForMatch 只留 [a-z0-9 汉字] → 这些别名归一化为空串,contains("") 恒真 +
+    // isChinese("") 空串真空真 → matchesTitle 对任意标题放行,「年8月16日 短剧更新目录1」
+    // 畅通入池并挂成主源,集数清单全是短剧文件。
+
+    @Test
+    void matchesTitleIgnoresAliasesThatNormalizeToEmpty() {
+        List<String> names = MediaSubscriptionCheckService.matchNames("航海王", "航海王", "海贼王\nワンピース\nون بيس\nONE PIECE");
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "海贼王(1999) 更新至1156集"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "ONE PIECE 1114-1136 1080P"));
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "年8月16日 短剧更新目录1"));
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "年8月11日 短剧更新目录8"));
+    }
+
+    /** 别名快照限幅 12 席不得被死别名挤占:归一化为空的别名 matchesTitle 永不命中,
+     *  白占席位会把「海贼王」这类常用旧译名挤出快照,旧译名分享反被标题门禁误杀(航海王线上案)。 */
+    @Test
+    void aliasSnapshotDropsUnmatchableAliases() throws Exception {
+        MetadataDetails details = new MetadataDetails();
+        details.setAliases(List.of("ون بيس", "Едно Парче", "ワンピース", "海贼王", "海賊王"));
+        MediaSubscription subscription = new MediaSubscription();
+        java.lang.reflect.Method snapshot = MediaSubscriptionCheckService.class
+                .getDeclaredMethod("applyMetadataSnapshot", MediaSubscription.class, MetadataDetails.class);
+        snapshot.setAccessible(true);
+        snapshot.invoke(service, subscription, details);
+
+        List<String> joined = List.of(subscription.getAliases().split("\\n"));
+        assertTrue(joined.contains("海贼王"), "常用旧译名必须保留");
+        assertFalse(joined.contains("ワンピース"), "归一化为空的死别名不得占用席位");
+        assertFalse(joined.contains("ون بيس"));
+    }
+
     // ---------- 线上事故回归:单字中文剧名 ----------
     // 订阅《蝉》(2026,name/keyword 均单字):元数据别名快照只留下英文名等 ≥2 字别名,
     // 单字中文名被长度门槛排除出匹配名单 → matchesTitle 只认别名,759 条搜索结果中

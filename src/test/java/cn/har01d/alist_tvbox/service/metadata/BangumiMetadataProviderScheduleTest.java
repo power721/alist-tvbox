@@ -100,6 +100,35 @@ class BangumiMetadataProviderScheduleTest {
         server.verify();
     }
 
+    /** 千集级连载(bgm 航海王 1191 集)必须翻过第 5 页:旧上限 5 页把分集截到 500,
+     *  桥接据此把官方总/已播钉死 500,千集级真资源反被集号门禁当同名异剧拦截(线上订阅 48)。 */
+    @Test
+    void episodesFetchBeyondFivePagesForLongRunningShows() throws Exception {
+        LocalDate aired = LocalDate.now(ZONE).minusDays(60);
+        int page = 0;
+        for (; page < 6; page++) { // 6 个满页(600 行),第 7 页 91 行收尾 → 691 行
+            StringBuilder body = new StringBuilder();
+            for (int i = 1; i <= 100; i++) {
+                body.append(episode(page * 100 + i, aired, "第" + (page * 100 + i) + "回")).append(',');
+            }
+            server.expect(once(), requestTo("https://api.bgm.tv/v0/episodes?subject_id=6000&limit=100&offset=" + (page * 100)))
+                    .andRespond(withSuccess("{\"data\":[" + body.substring(0, body.length() - 1) + "]}",
+                            MediaType.APPLICATION_JSON));
+        }
+        StringBuilder tail = new StringBuilder();
+        for (int i = 1; i <= 91; i++) {
+            tail.append(episode(600 + i, aired, "第" + (600 + i) + "回")).append(',');
+        }
+        server.expect(once(), requestTo("https://api.bgm.tv/v0/episodes?subject_id=6000&limit=100&offset=600"))
+                .andRespond(withSuccess("{\"data\":[" + tail.substring(0, tail.length() - 1) + "]}",
+                        MediaType.APPLICATION_JSON));
+
+        List<JsonNode> episodes = BangumiMetadataProvider.fetchEpisodePages(restTemplate, "6000");
+
+        assertEquals(691, episodes.size(), "6 个满页 + 91 行收尾:5 页旧上限会停在 500");
+        server.verify();
+    }
+
     /** 已播口径按播出时刻:当日 20:00 前刷新,当日集不算已播且是 nextAir(墙钟相关用例直测覆盖)。 */
     @Test
     void todayEpisodeAirsAtEightPm() throws Exception {

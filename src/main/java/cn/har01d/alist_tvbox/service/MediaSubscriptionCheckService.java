@@ -1499,10 +1499,13 @@ public class MediaSubscriptionCheckService {
         subscription.setOfficialStatus(details.getStatus());
         subscription.setNextAirTime(details.getNextAirTime());
         if (details.getAliases() != null) {
-            // 别名快照(换行分隔):标题归属匹配用;单条过长/为空的丢弃,总量限幅
+            // 别名快照(换行分隔):标题归属匹配用;单条过长/为空的丢弃,总量限幅。
+            // 归一化为空的死别名(纯假名/西里尔/阿拉伯文等)必须一并丢弃:matchesTitle 对它们
+            // 永不命中,白占 12 席会把「海贼王」这类常用旧译名挤出去,旧译名分享反被标题门禁误杀
             String joined = details.getAliases().stream()
                     .map(String::trim)
                     .filter(a -> a.length() >= 2 && a.length() <= 100)
+                    .filter(a -> !normalizeForMatch(a).isBlank())
                     .distinct()
                     .limit(12)
                     .reduce((a, b) -> a + "\n" + b)
@@ -4660,6 +4663,10 @@ public class MediaSubscriptionCheckService {
         }
         for (String name : names) {
             String n = normalizeForMatch(name);
+            if (n.isBlank()) {
+                continue; // 纯假名/西里尔/阿拉伯文等别名归一化后为空:contains("") 恒真、isChinese("") 真空真,
+                // 会放行一切标题把门禁整个打穿(线上:航海王别名 ワンピース/ون بيس 让「短剧更新目录」入池成主源)
+            }
             if ((n.length() >= 2 || TextUtils.isChinese(n)) && normalized.contains(n)) {
                 return true;
             }
