@@ -310,7 +310,14 @@
     </el-drawer>
 
     <el-drawer v-model="episodesVisible" :title="'集数清单 - ' + (current?.name || '')" size="52%">
-      <el-table :data="episodeItems" border v-loading="episodesLoading" max-height="600" row-key="episode">
+      <div class="episode-filter">
+        <el-radio-group v-model="episodeFilter" size="small">
+          <el-radio-button value="all">全部 {{ episodeItems.length }}</el-radio-button>
+          <el-radio-button value="present">有源 {{ episodePresentCount }}</el-radio-button>
+          <el-radio-button value="missing">缺失 {{ episodeMissingCount }}</el-radio-button>
+        </el-radio-group>
+      </div>
+      <el-table :data="filteredEpisodeItems" border v-loading="episodesLoading" max-height="600" row-key="episode">
         <el-table-column type="expand">
           <template #default="scope">
             <div v-if="scope.row.sources?.length" class="episode-matrix">
@@ -848,6 +855,11 @@ const resources = ref<ResourceDto[]>([])
 const episodesVisible = ref(false)
 const episodesLoading = ref(false)
 const episodeItems = ref<any[]>([])
+const episodeFilter = ref<'all' | 'present' | 'missing'>('all')
+const episodePresentCount = computed(() => episodeItems.value.filter(it => it.present).length)
+const episodeMissingCount = computed(() => episodeItems.value.length - episodePresentCount.value)
+const filteredEpisodeItems = computed(() => episodeFilter.value === 'all' ? episodeItems.value
+    : episodeItems.value.filter(it => !!it.present === (episodeFilter.value === 'present')))
 const eventsVisible = ref(false)
 const events = ref<EventDto[]>([])
 const detailVisible = ref(false)
@@ -1386,6 +1398,7 @@ const showEpisodes = (row: SubscriptionDto) => {
   current.value = row
   episodesVisible.value = true
   episodesLoading.value = true
+  episodeFilter.value = 'all'
   const my = ++episodesSeq
   axios.get(`/api/media-subscriptions/${row.id}/episodes`).then(response => {
     if (my !== episodesSeq) return
@@ -2174,6 +2187,10 @@ const formatClock = (time: number) => {
   display: flex;
   justify-content: center;
   margin-top: 14px;
+}
+
+.episode-filter {
+  margin-bottom: 10px;
 }
 
 .episode-matrix {

@@ -64,6 +64,8 @@ public class MediaSubscriptionService {
     /** 资源侧"可播集"状态口径:列目录见过(LISTED)或取链成功过(VERIFIED)的集源行 —— 详情装配与角标同源。 */
     private static final Set<String> LIVE_EPISODE_STATES = Set.of(
             MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED);
+    /** 网页集数清单/详情分集单次返回上限:防预期集数等脏数据撑爆响应;超长番(1200+ 集)不受影响 */
+    private static final int MAX_EPISODE_ROWS = 5000;
 
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionResourceRepository resourceRepository;
@@ -1641,7 +1643,7 @@ public class MediaSubscriptionService {
             base = Math.max(base, subscription.getExpectedEpisodes());
         }
         List<Map<String, Object>> result = new ArrayList<>();
-        for (int i = 1; i <= Math.min(base, 500); i++) {
+        for (int i = 1; i <= Math.min(base, MAX_EPISODE_ROWS); i++) {
             String source = sources.get(i);
             boolean present = source != null; // 可用性只认 LIVE 行;"源损坏"是展示文案,不是已有
             if (source == null && deadByEpisode.containsKey(i)) {
@@ -1759,7 +1761,7 @@ public class MediaSubscriptionService {
                                 subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes())));
         long now = System.currentTimeMillis();
         List<Map<String, Object>> episodeItems = new ArrayList<>();
-        for (int i = 1; i <= Math.min(base, 500); i++) {
+        for (int i = 1; i <= Math.min(base, MAX_EPISODE_ROWS); i++) {
             Map<String, Object> local = localByEpisode.get(i);
             cn.har01d.alist_tvbox.dto.EpisodeInfo info = metaEpisodes.get(i);
             MediaSubscriptionEpisode row = rows.get(i);
