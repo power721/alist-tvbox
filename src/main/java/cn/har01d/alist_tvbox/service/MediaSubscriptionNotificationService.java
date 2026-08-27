@@ -9,11 +9,11 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.service.metadata.MetadataHttp;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -77,6 +77,7 @@ public class MediaSubscriptionNotificationService {
     /** 同订阅处理互斥(入队即试发与兜底扫描并发时防重复编辑) */
     private final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
 
+    @Autowired
     public MediaSubscriptionNotificationService(MediaSubscriptionRepository subscriptionRepository,
                                                 MediaSubscriptionEventRepository eventRepository,
                                                 MediaSubscriptionNotifyTaskRepository taskRepository,

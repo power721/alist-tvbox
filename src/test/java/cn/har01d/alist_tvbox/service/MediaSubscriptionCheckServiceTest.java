@@ -117,6 +117,49 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(5, service.parseEpisode("Show.S01E05.2160p.mkv", 1));
     }
 
+    // ---------- 四位数集号(2026-08-27):长寿动漫集号早已过千,999 上限整目录拒识 ----------
+    // 线上事故(名侦探柯南,官方登记总 1212 集):百度主源 189 个文件全部四位集号命名
+    // (1173.mp4/1178国语.mp4/1245 4KHDR日语.mp4),999 上限下零识别;唯一"识别"出的 1 集
+    // 是剧场版子目录的电影文件(TrueHD.5.1 的 1 被末号规则当集号)—— 订阅显示 1 集。
+    // 修复:1000-9999 收入可信域,但年份形态(1900-2099,如 2024/2025)继续排除。
+
+    @Test
+    void fourDigitEpisodeNumbersAreRecognized() {
+        assertEquals(1173, service.parseEpisode("1173.mp4", null));
+        assertEquals(1178, service.parseEpisode("1178国语.mp4", null));
+        assertEquals(1194, service.parseEpisode("1194.国语.mp4", null));
+        assertEquals(1217, service.parseEpisode("1217国语4K.mp4", null));
+        assertEquals(1245, service.parseEpisode("1245 4KHDR日语.mp4", null));
+        assertEquals(1270, service.parseEpisode("1270 4KHDR国语.mp4", null));
+        assertEquals(1237, service.parseEpisode("1237-国语_4K.mp4", null));
+        assertEquals(1021, service.parseEpisode("1021.mp4", null));
+        assertEquals(1173, service.parseEpisode("Show.S01E1173.4K.mp4", 1));
+        assertEquals(1178, service.parseEpisodeFromTitle("1178 国语", null));
+    }
+
+    @Test
+    void yearShapedFourDigitNumbersStayRejected() {
+        assertEquals(-1, service.parseEpisode("Movie.2025.1080p.WEB-DL.HEVC.mkv", null));
+        // 剧场版电影名(2025.V2...TrueHD.5.1):剥 TrueHD/版本号/声道位后只剩年份形态 →
+        // 电影不再混进剧集清单冒充「第1集」
+        assertEquals(-1, service.parseEpisode("2025.V2.1080p.BluRay.Remux.AVC.TrueHD.5.1-Nest@ADE.mkv", null));
+        assertEquals(-1, service.parseEpisode(
+                "Detective.Conan.One-eyed.Flashback.2025.1080p.BluRay.Remux.AVC.TrueHD.5.1.mkv", null));
+        assertFalse(MediaSubscriptionCheckService.plausibleEpisodeNumber(2025));
+        assertTrue(MediaSubscriptionCheckService.plausibleEpisodeNumber(1270));
+        assertFalse(MediaSubscriptionCheckService.plausibleEpisodeNumber(10000));
+    }
+
+    @Test
+    void channelStripKeepsDateStampsAndEpisodeNumbers() {
+        // 声道位剥离带数字边界:单/双位月的日期戳不被吃掉,真实集号照常识别(缺陷 10 不回归)
+        assertEquals(5, service.parseEpisode("剧名 第05集 2026.8.21.mkv", null));
+        assertEquals(7, service.parseEpisode("剧名 第07集 2026年08月21日.mkv", null));
+        assertEquals(1, service.parseEpisode("01 [4K][HEVC.AAC][2026.08.21].mp4", null));
+        // 版本号剥离不伤正常集号(前置分隔符限定,词中 vN 不剥)
+        assertEquals(9, service.parseEpisode("show.09.v2.mp4", null));
+    }
+
     // ---------- 缺陷 12 回归:方括号技术标注段(夸克 4K 转码命名)不得污染集号 ----------
     // 线上事故(邻人可疑 2026,三集迷你剧):文件名「上集：喜迁新居，竟遇“诡”邻 [322155_maxplus_50fps_tv_6.72GB].mkv」
     // 末号规则取到体积 6.72 的 72,三集各成 45/60/72(maxEpisode=72),与官方 3 集对不上,详情页分集全缺失。
@@ -2073,6 +2116,35 @@ class MediaSubscriptionCheckServiceTest {
         subscription.setNextAirTime(System.currentTimeMillis() + 3600_000);
         assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 28)),
                 "有下集排播 = 未播完口径,容差内放行");
+    }
+
+    // ---------- 长寿剧登记滞后容差(2026-08-27):固定 +2 容差误杀千集动漫正确主源 ----------
+    // 线上事故(名侦探柯南):TMDB 登记总 1212,网盘实际更至 1270(滞后 58 集),集号门禁按
+    // "溢出 > 2 = 同名异剧" 把正确主源整体退役。登记滞后量级与体量相关:容差随总集数放大
+    // (每满 10 集容忍 1 集,下限 2),小体量区间(26 vs 37 真人版)判别力不变。
+
+    @Test
+    void episodeRangeGateToleratesLongShowRegistrationLag() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialTotal(1212);
+        subscription.setOfficialEpisodes(1210); // 未播完(RETURNING,有下集排播)
+        assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1173, 1270)),
+                "千集动漫登记滞后 58 集(≤ 体量容差 121):放行,线上柯南形态");
+        assertTrue(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 1400)),
+                "溢出 188 超出体量容差:仍判异剧拒");
+        assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, episodeRange(1, 1214)),
+                "溢出 2 在下限容差内:放行");
+    }
+
+    @Test
+    void titleProgressGateToleratesLongShowRegistrationLag() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialTotal(1212);
+        subscription.setOfficialEpisodes(1210);
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "名侦探柯南 更新至1270集"),
+                "宣称 1270 vs 登记 1212,滞后在体量容差内:放行");
+        assertTrue(MediaSubscriptionCheckService.titleProgressForeign(subscription, "名侦探柯南 更新至1400集"),
+                "宣称超出体量容差:拒");
     }
 
     @Test

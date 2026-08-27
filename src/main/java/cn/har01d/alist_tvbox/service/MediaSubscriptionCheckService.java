@@ -88,7 +88,7 @@ import java.util.regex.Pattern;
 public class MediaSubscriptionCheckService {
     /** 分享类型码(Message.type):网盘类;magnet/ed2k/video 候选直接丢弃 */
     private static final Set<String> PAN_TYPES = Set.of("0", "1", "2", "3", "5", "6", "7", "8", "9", "10", "12");
-    private static final Pattern SEASON_EPISODE = Pattern.compile("[Ss](\\d{1,2})[Ee](\\d{1,3})");
+    private static final Pattern SEASON_EPISODE = Pattern.compile("[Ss](\\d{1,2})[Ee](\\d{1,4})");
     private static final Pattern NUMBER = Pattern.compile("(\\d{1,4})");
     /** 全局主网盘 Setting key(逗号分隔分享类型码;订阅级 main_drives 覆盖) */
     public static final String MSUB_MAIN_DRIVES = "msub_main_drives";
@@ -97,10 +97,14 @@ public class MediaSubscriptionCheckService {
     /** 预告/花絮等非正片 */
     private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost)");
     /** 完结资源包形态:对追更中的订阅不会持续更新 */
-    private static final Pattern COMPLETE_PACK = Pattern.compile("全\\s*\\d{1,3}\\s*集|全集|完整版|已?完结");
-    /** 扫集号前先剥掉的技术标签(避免 1080/2160/4K 被当成集数) */
+    private static final Pattern COMPLETE_PACK = Pattern.compile("全\\s*\\d{1,4}\\s*集|全集|完整版|已?完结");
+    /** 扫集号前先剥掉的技术标签(避免 1080/2160/4K 被当成集数)。声道位/版本号必须一并剥:
+     * 剧场版电影常以 {@code 2025.V2.1080p.BluRay.Remux.AVC.TrueHD.5.1} 命名,不剥的话末号规则把
+     * {@code 5.1} 的 1 当集号,109 分钟的电影混进剧集清单冒充「第1集」(线上:柯南订阅唯一
+     * "识别"出的 1 集就是剧场版)。声道位带数字边界(前后都不是数字),日期戳 {@code 2026.08.21}
+     * 里的 {@code 6.0}/{@code 8.2} 不在剥离范围,日期戳剥除(缺陷 10)不受影响。 */
     private static final Pattern TECH_TAGS = Pattern.compile(
-            "(?i)(2160p|1080p|720p|480p|4k|8k|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|国语|粤语|中字|简体|繁体|双语|字幕)");
+            "(?i)(2160p|1080p|720p|480p|4k|8k|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|truehd|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|[.\\-_ ]v\\d{1,2}(?![a-z0-9])|(?<!\\d)\\d\\.\\d(?!\\d)|国语|粤语|中字|简体|繁体|双语|字幕)");
     /** 网盘限流/风控(非资源失效):百度 errno -62 = 验证次数过多;其余为通用限流措辞 */
     private static final Pattern THROTTLE_ERROR = Pattern.compile(
             "(?i)errno\"?\\s*:\\s*-62|验证次数过多|请稍[后候]|访问频繁|操作频繁|too many (requests|attempts)|rate.?limit|\\b429\\b");
@@ -109,7 +113,7 @@ public class MediaSubscriptionCheckService {
      * 体积 6.45 的 45 会被末号规则当集号,三集各解析成 45/60/72。 */
     private static final Pattern BRACKET_TECH_EXTRA = Pattern.compile("(?i)fps|maxplus|\\d+(?:\\.\\d+)?\\s*[gmtk]b?\\b|\\d{5,}");
     /** 方括号段里的显式集号标记:段内虽混有技术词但集号是明确写出的,不剔(如 {@code [第05集 1080P]}) */
-    private static final Pattern BRACKET_EPISODE_MARK = Pattern.compile("(?i)第\\s*\\d{1,3}\\s*集|[Ss]\\d{1,2}[Ee]\\d{1,3}|\\bep\\s*\\d{1,3}");
+    private static final Pattern BRACKET_EPISODE_MARK = Pattern.compile("(?i)第\\s*\\d{1,4}\\s*集|[Ss]\\d{1,2}[Ee]\\d{1,4}|\\bep\\s*\\d{1,4}");
     /** 上/中/下章节标记(集/篇/部):无数字集号时的集序推定,上=1 中=2 下=3。
      * 三集迷你剧常按「上集/中集/下集」命名且与 TMDB 的 S1E1-3 标题一一对应。 */
     private static final Pattern CHAPTER_MARK = Pattern.compile("([上中下])[集篇部]");
@@ -144,7 +148,7 @@ public class MediaSubscriptionCheckService {
     private static final Pattern SEASON_RANGE = Pattern.compile("第\\s*(\\d{1,2})\\s*[-~至]\\s*(\\d{1,2})\\s*季");
     /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
     private static final Pattern TITLE_PROGRESS = Pattern.compile(
-            "(?i)更新?至\\s*(\\d{1,3})|全\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*[-~至]\\s*(\\d{1,3})\\s*集|第\\s*(\\d{1,3})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,3})(?!\\d)");
+            "(?i)更新?至\\s*(\\d{1,4})|全\\s*(\\d{1,4})\\s*集|第\\s*(\\d{1,4})\\s*[-~至]\\s*(\\d{1,4})\\s*集|第\\s*(\\d{1,4})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,4})(?!\\d)");
     /** 标题/元数据里的年份(前后无数字边界,防 1080p/60fps/长数字段误配) */
     private static final Pattern YEAR_MARK = Pattern.compile("(?<!\\d)(19[89]\\d|20[0-2]\\d)(?!\\d)");
     private static final String INDEX_TEMPLATE_NAME = "追剧";
@@ -1739,7 +1743,9 @@ public class MediaSubscriptionCheckService {
      * 同名同季(线上:真人版「仙剑奇侠传三 2160P」37 集顶在动画版 26 集订阅上,maxEpisode=37
      * 还误判 ENDED),标题无年份无类型词,标题/年份门禁对这种形态全部放行 —— 探测出的集号
      * 范围是挂上后唯一可靠的区分信号。本季已播完(登记集数全播完)后再冒的集号不可能是本剧,
-     * 超出即拒;未播完允许 +2(TMDB 登记总集数滞后于实际排播)。官方总集数未知/无集号 → 放行。
+     * 超出即拒;未播完按登记体量放大容差(每满 10 集容忍 1 集,下限 2)—— TMDB 登记滞后量级
+     * 与剧集体量相关,千集级长寿动漫可落后数十集(线上:柯南登记总 1212,网盘实际更至 1270)。
+     * 官方总集数未知/无集号 → 放行。
      */
     static boolean episodeNumbersForeign(MediaSubscription subscription, Collection<Integer> numbers) {
         Integer total = subscription.getOfficialTotal();
@@ -1748,7 +1754,13 @@ public class MediaSubscriptionCheckService {
         }
         int max = numbers.stream().max(Integer::compareTo).orElse(0);
         int overflow = max - total;
-        return overflow > 0 && (subscription.isSeasonAiredOut() || overflow > 2);
+        return overflow > 0 && (subscription.isSeasonAiredOut() || overflow > registrationLagTolerance(total));
+    }
+
+    /** 未播完时的集号溢出容差:短剧 1-2 集(排播登记滞后),长寿剧随体量放大。
+     * 小体量区间(真人版 37 vs 动画版 26)容差仍是 2,原判别力不变。 */
+    static int registrationLagTolerance(int officialTotal) {
+        return Math.max(2, officialTotal / 10);
     }
 
     /** 非剧本内容(综艺/纪录/新闻/脱口秀):元数据对这类内容的季总集数登记天然不可靠
@@ -1805,7 +1817,7 @@ public class MediaSubscriptionCheckService {
 
     /**
      * 标题宣称集数门禁:「全37集」等宣称(TITLE_PROGRESS 各形态最大值)显著超出官方总集数
-     * (与探测集号同判据:已播完超出即拒/未播完容差 +2)—— 在入池/候选层就拦,不必等挂载探测。
+     * (与探测集号同判据:已播完超出即拒/未播完按登记体量放大容差)—— 在入池/候选层就拦,不必等挂载探测。
      * 标题带季标记/合集词时跳过:多季合一包宣称的是<b>跨季总数</b>(「鬼灭之刃 全52集 合集」装
      * 全部季),与同名异剧在标题层无法区分,交给探测层季过滤/集号门禁。
      */
@@ -1821,7 +1833,7 @@ public class MediaSubscriptionCheckService {
         if (claimed == null || claimed <= total) {
             return false;
         }
-        return subscription.isSeasonAiredOut() || claimed - total > 2;
+        return subscription.isSeasonAiredOut() || claimed - total > registrationLagTolerance(total);
     }
 
     /** 同 {@link #titleProgressForeign(MediaSubscription, String)},非剧本内容豁免:
@@ -3669,7 +3681,7 @@ public class MediaSubscriptionCheckService {
             if (season != null && season > 0 && season != s) {
                 return -1;
             }
-            return ep >= 1 && ep <= 999 ? ep : -1;
+            return ep >= 1 && ep <= 9999 ? ep : -1; // SxxEyy 是显式集标,四位集号直接信(柯南 S01E1173)
         }
         String cleaned = TECH_TAGS.matcher(base).replaceAll(" ");
         cleaned = DATE_STAMP.matcher(cleaned).replaceAll(" "); // 日期戳的月/日会被末号规则当成集号
@@ -3678,7 +3690,7 @@ public class MediaSubscriptionCheckService {
         while (numbers.find()) {
             try {
                 int value = Integer.parseInt(numbers.group(1));
-                if (value >= 1 && value <= 999) {
+                if (plausibleEpisodeNumber(value)) {
                     episode = value;
                 }
             } catch (NumberFormatException ignored) {
@@ -3686,6 +3698,17 @@ public class MediaSubscriptionCheckService {
             }
         }
         return episode > 0 ? episode : chapterNumber(cleaned);
+    }
+
+    /** 末号规则的集号可信域:1-999 直取;1000-9999 只收非年份形态(1900-2099 视为年份弃用)。
+     * 长寿动漫实际集号早已过千 —— 线上柯南(官方登记 1212 集)的百度主源 1173-1270 全部纯数字
+     * 命名(1173.mp4/1178国语.mp4),999 上限曾让 189 个文件零识别、订阅只剩 1 集;而四位年份
+     * (2024/2025)是文件名里唯一常见的四位数噪声,按年份区间排除即可两全。 */
+    static boolean plausibleEpisodeNumber(int value) {
+        if (value >= 1 && value <= 999) {
+            return true;
+        }
+        return value >= 1000 && value <= 9999 && (value < 1900 || value > 2099);
     }
 
     /** 播放列表显示标题(fixName 已剥公共前后缀)解析集号:剥掉的是集号前的公共前缀,
@@ -3706,14 +3729,14 @@ public class MediaSubscriptionCheckService {
             if (season != null && season > 0 && season != s) {
                 return -1;
             }
-            return ep >= 1 && ep <= 999 ? ep : -1;
+            return ep >= 1 && ep <= 9999 ? ep : -1;
         }
         String cleaned = TECH_TAGS.matcher(base).replaceAll(" ");
         Matcher numbers = NUMBER.matcher(cleaned);
         while (numbers.find()) {
             try {
                 int value = Integer.parseInt(numbers.group(1));
-                if (value >= 1 && value <= 999) {
+                if (plausibleEpisodeNumber(value)) {
                     return value;
                 }
             } catch (NumberFormatException ignored) {
