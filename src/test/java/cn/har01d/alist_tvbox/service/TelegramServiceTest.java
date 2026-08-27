@@ -439,6 +439,70 @@ class TelegramServiceTest {
         assertThat(messages).isEmpty();
     }
 
+    @Test
+    void listDoubanWebRewritesCoverToRelativeImageProxy() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+        String body = """
+                {"total":1,"items":[{"id":"36810153","title":"测试剧",
+                  "pic":{"normal":"https://img3.doubanio.com/view/photo/s_ratio_poster/public/p1.jpg"},
+                  "rating":{"count":100,"value":7.5}}]}
+                """;
+
+        server.expect(once(), request -> assertThat(request.getURI().getPath()).endsWith("/subject/recent_hot/tv"))
+                .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+        server.expect(once(), request -> assertThat(request.getURI().getPath()).endsWith("/subject/recent_hot/tv"))
+                .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        var webResult = service.listDouban("hot_tv", "web", null, null, null, null, 1, 20);
+        var spiderResult = service.listDouban("hot_tv", null, null, null, null, null, 1, 20);
+
+        assertThat(webResult.getList()).singleElement().satisfies(movie ->
+                assertThat(movie.getVod_pic()).isEqualTo("/images?url=https://img3.doubanio.com/view/photo/s_ratio_poster/public/p1.jpg"));
+        // TVBox spider 不带 ac,封面保持豆瓣直链
+        assertThat(spiderResult.getList()).singleElement().satisfies(movie ->
+                assertThat(movie.getVod_pic()).isEqualTo("https://img3.doubanio.com/view/photo/s_ratio_poster/public/p1.jpg"));
+        server.verify();
+    }
+
+    @Test
+    void listDoubanHotTvRegionUsesRecommendApiPerRegion() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getPath()).endsWith("/tv/recommend");
+                    // tags=电视剧,日本
+                    assertThat(request.getURI().getQuery()).contains("tags=%E7%94%B5%E8%A7%86%E5%89%A7%2C%E6%97%A5%E6%9C%AC");
+                })
+                .andRespond(withSuccess("""
+                        {"total":500,"items":[{"id":"1","title":"日剧",
+                          "pic":{"normal":"https://img1.doubanio.com/p1.jpg"},"rating":{"count":10,"value":8.0}}]}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getPath()).endsWith("/tv/recommend");
+                    // tags=电视剧,韩国 —— 不同地区各自请求,不落同一条缓存
+                    assertThat(request.getURI().getQuery()).contains("tags=%E7%94%B5%E8%A7%86%E5%89%A7%2C%E9%9F%A9%E5%9B%BD");
+                })
+                .andRespond(withSuccess("""
+                        {"total":500,"items":[{"id":"2","title":"韩剧",
+                          "pic":{"normal":"https://img2.doubanio.com/p2.jpg"},"rating":{"count":20,"value":7.0}}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        var japan = service.listDouban("hot_tv", "web", null, null, null, "日本", 1, 20);
+        var korea = service.listDouban("hot_tv", "web", null, null, null, "韩国", 1, 20);
+
+        assertThat(japan.getList()).singleElement().satisfies(movie -> {
+            assertThat(movie.getVod_name()).isEqualTo("日剧");
+            assertThat(movie.getVod_pic()).isEqualTo("/images?url=https://img1.doubanio.com/p1.jpg");
+        });
+        assertThat(korea.getList()).singleElement().satisfies(movie ->
+                assertThat(movie.getVod_name()).isEqualTo("韩剧"));
+        server.verify();
+    }
+
     private TelegramService createService(AppProperties appProperties, RestTemplate restTemplate, TelegramChannelRepository channelRepository) {
         return createService(appProperties, restTemplate, channelRepository, mock(RemoteSearchService.class));
     }
