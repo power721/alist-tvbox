@@ -696,6 +696,12 @@ public class SubscriptionService {
             overrideConfig(config, fixUrl(url.trim()), prefix, getConfigData(url.trim()));
         }
 
+        // 上游订阅的 spider 会在 overrideConfig 中直接写入全局字段,抢占 TVBox 唯一的主 spider 位,
+        // 导致本项目 spring.jar 不随订阅加载,其代理/播放同步等常驻服务不启动。
+        // 全局主 spider 固定为本项目 spring.jar;上游 spider 已在合并 sites 时降级为上游站点的 jar 属性。
+        // 用户在全局或订阅覆盖配置中显式指定 spider 时以用户为准(两处均在此后应用)。
+        config.put("spider", readHostAddress("/spring.jar"));
+
 //        injectCookies(config);
 
         sortSites(config, sort);
