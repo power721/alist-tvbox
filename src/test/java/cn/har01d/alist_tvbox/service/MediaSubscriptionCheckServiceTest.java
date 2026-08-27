@@ -143,6 +143,29 @@ class MediaSubscriptionCheckServiceTest {
         return history;
     }
 
+    // ---------- 长番缺集检测(2026-08-27):base 上限 500 误伤 1200+ 集长番 ----------
+    // 线上形态:柯南官方已播 1210、观测到 1270,computeMissing 的 base>500 保护整轮返回空,
+    // 27 个真实缺口(全部落在官方已播范围内)从未触发补缺。上限抬到与网页清单同口径 5000。
+
+    @Test
+    void computeMissingCoversLongSeriesBeyondFiveHundred() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialEpisodes(1210);
+        Set<Integer> present = IntStream.rangeClosed(1, 1270).boxed()
+                .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
+        present.removeAll(Set.of(257, 926, 1008));
+
+        assertEquals(Set.of(257, 926, 1008), service.computeMissing(subscription, present));
+    }
+
+    @Test
+    void computeMissingStillIgnoresAbsurdOfficialCount() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialEpisodes(9999);
+
+        assertTrue(service.computeMissing(subscription, Set.of(1, 2, 3)).isEmpty());
+    }
+
     @Test
     void chineseEpisodeSuffix() {
         assertEquals(3, service.parseEpisode("边水往事.第03集.4K.mkv", null));

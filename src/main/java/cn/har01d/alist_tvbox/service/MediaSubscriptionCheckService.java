@@ -1534,8 +1534,9 @@ public class MediaSubscriptionCheckService {
         if (subscription.getExpectedEpisodes() != null) {
             base = Math.max(base, subscription.getExpectedEpisodes());
         }
-        // base 上限保护:官方数据异常时不至于搜上百集
-        if (base <= 0 || base > 500) {
+        // base 上限保护:官方数据异常时不至于搜几千集(与网页清单 MAX_EPISODE_ROWS 同口径,
+        // 旧值 500 把柯南这类 1200+ 集长番的缺集检测整轮废掉 —— 27 个真实缺口从未触发补缺)
+        if (base <= 0 || base > MediaSubscriptionService.MAX_EPISODE_ROWS) {
             return Set.of();
         }
         Set<Integer> missing = new TreeSet<>();

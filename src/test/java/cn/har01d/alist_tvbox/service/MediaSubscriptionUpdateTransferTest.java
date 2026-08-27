@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.MediaSubscriptionDto;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
@@ -12,7 +13,10 @@ import org.mockito.Mockito;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -95,5 +99,25 @@ class MediaSubscriptionUpdateTransferTest {
         service.update(1, 3, request);
 
         verify(transferService, never()).transferAsync(anyInt(), anyInt());
+    }
+
+    // ---------- 长番缺口提示(2026-08-27):expected 未配时「缺第 X 集」整个丢失 ----------
+    // 线上形态:柯南 expectedEpisodes=null,旧 missingEpisodes 只认 expected 直接返回空,
+    // 列表页从不显示缺口提示 —— 用户只能进集数清单肉眼找 27 个缺口。
+    // 新口径与巡检 computeMissing 对齐:官方已播/期望/观测最大集号取大为范围。
+
+    @Test
+    void dtoMissingEpisodesFallBackToObservedRangeWithoutExpected() {
+        MediaSubscription sub = subscription(MediaSubscription.MODE_FOLLOW, "[]");
+        sub.setExpectedEpisodes(null);
+        sub.setOfficialEpisodes(1210);
+        sub.setMaxEpisode(1270);
+        sub.setCurrentEpisodes(1243);
+        when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(anyInt(), anyCollection()))
+                .thenReturn(IntStream.rangeClosed(1, 1270).filter(n -> n != 257 && n != 926).boxed().toList());
+
+        MediaSubscriptionDto dto = service.toDto(sub);
+
+        assertEquals(List.of(257, 926), dto.getMissingEpisodes());
     }
 }

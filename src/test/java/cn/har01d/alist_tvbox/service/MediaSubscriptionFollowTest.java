@@ -34,9 +34,10 @@ class MediaSubscriptionFollowTest {
 
     private final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
     private final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
+    private final MediaSubscriptionEpisodeSourceRepository episodeSourceRepository = Mockito.mock(MediaSubscriptionEpisodeSourceRepository.class);
     private final MediaSubscriptionCheckService checkService = Mockito.mock(MediaSubscriptionCheckService.class);
     private final MediaSubscriptionService service = new MediaSubscriptionService(
-            subscriptionRepository, resourceRepository, null, null, null, null, null, null, null, null, null,
+            subscriptionRepository, resourceRepository, null, null, episodeSourceRepository, null, null, null, null, null, null,
             checkService, null, null, new AppProperties(), new ObjectMapper(), null, null);
 
     private MediaSubscription subscription() {

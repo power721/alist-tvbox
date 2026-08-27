@@ -64,8 +64,9 @@ public class MediaSubscriptionService {
     /** 资源侧"可播集"状态口径:列目录见过(LISTED)或取链成功过(VERIFIED)的集源行 —— 详情装配与角标同源。 */
     private static final Set<String> LIVE_EPISODE_STATES = Set.of(
             MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED);
-    /** 网页集数清单/详情分集单次返回上限:防预期集数等脏数据撑爆响应;超长番(1200+ 集)不受影响 */
-    private static final int MAX_EPISODE_ROWS = 5000;
+    /** 网页集数清单/详情分集单次返回上限:防预期集数等脏数据撑爆响应;超长番(1200+ 集)不受影响。
+     *  巡检缺集检测(computeMissing)同用此上限 —— 集号超过它的长番与展示层口径一致。 */
+    static final int MAX_EPISODE_ROWS = 5000;
 
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionResourceRepository resourceRepository;
@@ -1720,12 +1721,15 @@ public class MediaSubscriptionService {
         media.put("officialTotal", subscription.getOfficialTotal());
         media.put("officialStatus", subscription.getOfficialStatus());
         media.put("nextAirTime", subscription.getNextAirTime());
+        // 观测最大集号一并参与取大:官方统计滞后于资源现实时(柯南官方 1212/资源已到 1270),
+        // 详情页"已播/共"不能倒挂在本地集数之下
+        int observedMax = subscription.getMaxEpisode() == null ? 0 : subscription.getMaxEpisode();
         int metaTotal = details == null || details.getTotalEpisodes() == null ? 0 : details.getTotalEpisodes();
-        media.put("totalEpisodes", Math.max(metaTotal,
-                subscription.getOfficialTotal() == null ? 0 : subscription.getOfficialTotal()));
+        media.put("totalEpisodes", Math.max(Math.max(metaTotal,
+                subscription.getOfficialTotal() == null ? 0 : subscription.getOfficialTotal()), observedMax));
         int metaAired = details == null || details.getAiredEpisodes() == null ? 0 : details.getAiredEpisodes();
-        media.put("airedEpisodes", Math.max(metaAired,
-                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes()));
+        media.put("airedEpisodes", Math.max(Math.max(metaAired,
+                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes()), observedMax));
         result.put("media", media);
 
         // 分集合并:本地清单(已有/来源,含转存/主源/补缺)+ 元数据分集(标题/播出时间/剧照/简介)+ 分集行 + 日程快照
@@ -2411,11 +2415,8 @@ public class MediaSubscriptionService {
     }
 
     private List<Integer> missingEpisodes(MediaSubscription subscription) {
-        Integer expected = subscription.getExpectedEpisodes();
-        if (expected == null || expected <= 0) {
-            return List.of();
-        }
-        // 本地已有集来自集源行聚合(LIVE 并集);无行(首轮巡检前)按 currentEpisodes 计
+        // 与巡检 computeMissing 同口径:官方已播/期望/观测最大集号取大为范围 ——
+        // 只认 expectedEpisodes 时,未配期望的长番(柯南 expected=null)永远拿不到缺口提示
         Set<Integer> present = episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(subscription.getId(),
                 LIVE_EPISODE_STATES)
                 .stream().collect(java.util.stream.Collectors.toSet());
@@ -2424,8 +2425,19 @@ public class MediaSubscriptionService {
                 present.add(i);
             }
         }
+        int base = present.stream().max(Integer::compareTo).orElse(0);
+        if (subscription.getOfficialEpisodes() != null) {
+            base = Math.max(base, subscription.getOfficialEpisodes());
+        }
+        Integer expected = subscription.getExpectedEpisodes();
+        if (expected != null) {
+            base = Math.max(base, expected);
+        }
+        if (base <= 0 || base > MAX_EPISODE_ROWS) {
+            return List.of();
+        }
         List<Integer> missing = new ArrayList<>();
-        for (int i = 1; i <= expected; i++) {
+        for (int i = 1; i <= base; i++) {
             if (!present.contains(i)) {
                 missing.add(i);
             }

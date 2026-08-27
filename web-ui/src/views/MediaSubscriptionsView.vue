@@ -98,7 +98,7 @@
           </el-table-column>
           <el-table-column label="进度" width="170">
             <template #default="scope">
-              <span>{{ scope.row.currentEpisodes ?? 0 }}{{ scope.row.officialTotal ? ' / ' + scope.row.officialTotal : (scope.row.expectedEpisodes ? ' / ' + scope.row.expectedEpisodes : '') }} 集</span>
+              <span>{{ scope.row.currentEpisodes ?? 0 }}{{ progressTotal(scope.row) ? ' / ' + progressTotal(scope.row) : '' }} 集</span>
               <div class="sub-text danger" v-if="scope.row.missingEpisodes && scope.row.missingEpisodes.length">
                 缺第 {{ compactNumbers(scope.row.missingEpisodes) }} 集
               </div>
@@ -1753,6 +1753,10 @@ const compactNumbers = (numbers: number[]) => {
   if (numbers.length <= 6) return numbers.join(',')
   return numbers.slice(0, 6).join(',') + ` 等${numbers.length}集`
 }
+
+/** 进度分母:官方总集数滞后于资源现实时(长番官方 1212/本地已到 1270)以观测最大集号兜底,避免 1243/1212 倒挂 */
+const progressTotal = (row: SubscriptionDto): number | null =>
+    Math.max(row.officialTotal ?? 0, row.expectedEpisodes ?? 0, row.maxEpisode ?? 0) || null
 
 const formatTime = (time: number | null) => {
   if (!time) return '-'
