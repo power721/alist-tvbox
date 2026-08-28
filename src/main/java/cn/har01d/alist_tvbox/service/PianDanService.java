@@ -301,6 +301,64 @@ public class PianDanService {
         return "lite".equalsIgnoreCase(mode) ? "lite" : "all";
     }
 
+    /**
+     * 片单参与 App 全局搜索:TMDB multi 搜索,返回普通条目(App 聚合搜索结果直接展示),
+     * vod_id 沿用片单的 TMDB 导航形态,不使用 msearch 快捷搜索标记。
+     */
+    public MovieList search(String wd, int page, int size) {
+        int safePage = Math.min(TMDB_MAX_PAGE, Math.max(1, page));
+        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(TMDB_API + "/search/multi")
+                .queryParam("api_key", apiKey())
+                .queryParam("language", "zh-CN")
+                .queryParam("include_adult", false)
+                .queryParam("query", wd)
+                .queryParam("page", safePage);
+        try {
+            String json = fetchTmdb(uri.build().encode().toUriString());
+            JsonNode body = StringUtils.isBlank(json) ? null : objectMapper.readTree(json);
+            if (body == null || !body.path("results").isArray()) {
+                return emptyList(safePage, size);
+            }
+            List<MovieDetail> items = new ArrayList<>();
+            for (JsonNode item : body.path("results")) {
+                String mediaType = item.path("media_type").asText("");
+                if (!"movie".equals(mediaType) && !"tv".equals(mediaType)) {
+                    continue;
+                }
+                String title = firstNotBlank(item.path("title").asText(""), item.path("name").asText(""));
+                if (StringUtils.isBlank(title)) {
+                    continue;
+                }
+                String date = firstNotBlank(item.path("release_date").asText(""), item.path("first_air_date").asText(""));
+                String year = date.length() >= 4 ? date.substring(0, 4) : "";
+                MovieDetail movie = new MovieDetail();
+                movie.setVod_id(TMDB_PREFIX + mediaType + ":" + item.path("id").asInt(0));
+                movie.setVod_name(title);
+                String poster = firstNotBlank(item.path("poster_path").asText(""), item.path("backdrop_path").asText(""));
+                if (StringUtils.isNotBlank(poster)) {
+                    movie.setVod_pic(TMDB_IMAGE + poster);
+                }
+                movie.setVod_year(year);
+                movie.setType_name("movie".equals(mediaType) ? "电影" : "剧集");
+                movie.setVod_remarks(remarks(year, item.path("vote_average").asDouble(0)));
+                items.add(movie);
+                if (items.size() >= size) {
+                    break;
+                }
+            }
+            MovieList result = new MovieList();
+            result.setList(items);
+            result.setPage(body.path("page").asInt(safePage));
+            result.setPagecount(Math.min(TMDB_MAX_PAGE, Math.max(1, body.path("total_pages").asInt(1))));
+            result.setTotal(body.path("total_results").asInt(items.size()));
+            result.setLimit(items.size());
+            return result;
+        } catch (RestClientException | JsonProcessingException e) {
+            log.warn("pian-dan search failed: {}", wd, e);
+            return emptyList(safePage, size);
+        }
+    }
+
     public MovieList list(String type, String ac, int page, int size, Map<String, String> filters) {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, size);

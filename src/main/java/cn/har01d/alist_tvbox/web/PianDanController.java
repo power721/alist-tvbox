@@ -20,20 +20,25 @@ public class PianDanController {
     @GetMapping("/pian-dan")
     public Object browse(String t,
                          String ac,
+                         String wd,
                          @RequestParam(required = false, defaultValue = "1") int pg,
                          @RequestParam(required = false, defaultValue = "20") int size,
                          @RequestParam Map<String, String> filters) {
-        return browse("", t, ac, pg, size, filters);
+        return browse("", t, ac, wd, pg, size, filters);
     }
 
     @GetMapping("/pian-dan/{token}")
     public Object browse(@PathVariable String token,
                          String t,
                          String ac,
+                         String wd,
                          @RequestParam(required = false, defaultValue = "1") int pg,
                          @RequestParam(required = false, defaultValue = "20") int size,
                          @RequestParam Map<String, String> filters) {
         subscriptionService.checkToken(token);
+        if (StringUtils.isNotBlank(wd)) {
+            return pianDanService.search(wd, pg, size);
+        }
         if (StringUtils.isBlank(t)) {
             return pianDanService.category();
         }
