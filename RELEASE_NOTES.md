@@ -1,4 +1,4 @@
-# Release Notes - 1.60.0
+# Release Notes - 1.60.1
 
 ## 新增
 
