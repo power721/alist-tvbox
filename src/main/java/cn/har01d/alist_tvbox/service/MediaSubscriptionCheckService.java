@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.domain.DriveId;
 import cn.har01d.alist_tvbox.dto.EpisodeAirDate;
 import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionFilter;
+import cn.har01d.alist_tvbox.dto.MediaSubscriptionPoolFilter;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.tg.Message;
@@ -94,6 +95,9 @@ public class MediaSubscriptionCheckService {
     public static final String MSUB_MAIN_DRIVES = "msub_main_drives";
     /** 全局扩展网盘 Setting key(逗号分隔分享类型码):主网盘以外允许入候选池的盘,未配置时候选仅收主网盘 */
     public static final String MSUB_EXTENDED_DRIVES = "msub_extended_drives";
+    /** 全局资源筛选 Setting key(单行 JSON → {@link MediaSubscriptionPoolFilter}):包含/排除词、
+     * 清晰度门槛、单集体积上下限,入池/候选复筛/集文件体积策略三处消费,订阅级显式配置优先 */
+    public static final String MSUB_POOL_FILTER = "msub_pool_filter";
     /** 预告/花絮等非正片 */
     private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost)");
     /** 完结资源包形态:对追更中的订阅不会持续更新 */
@@ -1685,19 +1689,24 @@ public class MediaSubscriptionCheckService {
      * (「悬案」2026 vs「悬案解码 Dept. Q (2025)」)不再被逐个试挂;
      * 附标题宣称集数/版本词门禁 —— 宣称集数显著超出官方总集数(真人版「全37集」包)、
      * 动画订阅的显式「真人版」资源在此出局(探测前拦截,省一轮挂载试错);
-     * 附盘白名单 —— 配置了主/扩展网盘后,白名单以外盘的存量候选不再被探测/换源/补线。 */
+     * 附盘白名单 —— 配置了主/扩展网盘后,白名单以外盘的存量候选不再被探测/换源/补线;
+     * 附全局资源筛选(msub_pool_filter)—— 排除词/包含词/清晰度门槛对存量候选同样生效,
+     * 配置收紧后池内已有资源不再被选为主源(已挂载主源不经此路径,靠自然失效换源淘汰)。 */
     List<MediaSubscriptionResource> candidatesOrdered(MediaSubscription subscription) {
         long now = System.currentTimeMillis();
         Integer metaYear = metaYear(subscription);
         List<String> names = matchNames(subscription);
         List<String> genres = metaGenres(subscription);
         Set<String> allowedDrives = allowedCandidateDrives(subscription);
+        MediaSubscriptionPoolFilter global = globalPoolFilter();
         return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
                 .filter(r -> !MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState()))
                 .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()) || isBadCooled(r, now))
                 .filter(r -> titleYearMatches(metaYear, names, r.getTitle()))
                 .filter(r -> !titleProgressForeign(subscription, r.getTitle(), genres) && !liveActionForeign(genres, r.getTitle()))
                 .filter(r -> driveAllowed(allowedDrives, r.getType() == null ? null : DriveId.toDrive(r.getType())))
+                .filter(r -> !matchesKeywords(r.getTitle(), global.getExcludeKeywords()))
+                .filter(r -> globallyIncluded(global, r.getTitle()) && qualityAboveFloor(global, r.getTitle()))
                 .toList();
     }
 
@@ -2698,6 +2707,55 @@ public class MediaSubscriptionCheckService {
         return allowed.isEmpty() || (drive != null && allowed.contains(drive));
     }
 
+    /** 全局资源筛选(Setting msub_pool_filter 单行 JSON):即读即用,坏配置/未配置回落空对象(全部门禁关闭),不炸巡检。 */
+    MediaSubscriptionPoolFilter globalPoolFilter() {
+        String raw = settingRepository.findById(MSUB_POOL_FILTER).map(s -> s.getValue()).orElse("");
+        if (StringUtils.isBlank(raw)) {
+            return new MediaSubscriptionPoolFilter();
+        }
+        try {
+            MediaSubscriptionPoolFilter filter = objectMapper.readValue(raw, MediaSubscriptionPoolFilter.class);
+            filter.normalize();
+            return filter;
+        } catch (Exception e) {
+            log.warn("parse {} failed: {}", MSUB_POOL_FILTER, e.getMessage());
+            return new MediaSubscriptionPoolFilter();
+        }
+    }
+
+    /** 全局包含词硬门禁:配置非空时标题须至少包含其一;空 = 不限。 */
+    static boolean globallyIncluded(MediaSubscriptionPoolFilter global, String title) {
+        return global.getIncludeKeywords() == null || global.getIncludeKeywords().isEmpty()
+                || matchesKeywords(title, global.getIncludeKeywords());
+    }
+
+    /** 清晰度门槛:仅拒标题<b>明确标注</b>低于门槛的资源;未标注放行(挂载前无从判断,避免误杀召回)。 */
+    static boolean qualityAboveFloor(MediaSubscriptionPoolFilter global, String title) {
+        String floor = MediaSubscriptionPoolFilter.normalizeQuality(global.getMinQuality());
+        if (floor.isEmpty()) {
+            return true;
+        }
+        String quality = titleQuality(title);
+        return quality == null || QUALITY_RANK.get(quality) >= QUALITY_RANK.get(floor);
+    }
+
+    /** 标题标注的清晰度档位:uhd(4K/2160)> fhd(1080)> hd(720);未标注返回 null(门槛放行、打分不加)。 */
+    static String titleQuality(String title) {
+        if (StringUtils.containsIgnoreCase(title, "4K") || StringUtils.containsIgnoreCase(title, "2160")) {
+            return "uhd";
+        }
+        if (StringUtils.containsIgnoreCase(title, "1080")) {
+            return "fhd";
+        }
+        if (StringUtils.containsIgnoreCase(title, "720")) {
+            return "hd";
+        }
+        return null;
+    }
+
+    /** 清晰度档位序:hd(720P)=1 < fhd(1080P)=2 < uhd(4K)=3 */
+    private static final Map<String, Integer> QUALITY_RANK = Map.of("hd", 1, "fhd", 2, "uhd", 3);
+
     /** 当前主源所在盘(主源资源行的分享类型;旧数据无 type 返回 null)。 */
     String activeDrive(MediaSubscription subscription) {
         MediaSubscriptionResource primary = primaryResource(subscription);
@@ -3522,13 +3580,17 @@ public class MediaSubscriptionCheckService {
         return siteRepository.findById(1).orElseThrow();
     }
 
-    /** 订阅的单集大小上限(字节);未配置返回 0 = 不限。 */
+    /** 订阅的单集大小上限(字节):订阅级显式配置优先,否则回退全局 msub_pool_filter;均未配置返回 0 = 不限。 */
     long maxEpisodeBytes(MediaSubscription subscription) {
         MediaSubscriptionFilter filter = parseFilter(subscription);
-        if (filter == null || filter.getMaxEpisodeSizeMb() == null || filter.getMaxEpisodeSizeMb() <= 0) {
+        Integer maxMb = filter == null ? null : filter.getMaxEpisodeSizeMb();
+        if (maxMb == null || maxMb <= 0) {
+            maxMb = globalPoolFilter().getMaxEpisodeSizeMb();
+        }
+        if (maxMb == null || maxMb <= 0) {
             return 0;
         }
-        return (long) filter.getMaxEpisodeSizeMb() * 1024 * 1024;
+        return (long) maxMb * 1024 * 1024;
     }
 
     /**
@@ -3540,7 +3602,11 @@ public class MediaSubscriptionCheckService {
      * 底线,直接覆盖。
      */
     EpisodeSizePolicy episodeSizePolicy(MediaSubscription subscription) {
-        long floor = (long) appProperties.getSubscription().getMinEpisodeSizeMb() * 1024 * 1024;
+        MediaSubscriptionPoolFilter global = globalPoolFilter();
+        // 全局下限(未配置沿用部署默认 20MB 垃圾/样片防护线)
+        long floorMb = global.getMinEpisodeSizeMb() != null && global.getMinEpisodeSizeMb() > 0
+                ? global.getMinEpisodeSizeMb() : appProperties.getSubscription().getMinEpisodeSizeMb();
+        long floor = floorMb * 1024 * 1024;
         long preferred = 0;
         MediaSubscriptionFilter filter = parseFilter(subscription);
         Integer minMb = filter == null ? null : filter.getMinEpisodeSizeMb();
@@ -4018,6 +4084,7 @@ public class MediaSubscriptionCheckService {
         }
 
         MediaSubscriptionFilter filter = parseFilter(subscription);
+        MediaSubscriptionPoolFilter global = globalPoolFilter();
         List<String> names = matchNames(subscription);
         Integer metaYear = metaYear(subscription);
         List<String> genres = metaGenres(subscription);
@@ -4038,8 +4105,17 @@ public class MediaSubscriptionCheckService {
                 continue;
             }
             String title = StringUtils.defaultIfBlank(message.getName(), message.getLink());
-            if (matchesKeywords(title, filter == null ? null : filter.getExcludeKeywords())) {
-                audit.drop(PoolDrop.EXCLUDED, title);
+            if (matchesKeywords(title, filter == null ? null : filter.getExcludeKeywords())
+                    || matchesKeywords(title, global.getExcludeKeywords())) {
+                audit.drop(PoolDrop.EXCLUDED, title); // 订阅级与全局排除词并集:命中任一即拒
+                continue;
+            }
+            if (!globallyIncluded(global, title)) {
+                audit.drop(PoolDrop.INCLUDE, title); // 全局包含词硬门禁:配置非空时标题须至少含其一
+                continue;
+            }
+            if (!qualityAboveFloor(global, title)) {
+                audit.drop(PoolDrop.QUALITY, title); // 标题明确标注低于全局清晰度门槛;未标注放行
                 continue;
             }
             if (activeLink != null && activeLink.equals(message.getLink())) {
@@ -4207,6 +4283,8 @@ public class MediaSubscriptionCheckService {
         NON_PAN("非网盘结果", false),
         OFF_POOL("非白名单盘", false),
         EXCLUDED("命中排除词", true),
+        INCLUDE("缺包含词", true),
+        QUALITY("清晰度不足", true),
         TITLE("剧名不符", true),
         YEAR("年份不符", true),
         FOREIGN("异剧形态", true),
@@ -4289,6 +4367,7 @@ public class MediaSubscriptionCheckService {
         List<Map<String, Object>> result = new ArrayList<>();
         List<String> names = matchNames(keyword, keyword, null);
         Set<String> allowedDrives = allowedCandidateDrives(null);
+        MediaSubscriptionPoolFilter global = globalPoolFilter();
         for (Message message : messages) {
             if (StringUtils.isBlank(message.getLink()) || !PAN_TYPES.contains(StringUtils.defaultString(message.getType()))) {
                 continue;
@@ -4297,7 +4376,11 @@ public class MediaSubscriptionCheckService {
                 continue;
             }
             String title = StringUtils.defaultIfBlank(message.getName(), message.getLink());
-            if (matchesKeywords(title, filter == null ? null : filter.getExcludeKeywords())) {
+            if (matchesKeywords(title, filter == null ? null : filter.getExcludeKeywords())
+                    || matchesKeywords(title, global.getExcludeKeywords())) {
+                continue;
+            }
+            if (!globallyIncluded(global, title) || !qualityAboveFloor(global, title)) {
                 continue;
             }
             if (!names.isEmpty() && !matchesTitle(names, title)) {
@@ -4333,6 +4416,7 @@ public class MediaSubscriptionCheckService {
             Map.entry("quality.uhd", 25),      // 4K/2160
             Map.entry("quality.fhd", 15),      // 1080P
             Map.entry("quality.hd", 8),        // 720P
+            Map.entry("quality.prefer", 10),   // 命中订阅级「清晰度」关键词(此前后端从未消费,只存不读)
             Map.entry("drive.prefer", 20),     // 盘类型偏好(首位满分,每降一位 -5,下限 5)
             Map.entry("drive.outside", -10),   // 偏好之外的盘(降权不硬过滤)
             Map.entry("account", 8),           // 已配置该盘账号
@@ -4381,18 +4465,21 @@ public class MediaSubscriptionCheckService {
                 reasons.add("较旧+" + w);
             }
         }
-        if (StringUtils.containsIgnoreCase(title, "4K") || StringUtils.containsIgnoreCase(title, "2160")) {
-            int w = weight(filter, "quality.uhd");
+        String quality = titleQuality(title);
+        if (quality != null) {
+            int w = weight(filter, "quality." + quality);
             result += w;
-            reasons.add("4K+" + w);
-        } else if (StringUtils.containsIgnoreCase(title, "1080")) {
-            int w = weight(filter, "quality.fhd");
-            result += w;
-            reasons.add("1080P+" + w);
-        } else if (StringUtils.containsIgnoreCase(title, "720")) {
-            int w = weight(filter, "quality.hd");
-            result += w;
-            reasons.add("720P+" + w);
+            reasons.add((quality.equals("uhd") ? "4K" : quality.equals("fhd") ? "1080P" : "720P") + "+" + w);
+        }
+        if (filter != null && filter.getQualities() != null) {
+            for (String keyword : filter.getQualities()) {
+                if (StringUtils.isNotBlank(keyword) && StringUtils.containsIgnoreCase(title, keyword)) {
+                    int w = weight(filter, "quality.prefer");
+                    result += w;
+                    reasons.add("清晰度偏好+" + w);
+                    break;
+                }
+            }
         }
         if (filter != null && filter.getDriveTypes() != null && message.getType() != null) {
             try {
@@ -4580,7 +4667,7 @@ public class MediaSubscriptionCheckService {
         return vip;
     }
 
-    private boolean matchesKeywords(String title, List<String> keywords) {
+    private static boolean matchesKeywords(String title, List<String> keywords) {
         if (keywords == null) {
             return false;
         }

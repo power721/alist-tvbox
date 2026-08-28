@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.DanmakuConfig;
+import cn.har01d.alist_tvbox.dto.MediaSubscriptionPoolFilter;
 import cn.har01d.alist_tvbox.dto.SearchSetting;
 import cn.har01d.alist_tvbox.dto.backup.BackupRestoreMode;
 import cn.har01d.alist_tvbox.dto.backup.BackupRestoreResponse;
@@ -604,6 +605,11 @@ public class SettingService {
             appProperties.setDanmakuConfig(danmakuConfig);
             setting.setValue(writeDanmakuConfig(danmakuConfig));
         }
+        if (MediaSubscriptionCheckService.MSUB_POOL_FILTER.equals(setting.getName())) {
+            // 同款归一化回写;巡检侧即读即用(无缓存),下轮巡检生效
+            MediaSubscriptionPoolFilter poolFilter = parsePoolFilter(setting.getValue());
+            setting.setValue(writePoolFilter(poolFilter));
+        }
         if ("delete_delay_time".equals(setting.getName())) {
             aListLocalService.updateSetting("delete_delay_time", setting.getValue(), "number");
         }
@@ -734,6 +740,29 @@ public class SettingService {
             return objectMapper.writeValueAsString(config);
         } catch (Exception e) {
             log.warn("serialize danmaku config failed", e);
+            return "{}";
+        }
+    }
+
+    private MediaSubscriptionPoolFilter parsePoolFilter(String value) {
+        try {
+            MediaSubscriptionPoolFilter config = objectMapper.readValue(value, MediaSubscriptionPoolFilter.class);
+            if (config == null) {
+                return new MediaSubscriptionPoolFilter();
+            }
+            config.normalize();
+            return config;
+        } catch (Exception e) {
+            log.warn("parse msub pool filter failed: {}", value, e);
+            return new MediaSubscriptionPoolFilter();
+        }
+    }
+
+    private String writePoolFilter(MediaSubscriptionPoolFilter config) {
+        try {
+            return objectMapper.writeValueAsString(config);
+        } catch (Exception e) {
+            log.warn("serialize msub pool filter failed", e);
             return "{}";
         }
     }

@@ -515,6 +515,22 @@ PlaylistMerger 按集号合并多个源的清单:**转存副本(如有) > 主源
 | userSearchQuotaPerDay | 100 | 每用户每日搜索额度(全局搜索预算保护) |
 | keepTempSharesHours | 复用现有 | 补集临时挂载沿用 `tempShareExpiration` |
 
+### 11.1 全局资源筛选(msub_pool_filter,2026-08-28)
+
+Setting 表单行 JSON(`dto/MediaSubscriptionPoolFilter`),web-ui「追剧设置-资源筛选」标签页编辑;巡检即读即用(无缓存,下轮巡检生效),坏配置回落空对象不炸巡检:
+
+| 字段 | 语义 |
+|---|---|
+| includeKeywords | 硬门禁:非空时候选标题须至少含其一才入池(区别于订阅级 includeKeywords 仅加分);空 = 不限 |
+| excludeKeywords | 硬拒绝:与订阅级排除词取**并集** |
+| minQuality | 清晰度门槛(hd/fhd/uhd):仅拒标题**明确标注**低于门槛的,未标注放行(挂载前无从判断,避免误杀召回) |
+| minEpisodeSizeMb | 单集体积下限:替换部署默认 20MB 底线;订阅级显式配置优先(调低覆盖底线,调高仍是偏好层) |
+| maxEpisodeSizeMb | 单集体积上限:订阅级显式配置优先,否则回退全局;0 = 不限 |
+
+消费点四路:fillPool 入池三道门(落选审计 EXCLUDED/缺包含词/清晰度不足,计数与样例进 POOL_FILLED 事件)、preview 同规(「预览看到的即能入池的」)、candidatesOrdered 存量复筛(配置收紧后池内已有资源不再被选为主源,行不删除;已挂载主源不经此路径,自然失效后按新规则换源)、episodeSizePolicy/maxEpisodeBytes 单集文件体积策略全局回退。
+
+同批修复:订阅级 `filter.qualities`(编辑对话框「清晰度」多选)此前后端从未消费,现已接线为加分(命中 `quality.prefer` 默认 +10,权重表可调)。
+
 ## 12. 风险与对策
 
 | 风险 | 对策 |

@@ -230,6 +230,7 @@
           <el-select v-model="form.qualities" multiple allow-create placeholder="如 4K / 1080P">
             <el-option v-for="q in ['4K', '1080P', '720P']" :key="q" :label="q" :value="q"/>
           </el-select>
+          <span class="sub-text">命中加排序分;硬门槛(拒低清)在 追剧设置-资源筛选 全局配置</span>
         </el-form-item>
         <el-form-item label="包含关键词">
           <el-select v-model="form.includeKeywords" multiple allow-create filterable placeholder="字幕组等,回车添加"/>
@@ -532,6 +533,36 @@
           <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
         </el-form-item>
         <span class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关);盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
+          </el-tab-pane>
+          <el-tab-pane label="资源筛选" name="poolFilter">
+            <el-form-item label="清晰度门槛">
+              <el-select v-model="notifyForm.poolMinQuality" style="width: 100%">
+                <el-option label="不限" value=""/>
+                <el-option label="720P 起" value="hd"/>
+                <el-option label="1080P 起" value="fhd"/>
+                <el-option label="只要 4K" value="uhd"/>
+              </el-select>
+              <span class="sub-text">仅拒标题明确标注低于门槛的资源;未标注清晰度的放行(挂载前无从判断,避免误杀)</span>
+            </el-form-item>
+            <el-form-item label="包含关键词">
+              <el-select v-model="notifyForm.poolIncludeKeywords" multiple allow-create filterable
+                         placeholder="如 国语/中字;回车添加" style="width: 100%"/>
+              <span class="sub-text">硬门禁:配置后标题须至少含其一才入池,过严会把候选池筛空;留空不限</span>
+            </el-form-item>
+            <el-form-item label="排除关键词">
+              <el-select v-model="notifyForm.poolExcludeKeywords" multiple allow-create filterable
+                         placeholder="如 短剧/枪版/抢先版;回车添加" style="width: 100%"/>
+              <span class="sub-text">标题含任一即拒,与订阅级排除词取并集</span>
+            </el-form-item>
+            <el-form-item label="单集下限(MB)">
+              <el-input-number v-model="notifyForm.poolMinEpisodeSizeMb" :min="0" :max="100000"/>
+              <span class="sub-text" style="margin-left:8px">0=默认底线;硬底线,低于该体积的集文件直接忽略,过严会丢小体积正片</span>
+            </el-form-item>
+            <el-form-item label="单集上限(MB)">
+              <el-input-number v-model="notifyForm.poolMaxEpisodeSizeMb" :min="0" :max="1000000"/>
+              <span class="sub-text" style="margin-left:8px">0=不限,过滤捆绑包/异常大文件;订阅级显式配置优先</span>
+            </el-form-item>
+            <span class="sub-text">对所有订阅生效(下轮巡检起):入池、存量候选换源、单集文件筛选统一收紧;订阅级单集体积优先、排除词两边并集;已挂载主源不主动更换,自然失效后按新规则换源</span>
           </el-tab-pane>
           <el-tab-pane label="盘链" name="panlian">
         <el-form-item label="站点">
@@ -907,6 +938,11 @@ const notifyForm = ref({
   vipAccounts: [] as number[],
   mainDrives: [] as number[],
   extendedDrives: [] as number[],
+  poolMinQuality: '',
+  poolIncludeKeywords: [] as string[],
+  poolExcludeKeywords: [] as string[],
+  poolMinEpisodeSizeMb: 0,
+  poolMaxEpisodeSizeMb: 0,
   panlianHost: '',
   panlianUsername: '',
   panlianPassword: '',
@@ -1537,6 +1573,23 @@ const importSubs = () => {
   }
 }
 
+/** 全局资源筛选(msub_pool_filter 单行 JSON);坏配置/未配置回落空(全部门禁关闭) */
+const parsePoolFilter = (raw: string) => {
+  let parsed: any = {}
+  try {
+    parsed = raw ? JSON.parse(raw) : {}
+  } catch {
+    parsed = {}
+  }
+  return {
+    minQuality: typeof parsed.minQuality === 'string' ? parsed.minQuality : '',
+    includeKeywords: Array.isArray(parsed.includeKeywords) ? parsed.includeKeywords : [],
+    excludeKeywords: Array.isArray(parsed.excludeKeywords) ? parsed.excludeKeywords : [],
+    minEpisodeSizeMb: typeof parsed.minEpisodeSizeMb === 'number' ? parsed.minEpisodeSizeMb : 0,
+    maxEpisodeSizeMb: typeof parsed.maxEpisodeSizeMb === 'number' ? parsed.maxEpisodeSizeMb : 0,
+  }
+}
+
 const openNotify = () => {
   notifyTab.value = 'general'
   axios.get('/api/settings').then(response => {
@@ -1551,6 +1604,12 @@ const openNotify = () => {
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0).slice(0, 2)
     notifyForm.value.extendedDrives = (settings['msub_extended_drives'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
+    const poolFilter = parsePoolFilter(settings['msub_pool_filter'])
+    notifyForm.value.poolMinQuality = poolFilter.minQuality
+    notifyForm.value.poolIncludeKeywords = poolFilter.includeKeywords
+    notifyForm.value.poolExcludeKeywords = poolFilter.excludeKeywords
+    notifyForm.value.poolMinEpisodeSizeMb = poolFilter.minEpisodeSizeMb
+    notifyForm.value.poolMaxEpisodeSizeMb = poolFilter.maxEpisodeSizeMb
     notifyForm.value.panlianHost = settings['panlian_host'] || ''
     notifyForm.value.panlianUsername = settings['panlian_username'] || ''
     notifyForm.value.panlianPassword = settings['panlian_password'] || ''
@@ -1566,7 +1625,7 @@ const openNotify = () => {
     notifyLoaded.value = true
     notifyVisible.value = true
   }).catch(() => {
-    // 加载失败绝不能打开空表单:保存会把 19 项配置(含 botToken/豆瓣 cookie/搜索源凭证)整体覆写为空
+    // 加载失败绝不能打开空表单:保存会把 20 项配置(含 botToken/豆瓣 cookie/搜索源凭证/资源筛选)整体覆写为空
     ElMessage.error('设置加载失败,未打开对话框,请重试')
   })
 }
@@ -1589,6 +1648,16 @@ const saveNotify = () => {
     axios.post('/api/settings', {
       name: 'msub_extended_drives',
       value: [...new Set(notifyForm.value.extendedDrives)].join(','),
+    }),
+    axios.post('/api/settings', {
+      name: 'msub_pool_filter',
+      value: JSON.stringify({
+        minQuality: notifyForm.value.poolMinQuality || '',
+        includeKeywords: notifyForm.value.poolIncludeKeywords.map((k: string) => k.trim()).filter(Boolean),
+        excludeKeywords: notifyForm.value.poolExcludeKeywords.map((k: string) => k.trim()).filter(Boolean),
+        minEpisodeSizeMb: notifyForm.value.poolMinEpisodeSizeMb || 0,
+        maxEpisodeSizeMb: notifyForm.value.poolMaxEpisodeSizeMb || 0,
+      }),
     }),
     axios.post('/api/settings', {name: 'panlian_host', value: notifyForm.value.panlianHost.trim()}),
     axios.post('/api/settings', {name: 'panlian_username', value: notifyForm.value.panlianUsername.trim()}),
@@ -1663,6 +1732,7 @@ const weightDefs: { key: string; label: string; value: number }[] = [
   { key: 'quality.uhd', label: '4K', value: 25 },
   { key: 'quality.fhd', label: '1080P', value: 15 },
   { key: 'quality.hd', label: '720P', value: 8 },
+  { key: 'quality.prefer', label: '清晰度偏好词', value: 10 },
   { key: 'drive.prefer', label: '盘类型偏好', value: 20 },
   { key: 'drive.outside', label: '偏好外盘', value: -10 },
   { key: 'drive.main', label: '主网盘', value: 15 },

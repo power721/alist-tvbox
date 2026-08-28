@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.MediaSubscriptionPoolFilter;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.DeadLinkRepository;
@@ -273,22 +274,23 @@ class MediaSubscriptionCheckServiceTest {
 
     @Test
     void episodeSizePolicyForms() {
+        Fixture fixture = new Fixture();
         MediaSubscription subscription = new MediaSubscription();
-        MediaSubscriptionCheckService.EpisodeSizePolicy policy = service.episodeSizePolicy(subscription);
+        MediaSubscriptionCheckService.EpisodeSizePolicy policy = fixture.service.episodeSizePolicy(subscription);
         assertEquals(20L * 1024 * 1024, policy.floorBytes(), "无过滤:全局 20MB 底线");
         assertEquals(0, policy.preferredBytes());
         subscription.setFilterConfig("{\"minEpisodeSizeMb\":200,\"maxEpisodeSizeMb\":0}");
-        policy = service.episodeSizePolicy(subscription);
+        policy = fixture.service.episodeSizePolicy(subscription);
         assertEquals(20L * 1024 * 1024, policy.floorBytes(), "调高 = 偏好层,底线不动");
         assertEquals(200L * 1024 * 1024, policy.preferredBytes());
         assertTrue(policy.preferredHit(200L * 1024 * 1024));
         assertFalse(policy.preferredHit(199L * 1024 * 1024));
         subscription.setFilterConfig("{\"minEpisodeSizeMb\":5}");
-        policy = service.episodeSizePolicy(subscription);
+        policy = fixture.service.episodeSizePolicy(subscription);
         assertEquals(5L * 1024 * 1024, policy.floorBytes(), "显式调低:覆盖全局底线");
         assertEquals(0, policy.preferredBytes());
         subscription.setFilterConfig("{\"maxEpisodeSizeMb\":1000}");
-        policy = service.episodeSizePolicy(subscription);
+        policy = fixture.service.episodeSizePolicy(subscription);
         assertEquals(1000L * 1024 * 1024, policy.maxBytes());
         assertEquals(0, policy.preferredBytes(), "单集上限独立接线,不产生偏好层");
     }
@@ -322,6 +324,203 @@ class MediaSubscriptionCheckServiceTest {
         }
         response.setFiles(list);
         return response;
+    }
+
+    // ---------- 全局资源筛选(2026-08-28):msub_pool_filter 单行 JSON,三道门 + 存量复筛 + 体积全局回退 ----------
+    // include=硬门禁(须含其一)/ exclude=与订阅级并集 / 清晰度=门槛(仅拒标题明确标注低于门槛的,未标注放行);
+    // 单集下限替换部署默认底线,订阅级显式配置优先 —— 与「主网盘:清空=跟随全局」同款合并惯例。
+
+    @Test
+    void titleQualityForms() {
+        assertEquals("uhd", MediaSubscriptionCheckService.titleQuality("苍兰诀 全12集 4K"));
+        assertEquals("uhd", MediaSubscriptionCheckService.titleQuality("苍兰诀 2160p HEVC"));
+        assertEquals("fhd", MediaSubscriptionCheckService.titleQuality("苍兰诀 1080P 全集"));
+        assertEquals("hd", MediaSubscriptionCheckService.titleQuality("苍兰诀 720p 标清版"));
+        assertNull(MediaSubscriptionCheckService.titleQuality("苍兰诀 第01-08集 国语"));
+    }
+
+    @Test
+    void poolFilterNormalize() {
+        MediaSubscriptionPoolFilter filter = new MediaSubscriptionPoolFilter();
+        filter.setIncludeKeywords(java.util.Arrays.asList("  ", "国语", "国语", ""));
+        filter.setMinQuality("4K");
+        filter.setMinEpisodeSizeMb(-5);
+        filter.setMaxEpisodeSizeMb(100);
+        filter.normalize();
+        assertEquals(List.of("国语"), filter.getIncludeKeywords());
+        assertEquals("uhd", filter.getMinQuality());
+        assertEquals(0, filter.getMinEpisodeSizeMb());
+        assertEquals(100, filter.getMaxEpisodeSizeMb());
+        filter.setMinEpisodeSizeMb(200);
+        filter.setMaxEpisodeSizeMb(100);
+        filter.normalize();
+        assertEquals(0, filter.getMaxEpisodeSizeMb(), "上下限矛盾:max 视为不限");
+        assertEquals("fhd", MediaSubscriptionPoolFilter.normalizeQuality("1080"));
+        assertEquals("", MediaSubscriptionPoolFilter.normalizeQuality("蓝光"));
+    }
+
+    @Test
+    void episodeSizePolicyGlobalFallback() {
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_POOL_FILTER))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_POOL_FILTER,
+                        "{\"minEpisodeSizeMb\":50,\"maxEpisodeSizeMb\":800}")));
+        MediaSubscription subscription = new MediaSubscription();
+        MediaSubscriptionCheckService.EpisodeSizePolicy policy = fixture.service.episodeSizePolicy(subscription);
+        assertEquals(50L * 1024 * 1024, policy.floorBytes(), "全局下限:替换部署默认 20MB 底线");
+        assertEquals(800L * 1024 * 1024, policy.maxBytes(), "全局上限:订阅未配置时回退");
+        assertEquals(0, policy.preferredBytes());
+        subscription.setFilterConfig("{\"minEpisodeSizeMb\":30,\"maxEpisodeSizeMb\":100}");
+        policy = fixture.service.episodeSizePolicy(subscription);
+        assertEquals(30L * 1024 * 1024, policy.floorBytes(), "订阅级显式调低:覆盖全局底线(订阅优先)");
+        assertEquals(100L * 1024 * 1024, policy.maxBytes(), "订阅级上限优先");
+        subscription.setFilterConfig("{\"minEpisodeSizeMb\":500}");
+        policy = fixture.service.episodeSizePolicy(subscription);
+        assertEquals(500L * 1024 * 1024, policy.preferredBytes(), "订阅级调高全局底线:仍走偏好层而非硬门");
+        assertEquals(800L * 1024 * 1024, policy.maxBytes());
+    }
+
+    @Test
+    void fillPoolAppliesGlobalFilterGates() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_POOL_FILTER))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_POOL_FILTER,
+                        "{\"includeKeywords\":[\"国语\"],\"excludeKeywords\":[\"短剧\"],\"minQuality\":\"fhd\"}")));
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(
+                        message("https://pan.quark.cn/s/ok", "苍兰诀 第01-08集 国语 1080P"),
+                        message("https://pan.quark.cn/s/no-kw", "苍兰诀 第01-08集 4K"),
+                        message("https://pan.quark.cn/s/drama", "苍兰诀 短剧合集 1080P 国语"),
+                        message("https://pan.quark.cn/s/lowq", "苍兰诀 第01-08集 720P 国语")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(1, "https://pan.quark.cn/s/ok"))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository).save(captor.capture());
+        assertEquals("https://pan.quark.cn/s/ok", captor.getValue().getLink(), "三道门只有全过的资源入池");
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository).save(events.capture());
+        assertTrue(events.getValue().getDetail().contains("命中排除词 1"), "全局排除词拦截有审计: " + events.getValue().getDetail());
+        assertTrue(events.getValue().getDetail().contains("缺包含词 1"), "全局包含词硬门禁拦截有审计");
+        assertTrue(events.getValue().getDetail().contains("清晰度不足 1"), "清晰度门槛拦截有审计");
+    }
+
+    @Test
+    void fillPoolGlobalQualityFloorPassesUnmarkedTitles() {
+        // 只拒「明确标注」低于门槛的:未标注清晰度的放行(挂载前无从判断,避免误杀召回)
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_POOL_FILTER))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_POOL_FILTER, "{\"minQuality\":\"uhd\"}")));
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(
+                        message("https://pan.quark.cn/s/plain", "苍兰诀 第01-08集 国语"),
+                        message("https://pan.quark.cn/s/hd", "苍兰诀 第01-08集 720P")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(1, "https://pan.quark.cn/s/plain"))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository).save(captor.capture());
+        assertEquals("https://pan.quark.cn/s/plain", captor.getValue().getLink(), "未标注清晰度的资源放行");
+    }
+
+    @Test
+    void fillPoolMergesGlobalAndSubscriptionExcludes() {
+        // 排除词并集:全局排「短剧」+ 订阅排「抢先版」,命中任一即拒
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        fixture.subscription.setFilterConfig("{\"excludeKeywords\":[\"抢先版\"]}");
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_POOL_FILTER))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_POOL_FILTER, "{\"excludeKeywords\":[\"短剧\"]}")));
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(
+                        message("https://pan.quark.cn/s/ok", "苍兰诀 第01-08集 1080P"),
+                        message("https://pan.quark.cn/s/drama", "苍兰诀 短剧合集"),
+                        message("https://pan.quark.cn/s/ts", "苍兰诀 抢先版 1080P")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(1, "https://pan.quark.cn/s/ok"))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository).save(captor.capture());
+        assertEquals("https://pan.quark.cn/s/ok", captor.getValue().getLink(), "两层排除词并集生效");
+    }
+
+    @Test
+    void fillPoolSubscriptionQualitiesBonus() {
+        // 订阅级「清晰度」关键词此前后端从未消费,只存不读;接线为加分(命中 +quality.prefer 默认 10)
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        fixture.subscription.setFilterConfig("{\"qualities\":[\"杜比视界\"]}");
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(
+                        message("https://pan.quark.cn/s/dv", "苍兰诀 第01-08集 4K 杜比视界"),
+                        message("https://pan.quark.cn/s/plain", "苍兰诀 第01-08集 4K")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository, Mockito.times(2)).save(captor.capture());
+        int dv = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/dv")).findFirst().orElseThrow().getScore();
+        int plain = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/plain")).findFirst().orElseThrow().getScore();
+        assertEquals(10, dv - plain, "同条件下命中清晰度偏好词 +10");
+    }
+
+    @Test
+    void candidatesOrderedHonorsGlobalFilter() {
+        // 存量候选复筛:配置收紧后池内已有资源不再被选为主源(行不删除,只是不再参与换源)
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_POOL_FILTER))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_POOL_FILTER,
+                        "{\"excludeKeywords\":[\"短剧\"],\"minQuality\":\"fhd\"}")));
+        MediaSubscriptionResource fine = resource("苍兰诀 第01-08集 4K");
+        MediaSubscriptionResource drama = resource("苍兰诀 短剧合集");
+        MediaSubscriptionResource lowQ = resource("苍兰诀 第01-08集 720P");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(fine, drama, lowQ));
+
+        List<MediaSubscriptionResource> candidates = fixture.service.candidatesOrdered(fixture.subscription);
+
+        assertEquals(List.of(fine), candidates, "排除词/清晰度门槛对存量候选同样生效");
+    }
+
+    @Test
+    void previewAppliesGlobalFilterGates() {
+        // 预览与入池同规:全局门禁在 preview 也生效(「预览看到的即能入池的」)
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_POOL_FILTER))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_POOL_FILTER, "{\"excludeKeywords\":[\"短剧\"]}")));
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(
+                        message("https://pan.quark.cn/s/ok", "苍兰诀 第01-08集 4K"),
+                        message("https://pan.quark.cn/s/drama", "苍兰诀 短剧合集")));
+
+        List<Map<String, Object>> result = fixture.service.preview("苍兰诀", null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("https://pan.quark.cn/s/ok", result.get(0).get("link"));
+    }
+
+    private static MediaSubscriptionResource resource(String title) {
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setSubscriptionId(1);
+        resource.setLink("https://pan.quark.cn/s/" + title.hashCode());
+        resource.setTitle(title);
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        return resource;
     }
 
     // ---------- 缺陷 12 回归:方括号技术标注段(夸克 4K 转码命名)不得污染集号 ----------
