@@ -200,13 +200,15 @@ class SubscriptionServiceCatSitesTest {
         ReflectionTestUtils.setField(service, "appProperties", properties);
         ReflectionTestUtils.setField(service, "tokens", "tok3");
 
-        String json = "{url: 'ATV_MEDIA_URL', play: 'ATV_MEDIA_PLAY_URL', web: 'ATV_TG_WEB_URL'}";
+        String json = "{url: 'ATV_MEDIA_URL', play: 'ATV_MEDIA_PLAY_URL', web: 'ATV_TG_WEB_URL', pan: 'ATV_PIAN_DAN_URL', api: 'ATV_API_URL', token: 'ATV_TOKEN'}";
         String result = ReflectionTestUtils.invokeMethod(service, "replaceLegacyConfig", json);
 
         assertTrue(result.contains("http://atv.example/media/tok3"), result);
         assertTrue(result.contains("http://atv.example/play/tok3"));
         // TG 网页与 TG 搜索共用端点;片单无播放端点
         assertTrue(result.contains("http://atv.example/tg-search/tok3"));
+        // atv_pan 后端必须替换(盘搜文件夹化关键,曾在此丢失)
+        assertTrue(result.contains("api: 'http://atv.example', token: 'tok3'"), result);
         assertFalse(result.contains("ATV_"));
     }
 

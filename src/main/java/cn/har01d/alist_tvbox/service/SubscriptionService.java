@@ -524,6 +524,10 @@ public class SubscriptionService {
         atvPaths.put("ATV_TG_WEB_PLAY_URL", "/play");
         atvPaths.put("ATV_PIAN_DAN_URL", "/pian-dan");
         atvPaths.put("ATV_LIVE_URL", "/live");
+        // 网盘解析后端(atv_pan 段),盘搜爬虫文件夹化的关键配置,只在 replaceOpen 有、这里漏过
+        String backendAddress = readHostAddress();
+        json = json.replace("ATV_API_URL", backendAddress);
+        json = json.replace("ATV_TOKEN", appProperties.isEnabledToken() ? getCurrentOrFirstToken() : "-");
         for (Map.Entry<String, String> entry : atvPaths.entrySet()) {
             json = json.replace(entry.getKey(), readHostAddress(entry.getValue() + secret));
         }
