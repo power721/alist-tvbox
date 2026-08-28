@@ -492,13 +492,17 @@ public class MediaSubscriptionService {
         };
     }
 
-    /** 安卓端封面:相对 /images 代理 → 按当前请求 host 重建绝对地址(图床直连可能被墙)。 */
+    /** 安卓端封面:直链图(TMDB/豆瓣图床,客户端直连可能被墙/防盗链)先包进后端 /images 代理,
+     * 再按当前请求 host 重建绝对地址。 */
     private String absoluteCover(String stored) {
         if (StringUtils.isBlank(stored)) {
             return stored;
         }
+        if (stored.startsWith("http")) {
+            stored = proxiedCover(stored);
+        }
         if (!stored.startsWith("/images")) {
-            return stored; // 直链封面原样返回
+            return stored;
         }
         try {
             int queryAt = stored.indexOf('?');

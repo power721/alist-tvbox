@@ -301,6 +301,23 @@ class MediaSubscriptionRemarksTest {
         assertEquals("测试剧 第2季", service.contentList(1).getList().getFirst().getVod_name());
     }
 
+    // ---------- 封面代理 ----------
+
+    @Test
+    void coverDirectLinkRoutedThroughImagesProxy() {
+        // 线上形态:巡检回填的封面快照是 TMDB 直链,TVBox 客户端直连图床被墙 ——
+        // vod_pic 必须包进后端 /images 代理(单测无请求上下文,绝对化回落相对地址,代理形态即断言点)
+        String tmdbCover = "https://media.themoviedb.org/t/p/w300_and_h450_bestv2/abc.jpg";
+        subscription.setCoverUrl(tmdbCover);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+
+        String pic = service.contentList(1).getList().getFirst().getVod_pic();
+
+        assertTrue(pic.startsWith("/images?url="), "直链封面须走 /images 代理: " + pic);
+        assertTrue(pic.contains(java.net.URLEncoder.encode(tmdbCover, java.nio.charset.StandardCharsets.UTF_8)),
+                "代理参数携带原始图地址");
+    }
+
     // ---------- 逐集资源矩阵 ----------
 
     @Test
