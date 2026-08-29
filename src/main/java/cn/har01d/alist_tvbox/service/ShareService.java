@@ -753,10 +753,21 @@ public class ShareService {
     public ObjectNode getCookies(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         ObjectNode result = objectMapper.createObjectNode();
-        // u-{username} 用户 token:按归属过滤,只下发本人账号凭证(凭证不下发给非归属人);
-        // B 站 cookie 等全局凭证仅共享 secret(管理员设备)可取
-        var user = userService.findByUserVodToken(id);
-        int uid = user == null ? 0 : (user.getId() == null ? 0 : user.getId());
+        // 用户凭证下载:仅认 u-{username}-{vod_secret}(配置注入的 secret 同源)。u-{username} 本身无熵
+        //(用户名可猜测),不能当授权用,裸 u- token / 密钥不符一律空结果;
+        // 命中后仍按归属过滤,只下发本人账号凭证;B 站 cookie 等全局凭证仅共享 secret(管理员设备)可取
+        int uid = 0;
+        if (id.startsWith(Constants.USER_TOKEN_PREFIX)) {
+            String body = id.substring(Constants.USER_TOKEN_PREFIX.length());
+            int sep = body.lastIndexOf('-');
+            if (sep > 0 && sep + 1 < body.length()) {
+                var user = userService.findByUsername(body.substring(0, sep));
+                String secret = body.substring(sep + 1);
+                if (user != null && secret.equals(userService.vodSecretOf(user))) {
+                    uid = user.getId() == null ? 0 : user.getId();
+                }
+            }
+        }
         if (!aliSecret.equals(id) && uid == 0) {
             return result;
         }

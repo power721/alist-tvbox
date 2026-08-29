@@ -411,7 +411,9 @@ public class DriverAccountService {
             account.setToken("");
         }
 
-        if (driverAccountRepository.countByType(account.getType()) <= 1) {
+        // 仅剩一个账号时强制 master 仅限全局账号:普通用户编辑本人某盘型唯一账号,
+        // 不得因此顶成全局主账号(updateMaster 是 owner 无关查询,会把全局选主一并改掉)
+        if (driverAccountRepository.countByType(account.getType()) <= 1 && account.getOwnerUid() == 0) {
             account.setMaster(true);
         }
 

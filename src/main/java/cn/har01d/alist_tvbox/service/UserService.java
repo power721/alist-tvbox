@@ -37,6 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -290,9 +291,30 @@ public class UserService {
         var user = new User();
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        user.setVodSecret(generateVodSecret());
         userRepository.save(user);
         usernames.add(user.getUsername());
         return user;
+    }
+
+    /** 用户凭证下载密钥:16 hex(SecureRandom)。用户名可猜测,u-{username} token 无熵,熵全靠此值。 */
+    public static String generateVodSecret() {
+        byte[] bytes = new byte[8];
+        new SecureRandom().nextBytes(bytes);
+        StringBuilder secret = new StringBuilder(16);
+        for (byte b : bytes) {
+            secret.append(String.format("%02x", b));
+        }
+        return secret.toString();
+    }
+
+    /** 凭证下载密钥(V39 迁移兜底:读时补生成,防旧库漏回填)。 */
+    public String vodSecretOf(User user) {
+        if (StringUtils.isBlank(user.getVodSecret())) {
+            user.setVodSecret(generateVodSecret());
+            userRepository.save(user);
+        }
+        return user.getVodSecret();
     }
 
     public User update(int id, UserDto dto) {

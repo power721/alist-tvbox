@@ -1494,10 +1494,11 @@ public class SubscriptionService {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         String uid = generateUid();
         String playbackToken = playbackTokenForSubscription(token, subscriptionId);
-        // 共享 token → ali_secret(管理员设备,全量凭证);u- 用户 token → 填 token 本身,
-        // spider 调 /cookies/{secret} 时服务端按归属只回本人账号凭证
+        // 共享 token → ali_secret(管理员设备,全量凭证);u- 用户 token → u-{username}-{vod_secret}
+        //(凭证下载密钥:u-{username} 无熵不能当授权,熵来自随机 vodSecret),
+        // spider 调 /cookies/{secret} 时服务端校验密钥后按归属只回本人账号凭证
         String secret = token.startsWith(USER_TOKEN_PREFIX)
-                ? token
+                ? token + "-" + userService.vodSecretOf(userService.findByUserVodToken(token))
                 : settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         for (SubscriptionSourceService.SubscriptionSourceRef source : subscriptionSourceService.findEnabledSources()) {
             try {
