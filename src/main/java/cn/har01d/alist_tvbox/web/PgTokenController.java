@@ -67,9 +67,10 @@ public class PgTokenController {
 
     @GetMapping("/lib/tokenm")
     public ObjectNode tokenm(String token) throws Exception {
-        // 按 token 归属过滤:共享 token=管理员设备→全部 master 凭证;u- token→仅本人账号凭证;
-        // 全局账号凭证绝不下发给普通用户(只能经服务端代理使用)
-        int uid = subscriptionService.credentialUidFor(token);
+        // 按 token 归属过滤:共享 token=管理员设备→全部 master 凭证;
+        // u- 形态须带密钥(u-{username}-{vod_secret})验真才回本人账号凭证 —— 裸 u-{username}
+        // 用户名可猜测,不能当授权(全局账号凭证也绝不下发给普通用户,只能经服务端代理使用)
+        int uid = subscriptionService.credentialAuthorityUidFor(token);
         if (uid < 0) {
             subscriptionService.requireSubscriptionToken(token);
             uid = 0;

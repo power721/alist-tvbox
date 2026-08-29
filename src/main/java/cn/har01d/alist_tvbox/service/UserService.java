@@ -142,6 +142,32 @@ public class UserService {
         return username == null ? null : findByUsername(username);
     }
 
+    /**
+     * 凭证形态 token(u-{username}-{vodSecret})→ 用户:密钥验真通过才返回;
+     * 裸 u-{username} 无熵(用户名可猜测),不能作为凭证权威,返回 null。
+     */
+    public User findUserByCredentialToken(String token) {
+        if (token == null || !token.startsWith(USER_TOKEN_PREFIX)) {
+            return null;
+        }
+        String body = token.substring(USER_TOKEN_PREFIX.length());
+        int sep = body.lastIndexOf('-');
+        if (sep <= 0 || sep + 1 >= body.length()) {
+            return null;
+        }
+        User user = findByUsername(body.substring(0, sep));
+        if (user == null) {
+            return null;
+        }
+        return body.substring(sep + 1).equals(vodSecretOf(user)) ? user : null;
+    }
+
+    /** 裸 u-{username}(用户存在)→ 拼上密钥的凭证形态,供配置嵌入;其它形态原样返回。 */
+    public String toCredentialToken(String token) {
+        User user = findByUserVodToken(token);
+        return user == null ? token : token + "-" + vodSecretOf(user);
+    }
+
     private void loadUsernames() {
         usernames.clear();
         userRepository.findAll().forEach(user -> usernames.add(user.getUsername()));

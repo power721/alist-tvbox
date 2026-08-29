@@ -225,13 +225,17 @@ public class TvBoxService {
 
     /**
      * 当前请求方的凭证视角:0=管理级(共享 token=管理员设备/管理会话/X-API-KEY,凭证可全量下发);
-     * >0=具体用户 uid(u- token 或 USER 会话),只有 ownerUid 匹配的账号凭证才可随直链下发。
+     * >0=具体用户 uid(u- token 须带密钥验真,或 USER 会话),只有 ownerUid 匹配的账号凭证才可随直链下发;
+     * -1=裸 u-{username}(无熵可猜测)——既不发本人凭证,也绝不回落会话(无会话时 currentUid()=0 会被当管理级)。
      */
     private int credentialUid() {
         String token = subscriptionService.getCurrentToken();
-        int uid = subscriptionService.credentialUidFor(token);
+        int uid = subscriptionService.verifiedCredentialUidFor(token);
         if (uid >= 0) {
             return uid;
+        }
+        if (token.startsWith(Constants.USER_TOKEN_PREFIX)) {
+            return -1;
         }
         // 无 vod token 上下文(网页会话等):回落会话身份,管理级=0
         return accountAccessGuard.isElevated() ? 0 : accountAccessGuard.currentUid();

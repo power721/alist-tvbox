@@ -127,6 +127,8 @@ public class SubscriptionService {
 
     private final OkHttpClient okHttpClient = new OkHttpClient();
     private final ThreadLocal<String> currentToken = new ThreadLocal<>();
+    // 本请求的用户 token 已通过密钥验真(u-{username}-{secret} 形态,checkToken 归一化后记录裸形态)
+    private final ThreadLocal<String> verifiedUserToken = new ThreadLocal<>();
 
     private String tokens = "";
 
@@ -330,6 +332,15 @@ public class SubscriptionService {
     }
 
     public void checkToken(String rawToken) {
+        // u-{username}-{vodSecret} 凭证形态:验真通过则归一化为裸 u-{username}(内容/租户口径不变),
+        // 并打上验真标记 —— 凭证注入(tokenm/open/play 直链)只认该标记,裸 u- 无熵不得作为凭证权威
+        var credentialUser = userService.findUserByCredentialToken(rawToken);
+        if (credentialUser != null) {
+            rawToken = UserService.userVodToken(credentialUser.getUsername());
+            verifiedUserToken.set(rawToken);
+        } else {
+            verifiedUserToken.remove();
+        }
         currentToken.set(rawToken);
         tenantService.setTenant(rawToken);
         if (!appProperties.isEnabledToken()) {
@@ -385,6 +396,15 @@ public class SubscriptionService {
         return tokens.split(",")[0];
     }
 
+    /** vod token → 凭证视角 uid:u-{username}-{secret} 验真 → 该用户;共享 token → 0;其它(含裸 u-)→ -1。 */
+    public int credentialAuthorityUidFor(String token) {
+        var user = userService.findUserByCredentialToken(token);
+        if (user != null) {
+            return user.getId() == null ? -1 : user.getId();
+        }
+        return isValidSubscriptionToken(token) ? 0 : -1;
+    }
+
     /**
      * vod token → 凭证视角 uid:u-{username} → 该用户 id;共享 token → 0(管理级);其它/空 → -1(无 token 上下文)。
      * 播放直连/凭证下发的归属判定统一入口。
@@ -400,16 +420,39 @@ public class SubscriptionService {
         return -1;
     }
 
-    /** 配置生成时的凭证账号:u- token → 本人账号;共享 token/无上下文 → 全局 master。 */
+    /**
+     * 带"验真"要求的凭证 uid(tokenm/play 直连等无会话凭证下发用):
+     * 裸 u-{username} 无熵(用户名可猜测)不得作为凭证权威,返回 -1;
+     * 共享 token/全局上下文不受影响;u- 形态须由 checkToken 验真(带密钥)后才认。
+     */
+    public int verifiedCredentialUidFor(String token) {
+        if (token != null && token.startsWith(USER_TOKEN_PREFIX)) {
+            return token.equals(verifiedUserToken.get()) ? credentialUidFor(token) : -1;
+        }
+        return credentialUidFor(token);
+    }
+
+    /** 配置生成时的凭证账号:u- token 须验真(带密钥)才注入本人账号;裸 u- 不给本人凭证、也不回落全局 master。 */
     private Optional<Account> credentialAliAccount() {
-        int uid = credentialUidFor(getCurrentToken());
-        return uid > 0 ? accountRepository.findFirstByOwnerUidOrderByIdAsc(uid) : accountRepository.getFirstByMasterTrue();
+        int uid = verifiedCredentialUidFor(getCurrentToken());
+        if (uid > 0) {
+            return accountRepository.findFirstByOwnerUidOrderByIdAsc(uid);
+        }
+        if (uid == 0) {
+            return accountRepository.getFirstByMasterTrue();
+        }
+        return getCurrentToken().startsWith(USER_TOKEN_PREFIX) ? Optional.empty() : accountRepository.getFirstByMasterTrue();
     }
 
     private Optional<DriverAccount> credentialQuarkAccount() {
-        int uid = credentialUidFor(getCurrentToken());
-        return uid > 0 ? panAccountRepository.findFirstByOwnerUidAndTypeOrderByIdAsc(uid, DriverType.QUARK)
-                : panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK);
+        int uid = verifiedCredentialUidFor(getCurrentToken());
+        if (uid > 0) {
+            return panAccountRepository.findFirstByOwnerUidAndTypeOrderByIdAsc(uid, DriverType.QUARK);
+        }
+        if (uid == 0) {
+            return panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK);
+        }
+        return getCurrentToken().startsWith(USER_TOKEN_PREFIX) ? Optional.empty() : panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK);
     }
 
     /** token 模式是否开启(运行时可经 /api/token 切换):TokenFilter 据此收紧无 token 的 /open。 */
@@ -465,6 +508,7 @@ public class SubscriptionService {
 
     public void clearRequestContext() {
         currentToken.remove();
+        verifiedUserToken.remove();
         tenantService.clear();
     }
 
@@ -814,6 +858,11 @@ public class SubscriptionService {
     }
 
     public Map<String, Object> subscription(String token, String id) {
+        // u-{username}-{secret} 凭证形态归一化为裸 u-{username}:归属判定与 configUrl 均按裸口径
+        var credentialUser = userService.findUserByCredentialToken(token);
+        if (credentialUser != null) {
+            token = UserService.userVodToken(credentialUser.getUsername());
+        }
         Subscription subscription = subscriptionRepository.findBySid(id).orElseThrow(NotFoundException::new);
         // 归属隔离:个人订阅(ownerUid>0)仅归属人本人的 u- token(或管理级共享 token)可取;
         // 个人订阅默认 sid=数字 id,可枚举,不做校验等于向任意用户泄漏其私有上游 URL 与 override 配置
@@ -1500,10 +1549,13 @@ public class SubscriptionService {
         String secret = token.startsWith(USER_TOKEN_PREFIX)
                 ? token + "-" + userService.vodSecretOf(userService.findByUserVodToken(token))
                 : settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
+        // 配置里嵌入的 token 一律升级为凭证形态:spider 拿它调 /vod、tokenm 等,
+        // 裸 u-{username} 可猜测,凭证明文下发只认带密钥形态
+        String embedToken = token.startsWith(USER_TOKEN_PREFIX) ? secret : token;
         for (SubscriptionSourceService.SubscriptionSourceRef source : subscriptionSourceService.findEnabledSources()) {
             try {
                 if (source.builtin()) {
-                    Map<String, Object> site = buildSite(token, secret, uid, source.siteKey(), source.name(),
+                    Map<String, Object> site = buildSite(embedToken, secret, uid, source.siteKey(), source.name(),
                             playbackToken, configUrl);
                     site.put("order", order);
                     // key transformation for csp_Push (needed before override lookup)
@@ -1523,7 +1575,7 @@ public class SubscriptionService {
                     sites.add(id++, site);
                     log.debug("add builtin source {}: {}", source.siteKey(), site);
                 } else if (source.plugin() != null) {
-                    Map<String, Object> site = buildPluginSite(source.plugin(), token, secret,
+                    Map<String, Object> site = buildPluginSite(source.plugin(), embedToken, secret,
                             playbackToken, configUrl);
                     site.put("order", order);
                     String overrideKey = (String) site.get("key");
@@ -1927,6 +1979,9 @@ public class SubscriptionService {
                 // 关键:/sub/{id} 等用户路径会经 checkToken 把 currentToken 设为 "",不算"内部",不注入全局 —— 避免无 token 客户端拿到全局订阅 token 再访问 tokenm/zx/tvfan
                 String currentReqToken = currentToken.get();
                 String subToken = currentReqToken != null ? currentReqToken : getFirstSubscriptionToken();
+                // u- 用户 token 升级为凭证形态再入 URL:tokenm 只认带密钥形态(裸 u- 无熵),
+                // zx/tvfan 目前本就只收共享 token,嵌入哪种都会 400,不影响
+                subToken = userService.toCredentialToken(subToken);
                 json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
