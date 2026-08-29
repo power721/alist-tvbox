@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 /** 创建/更新追剧订阅的请求体。 */
@@ -9,9 +10,15 @@ public class MediaSubscriptionRequest {
     private String keyword;
     private Integer season;
     private Integer doubanId;
+    @JsonIgnore
+    private boolean doubanIdSet;
     /** 元数据平台与条目 id(douban/tmdb/bangumi,§4.8) */
     private String metaProvider;
     private String metaId;
+    @JsonIgnore
+    private boolean metaProviderSet;
+    @JsonIgnore
+    private boolean metaIdSet;
     private Integer expectedEpisodes;
     /** P0 仅实现 FOLLOW(挂载+自动换源);TRANSFER(自动转存)为 P2 */
     private String mode;
@@ -25,4 +32,19 @@ public class MediaSubscriptionRequest {
     /** 主网盘覆盖(分享类型码,空 = 跟随全局 msub_main_drives) */
     private java.util.List<Integer> mainDrives;
     private MediaSubscriptionFilter filter;
+
+    public void setDoubanId(Integer doubanId) {
+        this.doubanId = doubanId;
+        this.doubanIdSet = true;
+    }
+
+    public void setMetaProvider(String metaProvider) {
+        this.metaProvider = metaProvider;
+        this.metaProviderSet = true;
+    }
+
+    public void setMetaId(String metaId) {
+        this.metaId = metaId;
+        this.metaIdSet = true;
+    }
 }

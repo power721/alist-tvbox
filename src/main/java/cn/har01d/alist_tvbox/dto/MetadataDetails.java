@@ -10,6 +10,9 @@ public class MetadataDetails {
     public static final String STATUS_RETURNING = "RETURNING";
     public static final String STATUS_ENDED = "ENDED";
     public static final String STATUS_UNKNOWN = "UNKNOWN";
+    public static final String EXTERNAL_MATCH = "MATCH";
+    public static final String EXTERNAL_NO_MATCH = "NO_MATCH";
+    public static final String EXTERNAL_RETRY = "RETRY";
 
     private String provider;
     private String id;
@@ -48,6 +51,10 @@ public class MetadataDetails {
     private java.util.Map<String, String> ratings;
     /** 跨源条目 id(provider → id,如豆瓣订阅桥接后含 {"tmdb":"123"}):详情页外链跳转用 */
     private java.util.Map<String, String> externalIds;
+    /** 跨源封面候选(provider → URL):主图床不可达时由后端图片代理按候选回退。 */
+    private java.util.Map<String, String> externalCovers;
+    /** 跨源绑定状态(provider → MATCH/NO_MATCH/RETRY):RETRY 不应被预热标记为完成。 */
+    private java.util.Map<String, String> externalStatuses;
     /** 官方播放平台链接(平台名→播放页,如 {"爱奇艺":"https://www.iqiyi.com/v_xx.html"}):豆瓣「在哪儿看」桥接产出,详情页 links 展开 */
     private java.util.Map<String, String> playLinks;
     /** 导演 */

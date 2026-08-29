@@ -43,4 +43,11 @@ public class PlayUrl {
         this.referer = referer;
         this.time = time;
     }
+
+    public PlayUrl(int site, String url, String referer, Instant time) {
+        this.site = site;
+        this.path = url;
+        this.referer = referer;
+        this.time = time;
+    }
 }

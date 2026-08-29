@@ -33,6 +33,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
@@ -47,6 +51,8 @@ import java.util.concurrent.CancellationException;
 @Service
 public class ProxyService {
     private static final int BUFFER_SIZE = 64 * 1024;
+    public static final int IMAGE_PUBLIC_SITE = -1;
+    public static final int IMAGE_PRIVATE_SITE = -2;
     private final AppProperties appProperties;
     private final PlayUrlRepository playUrlRepository;
     private final SiteService siteService;
@@ -59,6 +65,10 @@ public class ProxyService {
     private final Cache<String, FsDetail> fileCache = Caffeine.newBuilder()
             .maximumSize(512)
             .expireAfterWrite(Duration.ofSeconds(30))
+            .build();
+    private final Cache<String, Integer> imageSiteCache = Caffeine.newBuilder()
+            .maximumSize(64)
+            .expireAfterWrite(Duration.ofMinutes(10))
             .build();
 
     public ProxyService(AppProperties appProperties,
@@ -85,11 +95,57 @@ public class ProxyService {
     }
 
     public int generateImageUrl(String url, String referer) {
-        PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(0, url, Sort.by("id").descending());
+        int imageSite = imageSite(url, referer);
+        PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(imageSite, url, Sort.by("id").descending());
         if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
-            playUrl = playUrlRepository.save(new PlayUrl(url, referer, Instant.now().plus(3, ChronoUnit.DAYS)));
+            playUrl = playUrlRepository.save(new PlayUrl(
+                    imageSite, url, referer, Instant.now().plus(3, ChronoUnit.DAYS)));
         }
         return playUrl.getId();
+    }
+
+    private int imageSite(String url, String referer) {
+        try {
+            URI target = URI.create(url);
+            URI source = URI.create(referer);
+            if (!sameAuthority(target, source) || target.getHost() == null) {
+                return IMAGE_PUBLIC_SITE;
+            }
+            Integer cached = imageSiteCache.getIfPresent(target.getHost().toLowerCase());
+            if (cached != null) {
+                return cached;
+            }
+            InetAddress[] addresses = InetAddress.getAllByName(target.getHost());
+            int classified = addresses.length > 0 && java.util.Arrays.stream(addresses).allMatch(ProxyService::isLanAddress)
+                    ? IMAGE_PRIVATE_SITE : IMAGE_PUBLIC_SITE;
+            imageSiteCache.put(target.getHost().toLowerCase(), classified);
+            return classified;
+        } catch (Exception e) {
+            return IMAGE_PUBLIC_SITE;
+        }
+    }
+
+    private static boolean sameAuthority(URI first, URI second) {
+        return first.getHost() != null && second.getHost() != null
+                && first.getHost().equalsIgnoreCase(second.getHost())
+                && effectivePort(first) == effectivePort(second);
+    }
+
+    private static int effectivePort(URI uri) {
+        return uri.getPort() >= 0 ? uri.getPort()
+                : "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    }
+
+    private static boolean isLanAddress(InetAddress address) {
+        if (address == null || address.isAnyLocalAddress() || address.isLoopbackAddress()
+                || address.isLinkLocalAddress() || address.isMulticastAddress()) {
+            return false;
+        }
+        if (address instanceof Inet4Address) {
+            return address.isSiteLocalAddress();
+        }
+        byte[] bytes = address.getAddress();
+        return address instanceof Inet6Address && bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc;
     }
 
     public int generateProxyUrl(String path) {

@@ -1,4 +1,7 @@
 spring:
+  mvc:
+    async:
+      request-timeout: 15s
   http:
     converters:
       preferred-json-mapper: jackson2
