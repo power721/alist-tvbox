@@ -3278,7 +3278,8 @@ onMounted(() => {
   if (store.admin) {
     loadDevices()
   }
-  if (store.admin) axios.get('/api/basic-auth-credentials').then(({data}) => {
+  // 猫影视客户端要求链接内嵌 basic auth:USER 也要加载凭证拼装链接(后端已放开只读)
+  axios.get('/api/basic-auth-credentials').then(({data}) => {
     basicAuthUser.value = data.username
     basicAuthPass.value = data.password
   }).catch(() => {})

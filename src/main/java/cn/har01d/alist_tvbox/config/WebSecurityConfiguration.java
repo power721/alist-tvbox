@@ -78,6 +78,10 @@ public class WebSecurityConfiguration {
                         // VOD 订阅按归属隔离:USER 可用全局默认订阅(只读)+添加个人订阅
                         .requestMatchers("/api/subscriptions/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name(), Role.CLIENT.name())
+                        // 猫影视客户端要求链接内嵌 basic auth(客户端限制):USER 也需读取凭证来拼装链接;
+                        // 该凭证只解锁 /cat /node /open 内容前缀,内容仍由 vod token 校验,泄漏面可控。重新生成仍限管理级
+                        .requestMatchers(HttpMethod.GET, "/api/basic-auth-credentials")
+                        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name(), Role.CLIENT.name())
                         .requestMatchers("/api/live/follows", "/api/live/follows/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/media-subscriptions", "/api/media-subscriptions/**")
