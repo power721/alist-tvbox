@@ -127,7 +127,10 @@ public class LiveFollowService {
      * 与播放记录同步(playbackTokenForSubscription)的归属规则一致。
      */
     public int resolveUid(String token) {
-        var user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findByUserVodToken(token);
+        var user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findUserByCredentialToken(token);
+        if (user == null) {
+            user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findByUserVodToken(token);
+        }
         if (user == null) {
             user = userService.list().stream()
                     .filter(candidate -> candidate.getRole() == Role.ADMIN)

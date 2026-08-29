@@ -58,6 +58,7 @@
 import {onMounted, ref} from 'vue'
 import axios from "axios"
 import {useRouter} from "vue-router";
+import {ElMessage} from "element-plus";
 const router = useRouter()
 
 interface User {
@@ -116,6 +117,10 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
+  if (form.value.username.includes('-')) {
+    ElMessage.error("用户名不能包含 '-'")
+    return
+  }
   const url = updateAction.value ? '/api/users/' + form.value.id : '/api/users'
   axios.post(url, form.value).then(() => {
     formVisible.value = false

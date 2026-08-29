@@ -1665,7 +1665,10 @@ public class SubscriptionService {
             log.debug("playback sync subscription disabled");
             return "";
         }
-        var user = StringUtils.isBlank(subscriptionToken) ? null : userService.findByUserVodToken(subscriptionToken);
+        var user = StringUtils.isBlank(subscriptionToken) ? null : userService.findUserByCredentialToken(subscriptionToken);
+        if (user == null) {
+            user = StringUtils.isBlank(subscriptionToken) ? null : userService.findByUserVodToken(subscriptionToken);
+        }
         if (user == null) {
             user = userService.list().stream()
                     .filter(candidate -> candidate.getRole() == Role.ADMIN)

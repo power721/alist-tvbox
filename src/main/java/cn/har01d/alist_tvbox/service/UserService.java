@@ -145,21 +145,18 @@ public class UserService {
     /**
      * 凭证形态 token(u-{username}-{vodSecret})→ 用户:密钥验真通过才返回;
      * 裸 u-{username} 无熵(用户名可猜测),不能作为凭证权威,返回 null。
+     * 用户名已禁含 '-'(validateUsername),split 三段无歧义。
      */
     public User findUserByCredentialToken(String token) {
         if (token == null || !token.startsWith(USER_TOKEN_PREFIX)) {
             return null;
         }
-        String body = token.substring(USER_TOKEN_PREFIX.length());
-        int sep = body.lastIndexOf('-');
-        if (sep <= 0 || sep + 1 >= body.length()) {
+        String[] parts = token.split("-");
+        if (parts.length != 3 || parts[1].isEmpty() || parts[2].isEmpty()) {
             return null;
         }
-        User user = findByUsername(body.substring(0, sep));
-        if (user == null) {
-            return null;
-        }
-        return body.substring(sep + 1).equals(vodSecretOf(user)) ? user : null;
+        User user = findByUsername(parts[1]);
+        return user == null ? null : parts[2].equals(vodSecretOf(user)) ? user : null;
     }
 
     /** 裸 u-{username}(用户存在)→ 拼上密钥的凭证形态,供配置嵌入;其它形态原样返回。 */
@@ -307,6 +304,7 @@ public class UserService {
         if (StringUtils.isEmpty(dto.getUsername())) {
             throw new BadRequestException("用户名不能为空");
         }
+        validateUsername(dto.getUsername());
         if (StringUtils.isEmpty(dto.getPassword())) {
             throw new BadRequestException("密码不能为空");
         }
@@ -321,6 +319,13 @@ public class UserService {
         userRepository.save(user);
         usernames.add(user.getUsername());
         return user;
+    }
+
+    /** 用户名禁含 '-':凭证 token 形态 u-{username}-{secret} 靠 '-' 分段,用户名带 '-' 会造成归属解析歧义。 */
+    private void validateUsername(String username) {
+        if (username.contains("-")) {
+            throw new BadRequestException("用户名不能包含 '-'");
+        }
     }
 
     /** 用户凭证下载密钥:16 hex(SecureRandom)。用户名可猜测,u-{username} token 无熵,熵全靠此值。 */
@@ -349,6 +354,7 @@ public class UserService {
         var sessions = sessionRepository.findAllByUsername(username);
         sessionRepository.deleteAll(sessions);
         if (StringUtils.isNotEmpty(dto.getUsername())) {
+            validateUsername(dto.getUsername());
             User other = userRepository.findByUsername(dto.getUsername());
             if (other != null && !other.getId().equals(user.getId())) {
                 throw new BadRequestException("用户名已经存在");
@@ -407,6 +413,10 @@ public class UserService {
         }
 
         if (user.getRole() == Role.ADMIN && !username.equals(dto.getUsername())) {
+            if (StringUtils.isBlank(dto.getUsername())) {
+                throw new BadRequestException("用户名不能为空");
+            }
+            validateUsername(dto.getUsername());
             User other = userRepository.findByUsername(dto.getUsername());
             if (other != null && !other.getId().equals(user.getId())) {
                 throw new BadRequestException("用户名已经存在");

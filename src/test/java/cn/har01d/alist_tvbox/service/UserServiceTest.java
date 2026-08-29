@@ -82,6 +82,16 @@ class UserServiceTest {
     }
 
     @Test
+    void createShouldRejectUsernameContainingHyphen() {
+        UserDto dto = new UserDto();
+        dto.setUsername("xiaoming-test");
+        dto.setPassword("secret");
+
+        assertThrows(BadRequestException.class, () -> userService.create(dto));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
     void deleteShouldRemoveUsernameFromCache() {
         UserDto dto = new UserDto();
         dto.setUsername("alice");
@@ -129,18 +139,18 @@ class UserServiceTest {
         user.setPassword("encoded-old");
 
         UserDto dto = new UserDto();
-        dto.setUsername("new-admin");
+        dto.setUsername("new_admin");
         dto.setPassword("");
 
         when(userRepository.findByUsername("admin")).thenReturn(user);
-        when(userRepository.findByUsername("new-admin")).thenReturn(null);
+        when(userRepository.findByUsername("new_admin")).thenReturn(null);
         when(userRepository.save(user)).thenReturn(user);
-        when(tokenService.encodeToken(1, "new-admin", "ADMIN", null, null)).thenReturn("token");
+        when(tokenService.encodeToken(1, "new_admin", "ADMIN", null, null)).thenReturn("token");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "token"));
 
         UserToken token = userService.updateAccount(dto, null, null);
 
-        assertEquals("new-admin", user.getUsername());
+        assertEquals("new_admin", user.getUsername());
         assertEquals("encoded-old", user.getPassword());
         assertEquals("token", token.getToken());
         verify(passwordEncoder, never()).matches(any(), any());
