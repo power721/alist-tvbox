@@ -8,6 +8,7 @@ import db.migration.current.V28__MediaSubscriptionMainDrives;
 import db.migration.current.V30__MediaSubscriptionEpisodeSource;
 import db.migration.current.V31__MediaSubscriptionCover;
 import db.migration.current.V32__MediaMetadata;
+import db.migration.current.V37__MediaSubscriptionCoverFallback;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -221,6 +222,52 @@ class MediaSubscriptionMigrationTest {
         }
         // 幂等:重复执行不报错
         new V32__MediaMetadata().migrate(context());
+    }
+
+    @Test
+    void v37AddsFallbackCoverAndMarksOnlyUnboundTmdbRowsForBackfill() throws Exception {
+        new V20__MediaSubscription().migrate(context());
+        new V21__MediaSubscriptionMeta().migrate(context());
+        new V22__MediaSubscriptionMetaFix().migrate(context());
+        new V31__MediaSubscriptionCover().migrate(context());
+        execute("INSERT INTO media_subscription (id, uid, name, created_time, meta_provider, meta_id, douban_id, meta_sync_time)"
+                + " VALUES (10, 1, '待补绑', 0, 'tmdb', '233295', NULL, 111)");
+        execute("INSERT INTO media_subscription (id, uid, name, created_time, meta_provider, meta_id, douban_id, meta_sync_time)"
+                + " VALUES (11, 1, '已补绑', 0, 'tmdb', '233296', 36245887, 222)");
+        execute("INSERT INTO media_subscription (id, uid, name, created_time, meta_provider, meta_id, douban_id, meta_sync_time)"
+                + " VALUES (12, 1, '豆瓣源', 0, 'douban', '36245888', 36245888, 333)");
+        execute("INSERT INTO media_subscription (id, uid, name, created_time, meta_provider, meta_id, douban_id, meta_sync_time)"
+                + " VALUES (13, 1, '缺回退图', 0, 'tmdb', '233297', 36245889, 444)");
+
+        new V37__MediaSubscriptionCoverFallback().migrate(context());
+
+        execute("UPDATE media_subscription SET cover_fallback_url = 'https://img9.doubanio.com/fallback.jpg',"
+                + " cover_fallback_status = NULL WHERE id = 10");
+        execute("UPDATE media_subscription SET cover_fallback_url = 'https://img9.doubanio.com/complete.jpg',"
+                + " cover_fallback_status = NULL WHERE id = 11");
+        new V37__MediaSubscriptionCoverFallback().migrate(context()); // 已有完整跨源快照不应被再次标记
+
+        try (ResultSet rs = query("SELECT id, meta_sync_time, cover_fallback_url, cover_fallback_status"
+                + " FROM media_subscription ORDER BY id")) {
+            assertTrue(rs.next());
+            assertEquals(10, rs.getInt(1));
+            assertEquals(111L, rs.getLong(2));
+            assertEquals("https://img9.doubanio.com/fallback.jpg", rs.getString(3));
+            assertEquals("MATCH", rs.getString(4));
+            assertTrue(rs.next());
+            assertEquals(11, rs.getInt(1));
+            assertEquals(222L, rs.getLong(2));
+            assertEquals("MATCH", rs.getString(4));
+            assertTrue(rs.next());
+            assertEquals(12, rs.getInt(1));
+            assertEquals(333L, rs.getLong(2));
+            assertEquals(null, rs.getString(4));
+            assertTrue(rs.next());
+            assertEquals(13, rs.getInt(1));
+            assertEquals(444L, rs.getLong(2));
+            assertEquals("PENDING", rs.getString(4));
+        }
+        new V37__MediaSubscriptionCoverFallback().migrate(context()); // 幂等:重复执行不报错
     }
 
     private void execute(String sql) throws Exception {

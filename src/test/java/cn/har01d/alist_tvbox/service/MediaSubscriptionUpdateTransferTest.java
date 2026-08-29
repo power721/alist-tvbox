@@ -137,4 +137,21 @@ class MediaSubscriptionUpdateTransferTest {
 
         assertEquals(List.of(), dto.getMissingEpisodes());
     }
+
+    @Test
+    void dtoCoverIncludesFallbackParameter() {
+        MediaSubscription sub = subscription(MediaSubscription.MODE_FOLLOW, "[]");
+        String tmdbCover = "https://media.themoviedb.org/t/p/w300/poster.jpg";
+        String doubanCover = "https://img9.doubanio.com/view/photo/l/public/p1.jpg";
+        sub.setCoverUrl(tmdbCover);
+        sub.setCoverFallbackUrl(doubanCover);
+
+        MediaSubscriptionDto dto = service.toDto(sub);
+
+        assertEquals("/images?url="
+                        + java.net.URLEncoder.encode(tmdbCover, java.nio.charset.StandardCharsets.UTF_8)
+                        + "&fallback="
+                        + java.net.URLEncoder.encode(doubanCover, java.nio.charset.StandardCharsets.UTF_8),
+                dto.getCover());
+    }
 }

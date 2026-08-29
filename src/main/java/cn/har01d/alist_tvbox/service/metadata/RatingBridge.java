@@ -15,6 +15,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
@@ -26,7 +27,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 跨源评分桥接:各 provider 拉完详情后按剧名定位同剧条目,只补 ratings/externalIds
+ * 跨源评分桥接:各 provider 拉完详情后按剧名定位同剧条目,补 ratings/externalIds，
+ * 并记录已确认身份的 externalCovers/externalStatuses
  * (详情页多源评分 + 条目外链,links 由 {@code MediaSubscriptionService.appendMetaLink} 展开),
  * 条目身份(名称/封面/日程/集数)仍以源 provider 为准。任一源订阅经桥接即得三源评分/外链:
  * <ul>
@@ -34,7 +36,7 @@ import java.util.Optional;
  * <li>豆瓣订阅:名称桥接已带 TMDB,缺 Bangumi(国创动画同样有分);</li>
  * <li>Bangumi 订阅:缺豆瓣评分。</li>
  * </ul>
- * 两条评分路均免 cookie 免 key:豆瓣 suggest(游客可用)定位 subject id(只认 {@code type=episode},
+ * 两条评分路均免 cookie 免 key:豆瓣 suggest(游客可用)定位 subject id(接受影视类 movie/tv/episode,
  * id 要喂 rexxar tv 接口)→ rexxar rating.value(rexxar 无 cookie 可用,未开分 value=0 视为无分);
  * Bangumi api.bgm.tv 搜索结果自带 rating.score,无需二跳。匹配与「豆瓣名称桥接 TMDB」同规:
  * 归一化整词同名(匹配集=源中文名/原名/别名+剔季缀基名,候选含 sub_title/剔季缀;同名异剧/
@@ -53,8 +55,14 @@ public class RatingBridge {
     private static final String REXXAR_URL = "https://m.douban.com/rexxar/api/v2/tv/";
     private static final String BANGUMI_SEARCH_URL = "https://api.bgm.tv/v0/search/subjects";
 
-    /** 桥接产物:外部条目 id + 评分(未开分为 null —— 链接可给,分数不造;字符串形态与各 provider 的 ratings 一致)。 */
-    record Rating(String id, String score) {
+    /** 桥接产物:评分可宽松展示,只有 identityTrusted 才能持久化跨源 id/封面。 */
+    record Rating(String id, String score, String cover, boolean identityTrusted) {
+    }
+
+    private static final class BridgeRequestException extends RuntimeException {
+        private BridgeRequestException(Throwable cause) {
+            super(cause);
+        }
     }
 
     private record DoubanCandidate(String id, String title, String subTitle, String year) {
@@ -64,7 +72,7 @@ public class RatingBridge {
     }
 
     private final RestTemplate restTemplate;
-    /** 源条目(provider:id)→ 豆瓣评分(Optional.empty 负缓存:未命中/未开分/失败,6h 后重试)。 */
+    /** 源条目(provider:id)→ 豆瓣评分(Optional.empty 仅缓存已确认未命中;瞬时失败不进缓存)。 */
     private final Cache<String, Optional<Rating>> doubanCache = Caffeine.newBuilder()
             .maximumSize(300).expireAfterWrite(Duration.ofHours(6)).build();
     /** 源条目(provider:id)→ Bangumi 评分(同上负缓存)。 */
@@ -75,27 +83,40 @@ public class RatingBridge {
         this.restTemplate = metadataHttp.create();
     }
 
+    void invalidate(String provider, String id, int season) {
+        String cacheKey = provider + ":" + id + ":" + season;
+        doubanCache.invalidate(cacheKey);
+        bangumiCache.invalidate(cacheKey);
+    }
+
     /** provider 详情尾部接入:补缺源评分与外链;源自身/已带该源外链时跳过对应搜索。 */
     void enrich(MetadataDetails details, int season) {
         if (details == null || StringUtils.isBlank(details.getName()) || StringUtils.isBlank(details.getId())) {
             return;
         }
-        try {
-            List<String> names = matchNames(details);
-            Integer year = DoubanMetadataProvider.parseYear(details.getYear());
-            // 缓存键带 season:年份门禁只在 season<2 生效 —— 同剧 S1/S2 订阅共享结论会把
-            // S2(无门禁)命中的同名异剧 id 串给 S1(本应门禁拦截),反之亦然
-            String cacheKey = details.getProvider() + ":" + details.getId() + ":" + season;
-            if (!hasExternal(details, DoubanMetadataProvider.NAME)) {
+        List<String> names = matchNames(details);
+        Integer year = DoubanMetadataProvider.parseYear(details.getYear());
+        String cacheKey = details.getProvider() + ":" + details.getId() + ":" + season;
+        if (!hasExternal(details, DoubanMetadataProvider.NAME)) {
+            try {
                 apply(details, DoubanMetadataProvider.NAME, doubanCache.get(cacheKey,
                         key -> searchDouban(details, season, names, year)));
+                markExternalStatus(details, DoubanMetadataProvider.NAME,
+                        hasExternal(details, DoubanMetadataProvider.NAME)
+                                ? MetadataDetails.EXTERNAL_MATCH : MetadataDetails.EXTERNAL_NO_MATCH);
+            } catch (BridgeRequestException e) {
+                markExternalStatus(details, DoubanMetadataProvider.NAME, MetadataDetails.EXTERNAL_RETRY);
+                log.debug("rating bridge douban {} retry later: {}", details.getName(),
+                        e.getCause() == null ? e.getClass().getSimpleName() : e.getCause().getClass().getSimpleName());
             }
-            if (!hasExternal(details, BangumiMetadataProvider.NAME)) {
+        }
+        if (!hasExternal(details, BangumiMetadataProvider.NAME)) {
+            try {
                 apply(details, BangumiMetadataProvider.NAME, bangumiCache.get(cacheKey,
                         key -> searchBangumi(details, season, names, year)));
+            } catch (Exception e) {
+                log.debug("rating bridge bangumi {} failed: {}", details.getName(), e.getClass().getSimpleName());
             }
-        } catch (Exception e) {
-            log.debug("rating bridge {} failed: {}", details.getName(), e.getMessage());
         }
     }
 
@@ -130,6 +151,23 @@ public class RatingBridge {
         if (matched.isEmpty()) {
             return Optional.empty();
         }
+        boolean identityTrusted = season < 2;
+        if (season > 1) {
+            List<DoubanCandidate> sameSeason = matched.stream()
+                    .filter(item -> candidateSeason(item) == season)
+                    .toList();
+            if (!sameSeason.isEmpty()) {
+                matched = new ArrayList<>(sameSeason);
+                identityTrusted = true;
+            }
+        } else {
+            matched = matched.stream()
+                    .filter(item -> candidateSeason(item) <= 1)
+                    .toList();
+            if (matched.isEmpty()) {
+                return Optional.empty();
+            }
+        }
         if (year != null && season < 2) {
             // 单季条目年份必须对上(候选缺年份视为通过);全不沾 = 同名异剧,放弃
             List<DoubanCandidate> yearMatched = new ArrayList<>();
@@ -154,7 +192,10 @@ public class RatingBridge {
         double rating = body.path("rating").path("value").asDouble(0);
         log.info("rating bridge: {} ({} {}) -> douban {} [{}]", details.getName(),
                 details.getProvider(), details.getId(), best.id(), rating > 0 ? rating : "unrated");
-        return Optional.of(new Rating(best.id(), rating > 0 ? String.valueOf(rating) : null));
+        String cover = body.path("pic").path("large")
+                .asText(body.path("pic").path("normal").asText(""));
+        return Optional.of(new Rating(best.id(), rating > 0 ? String.valueOf(rating) : null,
+                StringUtils.defaultIfBlank(cover, null), identityTrusted));
     }
 
     private Optional<Rating> searchBangumi(MetadataDetails details, int season, List<String> names, Integer year) {
@@ -188,7 +229,7 @@ public class RatingBridge {
         }
         log.info("rating bridge: {} ({} {}) -> bangumi {} [{}]", details.getName(),
                 details.getProvider(), details.getId(), best.id(), score > 0 ? best.score() : "unrated");
-        return Optional.of(new Rating(best.id(), score > 0 ? best.score() : null));
+        return Optional.of(new Rating(best.id(), score > 0 ? best.score() : null, null, true));
     }
 
     /** 剔季缀基名作第二轮搜索词(与第一轮原名不同才值得补搜);无季标返回 null。 */
@@ -213,6 +254,11 @@ public class RatingBridge {
             matched.add(item);
         }
         return matched;
+    }
+
+    private static int candidateSeason(DoubanCandidate candidate) {
+        return Math.max(DoubanMetadataProvider.seasonHintOf(candidate.title()),
+                DoubanMetadataProvider.seasonHintOf(candidate.subTitle()));
     }
 
     private static List<BangumiCandidate> matchBangumi(List<BangumiCandidate> candidates, List<String> names) {
@@ -264,10 +310,25 @@ public class RatingBridge {
             ratings.putIfAbsent(source, hit.get().score());
             details.setRatings(ratings);
         }
-        Map<String, String> ids = details.getExternalIds() == null
-                ? new LinkedHashMap<>() : new LinkedHashMap<>(details.getExternalIds());
-        ids.putIfAbsent(source, hit.get().id());
-        details.setExternalIds(ids);
+        if (hit.get().identityTrusted()) {
+            Map<String, String> ids = details.getExternalIds() == null
+                    ? new LinkedHashMap<>() : new LinkedHashMap<>(details.getExternalIds());
+            ids.putIfAbsent(source, hit.get().id());
+            details.setExternalIds(ids);
+        }
+        if (hit.get().identityTrusted() && StringUtils.isNotBlank(hit.get().cover())) {
+            Map<String, String> covers = details.getExternalCovers() == null
+                    ? new LinkedHashMap<>() : new LinkedHashMap<>(details.getExternalCovers());
+            covers.putIfAbsent(source, hit.get().cover());
+            details.setExternalCovers(covers);
+        }
+    }
+
+    private static void markExternalStatus(MetadataDetails details, String source, String status) {
+        Map<String, String> statuses = details.getExternalStatuses() == null
+                ? new LinkedHashMap<>() : new LinkedHashMap<>(details.getExternalStatuses());
+        statuses.put(source, status);
+        details.setExternalStatuses(statuses);
     }
 
     /** 豆瓣 suggest(游客可用,与 DoubanMetadataProvider.search 同接口):失败返回 null。 */
@@ -334,7 +395,7 @@ public class RatingBridge {
         }
     }
 
-    /** String 收包再手动解析:与 RestTemplate 消息转换器组合解耦(Jackson2/Jackson3 均可)。 */
+    /** String 收包再手动解析:404 是确认未命中,限流/服务端/网络错误保留为可重试。 */
     private JsonNode httpGetJson(String url, String referer) {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -342,10 +403,19 @@ public class RatingBridge {
             headers.set(HttpHeaders.USER_AGENT, Utils.getUserAgent());
             ResponseEntity<String> response = restTemplate.exchange(
                     URI.create(url), HttpMethod.GET, new HttpEntity<>(null, headers), String.class);
-            return StringUtils.isBlank(response.getBody()) ? null : MAPPER.readTree(response.getBody());
+            if (StringUtils.isBlank(response.getBody())) {
+                throw new BridgeRequestException(new IllegalStateException("empty response"));
+            }
+            return MAPPER.readTree(response.getBody());
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 404) {
+                return null;
+            }
+            throw new BridgeRequestException(e);
+        } catch (BridgeRequestException e) {
+            throw e;
         } catch (Exception e) {
-            log.debug("rating bridge request failed: {} {}", url, e.getMessage());
-            return null;
+            throw new BridgeRequestException(e);
         }
     }
 }

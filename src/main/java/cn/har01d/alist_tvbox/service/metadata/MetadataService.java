@@ -178,6 +178,11 @@ public class MetadataService {
         if (details.getRatings() == null) {
             return true; // 多源评分/外链扩展前写入
         }
+        if (TmdbMetadataProvider.NAME.equalsIgnoreCase(details.getProvider())
+                && (details.getExternalCovers() == null || details.getExternalStatuses() == null
+                        || MetadataDetails.EXTERNAL_RETRY.equals(details.getExternalStatuses().get(DoubanMetadataProvider.NAME)))) {
+            return true; // 跨源封面/绑定扩展前或瞬时失败快照:重拉一次后恢复正常 TTL
+        }
         if (details.getGenres() != null && details.getGenres().stream()
                 .anyMatch(g -> g.contains(",") || g.contains("，"))) {
             return true;

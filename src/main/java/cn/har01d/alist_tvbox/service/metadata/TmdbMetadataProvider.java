@@ -112,18 +112,34 @@ public class TmdbMetadataProvider implements MetadataProvider {
             return null; // 熔断打开期间短路:别让每次调用都付满读超时(外网挂起时可拖 15s×4 请求)
         }
         int seasonNumber = season == null || season < 1 ? 1 : season;
-        MetadataDetails details = detailsCache.get(id + ":" + seasonNumber, key -> fetchDetails(id, seasonNumber));
+        String cacheKey = id + ":" + seasonNumber;
+        MetadataDetails details = detailsCache.getIfPresent(cacheKey);
+        if (details == null) {
+            details = fetchDetails(id, seasonNumber);
+            if (details != null && !hasExternalRetry(details)) {
+                detailsCache.put(cacheKey, details);
+            }
+        }
         return details != null && StringUtils.isNotBlank(details.getName()) ? details : null;
     }
 
     @Override
     public MetadataDetails refreshDetails(String id, Integer season) {
         int seasonNumber = season == null || season < 1 ? 1 : season;
+        String cacheKey = id + ":" + seasonNumber;
+        detailsCache.invalidate(cacheKey);
+        ratingBridge.invalidate(NAME, id, seasonNumber);
         MetadataDetails details = fetchDetails(id, seasonNumber);
-        if (details != null) {
-            detailsCache.put(id + ":" + seasonNumber, details); // 新值占位,后续 details() 不再吃旧缓存
+        if (details != null && !hasExternalRetry(details)) {
+            detailsCache.put(cacheKey, details); // 新值占位,后续 details() 不再吃旧缓存
         }
         return details;
+    }
+
+    private static boolean hasExternalRetry(MetadataDetails details) {
+        return details != null && details.getExternalStatuses() != null
+                && MetadataDetails.EXTERNAL_RETRY.equals(
+                        details.getExternalStatuses().get(DoubanMetadataProvider.NAME));
     }
 
     /** IMDb id 定位 TMDB 剧集并复用全量详情(豆瓣详情页 IMDb 桥接:分集播出日程/状态/别名);未命中返回 null。 */
@@ -166,6 +182,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 details.setRatings(new java.util.LinkedHashMap<>(java.util.Map.of("tmdb", details.getRating())));
             }
             details.setExternalIds(new java.util.LinkedHashMap<>(java.util.Map.of("tmdb", id)));
+            details.setExternalCovers(new java.util.LinkedHashMap<>());
             List<String> genres = new ArrayList<>();
             if (tv.has("genres") && tv.get("genres").isArray()) {
                 for (JsonNode genre : tv.get("genres")) {
@@ -214,7 +231,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
             }
             String poster = tv.path("poster_path").asText("");
             if (StringUtils.isNotBlank(poster)) {
-                details.setCover("https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + poster);
+                String cover = "https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + poster;
+                details.setCover(cover);
+                details.getExternalCovers().put(NAME, cover);
             }
             String status = tv.path("status").asText();
             if ("Ended".equals(status) || "Canceled".equals(status)) {

@@ -25,6 +25,37 @@ class ProxyServiceTest {
         assertThat(ProxyService.parsePlayUrlId("1@106306.iso")).isEqualTo(106306);
     }
 
+    @Test
+    void imageRegistrationUsesDedicatedPrivatePurposeForLanOrigin() {
+        when(playUrlRepository.findFirstBySiteAndPath(
+                Mockito.eq(ProxyService.IMAGE_PRIVATE_SITE), Mockito.anyString(), Mockito.any()))
+                .thenReturn(null);
+        assignIdOnSave();
+
+        int id = service.generateImageUrl(
+                "http://10.0.0.8/emby/Items/1/Images/Primary", "http://10.0.0.8/");
+
+        ArgumentCaptor<PlayUrl> captor = ArgumentCaptor.forClass(PlayUrl.class);
+        verify(playUrlRepository).save(captor.capture());
+        assertThat(captor.getValue().getSite()).isEqualTo(ProxyService.IMAGE_PRIVATE_SITE);
+        assertThat(id).isEqualTo(99);
+    }
+
+    @Test
+    void imageRegistrationKeepsPublicOriginPublic() {
+        when(playUrlRepository.findFirstBySiteAndPath(
+                Mockito.eq(ProxyService.IMAGE_PUBLIC_SITE), Mockito.anyString(), Mockito.any()))
+                .thenReturn(null);
+        assignIdOnSave();
+
+        service.generateImageUrl(
+                "https://93.184.216.34/emby/Items/1/Images/Primary", "https://93.184.216.34/");
+
+        ArgumentCaptor<PlayUrl> captor = ArgumentCaptor.forClass(PlayUrl.class);
+        verify(playUrlRepository).save(captor.capture());
+        assertThat(captor.getValue().getSite()).isEqualTo(ProxyService.IMAGE_PUBLIC_SITE);
+    }
+
     // ---------- 长效代理注册(追剧盘线路) ----------
 
     private static Site site() {

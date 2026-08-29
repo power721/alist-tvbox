@@ -31,7 +31,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  * Bangumi 条目 name_cn 常为空串(asText(default) 不走 default,须显式回落 name);
  * 未开分条目(豆瓣 value=0/Bangumi score=0)只并外链不造分数。
  * 归一化整词同名 + 年份门禁(±1,多季放行)后条目身份字段不动;
- * 原名搜空按剔季缀基名补搜一轮;未命中/失败负缓存静默,不影响详情主链。
+ * 原名搜空按剔季缀基名补搜一轮;确认未命中才负缓存,瞬时失败标记 RETRY,不影响详情主链。
  */
 class RatingBridgeTest {
     private static final String FANREN_SUGGEST =
@@ -65,7 +65,8 @@ class RatingBridgeTest {
                         """, MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo(FANREN_REXXAR)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
-                        "{\"title\":\"凡人修仙传\",\"year\":2020,\"rating\":{\"value\":8.9}}",
+                        "{\"title\":\"凡人修仙传\",\"year\":2020,\"rating\":{\"value\":8.9},"
+                                + "\"pic\":{\"large\":\"https://img9.doubanio.com/view/photo/l/public/p1.jpg\"}}",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo(BANGUMI_SEARCH)).andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess("""
@@ -80,6 +81,8 @@ class RatingBridgeTest {
         assertEquals("9.3", details.getRatings().get("bangumi"), "Bangumi 评分并入");
         assertEquals("8.5", details.getRatings().get("tmdb"), "TMDB 评分保留");
         assertEquals("36245887", details.getExternalIds().get("douban"), "取影视条目而非 book 干扰项");
+        assertEquals("https://img9.doubanio.com/view/photo/l/public/p1.jpg",
+                details.getExternalCovers().get("douban"), "跨源绑定同时保留豆瓣封面候选");
         assertEquals("332432", details.getExternalIds().get("bangumi"));
         assertTrue(details.getExternalIds().containsKey("tmdb"));
         assertEquals("凡人修仙传", details.getName(), "条目身份字段不动");
@@ -136,9 +139,9 @@ class RatingBridgeTest {
         server.verify();
     }
 
-    /** 多季合一 TMDB 条目(瑞克和莫蒂 S1 是 2013,当前季 2024):season≥2 放行年份门禁。 */
+    /** 多季合一 TMDB 条目可借剧级评分,但无明确季号的候选不能持久化为当前季豆瓣身份。 */
     @Test
-    void multiSeasonEntrySkipsYearGate() {
+    void multiSeasonLooseMatchAddsRatingWithoutPersistingIdentity() {
         server.expect(once(), requestTo(RICK_SUGGEST)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
                         "[{\"id\":\"246971\",\"title\":\"瑞克和莫蒂\",\"year\":\"2013\",\"type\":\"movie\"}]",
@@ -153,23 +156,93 @@ class RatingBridgeTest {
         bridge.enrich(details, 10);
 
         assertEquals("9.7", details.getRatings().get("douban"), "多季条目年份放行后命中");
+        assertFalse(details.getExternalIds().containsKey("douban"), "剧级宽松命中不可冒充第十季豆瓣 ID");
+        assertTrue(details.getExternalCovers() == null || !details.getExternalCovers().containsKey("douban"));
+        assertEquals(MetadataDetails.EXTERNAL_NO_MATCH, details.getExternalStatuses().get("douban"));
         server.verify();
     }
 
-    /** 豆瓣侧失败静默(不影响 Bangumi 路),桥接结果负缓存,6h 内不再重试。 */
     @Test
-    void doubanFailureIsSilentAndCached() {
+    void multiSeasonExplicitSameSeasonPersistsIdentityAndCover() {
+        server.expect(once(), requestTo(RICK_SUGGEST)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "[{\"id\":\"36756326\",\"title\":\"瑞克和莫蒂 第十季\",\"year\":\"2026\",\"type\":\"movie\"}]",
+                        MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("https://m.douban.com/rexxar/api/v2/tv/36756326")).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "{\"title\":\"瑞克和莫蒂 第十季\",\"rating\":{\"value\":9.6},"
+                                + "\"pic\":{\"large\":\"https://img9.doubanio.com/rick-s10.jpg\"}}",
+                        MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(BANGUMI_SEARCH)).andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("{\"data\":[]}", MediaType.APPLICATION_JSON));
+
+        MetadataDetails details = tmdbDetails("瑞克和莫蒂", "2013");
+        bridge.enrich(details, 10);
+
+        assertEquals("36756326", details.getExternalIds().get("douban"));
+        assertEquals("https://img9.doubanio.com/rick-s10.jpg", details.getExternalCovers().get("douban"));
+        assertEquals(MetadataDetails.EXTERNAL_MATCH, details.getExternalStatuses().get("douban"));
+        server.verify();
+    }
+
+    /** 豆瓣瞬时失败不进负缓存:本次标记 RETRY,下次恢复后补齐身份与封面。 */
+    @Test
+    void doubanFailureRetriesAndRecovers() {
         server.expect(once(), requestTo(FANREN_SUGGEST)).andExpect(method(HttpMethod.GET))
                 .andRespond(withServerError());
         server.expect(once(), requestTo(BANGUMI_SEARCH)).andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess("{\"data\":[]}", MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(FANREN_SUGGEST)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "[{\"id\":\"36245887\",\"title\":\"凡人修仙传\",\"year\":\"2020\",\"type\":\"movie\"}]",
+                        MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(FANREN_REXXAR)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "{\"title\":\"凡人修仙传\",\"rating\":{\"value\":8.9},"
+                                + "\"pic\":{\"large\":\"https://img9.doubanio.com/fanren.jpg\"}}",
+                        MediaType.APPLICATION_JSON));
 
         MetadataDetails details = tmdbDetails("凡人修仙传", "2020");
         bridge.enrich(details, 1);
-        bridge.enrich(details, 1); // 缓存:不再发请求
+        assertEquals(MetadataDetails.EXTERNAL_RETRY, details.getExternalStatuses().get("douban"));
+        assertFalse(details.getExternalIds().containsKey("douban"));
 
-        assertFalse(details.getRatings().containsKey("douban"));
+        bridge.enrich(details, 1);
+
+        assertEquals("8.9", details.getRatings().get("douban"));
+        assertEquals("36245887", details.getExternalIds().get("douban"));
+        assertEquals("https://img9.doubanio.com/fanren.jpg", details.getExternalCovers().get("douban"));
+        assertEquals(MetadataDetails.EXTERNAL_MATCH, details.getExternalStatuses().get("douban"));
         assertEquals("8.5", details.getRatings().get("tmdb"), "主链评分不受桥接失败影响");
+        server.verify();
+    }
+
+    @Test
+    void forceRefreshInvalidatesConfirmedNoMatchCache() {
+        server.expect(once(), requestTo(FANREN_SUGGEST)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(FANREN_SUGGEST)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "[{\"id\":\"36245887\",\"title\":\"凡人修仙传\",\"year\":\"2020\",\"type\":\"movie\"}]",
+                        MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(FANREN_REXXAR)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "{\"title\":\"凡人修仙传\",\"rating\":{\"value\":8.9},"
+                                + "\"pic\":{\"large\":\"https://img9.doubanio.com/fanren.jpg\"}}",
+                        MediaType.APPLICATION_JSON));
+
+        MetadataDetails missed = tmdbDetails("凡人修仙传", "2020");
+        missed.getExternalIds().put("bangumi", "332432");
+        bridge.enrich(missed, 1);
+        assertEquals(MetadataDetails.EXTERNAL_NO_MATCH, missed.getExternalStatuses().get("douban"));
+
+        bridge.invalidate("tmdb", "24637", 1);
+        MetadataDetails refreshed = tmdbDetails("凡人修仙传", "2020");
+        refreshed.getExternalIds().put("bangumi", "332432");
+        bridge.enrich(refreshed, 1);
+
+        assertEquals("36245887", refreshed.getExternalIds().get("douban"));
+        assertEquals("https://img9.doubanio.com/fanren.jpg", refreshed.getExternalCovers().get("douban"));
         server.verify();
     }
 

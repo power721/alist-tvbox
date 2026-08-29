@@ -192,6 +192,7 @@ public class DoubanMetadataProvider implements MetadataProvider {
         MetadataDetails details = new MetadataDetails();
         details.setProvider(NAME);
         details.setId(id);
+        details.setExternalCovers(new java.util.LinkedHashMap<>());
         // rexxar tv 条目接口补集数(在线搜索结果即豆瓣 subject id,直接可用);失败降级本地 movie 表
         Instant lastFailure = failures.get(id);
         if (lastFailure == null || Duration.between(lastFailure, Instant.now()).toMinutes() >= 30) {
@@ -292,6 +293,9 @@ public class DoubanMetadataProvider implements MetadataProvider {
             }
         } catch (NumberFormatException ignored) {
             // 在线 subject id 非数字,本地表兜底不适用
+        }
+        if (StringUtils.isNotBlank(details.getCover())) {
+            details.getExternalCovers().put(NAME, details.getCover());
         }
         enrichFromSubjectPage(details, id, season);
         bridgeTmdbByName(details, season);
@@ -565,6 +569,18 @@ public class DoubanMetadataProvider implements MetadataProvider {
         if (douban == null || tmdb == null) {
             return;
         }
+        java.util.Map<String, String> covers = douban.getExternalCovers() == null
+                ? new java.util.LinkedHashMap<>() : new java.util.LinkedHashMap<>(douban.getExternalCovers());
+        if (StringUtils.isNotBlank(douban.getCover())) {
+            covers.putIfAbsent(NAME, douban.getCover());
+        }
+        if (tmdb.getExternalCovers() != null) {
+            tmdb.getExternalCovers().forEach(covers::putIfAbsent);
+        }
+        if (StringUtils.isNotBlank(tmdb.getCover())) {
+            covers.putIfAbsent(TmdbMetadataProvider.NAME, tmdb.getCover());
+        }
+        douban.setExternalCovers(covers);
         if (StringUtils.isNotBlank(tmdb.getCover())) {
             // 豆瓣封面(rexxar pic 的 view/photo 图床)防盗链/风控频发,代理也常 403;TMDB 海报可用性稳定,优先
             douban.setCover(tmdb.getCover());

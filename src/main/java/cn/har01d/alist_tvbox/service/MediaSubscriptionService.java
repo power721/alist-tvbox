@@ -26,6 +26,7 @@ import cn.har01d.alist_tvbox.entity.UserPreferenceRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.metadata.DoubanMetadataProvider;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
+import cn.har01d.alist_tvbox.service.metadata.TmdbMetadataProvider;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
@@ -140,11 +141,7 @@ public class MediaSubscriptionService {
     public List<MediaSubscriptionDto> list(int uid) {
         List<MediaSubscription> subscriptions = subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid);
         // 封面快照缺失(新订阅/升级存量)时后台预热:本轮先出占位/豆瓣库封面,回填后下次刷新可见。列表自身不等待任何外部调用
-        for (MediaSubscription subscription : subscriptions) {
-            if (StringUtils.isBlank(subscription.getCoverUrl())) {
-                checkService.prewarmCoverAsync(subscription);
-            }
-        }
+        subscriptions.forEach(this::maybePrewarmCover);
         return subscriptions.stream().map(this::toDto).toList();
     }
 
@@ -165,22 +162,43 @@ public class MediaSubscriptionService {
         // 同名同季幂等:搜索/播放页「追更」按钮可连点、下一季订阅可重复提交,重复订阅会产生
         // 两条 score=1000 候选抢主源 —— 已存在则直接复用(删除后重订不受影响)
         Integer season = subscription.getSeason();
+        String requestedMetaProvider = StringUtils.defaultIfBlank(request.getMetaProvider(), null);
+        String requestedMetaId = abbreviateMetaId(request.getMetaId());
+        Integer requestedDoubanId = request.getDoubanId();
+        if (StringUtils.isBlank(requestedMetaProvider) && StringUtils.isBlank(requestedMetaId)
+                && requestedDoubanId != null) {
+            requestedMetaProvider = DoubanMetadataProvider.NAME;
+            requestedMetaId = String.valueOf(requestedDoubanId);
+        }
+        if (StringUtils.isBlank(requestedMetaProvider) ^ StringUtils.isBlank(requestedMetaId)) {
+            throw new BadRequestException("元数据源和条目 ID 必须同时提供");
+        }
+        if (DoubanMetadataProvider.NAME.equalsIgnoreCase(requestedMetaProvider)) {
+            if (!StringUtils.isNumeric(requestedMetaId)) {
+                throw new BadRequestException("豆瓣条目 ID 必须为数字");
+            }
+            int metaDoubanId = Integer.parseInt(requestedMetaId);
+            if (requestedDoubanId != null && requestedDoubanId != metaDoubanId) {
+                throw new BadRequestException("豆瓣条目 ID 不一致");
+            }
+            requestedDoubanId = metaDoubanId;
+        }
         MediaSubscription existing = subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid).stream()
                 .filter(s -> subscription.getName().equals(s.getName()) && Objects.equals(season, s.getSeason()))
                 .findFirst().orElse(null);
         if (existing != null) {
+            if (bindMissingMetadata(existing, requestedMetaProvider, requestedMetaId, requestedDoubanId)) {
+                subscriptionRepository.save(existing);
+                prewarmMetadataAfterCommit(existing);
+            }
             log.info("media subscription already exists: uid={} {} season={}, reuse id {}", uid,
                     subscription.getName(), season, existing.getId());
             return toDto(existing);
         }
-        subscription.setDoubanId(request.getDoubanId());
-        subscription.setMetaProvider(StringUtils.defaultIfBlank(request.getMetaProvider(), null));
+        subscription.setDoubanId(requestedDoubanId);
+        subscription.setMetaProvider(requestedMetaProvider);
         // meta_id 列 VARCHAR(64):official 源的 id 是剧名(外部长字符串),链接直订回落时无界
-        subscription.setMetaId(abbreviateMetaId(request.getMetaId()));
-        if (subscription.getMetaId() == null && subscription.getDoubanId() != null) {
-            subscription.setMetaProvider(DoubanMetadataProvider.NAME);
-            subscription.setMetaId(String.valueOf(subscription.getDoubanId()));
-        }
+        subscription.setMetaId(requestedMetaId);
         subscription.setExpectedEpisodes(request.getExpectedEpisodes());
         subscription.setMode(StringUtils.isBlank(request.getMode()) ? MediaSubscription.MODE_FOLLOW : request.getMode());
         subscription.setAccountId(request.getAccountId());
@@ -199,6 +217,7 @@ public class MediaSubscriptionService {
 
         subscription.setMountPath(buildMountPath(subscription));
         subscriptionRepository.save(subscription);
+        prewarmMetadataAfterCommit(subscription); // 新增即异步绑定跨源 id/封面,不让创建请求等待外网
         log.info("media subscription created: uid={} {} {} mode={}", uid, subscription.getId(), subscription.getName(), subscription.getMode());
         return toDto(subscription);
     }
@@ -209,10 +228,46 @@ public class MediaSubscriptionService {
         if (request == null) {
             return toDto(subscription);
         }
+        checkService.invalidateCheck(id);
         boolean searchRelevant = false;
         Integer previousSeason = subscription.getSeason();
         String previousMode = subscription.getMode();
         String previousAccountIds = subscription.getAccountIds();
+        String previousMetaProvider = subscription.getMetaProvider();
+        String previousMetaId = subscription.getMetaId();
+        Integer previousDoubanId = subscription.getDoubanId();
+        String nextMetaProvider = previousMetaProvider;
+        String nextMetaId = previousMetaId;
+        boolean metaProviderRequested = request.isMetaProviderSet();
+        boolean metaIdRequested = request.isMetaIdSet();
+        if (metaProviderRequested) {
+            nextMetaProvider = StringUtils.defaultIfBlank(request.getMetaProvider(), null);
+            if (StringUtils.isBlank(nextMetaProvider)) {
+                nextMetaId = null; // 显式清空 provider 时成对清空条目 ID
+            }
+        }
+        if (metaIdRequested) {
+            nextMetaId = abbreviateMetaId(request.getMetaId());
+        }
+        if (metaProviderRequested && !Objects.equals(previousMetaProvider, nextMetaProvider)
+                && StringUtils.isNotBlank(nextMetaProvider) && !metaIdRequested) {
+            throw new BadRequestException("切换元数据源必须同时提供条目 ID");
+        }
+        if ((StringUtils.isBlank(nextMetaProvider) ^ StringUtils.isBlank(nextMetaId))) {
+            throw new BadRequestException("元数据源和条目 ID 必须同时提供");
+        }
+        Integer requestedDoubanId = request.isDoubanIdSet() ? request.getDoubanId() : previousDoubanId;
+        if (DoubanMetadataProvider.NAME.equalsIgnoreCase(nextMetaProvider)) {
+            if (!StringUtils.isNumeric(nextMetaId)) {
+                throw new BadRequestException("豆瓣条目 ID 必须为数字");
+            }
+            int metaDoubanId = Integer.parseInt(nextMetaId);
+            if (request.isDoubanIdSet() && request.getDoubanId() != null
+                    && request.getDoubanId() != metaDoubanId) {
+                throw new BadRequestException("豆瓣条目 ID 不一致");
+            }
+            requestedDoubanId = metaDoubanId;
+        }
         if (StringUtils.isNotBlank(request.getName())) {
             subscription.setName(StringUtils.abbreviate(request.getName().trim(), 250));
         }
@@ -224,16 +279,34 @@ public class MediaSubscriptionService {
             subscription.setSeason(request.getSeason());
             searchRelevant = true;
         }
-        if (request.getDoubanId() != null) {
-            subscription.setDoubanId(request.getDoubanId());
+        if (request.isDoubanIdSet()) {
+            subscription.setDoubanId(requestedDoubanId);
         }
-        if (request.getMetaProvider() != null) {
-            subscription.setMetaProvider(StringUtils.defaultIfBlank(request.getMetaProvider(), null));
+        if (metaProviderRequested || metaIdRequested) {
+            subscription.setMetaProvider(nextMetaProvider);
+            subscription.setMetaId(nextMetaId); // 列 VARCHAR(64),official 源 id 是剧名
         }
-        if (request.getMetaId() != null) {
-            subscription.setMetaId(abbreviateMetaId(request.getMetaId())); // 列 VARCHAR(64),official 源 id 是剧名
+        boolean metadataBindingChanged = !Objects.equals(previousMetaProvider, subscription.getMetaProvider())
+                || !Objects.equals(previousMetaId, subscription.getMetaId());
+        if (metadataBindingChanged) {
             subscription.setMetaSyncTime(null); // 换条目立即重拉元数据
             subscription.setCoverUrl(null); // 封面快照随条目走,不留旧剧封面
+            subscription.setCoverFallbackUrl(null);
+            subscription.setCoverFallbackStatus("PENDING");
+            if (DoubanMetadataProvider.NAME.equalsIgnoreCase(subscription.getMetaProvider())
+                    && StringUtils.isNumeric(subscription.getMetaId())) {
+                subscription.setDoubanId(requestedDoubanId);
+            } else if (request.isDoubanIdSet()) {
+                subscription.setDoubanId(requestedDoubanId);
+            } else {
+                subscription.setDoubanId(null); // 非豆瓣条目先清旧绑定,由预热按新条目重新匹配
+            }
+        }
+        boolean doubanBindingChanged = !Objects.equals(previousDoubanId, subscription.getDoubanId());
+        if (!metadataBindingChanged && doubanBindingChanged) {
+            subscription.setMetaSyncTime(null);
+            subscription.setCoverFallbackUrl(null); // 手工切换豆瓣绑定后,旧图不能继续冒充新条目
+            subscription.setCoverFallbackStatus("PENDING");
         }
         if (request.getExpectedEpisodes() != null) {
             subscription.setExpectedEpisodes(request.getExpectedEpisodes());
@@ -265,10 +338,17 @@ public class MediaSubscriptionService {
         }
         subscription.setUpdatedTime(System.currentTimeMillis());
         int oldSeason = previousSeason == null || previousSeason <= 0 ? 1 : previousSeason;
-        if (request.getSeason() != null && request.getSeason() > 0 && request.getSeason() != oldSeason) {
+        boolean seasonChanged = request.getSeason() != null && request.getSeason() > 0
+                && request.getSeason() != oldSeason;
+        if (seasonChanged) {
             resetForSeasonChange(uid, subscription, oldSeason, request.getSeason());
         }
         subscriptionRepository.save(subscription);
+        if ((metadataBindingChanged || doubanBindingChanged || seasonChanged)
+                && StringUtils.isNotBlank(subscription.getMetaProvider())
+                && StringUtils.isNotBlank(subscription.getMetaId())) {
+            prewarmMetadataAfterCommit(subscription);
+        }
         // 编辑切入 TRANSFER(如挂载模式改转存)或转存目标账号变化:立即排队增量转存,
         // 不再等下一轮巡检/每小时 :40 sweep。afterCommit 再提交:transfer() 入口 findById
         // 要读已提交的新 mode,事务提交前抢先执行会读到旧 FOLLOW 静默跳过(单测直调无事务,兜底同步执行)
@@ -288,6 +368,54 @@ public class MediaSubscriptionService {
             }
         }
         return toDto(subscription);
+    }
+
+    /** 同名同季幂等复用时,允许本次带元数据的请求补齐旧的纯标题订阅,不覆盖已绑定条目。 */
+    private boolean bindMissingMetadata(MediaSubscription subscription, String provider, String metaId, Integer doubanId) {
+        if (StringUtils.isNotBlank(subscription.getMetaProvider()) && StringUtils.isNotBlank(subscription.getMetaId())) {
+            return false;
+        }
+        if (StringUtils.isBlank(provider) || StringUtils.isBlank(metaId)) {
+            return false;
+        }
+        subscription.setMetaProvider(provider);
+        subscription.setMetaId(metaId);
+        subscription.setDoubanId(doubanId);
+        subscription.setMetaSyncTime(null);
+        subscription.setCoverUrl(null);
+        subscription.setCoverFallbackUrl(null);
+        subscription.setCoverFallbackStatus("PENDING");
+        subscription.setUpdatedTime(System.currentTimeMillis());
+        return true;
+    }
+
+    private void prewarmMetadataAfterCommit(MediaSubscription subscription) {
+        Runnable prewarm = () -> checkService.prewarmCoverAsync(subscription);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    prewarm.run();
+                }
+            });
+        } else {
+            prewarm.run();
+        }
+    }
+
+    private void maybePrewarmCover(MediaSubscription subscription) {
+        if (subscription != null
+                && (StringUtils.isBlank(subscription.getCoverUrl()) || needsTmdbCoverFallback(subscription))) {
+            checkService.prewarmCoverAsync(subscription);
+        }
+    }
+
+    private static boolean needsTmdbCoverFallback(MediaSubscription subscription) {
+        return subscription != null
+                && TmdbMetadataProvider.NAME.equalsIgnoreCase(subscription.getMetaProvider())
+                && (subscription.getCoverFallbackStatus() == null
+                || "PENDING".equals(subscription.getCoverFallbackStatus())
+                || "RETRY".equals(subscription.getCoverFallbackStatus()));
     }
 
     /**
@@ -374,6 +502,7 @@ public class MediaSubscriptionService {
     @Transactional
     public MediaSubscriptionDto pause(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
+        checkService.invalidateCheck(id);
         subscription.setStatus(MediaSubscription.STATUS_PAUSED);
         subscription.setUpdatedTime(System.currentTimeMillis());
         subscriptionRepository.save(subscription);
@@ -383,6 +512,7 @@ public class MediaSubscriptionService {
     @Transactional
     public MediaSubscriptionDto resume(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
+        checkService.invalidateCheck(id);
         subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
         subscription.setNextCheckTime(System.currentTimeMillis());
         subscription.setUpdatedTime(System.currentTimeMillis());
@@ -466,10 +596,11 @@ public class MediaSubscriptionService {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
         for (MediaSubscription subscription : subscriptions) {
+            maybePrewarmCover(subscription);
             MovieDetail detail = new MovieDetail();
             detail.setVod_id(VOD_ID_PREFIX + subscription.getId());
             detail.setVod_name(displayName(subscription));
-            detail.setVod_pic(absoluteCover(coverOf(subscription)));
+            detail.setVod_pic(absoluteCover(proxiedSubscriptionCover(subscription)));
             detail.setVod_remarks(buildRemarks(subscription));
             list.add(detail);
         }
@@ -527,6 +658,7 @@ public class MediaSubscriptionService {
      * TVBox 请求(空 ac)走集源行索引直装配(见 {@link #fastDetail});web/TG(非空 ac)与快路径兜底走旧实时列举。 */
     public MovieList contentDetail(int uid, int id, String ac, String title) {
         MediaSubscription subscription = getOwned(uid, id);
+        maybePrewarmCover(subscription);
         if (StringUtils.isBlank(subscription.getMountPath()) || subscription.getShareId() == null) {
             MovieList result = new MovieList();
             MovieDetail detail = new MovieDetail();
@@ -685,7 +817,7 @@ public class MediaSubscriptionService {
     private void applySubscriptionMetadata(MovieDetail detail, MediaSubscription subscription) {
         detail.setVod_id(VOD_ID_PREFIX + subscription.getId());
         detail.setVod_name(displayName(subscription));
-        detail.setVod_pic(absoluteCover(coverOf(subscription)));
+        detail.setVod_pic(absoluteCover(proxiedSubscriptionCover(subscription)));
         if (subscription.getDoubanId() != null) {
             detail.setDbid(subscription.getDoubanId());
         }
@@ -1157,6 +1289,19 @@ public class MediaSubscriptionService {
             return cover;
         }
         return "/images?url=" + java.net.URLEncoder.encode(cover, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private String proxiedCover(String cover, String fallbackCover) {
+        if (StringUtils.isBlank(cover)) {
+            return proxiedCover(fallbackCover);
+        }
+        String proxied = proxiedCover(cover);
+        if (StringUtils.isBlank(proxied) || StringUtils.isBlank(fallbackCover)
+                || !fallbackCover.startsWith("http") || fallbackCover.equals(cover)) {
+            return proxied;
+        }
+        return proxied + "&fallback="
+                + java.net.URLEncoder.encode(fallbackCover, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /** 存量元数据快照的 TMDB 背景图(或上一版已升的 original)统一改写 w1280:预生成尺寸文件小、加载快,零网络免刷新。 */
@@ -1672,15 +1817,13 @@ public class MediaSubscriptionService {
      */
     public Map<String, Object> detail(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
+        maybePrewarmCover(subscription);
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("subscription", toDto(subscription));
 
         MetadataDetails details = null;
         if (StringUtils.isNotBlank(subscription.getMetaProvider()) && StringUtils.isNotBlank(subscription.getMetaId())) {
             details = metadataService.cachedDetails(subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
-            if (details == null) {
-                checkService.prewarmCoverAsync(subscription); // 后台拉首轮元数据落库,不打断本次响应
-            }
         }
         Map<String, Object> media = new java.util.LinkedHashMap<>();
         media.put("provider", subscription.getMetaProvider());
@@ -1689,7 +1832,9 @@ public class MediaSubscriptionService {
             media.put("name", details.getName());
             media.put("originalName", details.getOriginalName());
             media.put("year", details.getYear());
-            media.put("cover", proxiedCover(details.getCover()));
+            String fallbackCover = StringUtils.defaultIfBlank(subscription.getCoverFallbackUrl(),
+                    MediaSubscriptionCheckService.mappedFallbackCover(details, subscription.getDoubanId()));
+            media.put("cover", proxiedCover(details.getCover(), fallbackCover));
             media.put("backdrop", proxiedCover(upgradeBackdropUrl(details.getBackdrop())));
             media.put("backdrops", proxiedBackdrops(details));
             media.put("status", details.getStatus());
@@ -1814,7 +1959,7 @@ public class MediaSubscriptionService {
                     result.add(Map.of(
                             "subscriptionId", subscription.getId(),
                             "name", displayName(subscription),
-                            "cover", proxiedCover(coverOf(subscription)),
+                            "cover", proxiedSubscriptionCover(subscription),
                             "type", event.getType(),
                             "detail", StringUtils.defaultString(event.getDetail()),
                             "createdTime", event.getCreatedTime()));
@@ -2256,6 +2401,9 @@ public class MediaSubscriptionService {
         if (StringUtils.isNotBlank(subscription.getCoverUrl())) {
             return subscription.getCoverUrl();
         }
+        if (StringUtils.isNotBlank(subscription.getCoverFallbackUrl())) {
+            return subscription.getCoverFallbackUrl();
+        }
         if (subscription.getDoubanId() != null) {
             var movie = movieRepository.findById(subscription.getDoubanId()).orElse(null);
             if (movie != null && StringUtils.isNotBlank(movie.getCover())) {
@@ -2263,6 +2411,25 @@ public class MediaSubscriptionService {
             }
         }
         return Constants.ALIST_PIC;
+    }
+
+    private String fallbackCoverOf(MediaSubscription subscription) {
+        String primary = coverOf(subscription);
+        if (StringUtils.isNotBlank(subscription.getCoverFallbackUrl())
+                && !subscription.getCoverFallbackUrl().equals(primary)) {
+            return subscription.getCoverFallbackUrl();
+        }
+        if (subscription.getDoubanId() != null) {
+            var movie = movieRepository.findById(subscription.getDoubanId()).orElse(null);
+            if (movie != null && StringUtils.isNotBlank(movie.getCover()) && !movie.getCover().equals(primary)) {
+                return movie.getCover();
+            }
+        }
+        return null;
+    }
+
+    private String proxiedSubscriptionCover(MediaSubscription subscription) {
+        return proxiedCover(coverOf(subscription), fallbackCoverOf(subscription));
     }
 
     private String buildRemarks(MediaSubscription subscription) {
@@ -2378,7 +2545,7 @@ public class MediaSubscriptionService {
         dto.setOfficialStatus(subscription.getOfficialStatus());
         dto.setNextAirTime(subscription.getNextAirTime());
         String cover = coverOf(subscription);
-        dto.setCover(Constants.ALIST_PIC.equals(cover) ? null : proxiedCover(cover));
+        dto.setCover(Constants.ALIST_PIC.equals(cover) ? null : proxiedSubscriptionCover(subscription));
         dto.setMode(subscription.getMode());
         dto.setAccountId(subscription.getAccountId());
         dto.setAccountIds(parseAccountIds(subscription));

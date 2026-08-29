@@ -78,6 +78,14 @@ public class MediaSubscription {
     @Column(name = "cover_url", length = 512)
     private String coverUrl;
 
+    /** 主封面图床不可达时的后端代理回退地址(通常为豆瓣封面)。 */
+    @Column(name = "cover_fallback_url", length = 512)
+    private String coverFallbackUrl;
+
+    /** 豆瓣备用图解析状态:PENDING/MATCH/NO_MATCH/RETRY。 */
+    @Column(name = "cover_fallback_status", length = 16)
+    private String coverFallbackStatus;
+
     /** 元数据别名快照(换行分隔),搜索结果标题归属匹配用(§4.7) */
     @Column(columnDefinition = "TEXT")
     private String aliases;

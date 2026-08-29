@@ -47,6 +47,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -997,12 +1000,14 @@ class MediaSubscriptionCheckServiceTest {
 
         assertEquals(55, fixture.subscription.getCurrentEpisodes(), "行并集口径应即时反映");
         assertEquals(55, fixture.subscription.getMaxEpisode());
-        Mockito.verify(fixture.subscriptionRepository).save(fixture.subscription);
+        Mockito.verify(fixture.subscriptionRepository).updateEpisodeCounters(
+                Mockito.eq(1), Mockito.eq(55), Mockito.eq(55), Mockito.anyLong());
 
         // 已一致时不再写库(避免详情高频触发空写)
         Mockito.clearInvocations(fixture.subscriptionRepository);
         fixture.service.refreshEpisodeCounters(fixture.subscription);
-        Mockito.verify(fixture.subscriptionRepository, Mockito.never()).save(Mockito.any());
+        Mockito.verify(fixture.subscriptionRepository, Mockito.never()).updateEpisodeCounters(
+                Mockito.anyInt(), Mockito.anyInt(), Mockito.anyInt(), Mockito.anyLong());
     }
 
     private static List<Integer> numbers(Map<Integer, MediaSubscriptionEpisodeSource> rows,
@@ -2147,6 +2152,525 @@ class MediaSubscriptionCheckServiceTest {
                 "年份全不符且剧名仅子串嵌入更长词(悬案⊂悬案解码):拒");
         assertTrue(MediaSubscriptionCheckService.titleYearMatches(expected, names, "悬案 1080p 60fps 2160p"),
                 "分辨率/帧率数字不得误配为年份");
+    }
+
+    @Test
+    void metadataSnapshotBindsDoubanIdAndFallbackCover() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setMetaProvider("tmdb");
+        fixture.subscription.setMetaId("233295");
+        MetadataDetails details = new MetadataDetails();
+        details.setProvider("tmdb");
+        details.setId("233295");
+        details.setCover("https://media.themoviedb.org/t/p/w300/poster.jpg");
+        details.setExternalIds(new java.util.LinkedHashMap<>(Map.of(
+                "tmdb", "233295", "douban", "36245887")));
+        details.setExternalCovers(new java.util.LinkedHashMap<>(Map.of(
+                "tmdb", details.getCover(),
+                "douban", "https://img9.doubanio.com/view/photo/m_ratio_poster/public/p1.jpg")));
+
+        fixture.service.applyMetadataSnapshot(fixture.subscription, details);
+
+        assertEquals(details.getCover(), fixture.subscription.getCoverUrl());
+        assertEquals("https://img9.doubanio.com/view/photo/m_ratio_poster/public/p1.jpg",
+                fixture.subscription.getCoverFallbackUrl());
+        assertEquals(36245887, fixture.subscription.getDoubanId());
+    }
+
+    @Test
+    void metadataSnapshotDoesNotMixManualDoubanIdWithAnotherMappedCover() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setDoubanId(222);
+        fixture.subscription.setCoverFallbackUrl("https://img.example/douban-222.jpg");
+        MetadataDetails details = metadataDetails(111, "https://img.example/douban-111.jpg");
+
+        fixture.service.applyMetadataSnapshot(fixture.subscription, details);
+
+        assertEquals(222, fixture.subscription.getDoubanId());
+        assertEquals("https://img.example/douban-222.jpg", fixture.subscription.getCoverFallbackUrl());
+    }
+
+    @Test
+    void scheduledMetadataRefreshKeepsSyncTimeNullForRetry() {
+        Fixture fixture = new Fixture();
+        fixture.subscription.setMetaProvider("tmdb");
+        fixture.subscription.setMetaId("233295");
+        fixture.subscription.setSeason(1);
+        fixture.subscription.setMetaSyncTime(123L);
+        MetadataDetails retry = retryDetails();
+        Mockito.when(fixture.metadataService.details("tmdb", "233295", 1)).thenReturn(retry);
+
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                fixture.service, "refreshMetadata", fixture.subscription, 0L);
+
+        assertEquals(null, fixture.subscription.getMetaSyncTime());
+    }
+
+    @Test
+    void manualMetadataRefreshKeepsSyncTimeNullForRetry() {
+        Fixture fixture = new Fixture();
+        try {
+            fixture.subscription.setUid(1);
+            fixture.subscription.setMetaProvider("tmdb");
+            fixture.subscription.setMetaId("233295");
+            fixture.subscription.setSeason(1);
+            fixture.subscription.setMetaSyncTime(123L);
+            Mockito.when(fixture.metadataService.refreshDetails("tmdb", "233295", 1))
+                    .thenReturn(retryDetails());
+
+            fixture.service.refreshMetadataAsync(1, 1);
+
+            Mockito.verify(fixture.subscriptionRepository, Mockito.timeout(2000)).updateMetadataSnapshot(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(1),
+                    Mockito.isNull(), Mockito.eq(retryDetails().getCover()), Mockito.isNull(),
+                    Mockito.nullable(Integer.class),
+                    Mockito.nullable(Integer.class), Mockito.nullable(String.class), Mockito.nullable(Long.class),
+                    Mockito.nullable(String.class), Mockito.nullable(String.class));
+            Mockito.verify(fixture.subscriptionRepository, Mockito.never()).save(fixture.subscription);
+            assertEquals(null, fixture.subscription.getMetaSyncTime());
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    @Test
+    void updateCheckKeepsSyncTimeNullForRetry() {
+        Fixture fixture = new Fixture();
+        try {
+            fixture.subscription.setUid(1);
+            fixture.subscription.setMetaProvider("tmdb");
+            fixture.subscription.setMetaId("233295");
+            fixture.subscription.setSeason(1);
+            fixture.subscription.setMetaSyncTime(123L);
+            Mockito.when(fixture.metadataService.refreshDetails("tmdb", "233295", 1))
+                    .thenReturn(retryDetails());
+
+            fixture.service.checkUpdateAsync(1, 1);
+
+            Mockito.verify(fixture.subscriptionRepository, Mockito.timeout(2000)).updateMetadataSnapshot(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(1),
+                    Mockito.isNull(), Mockito.eq(retryDetails().getCover()), Mockito.isNull(),
+                    Mockito.nullable(Integer.class),
+                    Mockito.nullable(Integer.class), Mockito.nullable(String.class), Mockito.nullable(Long.class),
+                    Mockito.nullable(String.class), Mockito.nullable(String.class));
+            Mockito.verify(fixture.subscriptionRepository, Mockito.never()).save(fixture.subscription);
+            assertEquals(null, fixture.subscription.getMetaSyncTime());
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    @Test
+    void manualMetadataRefreshDiscardsResultAfterConcurrentIdentityChange() throws Exception {
+        Fixture fixture = new Fixture();
+        try {
+            MediaSubscription stale = metadataSubscription(1, 111, null);
+            stale.setUid(1);
+            MediaSubscription edited = metadataSubscription(2, 222, null);
+            edited.setUid(1);
+            CountDownLatch detailsStarted = new CountDownLatch(1);
+            CountDownLatch releaseDetails = new CountDownLatch(1);
+            CountDownLatch identityRechecked = new CountDownLatch(1);
+            AtomicInteger reads = new AtomicInteger();
+            Mockito.when(fixture.subscriptionRepository.findById(1)).thenAnswer(invocation -> {
+                int read = reads.incrementAndGet();
+                if (read >= 3) {
+                    identityRechecked.countDown();
+                    return Optional.of(edited);
+                }
+                return Optional.of(stale);
+            });
+            Mockito.when(fixture.metadataService.refreshDetails("tmdb", "233295", 1)).thenAnswer(invocation -> {
+                detailsStarted.countDown();
+                assertTrue(releaseDetails.await(2, TimeUnit.SECONDS));
+                return metadataDetails(111, "https://img.example/douban-111.jpg");
+            });
+
+            fixture.service.refreshMetadataAsync(1, 1);
+            assertTrue(detailsStarted.await(2, TimeUnit.SECONDS));
+            releaseDetails.countDown();
+            assertTrue(identityRechecked.await(2, TimeUnit.SECONDS));
+
+            verifyNoMetadataSnapshotWrite(fixture);
+            Mockito.verify(fixture.subscriptionRepository, Mockito.never()).save(Mockito.any());
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    @Test
+    void updateCheckDiscardsResultAfterConcurrentIdentityChange() throws Exception {
+        Fixture fixture = new Fixture();
+        try {
+            MediaSubscription stale = metadataSubscription(1, 111, null);
+            stale.setUid(1);
+            MediaSubscription edited = metadataSubscription(1, 222, null);
+            edited.setUid(1);
+            CountDownLatch detailsStarted = new CountDownLatch(1);
+            CountDownLatch releaseDetails = new CountDownLatch(1);
+            CountDownLatch identityRechecked = new CountDownLatch(1);
+            AtomicInteger reads = new AtomicInteger();
+            Mockito.when(fixture.subscriptionRepository.findById(1)).thenAnswer(invocation -> {
+                int read = reads.incrementAndGet();
+                if (read >= 3) {
+                    identityRechecked.countDown();
+                    return Optional.of(edited);
+                }
+                return Optional.of(stale);
+            });
+            Mockito.when(fixture.metadataService.refreshDetails("tmdb", "233295", 1)).thenAnswer(invocation -> {
+                detailsStarted.countDown();
+                assertTrue(releaseDetails.await(2, TimeUnit.SECONDS));
+                return metadataDetails(111, "https://img.example/douban-111.jpg");
+            });
+
+            fixture.service.checkUpdateAsync(1, 1);
+            assertTrue(detailsStarted.await(2, TimeUnit.SECONDS));
+            releaseDetails.countDown();
+            assertTrue(identityRechecked.await(2, TimeUnit.SECONDS));
+
+            verifyNoMetadataSnapshotWrite(fixture);
+            Mockito.verify(fixture.subscriptionRepository, Mockito.never()).save(Mockito.any());
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    @Test
+    void airingRefreshDiscardsResultAfterConcurrentSeasonChange() throws Exception {
+        Fixture fixture = new Fixture();
+        try {
+            MediaSubscription stale = metadataSubscription(1, 111, null);
+            stale.setOfficialStatus(MetadataDetails.STATUS_RETURNING);
+            stale.setMetaSyncTime(null);
+            MediaSubscription edited = metadataSubscription(2, null, null);
+            CountDownLatch detailsStarted = new CountDownLatch(1);
+            CountDownLatch releaseDetails = new CountDownLatch(1);
+            CountDownLatch identityRechecked = new CountDownLatch(1);
+            AtomicInteger reads = new AtomicInteger();
+            Mockito.when(fixture.subscriptionRepository.findAll()).thenReturn(List.of(stale));
+            Mockito.when(fixture.subscriptionRepository.findById(1)).thenAnswer(invocation -> {
+                if (reads.incrementAndGet() >= 2) {
+                    identityRechecked.countDown();
+                    return Optional.of(edited);
+                }
+                return Optional.of(stale);
+            });
+            Mockito.when(fixture.metadataService.details("tmdb", "233295", 1)).thenAnswer(invocation -> {
+                detailsStarted.countDown();
+                assertTrue(releaseDetails.await(2, TimeUnit.SECONDS));
+                return metadataDetails(111, "https://img.example/douban-111.jpg");
+            });
+
+            fixture.service.refreshAiringDue();
+            assertTrue(detailsStarted.await(2, TimeUnit.SECONDS));
+            releaseDetails.countDown();
+            assertTrue(identityRechecked.await(2, TimeUnit.SECONDS));
+
+            verifyNoMetadataSnapshotWrite(fixture);
+            Mockito.verify(fixture.subscriptionRepository, Mockito.never()).save(Mockito.any());
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    private static void verifyNoMetadataSnapshotWrite(Fixture fixture) {
+        Mockito.verify(fixture.subscriptionRepository, Mockito.after(300).never()).updateMetadataSnapshot(
+                Mockito.anyInt(), Mockito.anyString(), Mockito.anyString(), Mockito.nullable(Integer.class),
+                Mockito.nullable(Integer.class), Mockito.nullable(String.class), Mockito.nullable(Long.class),
+                Mockito.nullable(Integer.class), Mockito.nullable(Integer.class), Mockito.nullable(String.class),
+                Mockito.nullable(Long.class), Mockito.nullable(String.class), Mockito.nullable(String.class));
+    }
+
+    private static MetadataDetails retryDetails() {
+        MetadataDetails details = new MetadataDetails();
+        details.setProvider("tmdb");
+        details.setId("233295");
+        details.setCover("https://media.themoviedb.org/t/p/w300/poster.jpg");
+        details.setExternalStatuses(Map.of("douban", MetadataDetails.EXTERNAL_RETRY));
+        return details;
+    }
+
+    @Test
+    void coverPrewarmKeepsSyncTimeNullWhenExternalBindingMustRetry() {
+        Fixture fixture = new Fixture();
+        try {
+            fixture.subscription.setMetaProvider("tmdb");
+            fixture.subscription.setMetaId("233295");
+            fixture.subscription.setSeason(1);
+            fixture.subscription.setMetaSyncTime(null);
+            MetadataDetails details = new MetadataDetails();
+            details.setProvider("tmdb");
+            details.setId("233295");
+            details.setCover("https://media.themoviedb.org/t/p/w300/poster.jpg");
+            details.setExternalStatuses(Map.of("douban", MetadataDetails.EXTERNAL_RETRY));
+            Mockito.when(fixture.metadataService.details("tmdb", "233295", 1)).thenReturn(details);
+
+            fixture.service.prewarmCoverAsync(fixture.subscription);
+
+            Mockito.verify(fixture.subscriptionRepository, Mockito.timeout(2000)).updateCoverSnapshot(
+                    1, "tmdb", "233295", 1, null, null, details.getCover(), null, "RETRY");
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    @Test
+    void coverPrewarmPersistsNoMatchAndDoesNotRetryCompletedLookup() {
+        Fixture first = new Fixture();
+        try {
+            first.subscription.setMetaProvider("tmdb");
+            first.subscription.setMetaId("233295");
+            first.subscription.setSeason(1);
+            first.subscription.setCoverFallbackStatus("PENDING");
+            MetadataDetails details = new MetadataDetails();
+            details.setProvider("tmdb");
+            details.setId("233295");
+            details.setCover("https://media.themoviedb.org/t/p/w300/poster.jpg");
+            details.setExternalStatuses(Map.of("douban", MetadataDetails.EXTERNAL_NO_MATCH));
+            Mockito.when(first.metadataService.details("tmdb", "233295", 1)).thenReturn(details);
+
+            first.service.prewarmCoverAsync(first.subscription);
+
+            Mockito.verify(first.subscriptionRepository, Mockito.timeout(2000)).updateCoverSnapshot(
+                    1, "tmdb", "233295", 1, null, null, details.getCover(), null, "NO_MATCH");
+        } finally {
+            first.service.shutdown();
+        }
+
+        Fixture completed = new Fixture();
+        try {
+            completed.subscription.setMetaProvider("tmdb");
+            completed.subscription.setMetaId("233295");
+            completed.subscription.setSeason(1);
+            completed.subscription.setCoverUrl("https://media.themoviedb.org/t/p/w300/poster.jpg");
+            completed.subscription.setCoverFallbackStatus("NO_MATCH");
+
+            completed.service.prewarmCoverAsync(completed.subscription);
+
+            Mockito.verify(completed.metadataService, Mockito.after(500).never())
+                    .details(Mockito.anyString(), Mockito.anyString(), Mockito.any());
+        } finally {
+            completed.service.shutdown();
+        }
+    }
+
+    @Test
+    void invalidatedCheckDiscardsOldSeasonStateAndRerunsCurrentSeasonOnce() throws Exception {
+        Fixture fixture = new Fixture();
+        try {
+            MediaSubscription stale = metadataSubscription(1, null, null);
+            stale.setUid(7);
+            stale.setShareId(5);
+            MediaSubscription current = metadataSubscription(2, null, null);
+            current.setUid(7);
+            current.setShareId(5);
+            AtomicBoolean edited = new AtomicBoolean();
+            Mockito.when(fixture.subscriptionRepository.findById(1))
+                    .thenAnswer(invocation -> Optional.of(edited.get() ? current : stale));
+            CountDownLatch oldRefreshStarted = new CountDownLatch(1);
+            CountDownLatch releaseOldRefresh = new CountDownLatch(1);
+            Mockito.when(fixture.metadataService.details("tmdb", "233295", 1)).thenAnswer(invocation -> {
+                oldRefreshStarted.countDown();
+                assertTrue(releaseOldRefresh.await(2, TimeUnit.SECONDS));
+                return new MetadataDetails();
+            });
+            Mockito.when(fixture.metadataService.details("tmdb", "233295", 2)).thenReturn(null);
+            Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                            Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                    .thenThrow(new RuntimeException("{\"errno\":-62}"));
+
+            fixture.service.checkAsync(7, 1);
+            assertTrue(oldRefreshStarted.await(2, TimeUnit.SECONDS));
+            edited.set(true);
+            fixture.service.invalidateCheck(1);
+            releaseOldRefresh.countDown();
+
+            Mockito.verify(fixture.subscriptionRepository, Mockito.timeout(3000)).updateCheckState(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(2),
+                    Mockito.isNull(), Mockito.eq(5), Mockito.eq(MediaSubscription.STATUS_ACTIVE),
+                    Mockito.nullable(Integer.class), Mockito.nullable(Integer.class), Mockito.anyInt(),
+                    Mockito.nullable(Long.class), Mockito.nullable(Long.class), Mockito.nullable(Long.class));
+            Mockito.verify(fixture.subscriptionRepository, Mockito.never()).updateCheckState(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(1),
+                    Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyInt(),
+                    Mockito.any(), Mockito.any(), Mockito.any());
+            Mockito.verify(fixture.metadataService, Mockito.times(1)).details("tmdb", "233295", 1);
+            Mockito.verify(fixture.metadataService, Mockito.times(1)).details("tmdb", "233295", 2);
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    @Test
+    void coverPrewarmReschedulesCurrentSeasonAfterStaleSnapshotIsRejected() throws Exception {
+        Fixture fixture = new Fixture();
+        try {
+            MediaSubscription stale = metadataSubscription(1, null, null);
+            MediaSubscription current = metadataSubscription(2, null, null);
+            CountDownLatch detailsStarted = new CountDownLatch(1);
+            CountDownLatch releaseDetails = new CountDownLatch(1);
+            AtomicInteger reads = new AtomicInteger();
+            Mockito.when(fixture.subscriptionRepository.findById(1)).thenAnswer(invocation ->
+                    Optional.of(reads.incrementAndGet() == 1 ? stale : current));
+
+            MetadataDetails seasonOne = metadataDetails(111,
+                    "https://img.example/season-1.jpg");
+            MetadataDetails seasonTwo = metadataDetails(222,
+                    "https://img.example/season-2.jpg");
+            Mockito.when(fixture.metadataService.details("tmdb", "233295", 1)).thenAnswer(invocation -> {
+                detailsStarted.countDown();
+                assertTrue(releaseDetails.await(2, TimeUnit.SECONDS));
+                return seasonOne;
+            });
+            Mockito.when(fixture.metadataService.details("tmdb", "233295", 2)).thenReturn(seasonTwo);
+            Mockito.doAnswer(invocation -> ((Integer) invocation.getArgument(3)) == 1 ? 0 : 1)
+                    .when(fixture.subscriptionRepository).updateCoverSnapshot(
+                            Mockito.anyInt(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(),
+                            Mockito.nullable(Integer.class), Mockito.nullable(Integer.class),
+                            Mockito.nullable(String.class), Mockito.nullable(String.class), Mockito.nullable(String.class));
+
+            fixture.service.prewarmCoverAsync(stale);
+            assertTrue(detailsStarted.await(2, TimeUnit.SECONDS));
+            releaseDetails.countDown();
+
+            Mockito.verify(fixture.subscriptionRepository, Mockito.timeout(2000)).updateCoverSnapshot(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(1),
+                    Mockito.isNull(), Mockito.eq(111), Mockito.eq(seasonOne.getCover()),
+                    Mockito.eq(seasonOne.getExternalCovers().get("douban")), Mockito.eq("MATCH"));
+            Mockito.verify(fixture.subscriptionRepository, Mockito.timeout(2000)).updateCoverSnapshot(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(2),
+                    Mockito.isNull(), Mockito.eq(222), Mockito.eq(seasonTwo.getCover()),
+                    Mockito.eq(seasonTwo.getExternalCovers().get("douban")), Mockito.eq("MATCH"));
+            Mockito.verify(fixture.subscriptionRepository, Mockito.after(300).never()).updateCoverSnapshot(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(2),
+                    Mockito.isNull(), Mockito.eq(111), Mockito.eq(seasonOne.getCover()),
+                    Mockito.eq(seasonOne.getExternalCovers().get("douban")), Mockito.eq("MATCH"));
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    @Test
+    void coverPrewarmPreservesConcurrentManualDoubanBinding() throws Exception {
+        Fixture fixture = new Fixture();
+        try {
+            MediaSubscription stale = metadataSubscription(1, null, null);
+            MediaSubscription current = metadataSubscription(1, 222,
+                    "https://img.example/manual-douban-222.jpg");
+            CountDownLatch detailsStarted = new CountDownLatch(1);
+            CountDownLatch releaseDetails = new CountDownLatch(1);
+            AtomicInteger reads = new AtomicInteger();
+            Mockito.when(fixture.subscriptionRepository.findById(1)).thenAnswer(invocation ->
+                    Optional.of(reads.incrementAndGet() == 1 ? stale : current));
+
+            MetadataDetails matched = metadataDetails(111,
+                    "https://img.example/auto-douban-111.jpg");
+            Mockito.when(fixture.metadataService.details("tmdb", "233295", 1)).thenAnswer(invocation -> {
+                if (detailsStarted.getCount() > 0) {
+                    detailsStarted.countDown();
+                    assertTrue(releaseDetails.await(2, TimeUnit.SECONDS));
+                }
+                return matched;
+            });
+            Mockito.doAnswer(invocation -> invocation.getArgument(4) == null ? 0 : 1)
+                    .when(fixture.subscriptionRepository).updateCoverSnapshot(
+                            Mockito.anyInt(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(),
+                            Mockito.nullable(Integer.class), Mockito.nullable(Integer.class),
+                            Mockito.nullable(String.class), Mockito.nullable(String.class), Mockito.nullable(String.class));
+
+            fixture.service.prewarmCoverAsync(stale);
+            assertTrue(detailsStarted.await(2, TimeUnit.SECONDS));
+            releaseDetails.countDown();
+
+            Mockito.verify(fixture.subscriptionRepository, Mockito.timeout(2000)).updateCoverSnapshot(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(1),
+                    Mockito.isNull(), Mockito.eq(111), Mockito.eq(matched.getCover()),
+                    Mockito.eq(matched.getExternalCovers().get("douban")), Mockito.eq("MATCH"));
+            Mockito.verify(fixture.subscriptionRepository, Mockito.timeout(2000)).updateCoverSnapshot(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(1),
+                    Mockito.eq(222), Mockito.eq(222), Mockito.eq(matched.getCover()),
+                    Mockito.eq(current.getCoverFallbackUrl()), Mockito.eq("MATCH"));
+            Mockito.verify(fixture.subscriptionRepository, Mockito.after(300).never()).updateCoverSnapshot(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(1),
+                    Mockito.eq(222), Mockito.eq(222), Mockito.eq(matched.getCover()),
+                    Mockito.eq(matched.getExternalCovers().get("douban")), Mockito.eq("MATCH"));
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    @Test
+    void coverPrewarmUsesExplicitDoubanIdentityWhenAutomaticMatchDiffers() {
+        Fixture fixture = new Fixture();
+        try {
+            fixture.subscription.setMetaProvider("tmdb");
+            fixture.subscription.setMetaId("233295");
+            fixture.subscription.setSeason(1);
+            fixture.subscription.setDoubanId(222);
+            MetadataDetails tmdb = metadataDetails(111, "https://img.example/douban-111.jpg");
+            MetadataDetails douban = new MetadataDetails();
+            douban.setProvider("douban");
+            douban.setId("222");
+            douban.setCover("https://img.example/douban-222.jpg");
+            Mockito.when(fixture.metadataService.details("tmdb", "233295", 1)).thenReturn(tmdb);
+            Mockito.when(fixture.metadataService.details("douban", "222", 1)).thenReturn(douban);
+
+            fixture.service.prewarmCoverAsync(fixture.subscription);
+
+            Mockito.verify(fixture.subscriptionRepository, Mockito.timeout(2000)).updateCoverSnapshot(
+                    Mockito.eq(1), Mockito.eq("tmdb"), Mockito.eq("233295"), Mockito.eq(1),
+                    Mockito.eq(222), Mockito.eq(222), Mockito.eq(tmdb.getCover()),
+                    Mockito.eq(douban.getCover()), Mockito.eq("MATCH"));
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void coverPrewarmDoesNotRaceWithActiveSubscriptionCheck() {
+        Fixture fixture = new Fixture();
+        try {
+            fixture.subscription.setMetaProvider("tmdb");
+            fixture.subscription.setMetaId("233295");
+            Set<Integer> inFlight = (Set<Integer>) org.springframework.test.util.ReflectionTestUtils
+                    .getField(fixture.service, "inFlight");
+            assertNotNull(inFlight);
+            inFlight.add(1);
+
+            fixture.service.prewarmCoverAsync(fixture.subscription);
+
+            Mockito.verify(fixture.metadataService, Mockito.after(500).never())
+                    .details(Mockito.anyString(), Mockito.anyString(), Mockito.any());
+        } finally {
+            fixture.service.shutdown();
+        }
+    }
+
+    private static MediaSubscription metadataSubscription(int season, Integer doubanId, String fallback) {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setId(1);
+        subscription.setName("测试剧");
+        subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
+        subscription.setMetaProvider("tmdb");
+        subscription.setMetaId("233295");
+        subscription.setSeason(season);
+        subscription.setDoubanId(doubanId);
+        subscription.setCoverFallbackUrl(fallback);
+        return subscription;
+    }
+
+    private static MetadataDetails metadataDetails(int doubanId, String doubanCover) {
+        MetadataDetails details = new MetadataDetails();
+        details.setProvider("tmdb");
+        details.setId("233295");
+        details.setCover("https://media.themoviedb.org/t/p/w300/poster.jpg");
+        details.setExternalIds(new LinkedHashMap<>(Map.of(
+                "tmdb", "233295", "douban", String.valueOf(doubanId))));
+        details.setExternalCovers(new LinkedHashMap<>(Map.of(
+                "tmdb", details.getCover(), "douban", doubanCover)));
+        return details;
     }
 
     @Test
@@ -3664,6 +4188,23 @@ class MediaSubscriptionCheckServiceTest {
             subscription.setMountPath("/追剧/1-测试剧");
             subscription.setShareId(5);
             Mockito.when(subscriptionRepository.findById(1)).thenReturn(Optional.of(subscription));
+            Mockito.when(subscriptionRepository.updateCoverSnapshot(
+                    Mockito.anyInt(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(),
+                    Mockito.nullable(Integer.class), Mockito.nullable(Integer.class),
+                    Mockito.nullable(String.class), Mockito.nullable(String.class), Mockito.nullable(String.class)))
+                    .thenReturn(1);
+            Mockito.when(subscriptionRepository.updateMetadataSnapshot(
+                    Mockito.anyInt(), Mockito.anyString(), Mockito.anyString(), Mockito.nullable(Integer.class),
+                    Mockito.nullable(Integer.class), Mockito.nullable(String.class), Mockito.nullable(Long.class),
+                    Mockito.nullable(Integer.class), Mockito.nullable(Integer.class), Mockito.nullable(String.class),
+                    Mockito.nullable(Long.class), Mockito.nullable(String.class), Mockito.nullable(String.class)))
+                    .thenReturn(1);
+            Mockito.when(subscriptionRepository.updateCheckState(
+                    Mockito.anyInt(), Mockito.nullable(String.class), Mockito.nullable(String.class),
+                    Mockito.nullable(Integer.class), Mockito.nullable(Integer.class), Mockito.nullable(Integer.class),
+                    Mockito.nullable(String.class), Mockito.nullable(Integer.class), Mockito.nullable(Integer.class),
+                    Mockito.anyInt(), Mockito.nullable(Long.class), Mockito.nullable(Long.class), Mockito.nullable(Long.class)))
+                    .thenReturn(1);
             Mockito.when(shareRepository.findById(5)).thenReturn(Optional.of(new Share()));
             Mockito.when(siteRepository.findById(1)).thenReturn(Optional.of(new Site()));
             Mockito.when(deadLinkRepository.findByLink(Mockito.anyString())).thenReturn(Optional.empty());

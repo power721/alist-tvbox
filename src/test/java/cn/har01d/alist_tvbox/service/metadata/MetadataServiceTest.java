@@ -64,6 +64,8 @@ class MetadataServiceTest {
         details.setTotalEpisodes(12);
         details.setGenres(List.of("剧情")); // 新版快照形态(扩展字段在场);全缺 = 旧版,视为过期
         details.setRatings(java.util.Map.of("tmdb", "8.0")); // 多源评分扩展后的形态;缺 = 旧版
+        details.setExternalCovers(java.util.Map.of("tmdb", "https://media.themoviedb.org/poster.jpg"));
+        details.setExternalStatuses(java.util.Map.of("douban", MetadataDetails.EXTERNAL_NO_MATCH));
         return details;
     }
 
@@ -153,6 +155,21 @@ class MetadataServiceTest {
         MetadataDetails result = service.details("tmdb", "123", 1);
         assertEquals("完结剧", result.getName());
         verify(repository).save(any(MediaMetadata.class)); // 升级后回写新形态快照,下次不再触发
+    }
+
+    @Test
+    void snapshotWithoutExternalCoversRefreshesEvenWhenEnded() throws Exception {
+        MetadataDetails legacy = details(MetadataDetails.STATUS_ENDED, "完结剧");
+        legacy.setExternalCovers(null); // V37 跨源封面候选扩展前的持久快照
+        when(repository.findByProviderAndMetaIdAndSeason("tmdb", "123", 1))
+                .thenReturn(Optional.of(row(MetadataDetails.STATUS_ENDED, 1000, legacy)));
+        MetadataDetails fresh = details(MetadataDetails.STATUS_ENDED, "完结剧");
+        when(provider.details("123", 1)).thenReturn(fresh);
+
+        MetadataDetails result = service.details("tmdb", "123", 1);
+
+        assertNotNull(result);
+        verify(repository).save(any(MediaMetadata.class));
     }
 
     @Test

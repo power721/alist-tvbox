@@ -318,6 +318,36 @@ class MediaSubscriptionRemarksTest {
                 "代理参数携带原始图地址");
     }
 
+    @Test
+    void tvBoxCoverIncludesSingleEncodedFallbackParameter() {
+        String tmdbCover = "https://media.themoviedb.org/t/p/w300/poster A.jpg?token=a&b=c";
+        String doubanCover = "https://img9.doubanio.com/view/photo/l/public/p1.jpg?x=1&y=2";
+        subscription.setCoverUrl(tmdbCover);
+        subscription.setCoverFallbackUrl(doubanCover);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+
+        String pic = service.contentList(1).getList().getFirst().getVod_pic();
+
+        assertEquals("/images?url="
+                        + java.net.URLEncoder.encode(tmdbCover, java.nio.charset.StandardCharsets.UTF_8)
+                        + "&fallback="
+                        + java.net.URLEncoder.encode(doubanCover, java.nio.charset.StandardCharsets.UTF_8),
+                pic);
+    }
+
+    @Test
+    void tvBoxUsesFallbackAsPrimaryWhenTmdbCoverIsMissing() {
+        String doubanCover = "https://img9.doubanio.com/view/photo/l/public/p1.jpg";
+        subscription.setCoverUrl(null);
+        subscription.setCoverFallbackUrl(doubanCover);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+
+        String pic = service.contentList(1).getList().getFirst().getVod_pic();
+
+        assertEquals("/images?url="
+                + java.net.URLEncoder.encode(doubanCover, java.nio.charset.StandardCharsets.UTF_8), pic);
+    }
+
     // ---------- 逐集资源矩阵 ----------
 
     @Test

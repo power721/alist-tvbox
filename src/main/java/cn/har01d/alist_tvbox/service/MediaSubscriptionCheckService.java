@@ -32,7 +32,9 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.service.metadata.DoubanMetadataProvider;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
+import cn.har01d.alist_tvbox.service.metadata.TmdbMetadataProvider;
 import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
@@ -196,6 +198,9 @@ public class MediaSubscriptionCheckService {
     private final MediaSubscriptionNotificationService notificationService;
 
     private final Set<Integer> inFlight = ConcurrentHashMap.newKeySet();
+    private final Map<Integer, Long> checkRevision = new ConcurrentHashMap<>();
+    private final Map<Integer, Long> runningCheckRevision = new ConcurrentHashMap<>();
+    private final Set<Integer> rerunAfterCheck = ConcurrentHashMap.newKeySet();
     /** 已删除订阅的取消标记(delete() 卸载/删行前第一时间打上):订阅创建即触发首轮巡检,
      * 搜索+挂载可达数分钟,期间删除若巡检不感知,会继续搜索、把已删剧的挂载重新建回 AList,
      * 尾部对 detached 实体的 save 更会把无 @Version 的整行 INSERT 复活(线上 #40)。 */
@@ -207,6 +212,9 @@ public class MediaSubscriptionCheckService {
     private static final long RECENT_PLAY_WINDOW_MS = 7L * 24 * 3600_000;
     /** 封面预热去重(订阅 id):列表接口发现快照缺失时后台补拉,同订阅不堆积重复任务 */
     private final Set<Integer> coverPrewarmInFlight = ConcurrentHashMap.newKeySet();
+    /** 跨源桥接瞬时失败的退避(订阅身份 → 下次允许预热时间),换条目或换季不继承旧退避。 */
+    private final Map<String, Long> coverPrewarmRetryTime = new ConcurrentHashMap<>();
+    private static final long COVER_PREWARM_RETRY_DELAY_MS = 30 * 60_000L;
     /** 缺集补搜关键词轮次(0=整季,1+=单集),内存态即可 */
     private final Map<Integer, Integer> gapSearchRounds = new ConcurrentHashMap<>();
     /** 主网盘补池搜索限频(订阅 id → 上次搜索时间):池内无该盘资源时主动搜索,至多每检查周期一次 */
@@ -439,11 +447,15 @@ public class MediaSubscriptionCheckService {
                     if (current == null || !MediaSubscription.STATUS_ACTIVE.equals(current.getStatus())) {
                         return;
                     }
-                    refreshMetadata(current, ttl);
-                    if (stopIfDeleted(id)) {
+                    if (!metadataRefreshDue(current, ttl)) {
                         return;
                     }
-                    subscriptionRepository.save(current);
+                    MetadataRefreshPlan plan = metadataRefreshPlan(current);
+                    MetadataDetails details = metadataService.details(
+                            plan.provider(), plan.metaId(), plan.season());
+                    if (details != null && persistMetadataSnapshot(plan, details) == 0) {
+                        log.debug("discard stale airing metadata result for subscription {}", id);
+                    }
                 } catch (Exception e) {
                     log.warn("refresh airing metadata {} failed: {}", id, e.getMessage());
                 }
@@ -573,6 +585,10 @@ public class MediaSubscriptionCheckService {
         resourceRepository.deleteBySubscriptionId(id);
         subscription.setShareId(null);
         subscription.setCoverUrl(null); // 封面/日程快照是旧季口径,清空让首轮巡检按新季重拉
+        subscription.setCoverFallbackUrl(null);
+        if (!DoubanMetadataProvider.NAME.equalsIgnoreCase(subscription.getMetaProvider())) {
+            subscription.setDoubanId(null); // TMDB/Bangumi 的豆瓣绑定是季级派生结果,换季不可沿用旧季 ID
+        }
         subscription.setMetaSyncTime(null);
         subscription.setCurrentEpisodes(0);
         subscription.setMaxEpisode(null);
@@ -581,7 +597,7 @@ public class MediaSubscriptionCheckService {
         if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
             subscription.setStatus(MediaSubscription.STATUS_ACTIVE); // 换季=追新季,旧季完结状态随之作废
         }
-        forget(id, resourceIds);
+        clearTransientState(id, resourceIds);
         addEvent(id, MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
                 "换季重置:已清空资源池与集数,按第" + newSeason + "季重新搜索", false);
     }
@@ -628,11 +644,12 @@ public class MediaSubscriptionCheckService {
 
     /** 巡检中止检查点:订阅已删即回收本轮残留并返回 true,调用方立即收工(单次 set 查询,零 DB)。 */
     boolean stopIfDeleted(int subscriptionId) {
-        if (!deleted.contains(subscriptionId)) {
-            return false;
+        if (deleted.contains(subscriptionId)) {
+            cleanupDeleted(subscriptionId);
+            return true;
         }
-        cleanupDeleted(subscriptionId);
-        return true;
+        Long running = runningCheckRevision.get(subscriptionId);
+        return running != null && running.longValue() != checkRevision.getOrDefault(subscriptionId, 0L);
     }
 
     /**
@@ -670,17 +687,29 @@ public class MediaSubscriptionCheckService {
 
     /** 尾部落库门禁:订阅已删则回收残留并跳过 save —— 实体无 @Version,detached merge
      * 对已删行会把整行 INSERT 复活。 */
-    private void saveUnlessDeleted(int id, MediaSubscription subscription) {
-        if (!stopIfDeleted(id)) {
-            subscriptionRepository.save(subscription);
+    private boolean saveCheckState(MetadataRefreshPlan plan, MediaSubscription subscription) {
+        if (stopIfDeleted(plan.id())) {
+            return false;
         }
+        return subscriptionRepository.updateCheckState(plan.id(), plan.provider(), plan.metaId(), plan.season(),
+                plan.expectedDoubanId(), subscription.getShareId(), subscription.getStatus(),
+                subscription.getCurrentEpisodes(), subscription.getMaxEpisode(), subscription.getStallCount(),
+                subscription.getNextCheckTime(), subscription.getLastCheckTime(), subscription.getUpdatedTime()) == 1;
     }
 
     /** 订阅删除后清理全部内存态(限频/轮次/冷却 Map 按订阅/资源 id 键控,不清理即无界泄漏)。 */
     public void forget(int subscriptionId, List<Integer> resourceIds) {
+        clearTransientState(subscriptionId, resourceIds);
         inFlight.remove(subscriptionId);
+        checkRevision.remove(subscriptionId);
+        runningCheckRevision.remove(subscriptionId);
+        rerunAfterCheck.remove(subscriptionId);
+    }
+
+    private void clearTransientState(int subscriptionId, List<Integer> resourceIds) {
         playbackFailed.remove(subscriptionId);
         coverPrewarmInFlight.remove(subscriptionId);
+        coverPrewarmRetryTime.keySet().removeIf(key -> key.startsWith(subscriptionId + "|"));
         preheatAheadInFlight.remove(subscriptionId);
         gapSearchRounds.remove(subscriptionId);
         mainDriveSearchTime.remove(subscriptionId);
@@ -689,6 +718,14 @@ public class MediaSubscriptionCheckService {
         aheadRescueTime.remove(subscriptionId);
         if (resourceIds != null) {
             resourceIds.forEach(transientStreak::remove);
+        }
+    }
+
+    /** 用户编辑使旧巡检失效；旧任务退出后补跑一次当前身份。 */
+    public void invalidateCheck(int subscriptionId) {
+        checkRevision.merge(subscriptionId, 1L, Long::sum);
+        if (inFlight.contains(subscriptionId)) {
+            rerunAfterCheck.add(subscriptionId);
         }
     }
 
@@ -773,23 +810,100 @@ public class MediaSubscriptionCheckService {
         if (!coverPrewarmInFlight.add(id)) {
             return;
         }
+        String requestedRetryKey = coverPrewarmKey(subscription);
+        Long retryAt = coverPrewarmRetryTime.get(requestedRetryKey);
+        if (retryAt != null && retryAt > System.currentTimeMillis()) {
+            coverPrewarmInFlight.remove(id);
+            return;
+        }
+        if (retryAt != null) {
+            coverPrewarmRetryTime.remove(requestedRetryKey, retryAt);
+        }
         try {
             executor.submit(() -> {
+                boolean locked = false;
+                MediaSubscription rescheduleCurrent = null;
                 try {
-                    MediaSubscription current = subscriptionRepository.findById(id).orElse(null);
-                    if (current == null || StringUtils.isNotBlank(current.getCoverUrl())) {
+                    locked = tryLock(id);
+                    if (!locked) {
                         return;
+                    }
+                    MediaSubscription current = subscriptionRepository.findById(id).orElse(null);
+                    boolean missingTmdbCoverFallback = current != null
+                            && TmdbMetadataProvider.NAME.equalsIgnoreCase(current.getMetaProvider())
+                            && (current.getCoverFallbackStatus() == null
+                            || "PENDING".equals(current.getCoverFallbackStatus())
+                            || "RETRY".equals(current.getCoverFallbackStatus()));
+                    if (current == null || (StringUtils.isNotBlank(current.getCoverUrl()) && !missingTmdbCoverFallback)) {
+                        return;
+                    }
+                    String retryKey = coverPrewarmKey(current);
+                    Long currentRetryAt = coverPrewarmRetryTime.get(retryKey);
+                    if (currentRetryAt != null && currentRetryAt > System.currentTimeMillis()) {
+                        return;
+                    }
+                    if (currentRetryAt != null) {
+                        coverPrewarmRetryTime.remove(retryKey, currentRetryAt);
                     }
                     MetadataDetails details = metadataService.details(
                             current.getMetaProvider(), current.getMetaId(), current.getSeason());
-                    if (details != null && StringUtils.isNotBlank(details.getCover())) {
-                        subscriptionRepository.updateCoverUrl(id,
-                                StringUtils.abbreviate(details.getCover(), 500)); // cover_url 列 VARCHAR(512)
+                    if (details == null) {
+                        coverPrewarmRetryTime.put(retryKey,
+                                System.currentTimeMillis() + COVER_PREWARM_RETRY_DELAY_MS);
+                        return;
+                    }
+                    String cover = StringUtils.isBlank(details.getCover()) ? current.getCoverUrl()
+                            : StringUtils.abbreviate(details.getCover(), 500);
+                    Integer expectedDoubanId = current.getDoubanId();
+                    Integer mappedDoubanId = mappedDoubanId(details);
+                    boolean matchedCurrentDouban = mappedDoubanId != null
+                            && (expectedDoubanId == null || expectedDoubanId.equals(mappedDoubanId));
+                    Integer targetDoubanId = expectedDoubanId == null && matchedCurrentDouban
+                            ? mappedDoubanId : expectedDoubanId;
+                    String fallback = current.getCoverFallbackUrl();
+                    String mappedFallback = mappedFallbackCover(details);
+                    if (matchedCurrentDouban && StringUtils.isNotBlank(mappedFallback)) {
+                        fallback = StringUtils.abbreviate(mappedFallback, 500);
+                    } else if (expectedDoubanId != null
+                            && TmdbMetadataProvider.NAME.equalsIgnoreCase(current.getMetaProvider())) {
+                        MetadataDetails explicitDouban = metadataService.details(
+                                DoubanMetadataProvider.NAME, String.valueOf(expectedDoubanId), current.getSeason());
+                        if (explicitDouban != null && StringUtils.isNotBlank(explicitDouban.getCover())) {
+                            fallback = StringUtils.abbreviate(explicitDouban.getCover(), 500);
+                        }
+                    }
+                    boolean retry = isExternalRetry(details);
+                    String fallbackStatus = retry ? "RETRY"
+                            : StringUtils.isNotBlank(fallback) ? "MATCH" : "NO_MATCH";
+                    int updated = subscriptionRepository.updateCoverSnapshot(
+                            id, current.getMetaProvider(), current.getMetaId(), current.getSeason(),
+                            expectedDoubanId, targetDoubanId, cover, fallback,
+                            fallbackStatus);
+                    if (updated == 0) {
+                        coverPrewarmRetryTime.put(retryKey,
+                                System.currentTimeMillis() + COVER_PREWARM_RETRY_DELAY_MS);
+                        MediaSubscription latest = subscriptionRepository.findById(id).orElse(null);
+                        if (latest != null && !coverPrewarmKey(latest).equals(retryKey)) {
+                            rescheduleCurrent = latest;
+                        }
+                    } else if (retry) {
+                        coverPrewarmRetryTime.put(retryKey,
+                                System.currentTimeMillis() + COVER_PREWARM_RETRY_DELAY_MS);
+                    } else {
+                        coverPrewarmRetryTime.remove(retryKey);
                     }
                 } catch (Exception e) {
+                    coverPrewarmRetryTime.put(requestedRetryKey,
+                            System.currentTimeMillis() + COVER_PREWARM_RETRY_DELAY_MS);
                     log.debug("cover prewarm {} failed: {}", id, e.getMessage());
                 } finally {
+                    if (locked) {
+                        inFlight.remove(id);
+                    }
                     coverPrewarmInFlight.remove(id);
+                    if (rescheduleCurrent != null) {
+                        prewarmCoverAsync(rescheduleCurrent);
+                    }
                 }
             });
         } catch (Exception e) {
@@ -900,6 +1014,8 @@ public class MediaSubscriptionCheckService {
             log.debug("subscription {} check already running", id);
             return;
         }
+        long revision = checkRevision.getOrDefault(id, 0L);
+        runningCheckRevision.put(id, revision);
         try {
             // 锁内取新实体:排队等待期间其他任务可能已整行保存,旧实体再 save 会把
             // currentEpisodes/nextCheckTime 等字段整体回滚覆盖
@@ -907,6 +1023,7 @@ public class MediaSubscriptionCheckService {
             if (subscription == null || MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus())) {
                 return;
             }
+            MetadataRefreshPlan checkPlan = metadataRefreshPlan(subscription);
             boolean playbackFailure = playbackFailed.remove(id);
             if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
                 if (!playbackFailure && !reopenEnded(subscription) && !staleSeasonReopen(subscription)) {
@@ -914,7 +1031,7 @@ public class MediaSubscriptionCheckService {
                     // 完结看完:官方加重重开场景每日一查纯属浪费,拉长到每周(重开路 playEpisode
                     // 失败/加更/换季残留/异剧四条都由即时信号触发,不依赖这轮轻查)
                     subscription.setNextCheckTime(System.currentTimeMillis() + 7 * 24 * 3600_000L);
-                    saveUnlessDeleted(id, subscription);
+                    saveCheckState(checkPlan, subscription);
                     return;
                 }
                     // 完结≠看完:仍在追看的完结剧,资源可播性照在播维护(轻查只看集数,发现不了死源)。
@@ -930,8 +1047,9 @@ public class MediaSubscriptionCheckService {
                 }
             }
             doCheck(subscription);
-            saveUnlessDeleted(id, subscription);
-            scheduleTransferAfterCheck(subscription);
+            if (saveCheckState(checkPlan, subscription)) {
+                scheduleTransferAfterCheck(subscription);
+            }
         } catch (Exception e) {
             MediaSubscription failed = subscriptionRepository.findById(id).orElse(null);
             if (failed == null) {
@@ -945,9 +1063,13 @@ public class MediaSubscriptionCheckService {
             failed.setUpdatedTime(System.currentTimeMillis());
             addEvent(id, MediaSubscriptionEvent.TYPE_ERROR, "巡检失败:" + e.getMessage());
             scheduleNext(failed);
-            saveUnlessDeleted(id, failed);
+            saveCheckState(metadataRefreshPlan(failed), failed);
         } finally {
+            runningCheckRevision.remove(id);
             inFlight.remove(id);
+            if (rerunAfterCheck.remove(id) && !deleted.contains(id)) {
+                submitCheck(id);
+            }
         }
     }
 
@@ -1376,20 +1498,25 @@ public class MediaSubscriptionCheckService {
 
     /** minIntervalMs 内已刷过则跳过;日程全空的订阅不受间隔限制:provider 侧桥接能力升级(如豆瓣名称桥接)后,下一轮即能补上播出时间轴。 */
     private void refreshMetadata(MediaSubscription subscription, long minIntervalMs) {
-        if (StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
+        if (!metadataRefreshDue(subscription, minIntervalMs)) {
             return;
         }
-        long now = System.currentTimeMillis();
-        boolean noSchedule = subscription.getNextAirTime() == null && StringUtils.isBlank(subscription.getSchedule());
-        if (subscription.getMetaSyncTime() != null && now - subscription.getMetaSyncTime() < minIntervalMs && !noSchedule) {
-            return;
-        }
-        subscription.setMetaSyncTime(now);
         MetadataDetails details = metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
         if (details == null) {
             return;
         }
         applyMetadataSnapshot(subscription, details);
+    }
+
+    private static boolean metadataRefreshDue(MediaSubscription subscription, long minIntervalMs) {
+        if (subscription == null || StringUtils.isBlank(subscription.getMetaProvider())
+                || StringUtils.isBlank(subscription.getMetaId())) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        boolean noSchedule = subscription.getNextAirTime() == null && StringUtils.isBlank(subscription.getSchedule());
+        return subscription.getMetaSyncTime() == null
+                || now - subscription.getMetaSyncTime() >= minIntervalMs || noSchedule;
     }
 
     /** 详情页"刷新元数据":穿透缓存直取外网,无视节流立即重写订阅快照与 media_metadata 表。 */
@@ -1405,17 +1532,16 @@ public class MediaSubscriptionCheckService {
                         || StringUtils.isBlank(current.getMetaId())) {
                     return;
                 }
+                MetadataRefreshPlan plan = metadataRefreshPlan(current);
                 MetadataDetails details = metadataService.refreshDetails(
-                        current.getMetaProvider(), current.getMetaId(), current.getSeason());
+                        plan.provider(), plan.metaId(), plan.season());
                 if (details == null) {
                     return;
                 }
-                current.setMetaSyncTime(System.currentTimeMillis());
-                applyMetadataSnapshot(current, details);
-                if (stopIfDeleted(id)) {
+                if (persistMetadataSnapshot(plan, details) == 0) {
+                    log.debug("discard stale manual metadata result for subscription {}", id);
                     return;
                 }
-                subscriptionRepository.save(current);
                 log.info("media subscription {} metadata refreshed by user", id);
             } catch (Exception e) {
                 log.warn("refresh metadata {} failed: {}", id, e.getMessage());
@@ -1442,18 +1568,17 @@ public class MediaSubscriptionCheckService {
                     addEvent(id, MediaSubscriptionEvent.TYPE_UPDATE_CHECK, "未绑定元数据条目,无法检查官方更新");
                     return;
                 }
+                MetadataRefreshPlan plan = metadataRefreshPlan(current);
                 MetadataDetails details = metadataService.refreshDetails(
-                        current.getMetaProvider(), current.getMetaId(), current.getSeason());
+                        plan.provider(), plan.metaId(), plan.season());
                 if (details == null) {
                     addEvent(id, MediaSubscriptionEvent.TYPE_UPDATE_CHECK, "检查更新失败:元数据源不可用,稍后重试");
                     return;
                 }
-                current.setMetaSyncTime(System.currentTimeMillis());
-                applyMetadataSnapshot(current, details);
-                if (stopIfDeleted(id)) {
+                if (persistMetadataSnapshot(plan, details) == 0) {
+                    log.debug("discard stale update-check metadata result for subscription {}", id);
                     return;
                 }
-                subscriptionRepository.save(current);
 
                 int official = details.getAiredEpisodes() == null ? 0 : details.getAiredEpisodes();
                 if (official <= 0) {
@@ -1487,10 +1612,24 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 元数据 → 订阅行快照(封面/官方集数/状态/日程/别名),refreshMetadata 与手动刷新共用。 */
-    private void applyMetadataSnapshot(MediaSubscription subscription, MetadataDetails details) {
+    void applyMetadataSnapshot(MediaSubscription subscription, MetadataDetails details) {
+        subscription.setMetaSyncTime(isExternalRetry(details) ? null : System.currentTimeMillis());
         if (StringUtils.isNotBlank(details.getCover())) {
             // 外部 URL 可能超 cover_url 列宽(VARCHAR 512):不截断会 22001 炸整轮巡检
             subscription.setCoverUrl(StringUtils.abbreviate(details.getCover(), 500)); // 封面快照:列表接口纯读库,不再实时查 provider
+        }
+        Integer doubanId = mappedDoubanId(details);
+        Integer expectedDoubanId = subscription.getDoubanId();
+        boolean matchingDoubanIdentity = doubanId != null
+                && (expectedDoubanId == null || expectedDoubanId.equals(doubanId));
+        if (matchingDoubanIdentity) {
+            String fallbackCover = mappedFallbackCover(details);
+            if (StringUtils.isNotBlank(fallbackCover)) {
+                subscription.setCoverFallbackUrl(StringUtils.abbreviate(fallbackCover, 500));
+            }
+            if (expectedDoubanId == null) {
+                subscription.setDoubanId(doubanId);
+            }
         }
         // provider 降级只覆盖部分字段时不能把已知快照洗掉:官方集数门禁(集号范围/标题宣称)与
         // ENDED 重开判定都依赖这两个值,null(未知)保留旧值,非 null(含修正)照常更新
@@ -1530,6 +1669,82 @@ public class MediaSubscriptionCheckService {
                 log.debug("serialize schedule failed: {}", e.getMessage());
             }
         }
+    }
+
+    private record MetadataRefreshPlan(int id, String provider, String metaId, Integer season,
+                                       Integer expectedDoubanId) {
+    }
+
+    private static MetadataRefreshPlan metadataRefreshPlan(MediaSubscription subscription) {
+        return new MetadataRefreshPlan(subscription.getId(), subscription.getMetaProvider(),
+                subscription.getMetaId(), subscription.getSeason(), subscription.getDoubanId());
+    }
+
+    private int persistMetadataSnapshot(MetadataRefreshPlan plan, MetadataDetails details) {
+        MediaSubscription snapshot = subscriptionRepository.findById(plan.id()).orElse(null);
+        if (snapshot == null
+                || !java.util.Objects.equals(plan.provider(), snapshot.getMetaProvider())
+                || !java.util.Objects.equals(plan.metaId(), snapshot.getMetaId())
+                || !java.util.Objects.equals(plan.season(), snapshot.getSeason())
+                || !java.util.Objects.equals(plan.expectedDoubanId(), snapshot.getDoubanId())) {
+            return 0;
+        }
+        applyMetadataSnapshot(snapshot, details);
+        return subscriptionRepository.updateMetadataSnapshot(
+                plan.id(), plan.provider(), plan.metaId(), plan.season(), plan.expectedDoubanId(),
+                snapshot.getCoverUrl(), snapshot.getMetaSyncTime(), snapshot.getOfficialEpisodes(), snapshot.getOfficialTotal(),
+                snapshot.getOfficialStatus(), snapshot.getNextAirTime(), snapshot.getAliases(), snapshot.getSchedule());
+    }
+
+    private static String coverPrewarmKey(MediaSubscription subscription) {
+        int season = subscription.getSeason() == null || subscription.getSeason() < 1
+                ? 1 : subscription.getSeason();
+        return subscription.getId() + "|" + subscription.getMetaProvider() + "|"
+                + subscription.getMetaId() + "|" + season + "|" + subscription.getDoubanId();
+    }
+
+    static String mappedFallbackCover(MetadataDetails details) {
+        if (details == null || details.getExternalCovers() == null) {
+            return null;
+        }
+        String primary = details.getCover();
+        String douban = details.getExternalCovers().get("douban");
+        if (StringUtils.isNotBlank(douban) && !douban.equals(primary)) {
+            return douban;
+        }
+        return details.getExternalCovers().values().stream()
+                .filter(StringUtils::isNotBlank)
+                .filter(cover -> !cover.equals(primary))
+                .findFirst().orElse(null);
+    }
+
+    static String mappedFallbackCover(MetadataDetails details, Integer expectedDoubanId) {
+        Integer mappedDoubanId = mappedDoubanId(details);
+        if (expectedDoubanId != null && !expectedDoubanId.equals(mappedDoubanId)) {
+            return null;
+        }
+        return mappedFallbackCover(details);
+    }
+
+    static Integer mappedDoubanId(MetadataDetails details) {
+        if (details == null) {
+            return null;
+        }
+        String value = details.getExternalIds() == null ? null : details.getExternalIds().get("douban");
+        if (StringUtils.isBlank(value) && "douban".equalsIgnoreCase(details.getProvider())) {
+            value = details.getId();
+        }
+        try {
+            return StringUtils.isBlank(value) ? null : Integer.valueOf(value);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    static boolean isExternalRetry(MetadataDetails details) {
+        return details != null && details.getExternalStatuses() != null
+                && MetadataDetails.EXTERNAL_RETRY.equals(
+                        details.getExternalStatuses().get(DoubanMetadataProvider.NAME));
     }
 
     /** 缺口 = 1..base 中本地没有的集;base = max(观测最大, 官方已播, 期望集数)。 */
@@ -2994,7 +3209,8 @@ public class MediaSubscriptionCheckService {
                 subscription.setCurrentEpisodes(live.size());
                 subscription.setMaxEpisode(max);
                 subscription.setUpdatedTime(System.currentTimeMillis());
-                subscriptionRepository.save(subscription);
+                subscriptionRepository.updateEpisodeCounters(subscription.getId(), live.size(), max,
+                        subscription.getUpdatedTime());
             }
         } catch (Exception e) {
             log.debug("refresh episode counters for subscription {} failed: {}", subscription.getId(), e.getMessage());
