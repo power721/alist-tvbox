@@ -272,9 +272,18 @@ public class PikPakService {
             if (account.isMaster()) {
                 throw new BadRequestException("不能删除主账号");
             }
+            // 先清 AList storage 再删本地行,失败时行保留可重试(防活凭证遗留 AList)
+            int storageId = base + account.getId();
+            int status = aListLocalService.checkStatus();
+            if (status == 1) {
+                throw new BadRequestException("AList服务启动中");
+            }
+            if (status >= 2) {
+                accountService.deleteStorage(storageId, accountService.login());
+            } else {
+                aListLocalService.executeUpdate("DELETE FROM x_storages WHERE id = " + storageId);
+            }
             pikPakAccountRepository.deleteById(id);
-            String token = accountService.login();
-            accountService.deleteStorage(base + account.getId(), token);
         }
     }
 }

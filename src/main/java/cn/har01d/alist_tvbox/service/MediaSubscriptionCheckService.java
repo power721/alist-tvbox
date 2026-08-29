@@ -2028,7 +2028,10 @@ public class MediaSubscriptionCheckService {
             if (!belongsToShow(subscription, resource, files.keySet())) {
                 // 误挂异剧的补缺/线路挂载:其行会向"本地已有集"冒领错误集号,就地卸载回候选池
                 // (不走 retireResource:链接没死,不进跨订阅黑名单)
-                unmountShareIfUnused(resource.getShareId(), subscription.getId());
+                if (!unmountShareIfUnused(resource.getShareId(), subscription.getId())) {
+                    // 卸载失败(AList 不可用):保留挂载状态待下轮重试,勿清 shareId
+                    continue;
+                }
                 resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
                 resource.setMountPath(null);
                 resource.setShareId(null);
@@ -3198,8 +3201,13 @@ public class MediaSubscriptionCheckService {
                     keptCount++;
                     continue;
                 }
-                // 共享挂载:share 被其它订阅引用时不卸载,行照常回候选池
-                unmountShareIfUnused(resource.getShareId(), subscription.getId());
+                // 共享挂载:share 被其它订阅引用时不卸载,行照常回候选池;卸载失败(AList 不可用)则
+                // 保留挂载状态与 shareId 待下轮重试 —— 先清字段会把唯一重试凭据抹掉,挂载变永久孤儿
+                if (!unmountShareIfUnused(resource.getShareId(), subscription.getId())) {
+                    log.warn("subscription {} keep aux mount {} (unmount failed, retry next round)",
+                            subscription.getId(), resource.getId());
+                    continue;
+                }
                 resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
                 resource.setMountPath(null);
                 resource.setShareId(null);
@@ -3223,20 +3231,23 @@ public class MediaSubscriptionCheckService {
      * 共享挂载守卫:share 仍被其它订阅(主源或资源行)引用时不卸载 —— 挂载模式下多用户共用
      * 同一路径背后的分享,谁的资源退役都不该把别人正在看的挂载摘掉。
      */
-    private void unmountShareIfUnused(Integer shareId, int subscriptionId) {
+    /** @return false=AList 删除失败,挂载仍有效须保留资源行待重试;true=已删/被共享引用跳过/无 shareId */
+    private boolean unmountShareIfUnused(Integer shareId, int subscriptionId) {
         if (shareId == null) {
-            return;
+            return true;
         }
         if (subscriptionRepository.existsByShareIdAndIdNot(shareId, subscriptionId)
                 || resourceRepository.existsByShareIdAndSubscriptionIdNot(shareId, subscriptionId)) {
             log.debug("share {} still referenced by another subscription, skip unmount", shareId);
-            return;
+            return true;
         }
         try {
             shareService.deleteShare(shareId);
         } catch (Exception e) {
             log.warn("unmount share {} failed: {}", shareId, e.getMessage());
+            return false;
         }
+        return true;
     }
 
     /**

@@ -1197,9 +1197,10 @@ public class AccountService {
 
         Account account = accountRepository.findById(id).orElse(null);
         if (account != null) {
-            accountRepository.deleteById(id);
+            // 先清 AList 侧状态再删本地行:AList 失败(启动中/不可用)时行保留,删除可重试
             account.setShowMyAli(false);
             showMyAliWithAPI(account);
+            accountRepository.deleteById(id);
         }
     }
 

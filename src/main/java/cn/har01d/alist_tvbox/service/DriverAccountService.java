@@ -435,9 +435,19 @@ public class DriverAccountService {
     public void delete(Integer id) {
         DriverAccount account = driverAccountRepository.findById(id).orElse(null);
         if (account != null) {
+            // 先清 AList storage 再删本地行:AList 侧失败(服务未就绪等)时行保留,重试仍有据可查;
+            // 反序会把活凭证遗留在 AList 里且失去重试入口
+            int storageId = IDX + account.getId();
+            int status = aListLocalService.checkStatus();
+            if (status == 1) {
+                throw new BadRequestException("AList服务启动中");
+            }
+            if (status >= 2) {
+                accountService.deleteStorage(storageId, accountService.login());
+            } else {
+                aListLocalService.executeUpdate("DELETE FROM x_storages WHERE id = " + storageId);
+            }
             driverAccountRepository.deleteById(id);
-            String token = accountService.login();
-            accountService.deleteStorage(IDX + account.getId(), token);
         }
     }
 

@@ -375,26 +375,38 @@ public class UserService {
             throw new BadRequestException("不能删除管理员");
         }
         // 个人账号凭证即用户数字身份:人走凭证销毁;追剧订阅引用该账号的,解析时自然落空(已有容错)。
-        // 必须走各账号服务的 delete(连带移除内嵌 AList 的 storage/挂载),裸删库表会把活凭证遗留在 AList 里
+        // 必须走各账号服务的 delete(连带移除内嵌 AList 的 storage/挂载),裸删库表会把活凭证遗留在 AList 里。
+        // AList 侧清理失败(服务未就绪等)时中止删用户,账号行保留待管理员重试;
+        // 唯一豁免:PikPak 主账号保护属业务拒绝而非清理失败,行照清
         for (DriverAccount account : driverAccountRepository.findByOwnerUid(id)) {
             try {
                 driverAccountService.getObject().delete(account.getId());
+            } catch (BadRequestException e) {
+                throw new BadRequestException("网盘账号 [" + account.getName() + "] 清理失败,请稍后重试:" + e.getMessage());
             } catch (Exception e) {
-                log.warn("delete driver account {} for user {} failed", account.getId(), id, e);
+                throw new BadRequestException("网盘账号 [" + account.getName() + "] 清理失败(AList 不可用?),请稍后重试");
             }
         }
         for (Account account : accountRepository.findByOwnerUid(id)) {
             try {
                 accountService.getObject().delete(account.getId());
+            } catch (BadRequestException e) {
+                throw new BadRequestException("阿里账号 [user-" + account.getId() + "] 清理失败,请稍后重试:" + e.getMessage());
             } catch (Exception e) {
-                log.warn("delete ali account {} for user {} failed", account.getId(), id, e);
+                throw new BadRequestException("阿里账号 [user-" + account.getId() + "] 清理失败(AList 不可用?),请稍后重试");
             }
         }
         for (PikPakAccount account : pikPakAccountRepository.findByOwnerUid(id)) {
             try {
                 pikPakService.getObject().delete(account.getId());
+            } catch (BadRequestException e) {
+                if (e.getMessage() != null && e.getMessage().contains("主账号")) {
+                    log.warn("pikpak account {} is master-protected, drop row for user {}", account.getId(), id);
+                    continue;
+                }
+                throw new BadRequestException("PikPak 账号 [" + account.getUsername() + "] 清理失败,请稍后重试:" + e.getMessage());
             } catch (Exception e) {
-                log.warn("delete pikpak account {} for user {} failed", account.getId(), id, e);
+                throw new BadRequestException("PikPak 账号 [" + account.getUsername() + "] 清理失败(AList 不可用?),请稍后重试");
             }
         }
         // 兜底清行:个别服务删除失败(如 PikPak 主账号保护)时也不留下孤儿账号行
