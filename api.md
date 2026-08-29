@@ -13,6 +13,7 @@
 - [媒体集成](#媒体集成)
 - [网盘账户](#网盘账户)
 - [订阅与配置](#订阅与配置)
+- [追剧订阅](#追剧订阅)
 - [系统管理](#系统管理)
 
 ---
@@ -381,6 +382,47 @@ PikPak网盘
 ---
 
 ## 订阅与配置
+
+### 追剧订阅
+
+#### MediaSubscriptionController
+追剧订阅（自动追更）管理。所有接口均要求登录会话鉴权（`ADMIN`/`USER`），数据按当前用户隔离。
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/media-subscriptions` | 列出追剧订阅 |
+| POST | `/api/media-subscriptions` | 创建订阅并异步首次检查 |
+| POST | `/api/media-subscriptions/{id}` | 更新订阅 |
+| DELETE | `/api/media-subscriptions/{id}` | 删除订阅 |
+| POST | `/api/media-subscriptions/{id}/check` | 异步手动检查更新 |
+| POST | `/api/media-subscriptions/{id}/refresh-meta` | 异步刷新媒体元数据 |
+| POST | `/api/media-subscriptions/{id}/check-update` | 异步检查官方播出与本地资源差异 |
+| POST | `/api/media-subscriptions/{id}/pause` | 暂停订阅 |
+| POST | `/api/media-subscriptions/{id}/resume` | 恢复订阅 |
+| GET | `/api/media-subscriptions/{id}/events` | 获取订阅事件时间线 |
+| GET | `/api/media-subscriptions/{id}/resources` | 获取候选资源池 |
+| POST | `/api/media-subscriptions/{id}/resources/{resourceId}/activate` | 异步启用候选资源为主源 |
+| POST | `/api/media-subscriptions/{id}/resources/{resourceId}/pin` | 钉选资源为主源并优先保留 |
+| POST | `/api/media-subscriptions/{id}/resources/{resourceId}/unpin` | 取消资源钉选 |
+| POST | `/api/media-subscriptions/{id}/transfer` | 异步手动转存增量资源 |
+| GET | `/api/media-subscriptions/{id}/transfer/progress` | 获取转存进度 |
+| GET | `/api/media-subscriptions/{id}/next-season` | 查询可订阅的下一季 |
+| GET | `/api/media-subscriptions/{id}/episodes` | 获取分集及本地资源状态 |
+| GET | `/api/media-subscriptions/{id}/detail` | 获取媒体详情、元数据快照及分集信息 |
+| GET | `/api/media-subscriptions/navigation` | 获取片单追更导航分类 |
+| GET | `/api/media-subscriptions/navigation/list` | 获取片单分类条目（参数：`t`、`pg`、`size` 及筛选条件） |
+| GET | `/api/media-subscriptions/schedule` | 获取昨天至未来 7 天的播出时间轴 |
+| GET | `/api/media-subscriptions/meta/resolve` | 解析媒体链接元数据（参数：`url`） |
+| GET | `/api/media-subscriptions/meta/search` | 搜索媒体元数据（参数：`keyword`、`provider`） |
+| POST | `/api/media-subscriptions/preview` | 预览资源搜索与评分，不创建订阅 |
+| GET | `/api/media-subscriptions/inbox` | 获取近 3 天更新、换源和补缺事件 |
+| GET | `/api/media-subscriptions/export` | 导出当前用户的订阅 |
+| POST | `/api/media-subscriptions/import` | 导入订阅 |
+| POST | `/api/media-subscriptions/batch` | 批量检查、暂停、恢复或删除订阅 |
+| GET | `/api/media-subscriptions/stats` | 获取订阅状态与今日更新统计 |
+| POST | `/api/media-subscriptions/follow` | 将当前搜索资源直接订阅为主源 |
+| GET | `/api/media-subscriptions/preference` | 获取当前用户的追剧偏好配置 |
+| POST | `/api/media-subscriptions/preference` | 保存当前用户的追剧偏好配置 |
 
 ### SubscriptionController
 订阅配置管理
