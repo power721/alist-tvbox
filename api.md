@@ -52,6 +52,8 @@
 | GET | `/repo/{token}/{id}` | 获取多仓订阅配置（带token）            |
 | POST | `/api/cat/sync` | 同步猫影视配置                     |
 | GET | `/api/capabilities` | 获取系统能力列表                    |
+| GET | `/api/basic-auth-credentials` | 获取 Basic Auth 凭据 |
+| POST | `/api/basic-auth-credentials/regenerate` | 重新生成 Basic Auth 凭据 |
 
 ---
 
@@ -165,6 +167,25 @@
 |------|------|------|
 | GET | `/subtitles` | 获取字幕内容 |
 
+### PlaybackSyncController
+多端播放记录同步
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/playback/event` | 上报单条播放记录（播放同步令牌鉴权） |
+| POST | `/api/playback/events` | 批量上报播放记录（播放同步令牌鉴权） |
+| GET | `/api/playback/changes` | 拉取播放记录变更（播放同步令牌鉴权） |
+| POST | `/api/playback/sync` | WebHTV 兼容播放记录上报（播放同步令牌鉴权） |
+| GET | `/api/playback/sync` | WebHTV 兼容播放记录拉取（播放同步令牌鉴权） |
+| GET | `/api/playback/records` | 分页查询当前用户的同步记录 |
+| GET | `/api/playback/records/-/item` | 获取单条同步记录 |
+| POST | `/api/playback/records/-/delete` | 批量删除同步记录并创建墓碑 |
+| DELETE | `/api/playback/records` | 清空当前用户的同步记录 |
+| POST | `/api/playback/tombstones/-/delete` | 清除播放记录墓碑 |
+| GET | `/api/playback/tokens` | 列出播放同步令牌 |
+| POST | `/api/playback/tokens` | 创建播放同步令牌 |
+| DELETE | `/api/playback/tokens/{id}` | 删除播放同步令牌 |
+
 ---
 
 ## 媒体集成
@@ -250,8 +271,11 @@ Telegram集成
 | 方法 | 路径 | 描述 |
 |------|------|------|
 | GET | `/api/telegram/search` | 搜索消息 |
+| GET | `/api/telegram/tg-search/health` | 获取 tg-search 服务健康状态 |
 | GET | `/tg-search` | Telegram搜索API（无token） |
 | GET | `/tg-search/{token}` | Telegram搜索API（带token） |
+| GET | `/tgsc` | tg-search 兼容 API（无 token） |
+| GET | `/tgsc/{token}` | tg-search 兼容 API（带 token） |
 | GET | `/tg-db` | Telegram豆瓣API（无token） |
 | GET | `/tg-db/{token}` | Telegram豆瓣API（带token） |
 | GET | `/tgsz` | 搜索ZX格式 |
@@ -267,6 +291,31 @@ Telegram集成
 | POST | `/api/telegram/reloadChannels` | 重新加载频道 |
 | POST | `/api/telegram/validateChannels` | 验证频道 |
 
+### QqMusicController
+QQ 音乐扫码登录
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/qqmusic/login` | 获取 QQ 或微信登录二维码（参数：`type`） |
+| GET | `/api/qqmusic/check` | 查询扫码登录状态（参数：`key`） |
+| POST | `/api/qqmusic/refresh` | 刷新所有 QQ 音乐插件凭据 |
+
+### PianDanController
+片单导航与搜索
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/pian-dan` | 片单 API（无 token） |
+| GET | `/pian-dan/{token}` | 片单 API（带 token），支持分类、筛选、搜索及详情 |
+
+### MediaLibraryController
+内置“我的追剧”媒体库
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/media` | 我的追剧媒体库（无 token） |
+| GET | `/media/{token}` | 我的追剧媒体库（带 token），支持分类、搜索、详情和播放列表 |
+
 ### LiveController
 直播集成
 
@@ -276,6 +325,40 @@ Telegram集成
 | GET | `/live/{token}` | 直播API（带token） |
 | GET | `/live-play` | 直播播放（无token） |
 | GET | `/live-play/{token}` | 直播播放（带token） |
+| GET | `/live-proxy` | 直播流代理（无 token） |
+| GET | `/live-proxy/{token}` | 直播流代理（带 token） |
+| POST | `/live/follow` | 关注直播间（无 token） |
+| POST | `/live/{token}/follow` | 关注直播间（带 token） |
+| POST | `/live/unfollow` | 取消关注直播间（无 token） |
+| POST | `/live/{token}/unfollow` | 取消关注直播间（带 token） |
+
+### LiveDanmakuController
+直播弹幕轮询
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/live/danmaku` | 拉取直播弹幕（参数：`platform`、`roomId`、`after`） |
+| GET | `/live/danmaku/{token}` | 拉取直播弹幕（带 token） |
+
+### LiveFollowController
+直播关注管理（登录会话鉴权，数据按当前用户隔离）
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/live/follows` | 列出已关注直播间 |
+| POST | `/api/live/follows` | 关注直播间 |
+| POST | `/api/live/follows/url` | 通过官方直播间地址关注 |
+| DELETE | `/api/live/follows` | 取消关注（参数：`platform`、`roomId`） |
+
+### LiveCookieController
+直播平台 Cookie 管理
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/live/cookies` | 列出直播平台 Cookie 配置 |
+| PUT | `/api/live/cookies` | 保存直播平台 Cookie |
+| DELETE | `/api/live/cookies` | 清除直播平台 Cookie（参数：`platform`） |
+| POST | `/api/live/cookies/verify` | 验证直播平台 Cookie |
 
 ### HuyaController
 虎牙直播集成
@@ -313,6 +396,7 @@ Telegram集成
 |------|------|------|
 | GET | `/api/ali/accounts` | 列出阿里账户 |
 | POST | `/api/ali/accounts` | 创建阿里账户 |
+| POST | `/api/ali/accounts/-/info` | 获取阿里账户信息 |
 | POST | `/api/ali/accounts/{id}/checkin` | 签到 |
 | GET | `/api/ali/accounts/{id}/checkin` | 获取签到日志 |
 | POST | `/api/ali/accounts/{id}/token` | 更新令牌 |
@@ -342,6 +426,14 @@ Telegram集成
 | POST | `/api/pan/accounts/-/qr` | 获取二维码 |
 | POST | `/api/pan/accounts/-/token` | 获取刷新令牌 |
 | POST | `/api/pan/accounts/-/info` | 获取账户信息 |
+
+### DriveController
+网盘资源浏览（`Authorization` 鉴权）
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/drive/resolve` | 解析网盘分享资源 |
+| GET | `/api/drive/{resourceId}/files` | 列出资源目录文件（可选参数：`dir`） |
 
 ### PikPakController
 PikPak网盘
@@ -552,6 +644,8 @@ AList别名管理
 | POST | `/check-links/{token}` | 检测网盘链接有效性（插件用，带token，disk_type可省略自动推断） |
 | GET | `/pansou` | 盘搜API（无token） |
 | GET | `/pansou/{token}` | 盘搜API（带token） |
+| GET | `/pansou-group` | 按网盘分组的盘搜 API（无 token） |
+| GET | `/pansou-group/{token}` | 按网盘分组的盘搜 API（带 token） |
 | GET | `/tgsp` | 搜索PG（GET） |
 | POST | `/tgsp` | 搜索PG（POST） |
 | POST | `/tgsp/s/{id}` | 搜索PG频道 |
