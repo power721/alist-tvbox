@@ -1129,7 +1129,7 @@ remove_opposite_container() {
 
 # 检测容器状态
 check_container_status() {
-  local container_name=$(get_container_name)
+  local container_name="${1:-$(get_container_name)}"
   if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
     echo "running"
   elif docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
@@ -1793,8 +1793,9 @@ show_image_menu() {
 }
 
 reset_admin_password() {
-  local container_name=$(get_container_name)
-  local status=$(check_container_status)
+  local container_name="${1:-$(get_container_name)}"
+  local interactive="${2:-true}"
+  local status=$(check_container_status "$container_name")
 
   if [[ "$status" == "running" ]]; then
     local reset_token
@@ -1803,7 +1804,9 @@ reset_admin_password() {
     if ! write_admin_reset_token "$container_name" "$reset_token"; then
       echo -e "${RED}密码重置失败：无法写入容器内重置令牌${NC}"
       echo -e "${YELLOW}请查看日志：docker logs -f $container_name${NC}"
-      read -n 1 -s -r -p "按任意键继续..."
+      if [[ "$interactive" == "true" ]]; then
+        read -n 1 -s -r -p "按任意键继续..."
+      fi
       return
     fi
 
@@ -1824,10 +1827,12 @@ reset_admin_password() {
       echo -e "${YELLOW}请查看日志：docker logs -f $container_name${NC}"
     fi
   else
-    echo -e "${RED}容器未运行，无法通过本地接口重置管理员密码${NC}"
+    echo -e "${RED}容器 ${container_name} 未运行，无法通过本地接口重置管理员密码${NC}"
   fi
 
-  read -n 1 -s -r -p "按任意键继续..."
+  if [[ "$interactive" == "true" ]]; then
+    read -n 1 -s -r -p "按任意键继续..."
+  fi
 }
 
 parse_reset_password_response() {
@@ -3738,9 +3743,12 @@ cli_mode() {
     rollback-db)
       rollback_db
       ;;
+    reset-password)
+      reset_admin_password "${2:-}" false
+      ;;
     *)
       echo -e "${RED}未知命令: $1${NC}"
-      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu, config-db, migrate-db, rollback-db, help"
+      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu, config-db, migrate-db, rollback-db, reset-password, help"
       exit 1
       ;;
   esac
@@ -3774,6 +3782,7 @@ ${CYAN}命令行命令:${NC}
   migrate-db export [zip]   从当前实例导出 JSON 备份（跨机迁移第一步：在源实例导出）
   migrate-db import <zip>   将备份导入当前实例（恢复后自动重启；跨机迁移第二步，在目标实例执行）
   rollback-db               回退到上次切换前的数据库（恢复快照并重建容器）
+  reset-password [容器名]    重置指定容器的管理员密码；未指定时使用默认容器
   menu        进入交互式菜单
   help        显示本帮助
 
