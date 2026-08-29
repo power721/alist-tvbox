@@ -85,7 +85,7 @@ onMounted(() => {
         <el-menu mode="horizontal" :ellipsis="false" :router="true" class="desktop-nav">
           <el-menu-item index="/" v-if="store.admin">首页</el-menu-item>
           <el-menu-item index="/sites" v-if="account.authenticated && store.admin">站点</el-menu-item>
-          <el-menu-item index="/accounts" v-if="account.authenticated && show && store.admin">账号</el-menu-item>
+          <el-menu-item index="/accounts" v-if="account.authenticated && show">账号</el-menu-item>
           <el-menu-item index="/bilibili" v-if="account.authenticated && full && store.admin">BiliBili</el-menu-item>
           <el-menu-item index="/subscriptions" v-if="account.authenticated && store.admin">订阅</el-menu-item>
           <el-menu-item index="/shares" v-if="account.authenticated && show && full && store.admin">资源</el-menu-item>
@@ -126,7 +126,7 @@ onMounted(() => {
         <el-menu>
           <el-menu-item index="/" v-if="store.admin" @click="navigate('/')">首页</el-menu-item>
           <el-menu-item index="/sites" v-if="account.authenticated && store.admin" @click="navigate('/sites')">站点</el-menu-item>
-          <el-menu-item index="/accounts" v-if="account.authenticated && show && store.admin" @click="navigate('/accounts')">账号</el-menu-item>
+          <el-menu-item index="/accounts" v-if="account.authenticated && show" @click="navigate('/accounts')">账号</el-menu-item>
           <el-menu-item index="/bilibili" v-if="account.authenticated && full && store.admin" @click="navigate('/bilibili')">BiliBili</el-menu-item>
           <el-menu-item index="/subscriptions" v-if="account.authenticated && store.admin" @click="navigate('/subscriptions')">订阅</el-menu-item>
           <el-menu-item index="/shares" v-if="account.authenticated && show && full && store.admin" @click="navigate('/shares')">资源</el-menu-item>
