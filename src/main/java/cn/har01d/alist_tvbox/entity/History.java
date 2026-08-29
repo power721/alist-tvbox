@@ -42,7 +42,8 @@ public class History {
     private int cid;
 
     private int episode = -1;
-    private Integer uid = 1;
+    /** 归属用户,写入方必须显式赋值(不再默认 1:默认值会把来路不明的记录挂到首个用户名下) */
+    private Integer uid;
 
     // 多端播放记录同步:规范化身份与冲突时钟(可空;仅新协议路径填充)
     private String syncScope;

@@ -30,6 +30,8 @@ public class PlayUrl {
     private String referer;
     private Instant time;
     private Integer rating;
+    /** 归属用户:0=共享行(存量/短时代理,放行);&gt;0=该用户订阅注册的盘线路,/p 须 token 归属一致 */
+    private int ownerUid;
 
     public PlayUrl(int site, String path, Instant time) {
         this.site = site;

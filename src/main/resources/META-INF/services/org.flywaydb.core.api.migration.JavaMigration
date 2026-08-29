@@ -28,3 +28,7 @@ db.migration.current.V33__MediaSubscriptionCaughtUp
 db.migration.current.V34__MediaSubscriptionResourceLinkHash
 db.migration.current.V35__MediaSubscriptionResourcePinned
 db.migration.current.V36__MediaSubscriptionNotify
+db.migration.current.V37__AccountOwnership
+db.migration.current.V38__SubscriptionOwnership
+db.migration.current.V39__UserVodSecret
+db.migration.current.V40__PlayUrlOwnership

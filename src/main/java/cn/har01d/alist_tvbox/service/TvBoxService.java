@@ -169,6 +169,7 @@ public class TvBoxService {
             new FilterValue("低分", "low")
     );
     private final PikPakAccountRepository pikPakAccountRepository;
+    private final AccountAccessGuard accountAccessGuard;
     private List<Site> sites = new ArrayList<>();
     private final OkHttpClient okHttpClient = new OkHttpClient();
 
@@ -194,7 +195,8 @@ public class TvBoxService {
                         ProxyService proxyService,
                         Index115TvBoxAdapter index115Adapter,
                         RestTemplateBuilder builder,
-                        PikPakAccountRepository pikPakAccountRepository) {
+                        PikPakAccountRepository pikPakAccountRepository,
+                        AccountAccessGuard accountAccessGuard) {
         this.accountRepository = accountRepository;
         this.aliasRepository = aliasRepository;
         this.shareRepository = shareRepository;
@@ -218,6 +220,33 @@ public class TvBoxService {
         this.index115Adapter = index115Adapter;
         this.restTemplate = builder.build();
         this.pikPakAccountRepository = pikPakAccountRepository;
+        this.accountAccessGuard = accountAccessGuard;
+    }
+
+    /**
+     * 当前请求方的凭证视角:0=管理级(共享 token=管理员设备/管理会话/X-API-KEY,凭证可全量下发);
+     * >0=具体用户 uid(u- token 须带密钥验真,或 USER 会话),只有 ownerUid 匹配的账号凭证才可随直链下发;
+     * -1=裸 u-{username}(无熵可猜测)——既不发本人凭证,也绝不回落会话(无会话时 currentUid()=0 会被当管理级)。
+     */
+    private int credentialUid() {
+        String token = subscriptionService.getCurrentToken();
+        int uid = subscriptionService.verifiedCredentialUidFor(token);
+        if (uid >= 0) {
+            return uid;
+        }
+        if (token.startsWith(Constants.USER_TOKEN_PREFIX)) {
+            return -1;
+        }
+        // 无 vod token 上下文(网页会话等):回落会话身份,管理级=0
+        return accountAccessGuard.isElevated() ? 0 : accountAccessGuard.currentUid();
+    }
+
+    private boolean canSendCredentials(DriverAccount account) {
+        if (account == null) {
+            return true;
+        }
+        int uid = credentialUid();
+        return uid == 0 || account.getOwnerUid() == uid;
     }
 
     private Site getXiaoyaSite() {
@@ -1445,8 +1474,8 @@ public class TvBoxService {
         url = fixHttp(fsDetail.getRawUrl());
         if ("com.fongmi.android.tv".equals(client)) {
             // ignore
-        } else if ((fsDetail.getProvider().contains("Aliyundrive") && !fsDetail.getRawUrl().contains("115cdn.net"))
-                || (("open".equals(client) || "node".equals(client)) && fsDetail.getProvider().contains("115"))) {
+        } else if (("open".equals(client) || "node".equals(client)) && fsDetail.getProvider().contains("115")) {
+            // 阿里直链带签名可直连(省服务器带宽);仅 open/node 客户端的 115 保留代理(UA 签名校验问题)
             url = buildProxyUrl(site, name, path);
             useProxy = true;
             log.info("play url: {}", url);
@@ -1488,8 +1517,13 @@ public class TvBoxService {
                 result.put("header", Map.of("User-Agent", Constants.QUARK_USER_AGENT, "Referer", cleanUrl + "\\ "));
             } else {
                 var account = getDriverAccount(url, driverType);
-                String cookie = account == null ? "" : account.getCookie();
-                result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.QUARK_USER_AGENT, "Referer", "https://pan.quark.cn"));
+                if (account != null && !canSendCredentials(account)) {
+                    // 非归属人不得下发 Cookie(凭证只给归属人):改走服务端代理
+                    result.put("url", buildProxyUrl(site, name, path));
+                } else {
+                    String cookie = account == null ? "" : account.getCookie();
+                    result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.QUARK_USER_AGENT, "Referer", "https://pan.quark.cn"));
+                }
             }
         } else if (driverType == DriverType.UC) {
             int marker = url.indexOf("#x-referer=raw");
@@ -1502,8 +1536,13 @@ public class TvBoxService {
                 result.put("header", Map.of("User-Agent", Constants.UC_USER_AGENT, "Referer", cleanUrl + "\\ "));
             } else {
                 var account = getDriverAccount(url, driverType);
-                String cookie = account == null ? "" : account.getCookie();
-                result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.UC_USER_AGENT, "Referer", "https://drive.uc.cn"));
+                if (account != null && !canSendCredentials(account)) {
+                    // 非归属人不得下发 Cookie(凭证只给归属人):改走服务端代理
+                    result.put("url", buildProxyUrl(site, name, path));
+                } else {
+                    String cookie = account == null ? "" : account.getCookie();
+                    result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.UC_USER_AGENT, "Referer", "https://drive.uc.cn"));
+                }
             }
         } else if (driverType == DriverType.THUNDER) {
             result.put("header", Map.of("User-Agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)"));
@@ -1522,7 +1561,8 @@ public class TvBoxService {
 
         // PowerList 多账号分片:把各账号直连 + 各自 header 设到 result.multiUrls,
         // 供 spider.jar(VideoStreamProxy)客户端多账号分片加速。不改变服务端代理(useProxy)逻辑。
-        if (fsDetail.getMultiSource() != null && !fsDetail.getMultiSource().isEmpty()) {
+        // 分片源 header 含各账号 Cookie,只对管理级凭证视角(共享 token/管理会话)下发;普通用户走单 url(归属人 Cookie 或代理)
+        if (credentialUid() == 0 && fsDetail.getMultiSource() != null && !fsDetail.getMultiSource().isEmpty()) {
             List<Map<String, Object>> multiUrls = new ArrayList<>();
             for (FsDetail.MultiSource ms : fsDetail.getMultiSource()) {
                 Map<String, Object> item = new HashMap<>();

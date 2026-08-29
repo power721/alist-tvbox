@@ -6,7 +6,6 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionNotifyTask;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionNotifyTaskRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.service.metadata.MetadataHttp;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -69,7 +68,7 @@ public class MediaSubscriptionNotificationService {
     private final MediaSubscriptionRepository subscriptionRepository;
     private final MediaSubscriptionEventRepository eventRepository;
     private final MediaSubscriptionNotifyTaskRepository taskRepository;
-    private final SettingRepository settingRepository;
+    private final SettingService settingService;
     private final ObjectMapper objectMapper;
     private final RestTemplate rest;
     /** 串行派发:入队即试发(保持旧实现的秒级到达),失败留给兜底扫描 */
@@ -81,9 +80,9 @@ public class MediaSubscriptionNotificationService {
     public MediaSubscriptionNotificationService(MediaSubscriptionRepository subscriptionRepository,
                                                 MediaSubscriptionEventRepository eventRepository,
                                                 MediaSubscriptionNotifyTaskRepository taskRepository,
-                                                SettingRepository settingRepository,
+                                                SettingService settingService,
                                                 ObjectMapper objectMapper) {
-        this(subscriptionRepository, eventRepository, taskRepository, settingRepository, objectMapper,
+        this(subscriptionRepository, eventRepository, taskRepository, settingService, objectMapper,
                 new MetadataHttp(null).create());
     }
 
@@ -91,13 +90,13 @@ public class MediaSubscriptionNotificationService {
     MediaSubscriptionNotificationService(MediaSubscriptionRepository subscriptionRepository,
                                          MediaSubscriptionEventRepository eventRepository,
                                          MediaSubscriptionNotifyTaskRepository taskRepository,
-                                         SettingRepository settingRepository,
+                                         SettingService settingService,
                                          ObjectMapper objectMapper,
                                          RestTemplate rest) {
         this.subscriptionRepository = subscriptionRepository;
         this.eventRepository = eventRepository;
         this.taskRepository = taskRepository;
-        this.settingRepository = settingRepository;
+        this.settingService = settingService;
         this.objectMapper = objectMapper;
         this.rest = rest;
         AtomicInteger seq = new AtomicInteger();
@@ -174,13 +173,15 @@ public class MediaSubscriptionNotificationService {
             if (tasks.isEmpty()) {
                 return;
             }
-            String token = setting("msub_telegram_bot_token");
-            String chatId = setting("msub_telegram_chat_id");
+            MediaSubscription subscription = subscriptionRepository.findById(subscriptionId).orElseThrow();
+            // TG 渠道按订阅人解析:用户级 {key}:u{uid} 优先,未配置回退全局键(见 docs/multi-user-design.md §3.1)
+            int uid = subscription.getUid();
+            String token = settingService.getUserSetting("msub_telegram_bot_token", uid);
+            String chatId = settingService.getUserSetting("msub_telegram_chat_id", uid);
             if (token.isBlank() || chatId.isBlank()) {
                 markSent(tasks);
                 return;
             }
-            MediaSubscription subscription = subscriptionRepository.findById(subscriptionId).orElseThrow();
             String text = buildCard(subscription);
             try {
                 deliver(subscription, token, chatId, text);
@@ -367,14 +368,6 @@ public class MediaSubscriptionNotificationService {
         }
         taskRepository.saveAll(tasks);
         log.info("telegram notify retry scheduled ({} tasks): {}", tasks.size(), brief);
-    }
-
-    private String setting(String key) {
-        try {
-            return settingRepository.findById(key).map(s -> s.getValue() == null ? "" : s.getValue()).orElse("");
-        } catch (Exception e) {
-            return "";
-        }
     }
 
     private String abbreviate(String text) {

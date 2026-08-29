@@ -123,11 +123,14 @@ public class LiveFollowService {
     }
 
     /**
-     * 订阅 token → 归属用户:用户名 token → 该用户;共享 token/空 → 首个管理员。
+     * 订阅 token → 归属用户:u-{username} → 该用户;共享 token/空 → 首个管理员(全局 tokens 无 u- 前缀,不撞车)。
      * 与播放记录同步(playbackTokenForSubscription)的归属规则一致。
      */
     public int resolveUid(String token) {
-        var user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findByUsername(token);
+        var user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findUserByCredentialToken(token);
+        if (user == null) {
+            user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findByUserVodToken(token);
+        }
         if (user == null) {
             user = userService.list().stream()
                     .filter(candidate -> candidate.getRole() == Role.ADMIN)

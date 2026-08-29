@@ -28,6 +28,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,6 +50,12 @@ class UserServiceTest {
     private TokenService tokenService;
     @Mock
     private JdbcTemplate jdbcTemplate;
+    @Mock
+    private cn.har01d.alist_tvbox.entity.DriverAccountRepository driverAccountRepository;
+    @Mock
+    private cn.har01d.alist_tvbox.entity.AccountRepository accountRepository;
+    @Mock
+    private cn.har01d.alist_tvbox.entity.PikPakAccountRepository pikPakAccountRepository;
 
     private UserService userService;
 
@@ -57,7 +64,31 @@ class UserServiceTest {
         SecurityContextHolder.clearContext();
         userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
             new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-json.zip"),
-            jdbcTemplate);
+            driverAccountRepository, accountRepository, pikPakAccountRepository, jdbcTemplate,
+            null, null, null); // ObjectProvider<账号服务>:仅级联删除使用,mock 仓储默认空列表不会触达
+    }
+
+    @Test
+    void userVodTokenShouldUsePrefixAndRoundTrip() {
+        when(userRepository.findByUsername("alice")).thenReturn(null);
+
+        assertEquals("u-alice", UserService.userVodToken("alice"));
+        assertEquals("alice", userService.usernameOfUserVodToken("u-alice"));
+        assertNull(userService.usernameOfUserVodToken("alice"));
+        assertNull(userService.usernameOfUserVodToken("u-"));
+        assertNull(userService.usernameOfUserVodToken(null));
+        assertNull(userService.findByUserVodToken("u-alice"));
+        verify(userRepository).findByUsername("alice");
+    }
+
+    @Test
+    void createShouldRejectUsernameContainingHyphen() {
+        UserDto dto = new UserDto();
+        dto.setUsername("xiaoming-test");
+        dto.setPassword("secret");
+
+        assertThrows(BadRequestException.class, () -> userService.create(dto));
+        verify(userRepository, never()).save(any());
     }
 
     @Test
@@ -108,18 +139,18 @@ class UserServiceTest {
         user.setPassword("encoded-old");
 
         UserDto dto = new UserDto();
-        dto.setUsername("new-admin");
+        dto.setUsername("new_admin");
         dto.setPassword("");
 
         when(userRepository.findByUsername("admin")).thenReturn(user);
-        when(userRepository.findByUsername("new-admin")).thenReturn(null);
+        when(userRepository.findByUsername("new_admin")).thenReturn(null);
         when(userRepository.save(user)).thenReturn(user);
-        when(tokenService.encodeToken(1, "new-admin", "ADMIN", null, null)).thenReturn("token");
+        when(tokenService.encodeToken(1, "new_admin", "ADMIN", null, null)).thenReturn("token");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "token"));
 
         UserToken token = userService.updateAccount(dto, null, null);
 
-        assertEquals("new-admin", user.getUsername());
+        assertEquals("new_admin", user.getUsername());
         assertEquals("encoded-old", user.getPassword());
         assertEquals("token", token.getToken());
         verify(passwordEncoder, never()).matches(any(), any());

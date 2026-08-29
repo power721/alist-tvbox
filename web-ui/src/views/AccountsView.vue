@@ -13,6 +13,13 @@
       <el-table :data="accounts" border style="width: 100%; min-width: 900px">
 <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="nickname" label="昵称" sortable width="180"/>
+      <el-table-column label="归属" width="90">
+        <template #default="scope">
+          <el-tag :type="scope.row.ownerUid === 0 ? 'info' : 'success'" size="small">
+            {{ scope.row.ownerUid === 0 ? (store.admin ? '全局' : '共享') : '我的' }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="autoCheckin" label="自动签到" width="90">
         <template #default="scope">
           <el-icon v-if="scope.row.autoCheckin">
@@ -61,7 +68,7 @@
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showAccountInfo(scope.row)">账号信息</el-button>
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">详情</el-button>
-          <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
+          <el-button v-if="canManage(scope.row)" link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -104,6 +111,15 @@
             inactive-text="否"
           />
           <span class="hint">主账号用来观看分享。</span>
+        </el-form-item>
+        <el-form-item label="共享给普通用户" v-if="store.admin && !form.ownerUid">
+          <el-switch
+            v-model="form.shared"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+          />
+          <span class="hint">允许普通用户经服务端代理使用该账号,凭证不会下发给普通用户</span>
         </el-form-item>
         <el-form-item label="自动签到">
           <el-switch
@@ -193,6 +209,15 @@
           />
           <span class="hint">主账号用来观看分享。</span>
         </el-form-item>
+        <el-form-item label="共享给普通用户" v-if="store.admin && !form.ownerUid">
+          <el-switch
+            v-model="form.shared"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+          />
+          <span class="hint">允许普通用户经服务端代理使用该账号,凭证不会下发给普通用户</span>
+        </el-form-item>
         <el-form-item label="自动签到">
           <el-switch
             v-model="form.autoCheckin"
@@ -281,6 +306,9 @@ import router from "@/router";
 import PikPakView from '@/views/PikPakView.vue'
 import DriverAccountView from "@/views/DriverAccountView.vue";
 
+// 多用户归属:全局账号(ownerUid=0)仅管理员可管理;普通用户只能管理自己的账号(后端 AccountAccessGuard 兜底)
+const canManage = (row: any) => store.admin || row.ownerUid !== 0
+
 const iat = ref([0])
 const exp = ref([0])
 const activities = ref<any[]>([])
@@ -313,6 +341,8 @@ const timelineVisible = ref(false)
 const form = ref({
   id: 0,
   nickname: '',
+  shared: true,
+  ownerUid: 0,
   refreshToken: '',
   openToken: '',
   accessToken: '',
@@ -422,6 +452,8 @@ const handleAdd = () => {
   form.value = {
     id: 0,
     nickname: '',
+    shared: true,
+    ownerUid: 0,
     refreshToken: '',
     openToken: '',
     accessToken: '',

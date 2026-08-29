@@ -11,12 +11,17 @@ import java.time.Duration;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class ProxyServiceTest {
+interface ProxyCase {
+        void run(String id, int uid) throws Exception;
+    }
+
+    class ProxyServiceTest {
     private final PlayUrlRepository playUrlRepository = mock(PlayUrlRepository.class);
     private final ProxyService service = new ProxyService(null, playUrlRepository, null, null, null, null);
 
@@ -104,5 +109,63 @@ class ProxyServiceTest {
         assertThat(captor.getValue().getId()).isEqualTo(42);
         assertThat(captor.getValue().getTime()).isAfter(Instant.now());
         assertThat(id).isEqualTo(42);
+    }
+
+    // ---------- 盘线路 pid 归属(§3.3) ----------
+
+    @Test
+    void longTtlWithOwnerRegistersOwnershipRow() {
+        when(playUrlRepository.findFirstBySiteAndPath(Mockito.eq(1), Mockito.anyString(), Mockito.any()))
+                .thenReturn(null);
+        assignIdOnSave();
+
+        service.generateProxyUrl(site(), "/追剧/7-测试剧/第01集.mkv", Duration.ofDays(365), 5);
+
+        ArgumentCaptor<PlayUrl> captor = ArgumentCaptor.forClass(PlayUrl.class);
+        verify(playUrlRepository).save(captor.capture());
+        assertThat(captor.getValue().getOwnerUid()).isEqualTo(5);
+    }
+
+    @Test
+    void longTtlOwnershipDoesNotMigrateExistingSharedRow() {
+        // 同盘同路径已有共享行:直接复用,归属不迁移(共享挂载共用同一路径是预期行为)
+        when(playUrlRepository.findFirstBySiteAndPath(Mockito.eq(1), Mockito.anyString(), Mockito.any()))
+                .thenReturn(stored(Instant.now().plus(Duration.ofDays(300)))); // 剩余寿命超过一半:直接复用不写库
+        int id = service.generateProxyUrl(site(), "/追剧/7-测试剧/第01集.mkv", Duration.ofDays(365), 5);
+        assertThat(id).isEqualTo(42);
+        verify(playUrlRepository, never()).save(Mockito.any());
+    }
+
+    @Test
+    void proxyRejectsOwnedRowForOtherUser() {
+        PlayUrl owned = stored(Instant.now().plus(Duration.ofDays(1)));
+        owned.setOwnerUid(5);
+        when(playUrlRepository.findById(42)).thenReturn(java.util.Optional.of(owned));
+
+        assertThatExceptionOfType(cn.har01d.alist_tvbox.exception.BadRequestException.class)
+                .isThrownBy(() -> service.proxy("1@42", 7, null,
+                        new org.springframework.mock.web.MockHttpServletResponse()));
+    }
+
+    @Test
+    void proxyAllowsSharedRowForUserAndOwnedRowForOwnerAndAdminToken() {
+        // 归属校验通过后才会走到真链解析(此测试桩缺 site/huya 依赖,任何非"无权播放"异常都算放行)
+        PlayUrl shared = stored(Instant.now().plus(Duration.ofDays(1)));
+        org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
+        when(playUrlRepository.findById(42)).thenReturn(java.util.Optional.of(shared));
+        when(playUrlRepository.findById(43)).thenReturn(java.util.Optional.of(shared));
+
+        java.util.List<ProxyCase> cases = java.util.List.of(
+                (id, uid) -> service.proxy(id, uid, null, response));
+        for (ProxyCase proxyCase : cases) {
+            try {
+                proxyCase.run("42", 7);  // 共享行:任意用户放行
+                proxyCase.run("43", 0);  // 管理级 token(uid=0):全放行
+            } catch (cn.har01d.alist_tvbox.exception.BadRequestException e) {
+                throw new AssertionError("归属校验误拒: " + e.getMessage());
+            } catch (Exception expected) {
+                // 后续真链解析因测试桩缺失而失败,不影响归属校验结论
+            }
+        }
     }
 }

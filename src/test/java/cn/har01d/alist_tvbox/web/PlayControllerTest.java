@@ -34,12 +34,14 @@ class PlayControllerTest {
     private ProxyService proxyService;
     @Mock
     private MediaSubscriptionService mediaSubscriptionService;
+    @Mock
+    private cn.har01d.alist_tvbox.service.AccountAccessGuard accountAccessGuard;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        PlayController controller = new PlayController(tvBoxService, biliBiliService, subscriptionService, proxyService, mediaSubscriptionService);
+        PlayController controller = new PlayController(tvBoxService, biliBiliService, subscriptionService, proxyService, mediaSubscriptionService, accountAccessGuard);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new RestErrorHandler())
                 .build();

@@ -335,7 +335,8 @@ public class DriverAccountService {
             throw new BadRequestException("账号名称已经存在");
         }
         account.setId(null);
-        if (driverAccountRepository.countByType(account.getType()) == 0) {
+        // 首个账号自动升 master 仅限全局账号:普通用户给未配置的盘型开首个个人账号不得抢占全局主账号位
+        if (driverAccountRepository.countByType(account.getType()) == 0 && account.getOwnerUid() == 0) {
             account.setMaster(true);
         } else {
             updateMaster(account);
@@ -405,11 +406,14 @@ public class DriverAccountService {
         account.setFolder(dto.getFolder());
         account.setConcurrency(dto.getConcurrency());
         account.setAddition(dto.getAddition());
+        account.setShared(dto.isShared());
         if (dto.getType() == DriverType.BAIDU && (StringUtils.isNotBlank(dto.getAddition())) && !"{}".equals(dto.getAddition())) {
             account.setToken("");
         }
 
-        if (driverAccountRepository.countByType(account.getType()) <= 1) {
+        // 仅剩一个账号时强制 master 仅限全局账号:普通用户编辑本人某盘型唯一账号,
+        // 不得因此顶成全局主账号(updateMaster 是 owner 无关查询,会把全局选主一并改掉)
+        if (driverAccountRepository.countByType(account.getType()) <= 1 && account.getOwnerUid() == 0) {
             account.setMaster(true);
         }
 
@@ -431,9 +435,19 @@ public class DriverAccountService {
     public void delete(Integer id) {
         DriverAccount account = driverAccountRepository.findById(id).orElse(null);
         if (account != null) {
+            // 先清 AList storage 再删本地行:AList 侧失败(服务未就绪等)时行保留,重试仍有据可查;
+            // 反序会把活凭证遗留在 AList 里且失去重试入口
+            int storageId = IDX + account.getId();
+            int status = aListLocalService.checkStatus();
+            if (status == 1) {
+                throw new BadRequestException("AList服务启动中");
+            }
+            if (status >= 2) {
+                accountService.deleteStorage(storageId, accountService.login());
+            } else {
+                aListLocalService.executeUpdate("DELETE FROM x_storages WHERE id = " + storageId);
+            }
             driverAccountRepository.deleteById(id);
-            String token = accountService.login();
-            accountService.deleteStorage(IDX + account.getId(), token);
         }
     }
 

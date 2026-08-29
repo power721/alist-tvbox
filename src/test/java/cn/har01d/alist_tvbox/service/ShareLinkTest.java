@@ -92,7 +92,7 @@ class ShareLinkTest {
         Mockito.when(builder.rootUri(any())).thenReturn(builder);
         Mockito.when(builder.build()).thenReturn(restTemplate);
         shareService = new ShareService(appProperties, shareRepository, metaRepository, aliasRepository, settingRepository, siteRepository, accountRepository, driverAccountRepository, aListService, driverAccountService, accountService, aListLocalService, configFileService, pikPakService, offlineDownloadService
-                , builder, environment, objectMapper);
+                , builder, environment, objectMapper, org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.UserService.class));
     }
 
     @Test

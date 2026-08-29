@@ -12,6 +12,11 @@ import java.util.List;
 public interface MediaSubscriptionRepository extends JpaRepository<MediaSubscription, Integer> {
     List<MediaSubscription> findByUidOrderByCreatedTimeDesc(int uid);
 
+    boolean existsByMountPath(String mountPath);
+
+    /** 共享挂载守卫:该 share 是否仍被其它订阅的主源引用。 */
+    boolean existsByShareIdAndIdNot(Integer shareId, Integer id);
+
     Page<MediaSubscription> findByStatusAndNextCheckTimeLessThanEqualOrderByNextCheckTimeAsc(String status, long time, Pageable pageable);
 
     /** 仅更新封面快照列:预热回填与用户编辑并发时,不做全实体 merge 覆盖其他字段。 */

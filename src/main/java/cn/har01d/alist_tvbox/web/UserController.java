@@ -21,11 +21,13 @@ import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
 import cn.har01d.alist_tvbox.service.RateLimiter;
 import cn.har01d.alist_tvbox.service.UserService;
 import cn.har01d.alist_tvbox.util.Utils;
+import org.springframework.security.access.prepost.PreAuthorize;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
 public class UserController {
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
@@ -51,6 +53,7 @@ public class UserController {
         userService.delete(id);
     }
 
+    @PreAuthorize("permitAll()")
     @PostMapping("/api/accounts/login")
     public UserToken login(@RequestBody LoginDto account, HttpServletRequest request) {
         String rateKey = account.getUsername() + ":" + Utils.getClientIp(request);

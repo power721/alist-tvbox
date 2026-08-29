@@ -30,6 +30,10 @@ import db.migration.current.V33__MediaSubscriptionCaughtUp;
 import db.migration.current.V34__MediaSubscriptionResourceLinkHash;
 import db.migration.current.V35__MediaSubscriptionResourcePinned;
 import db.migration.current.V36__MediaSubscriptionNotify;
+import db.migration.current.V37__AccountOwnership;
+import db.migration.current.V38__SubscriptionOwnership;
+import db.migration.current.V39__UserVodSecret;
+import db.migration.current.V40__PlayUrlOwnership;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -90,7 +94,11 @@ public class NativeFlywayMigrationConfig {
                     new V33__MediaSubscriptionCaughtUp(),
                     new V34__MediaSubscriptionResourceLinkHash(),
                     new V35__MediaSubscriptionResourcePinned(),
-                    new V36__MediaSubscriptionNotify());
+                    new V36__MediaSubscriptionNotify(),
+                    new V37__AccountOwnership(),
+                    new V38__SubscriptionOwnership(),
+                    new V39__UserVodSecret(),
+                    new V40__PlayUrlOwnership());
         };
     }
 }

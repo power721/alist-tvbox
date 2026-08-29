@@ -42,6 +42,12 @@ class LocalApiAdminPasswordResetTest {
     @Mock
     private TokenService tokenService;
     @Mock
+    private cn.har01d.alist_tvbox.entity.DriverAccountRepository driverAccountRepository;
+    @Mock
+    private cn.har01d.alist_tvbox.entity.AccountRepository accountRepository;
+    @Mock
+    private cn.har01d.alist_tvbox.entity.PikPakAccountRepository pikPakAccountRepository;
+    @Mock
     private JdbcTemplate jdbcTemplate;
 
     private LocalApiController controller;
@@ -51,7 +57,7 @@ class LocalApiAdminPasswordResetTest {
         System.setProperty("atv.data.dir", dataDir.toString());
         UserService userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
             new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-json.zip"),
-            jdbcTemplate);
+            driverAccountRepository, accountRepository, pikPakAccountRepository, jdbcTemplate, null, null, null);
         controller = new LocalApiController(userService, org.mockito.Mockito.mock(SettingService.class));
     }
 

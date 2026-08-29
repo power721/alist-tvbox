@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
+import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
@@ -123,6 +124,7 @@ public class ShareService {
     private final int offset = 99900;
     private final AtomicInteger shareId = new AtomicInteger(20000);
     private final ObjectMapper objectMapper;
+    private final UserService userService;
 
     public ShareService(AppProperties appProperties,
                         ShareRepository shareRepository,
@@ -141,7 +143,8 @@ public class ShareService {
                         OfflineDownloadService offlineDownloadService,
                         RestTemplateBuilder builder,
                         Environment environment,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        UserService userService) {
         this.appProperties = appProperties;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
@@ -159,6 +162,7 @@ public class ShareService {
         this.offlineDownloadService = offlineDownloadService;
         this.environment = environment;
         this.objectMapper = objectMapper;
+        this.userService = userService;
         this.restTemplate = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
     }
 
@@ -749,41 +753,59 @@ public class ShareService {
     public ObjectNode getCookies(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         ObjectNode result = objectMapper.createObjectNode();
-        if (!aliSecret.equals(id)) {
+        // 用户凭证下载:仅认 u-{username}-{vod_secret}(配置注入的 secret 同源)。u-{username} 本身无熵
+        //(用户名可猜测),不能当授权用,裸 u- token / 密钥不符一律空结果;
+        // 命中后仍按归属过滤,只下发本人账号凭证;B 站 cookie 等全局凭证仅共享 secret(管理员设备)可取
+        int uid = 0;
+        if (id.startsWith(Constants.USER_TOKEN_PREFIX)) {
+            String body = id.substring(Constants.USER_TOKEN_PREFIX.length());
+            int sep = body.lastIndexOf('-');
+            if (sep > 0 && sep + 1 < body.length()) {
+                var user = userService.findByUsername(body.substring(0, sep));
+                String secret = body.substring(sep + 1);
+                if (user != null && secret.equals(userService.vodSecretOf(user))) {
+                    uid = user.getId() == null ? 0 : user.getId();
+                }
+            }
+        }
+        if (!aliSecret.equals(id) && uid == 0) {
             return result;
         }
 
-        putCookie(result, "quark", driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("").trim());
-        putCookie(result, "uc", driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).map(DriverAccount::getCookie).orElse("").trim());
-        putCookie(result, "baidu", driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).map(DriverAccount::getCookie).orElse("").trim());
+        Optional<DriverAccount> quark = account(DriverType.QUARK, uid);
+        Optional<DriverAccount> uc = account(DriverType.UC, uid);
+        Optional<DriverAccount> baidu = account(DriverType.BAIDU, uid);
+        putCookie(result, "quark", quark.map(DriverAccount::getCookie).orElse("").trim());
+        putCookie(result, "uc", uc.map(DriverAccount::getCookie).orElse("").trim());
+        putCookie(result, "baidu", baidu.map(DriverAccount::getCookie).orElse("").trim());
 
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).stream().findFirst().ifPresent(account -> {
+        account(DriverType.CLOUD189, uid).ifPresent(account -> {
             ObjectNode node = result.putObject("189");
             node.put("cookie", account.getCookie());
             node.put("username", account.getUsername());
             node.put("password", account.getPassword());
         });
 
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(account -> {
+        account(DriverType.PAN123, uid).ifPresent(account -> {
             ObjectNode node = result.putObject("123");
             node.put("username", account.getUsername());
             node.put("password", account.getPassword());
         });
 
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK_TV).stream().findFirst().ifPresent(account -> {
+        account(DriverType.QUARK_TV, uid).ifPresent(account -> {
             ObjectNode node = result.putObject("quarkTv");
             node.put("cookie", account.getCookie());
             node.put("token", account.getToken());
         });
 
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC_TV).stream().findFirst().ifPresent(account -> {
+        account(DriverType.UC_TV, uid).ifPresent(account -> {
             ObjectNode node = result.putObject("ucTv");
             node.put("device_id", account.getUsername());
             node.put("access_token", account.getPassword());
             node.put("refresh_token", account.getToken());
         });
 
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.THUNDER).stream().findFirst().ifPresent(account -> {
+        account(DriverType.THUNDER, uid).ifPresent(account -> {
             ObjectNode node = result.putObject("xunlei");
             node.put("refresh_token", account.getCookie());
             node.put("access_token", account.getToken());
@@ -795,7 +817,7 @@ public class ShareService {
             }
         });
 
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).ifPresent(account -> {
+        account(DriverType.PAN115, uid).ifPresent(account -> {
             ObjectNode node = result.putObject("115");
             node.put("cookie", account.getCookie());
             try {
@@ -806,16 +828,27 @@ public class ShareService {
             }
         });
 
-        accountRepository.getFirstByMasterTrue().ifPresent(account -> {
+        Optional<Account> ali = uid == 0 ? accountRepository.getFirstByMasterTrue()
+                : accountRepository.findFirstByOwnerUidOrderByIdAsc(uid);
+        ali.ifPresent(account -> {
             ObjectNode node = result.putObject("ali");
             node.put("refresh_token", account.getRefreshToken());
             node.put("access_token", account.getAccessToken());
         });
 
-        putToken(result, "139", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).map(DriverAccount::getToken).orElse("").trim());
-        putToken(result, "guangya", driverAccountRepository.findByTypeAndMasterTrue(DriverType.GUANGYA).map(DriverAccount::getToken).orElse("").trim());
-        putCookie(result, "bili", settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(""));
+        putToken(result, "139", account(DriverType.PAN139, uid).map(DriverAccount::getToken).orElse("").trim());
+        putToken(result, "guangya", account(DriverType.GUANGYA, uid).map(DriverAccount::getToken).orElse("").trim());
+        // B 站 cookie 是全局凭证:仅共享 secret(管理员设备)下发;用户 token 不带,spider 游客降级
+        if (uid == 0) {
+            putCookie(result, "bili", settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(""));
+        }
         return result;
+    }
+
+    /** getCookies 账号选取:共享 secret(uid=0)取全局 master;用户 token 取其本人账号。 */
+    private Optional<DriverAccount> account(DriverType type, int uid) {
+        return uid == 0 ? driverAccountRepository.findByTypeAndMasterTrue(type)
+                : driverAccountRepository.findFirstByOwnerUidAndTypeOrderByIdAsc(uid, type);
     }
 
     private String getAvailableAliRefreshToken(String id) {

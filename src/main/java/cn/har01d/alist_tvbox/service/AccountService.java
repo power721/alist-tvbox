@@ -937,14 +937,18 @@ public class AccountService {
         account.setClean(dto.isClean());
         account.setUseProxy(dto.isUseProxy());
         account.setConcurrency(dto.getConcurrency());
+        account.setOwnerUid(dto.getOwnerUid());
+        account.setShared(dto.isShared());
 
-        account.setMaster(dto.isMaster() || count == 0);
+        // 首个账号自动升 master 仅限全局账号:普通用户开首个个人账号不得抢占全局主账号位
+        boolean firstGlobal = count == 0 && account.getOwnerUid() == 0;
+        account.setMaster(dto.isMaster() || firstGlobal);
         if (account.isMaster()) {
             account.setShowMyAli(true);
         }
         accountRepository.save(account);
 
-        if (count == 0) {
+        if (firstGlobal) {
             updateTokens();
             int storageId = IDX + (account.getId() - 1) * 2;
             aListLocalService.setSetting("ali_account_id", String.valueOf(storageId), "number");
@@ -1051,6 +1055,7 @@ public class AccountService {
         account.setClean(dto.isClean());
         account.setUseProxy(dto.isUseProxy());
         account.setConcurrency(dto.getConcurrency());
+        account.setShared(dto.isShared());
 
         if (changed && account.isMaster()) {
             updateMaster(account);
@@ -1192,9 +1197,10 @@ public class AccountService {
 
         Account account = accountRepository.findById(id).orElse(null);
         if (account != null) {
-            accountRepository.deleteById(id);
+            // 先清 AList 侧状态再删本地行:AList 失败(启动中/不可用)时行保留,删除可重试
             account.setShowMyAli(false);
             showMyAliWithAPI(account);
+            accountRepository.deleteById(id);
         }
     }
 

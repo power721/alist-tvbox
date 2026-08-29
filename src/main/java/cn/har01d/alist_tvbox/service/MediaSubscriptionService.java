@@ -125,9 +125,24 @@ public class MediaSubscriptionService {
         this.siteRepository = siteRepository;
     }
 
-    /** 订阅 token → 归属用户:用户名 token → 该用户;共享 token/空 → 首个管理员。与 live-follow/播放同步一致。 */
+    /** 订阅 token → 归属用户:凭证形态(u-{username}-{secret})验真或裸 u-{username} → 该用户;
+     * 共享 token/空 → 首个管理员(全局 tokens 无 u- 前缀,不撞车)。与 live-follow/播放同步一致。
+     * 必须先按凭证形态解析:带密钥 token 整段(含 '-' 的用户名拼接)不是合法用户名,裸形态查不到会误回落管理员。 */
+    /** token 归属用户(凭证形态优先、裸 u- 形态回退);全局/共享/无效 token 返回 null(管理级口径)。
+     * 供 /p 代理等只需「是否用户级 token」的调用方使用,不带 resolveUid 的首个 ADMIN 兜底。 */
+    public cn.har01d.alist_tvbox.entity.User resolveTokenUser(String token) {
+        if (StringUtils.isBlank(token) || "-".equals(token)) {
+            return null;
+        }
+        var user = userService.findUserByCredentialToken(token);
+        if (user == null) {
+            user = userService.findByUserVodToken(token);
+        }
+        return user;
+    }
+
     public int resolveUid(String token) {
-        var user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findByUsername(token);
+        var user = resolveTokenUser(token);
         if (user == null) {
             user = userService.list().stream()
                     .filter(candidate -> candidate.getRole() == Role.ADMIN)
@@ -313,6 +328,11 @@ public class MediaSubscriptionService {
         List<Integer> sharesToUnmount = List.copyOf(new java.util.LinkedHashSet<>(shareIds));
         Runnable cleanup = () -> {
             for (Integer shareId : sharesToUnmount) {
+                // 共享挂载:share 仍被其它订阅引用时不卸载(换季只是本订阅重置,别人的挂载不动)
+                if (isShareReferencedByOthers(shareId, id)) {
+                    log.debug("share {} still referenced by another subscription, skip unmount on season reset", shareId);
+                    continue;
+                }
                 try {
                     shareService.deleteShare(shareId);
                 } catch (Exception e) {
@@ -347,6 +367,10 @@ public class MediaSubscriptionService {
         List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(id);
         for (MediaSubscriptionResource resource : resources) {
             if (resource.getShareId() != null) {
+                if (isShareReferencedByOthers(resource.getShareId(), id)) {
+                    log.debug("share {} still referenced by another subscription, skip unmount", resource.getShareId());
+                    continue;
+                }
                 try {
                     shareService.deleteShare(resource.getShareId());
                 } catch (Exception e) {
@@ -354,7 +378,7 @@ public class MediaSubscriptionService {
                 }
             }
         }
-        if (subscription.getShareId() != null) {
+        if (subscription.getShareId() != null && !isShareReferencedByOthers(subscription.getShareId(), id)) {
             try {
                 shareService.deleteShare(subscription.getShareId());
             } catch (Exception e) {
@@ -568,7 +592,7 @@ public class MediaSubscriptionService {
                         sizeByEpisode.merge(entry.getKey(), file.size(), Math::max);
                         String path = file.dir() + "/" + file.name();
                         driveLine(driveLines, target.drive()).putIfAbsent(entry.getKey(),
-                                fileEntry(site, path, file.name(), file.size()));
+                                fileEntry(site, path, file.name(), file.size(), subscription.getUid()));
                     }
                 }
             } catch (Exception e) {
@@ -608,7 +632,7 @@ public class MediaSubscriptionService {
                 if (drive != null) {
                     String path = resource.getMountPath() + "/" + row.getRelPath();
                     driveLine(driveLines, drive).putIfAbsent(episode,
-                            fileEntry(site, path, row.getRelPath(), row.getFileSize() == null ? 0L : row.getFileSize()));
+                            fileEntry(site, path, row.getRelPath(), row.getFileSize() == null ? 0L : row.getFileSize(), subscription.getUid()));
                 }
             }
         }
@@ -641,11 +665,11 @@ public class MediaSubscriptionService {
      * 剧完结停止回放一年后由 clean 自然回收(默认 7 天有效期会把历史里的物理地址变成死链)。 */
     private static final java.time.Duration DRIVE_LINE_PID_TTL = java.time.Duration.ofDays(365);
 
-    /** 盘线路条目:`文件名(大小)$1@{pid}` —— pid 经 PlayUrl 长效注册(纯 DB),点击时才解析真链。 */
-    private String fileEntry(cn.har01d.alist_tvbox.entity.Site site, String path, String relPath, long size) {
+    /** 盘线路条目:`文件名(大小)$1@{pid}` —— pid 经 PlayUrl 长效注册(纯 DB,带订阅归属),点击时才解析真链。 */
+    private String fileEntry(cn.har01d.alist_tvbox.entity.Site site, String path, String relPath, long size, int ownerUid) {
         String name = relPath.contains("/") ? relPath.substring(relPath.lastIndexOf('/') + 1) : relPath;
         String sizeText = size > 0 ? "(" + cn.har01d.alist_tvbox.util.Utils.byte2size(size) + ")" : "";
-        return name + sizeText + "$1@" + proxyService.generateProxyUrl(site, path, DRIVE_LINE_PID_TTL);
+        return name + sizeText + "$1@" + proxyService.generateProxyUrl(site, path, DRIVE_LINE_PID_TTL, ownerUid);
     }
 
     /** 逻辑线路分集标题:`NN. 分集标题(大小)`(分集标题读元数据快照零网络;无标题兜底"第N集",无大小省略括号)。 */
@@ -947,14 +971,14 @@ public class MediaSubscriptionService {
         }
     }
 
-    /** 播出时间轴:昨天 → 未来 7 天,每天更新的订阅与媒体播出时间。日程来自 provider 分集日期快照,窗口外退化为 nextAirTime。 */
+    /** 播出时间轴:昨天 → 未来 8 天,每天更新的订阅与媒体播出时间。日程来自 provider 分集日期快照,窗口外退化为 nextAirTime。 */
     public List<Map<String, Object>> schedule(int uid) {
         java.time.ZoneId zone = java.time.ZoneId.of(Constants.ZONE_ID);
         java.time.LocalDate startDate = java.time.LocalDate.now(zone).minusDays(1);
         String[] weekdays = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
         List<Map<String, Object>> days = new ArrayList<>();
         List<List<Map<String, Object>>> dayItems = new ArrayList<>();
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 10; i++) {
             java.time.LocalDate date = startDate.plusDays(i);
             String label = switch (i) {
                 case 0 -> "昨天";
@@ -962,7 +986,7 @@ public class MediaSubscriptionService {
                 case 2 -> "明天";
                 default -> weekdays[date.getDayOfWeek().getValue() - 1];
             };
-            Map<String, Object> day = new java.util.LinkedHashMap<>();
+            Map<String, Object> day = new LinkedHashMap<>();
             day.put("label", label);
             day.put("date", date.getMonthValue() + "/" + date.getDayOfMonth());
             day.put("today", i == 1);
@@ -2178,6 +2202,15 @@ public class MediaSubscriptionService {
         return subscription;
     }
 
+    /** 共享挂载守卫:该 share 仍被其它订阅(主源或资源行)引用时不卸载 —— 内容继续有效,别人还在看。 */
+    private boolean isShareReferencedByOthers(Integer shareId, int subscriptionId) {
+        if (shareId == null) {
+            return false;
+        }
+        return subscriptionRepository.existsByShareIdAndIdNot(shareId, subscriptionId)
+                || resourceRepository.existsByShareIdAndSubscriptionIdNot(shareId, subscriptionId);
+    }
+
     private String buildMountPath(MediaSubscription subscription) {
         String slug = subscription.getName().replaceAll("[\\s/\\\\:*?\"<>|#@$%\\.、,]+", "-");
         slug = StringUtils.strip(slug, "-");
@@ -2193,10 +2226,37 @@ public class MediaSubscriptionService {
         // 季后缀(第 2 季起):同一 TMDB tv id 跨季共用,不带季号时并行多季订阅(含「多季联动」入口)
         // 会生成同一路径互相覆盖挂载;仅创建时定名,存量订阅路径不动
         String seasonSuffix = seasonSuffix(subscription);
+        String base;
         if (tag != null) {
-            return Constants.SUBSCRIPTION_MOUNT_ROOT + slug + " " + tag + seasonSuffix;
+            base = Constants.SUBSCRIPTION_MOUNT_ROOT + slug + " " + tag + seasonSuffix;
+        } else {
+            base = Constants.SUBSCRIPTION_MOUNT_ROOT + subscription.getId() + "-" + slug + seasonSuffix;
         }
-        return Constants.SUBSCRIPTION_MOUNT_ROOT + subscription.getId() + "-" + slug + seasonSuffix;
+        // 挂载(FOLLOW)模式共享挂载路径:多个用户追同一部剧共用同一路径背后的分享挂载,
+        // 播放历史按 uid 隔离互不影响;仅转存(TRANSFER)模式挂的是个人网盘,必须独占路径。
+        // 转存路径构造级带 uid 段(uid>0):跨用户天然不撞,从根上堵并发同路径劫持 —— 不能用库级
+        // 全局唯一索引,FOLLOW 的共享挂载收编(同路径复用主源)要求允许重复 mount_path
+        if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
+            String path = subscription.getUid() > 0 ? base + " u" + subscription.getUid() : base;
+            return ensureUniqueMountPath(path, subscription.getUid());
+        }
+        return base;
+    }
+
+    /**
+     * mountPath 唯一化(仅转存模式):转存挂的是个人网盘必须独占路径,被占用时追加 uid 段消歧。
+     * 挂载模式共享路径不经过这里;仅影响新建订阅,存量路径不动。
+     */
+    private String ensureUniqueMountPath(String path, int uid) {
+        if (!subscriptionRepository.existsByMountPath(path)) {
+            return path;
+        }
+        String candidate = path + " u" + uid;
+        int n = 2;
+        while (subscriptionRepository.existsByMountPath(candidate) && n < 100) {
+            candidate = path + " u" + uid + "-" + n++;
+        }
+        return candidate;
     }
 
     /** 挂载目录季后缀:第 2 季起追加 " Sxx",首季/未标注不加(保持既有首季路径形态)。 */

@@ -499,40 +499,41 @@
       <el-form label-width="140">
         <el-tabs v-model="notifyTab">
           <el-tab-pane label="通用" name="general">
-        <el-form-item label="全局主网盘">
-          <el-select v-model="notifyForm.mainDrives" multiple placeholder="选 1-2 个,按优先级排序" style="width: 100%">
-            <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
-          </el-select>
-          <span class="sub-text">巡检保证主网盘剧集完整并固定播放线路;订阅可单独覆盖;分享挂载免登录,标注"已加账号"的盘更稳</span>
-        </el-form-item>
-        <el-form-item label="扩展网盘">
-          <el-select v-model="notifyForm.extendedDrives" multiple clearable placeholder="留空时候选仅收主网盘" style="width: 100%">
-            <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
-          </el-select>
-          <span class="sub-text">主网盘以外允许进候选池的网盘;不配置则候选/补缺/分盘线路只有主网盘的源(主网盘也未配置时才不限盘)</span>
-        </el-form-item>
-        <el-form-item label="Bot Token">
-          <el-input v-model="notifyForm.botToken" placeholder="123456:ABC-...,留空关闭通知"/>
-        </el-form-item>
-        <el-form-item label="Chat ID">
-          <el-input v-model="notifyForm.chatId" placeholder="与 bot 对话后获取"/>
-        </el-form-item>
-        <el-form-item label="完结归档(天)">
-          <el-input-number v-model="notifyForm.archiveDays" :min="0" :max="3650"/>
-          <span class="sub-text" style="margin-left:8px">完结 N 天后自动释放转存文件,0=关闭</span>
-        </el-form-item>
-        <el-form-item label="豆瓣 Cookie">
-          <el-input v-model="notifyForm.doubanCookie" type="textarea" :rows="2"
-                    placeholder="登录 movie.douban.com 后复制 Cookie,留空关闭;用于解析详情页又名/单集播出时间(限速抓取)"/>
-          <span class="sub-text">豆瓣条目自动补"又名"提高搜索匹配,并经 IMDb 桥接 TMDB 获取单集播出日程</span>
-        </el-form-item>
-        <el-form-item label="VIP 账号">
-          <el-select v-model="notifyForm.vipAccounts" multiple placeholder="勾选 SVIP/会员账号,资源评分加权" style="width: 100%">
-            <el-option v-for="account in accounts" :key="account.id" :label="account.name + '(' + account.type + ')'" :value="account.id"/>
-          </el-select>
-          <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
-        </el-form-item>
-        <span class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关);盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
+            <el-form-item v-if="store.admin" label="全局主网盘">
+              <el-select v-model="notifyForm.mainDrives" multiple placeholder="选 1-2 个,按优先级排序" style="width: 100%">
+                <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
+              </el-select>
+              <span class="sub-text">巡检保证主网盘剧集完整并固定播放线路;订阅可单独覆盖;分享挂载免登录,标注"已加账号"的盘更稳</span>
+            </el-form-item>
+            <el-form-item v-if="store.admin" label="扩展网盘">
+              <el-select v-model="notifyForm.extendedDrives" multiple clearable placeholder="留空时候选仅收主网盘" style="width: 100%">
+                <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
+              </el-select>
+              <span class="sub-text">主网盘以外允许进候选池的网盘;不配置则候选/补缺/分盘线路只有主网盘的源(主网盘也未配置时才不限盘)</span>
+            </el-form-item>
+            <el-form-item label="Bot Token">
+              <el-input v-model="notifyForm.botToken" placeholder="123456:ABC-...,留空关闭通知"/>
+            </el-form-item>
+            <el-form-item label="Chat ID">
+              <el-input v-model="notifyForm.chatId" placeholder="与 bot 对话后获取"/>
+              <span v-if="!store.admin" class="sub-text">个人 TG 通知渠道:留空时沿用管理员配置的全局渠道</span>
+            </el-form-item>
+            <el-form-item v-if="store.admin" label="完结归档(天)">
+              <el-input-number v-model="notifyForm.archiveDays" :min="0" :max="3650"/>
+              <span class="sub-text" style="margin-left:8px">完结 N 天后自动释放转存文件,0=关闭</span>
+            </el-form-item>
+            <el-form-item v-if="store.admin" label="豆瓣 Cookie">
+              <el-input v-model="notifyForm.doubanCookie" type="textarea" :rows="2"
+                        placeholder="登录 movie.douban.com 后复制 Cookie,留空关闭;用于解析详情页又名/单集播出时间(限速抓取)"/>
+              <span class="sub-text">豆瓣条目自动补"又名"提高搜索匹配,并经 IMDb 桥接 TMDB 获取单集播出日程</span>
+            </el-form-item>
+            <el-form-item v-if="store.admin" label="VIP 账号">
+              <el-select v-model="notifyForm.vipAccounts" multiple placeholder="勾选 SVIP/会员账号,资源评分加权" style="width: 100%">
+                <el-option v-for="account in accounts" :key="account.id" :label="account.name + '(' + account.type + ')'" :value="account.id"/>
+              </el-select>
+              <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
+            </el-form-item>
+            <span v-if="store.admin" class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关);盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
           </el-tab-pane>
           <el-tab-pane label="资源筛选" name="poolFilter">
             <el-form-item label="清晰度门槛">
@@ -564,7 +565,7 @@
             </el-form-item>
             <span class="sub-text">对所有订阅生效(下轮巡检起):入池、存量候选换源、单集文件筛选统一收紧;订阅级单集体积优先、排除词两边并集;已挂载主源不主动更换,自然失效后按新规则换源</span>
           </el-tab-pane>
-          <el-tab-pane label="盘链" name="panlian">
+          <el-tab-pane v-if="store.admin" label="盘链" name="panlian">
         <el-form-item label="站点">
           <el-input v-model="notifyForm.panlianHost" placeholder="留空用内置地址;自定义镜像站填 https://..."/>
         </el-form-item>
@@ -579,7 +580,7 @@
                     placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
         </el-form-item>
           </el-tab-pane>
-          <el-tab-pane label="观影" name="guanying">
+          <el-tab-pane v-if="store.admin" label="观影" name="guanying">
         <el-form-item label="站点">
           <el-input v-model="notifyForm.guanyingHost" placeholder="留空用内置 8 个镜像;多个地址逗号/竖线/换行分隔"/>
         </el-form-item>
@@ -594,7 +595,7 @@
                     placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
         </el-form-item>
           </el-tab-pane>
-          <el-tab-pane label="蜗牛" name="woniu">
+          <el-tab-pane v-if="store.admin" label="蜗牛" name="woniu">
         <el-form-item label="站点">
           <el-input v-model="notifyForm.woniuHost" placeholder="留空自动测速双线路(wn4k/zmi);自定义填 https://..."/>
         </el-form-item>
@@ -656,6 +657,7 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import axios from 'axios'
 import {ElMessage, ElMessageBox} from 'element-plus'
+import {store} from '@/services/store'
 
 /** 组件卸载统一清理延时刷新(检查/转存后的自动 reload):离开页面后不再触发孤儿请求 */
 const pendingTimers = new Set<number>()
@@ -1590,8 +1592,40 @@ const parsePoolFilter = (raw: string) => {
   }
 }
 
+/** 普通用户加载到的资源筛选快照(同款序列化):保存时未改动则跳过,避免把默认空配置存成用户级覆盖(盖掉全局门禁) */
+const userPoolRaw = ref('')
+const buildPoolFilterValue = () => JSON.stringify({
+  minQuality: notifyForm.value.poolMinQuality || '',
+  includeKeywords: notifyForm.value.poolIncludeKeywords.map((k: string) => k.trim()).filter(Boolean),
+  excludeKeywords: notifyForm.value.poolExcludeKeywords.map((k: string) => k.trim()).filter(Boolean),
+  minEpisodeSizeMb: notifyForm.value.poolMinEpisodeSizeMb || 0,
+  maxEpisodeSizeMb: notifyForm.value.poolMaxEpisodeSizeMb || 0,
+})
 const openNotify = () => {
   notifyTab.value = 'general'
+  if (!store.admin) {
+    // 普通用户:个人 TG 渠道 + 资源筛选偏好走用户级设置(读取回退全局值),其余全局项不展示
+    Promise.all([
+      axios.get('/api/user-settings/msub_telegram_bot_token'),
+      axios.get('/api/user-settings/msub_telegram_chat_id'),
+      axios.get('/api/user-settings/msub_pool_filter'),
+    ]).then(([token, chat, pool]) => {
+      notifyForm.value.botToken = token.data?.value || ''
+      notifyForm.value.chatId = chat.data?.value || ''
+      const poolFilter = parsePoolFilter(pool.data?.value || '')
+      notifyForm.value.poolMinQuality = poolFilter.minQuality
+      notifyForm.value.poolIncludeKeywords = poolFilter.includeKeywords
+      notifyForm.value.poolExcludeKeywords = poolFilter.excludeKeywords
+      notifyForm.value.poolMinEpisodeSizeMb = poolFilter.minEpisodeSizeMb
+      notifyForm.value.poolMaxEpisodeSizeMb = poolFilter.maxEpisodeSizeMb
+      userPoolRaw.value = buildPoolFilterValue()
+      notifyLoaded.value = true
+      notifyVisible.value = true
+    }).catch(() => {
+      ElMessage.error('设置加载失败,未打开对话框,请重试')
+    })
+    return
+  }
   axios.get('/api/settings').then(response => {
     const settings = response.data || {}
     notifyForm.value.botToken = settings['msub_telegram_bot_token'] || ''
@@ -1635,7 +1669,8 @@ const saveNotify = () => {
     ElMessage.warning('设置项尚未加载成功,暂不能保存(防止覆盖为空)')
     return
   }
-  const saves = [
+  const poolFilterValue = buildPoolFilterValue()
+  const saves = store.admin ? [
     axios.post('/api/settings', {name: 'msub_telegram_bot_token', value: notifyForm.value.botToken}),
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
     axios.post('/api/settings', {name: 'douban_cookie', value: notifyForm.value.doubanCookie}),
@@ -1651,13 +1686,7 @@ const saveNotify = () => {
     }),
     axios.post('/api/settings', {
       name: 'msub_pool_filter',
-      value: JSON.stringify({
-        minQuality: notifyForm.value.poolMinQuality || '',
-        includeKeywords: notifyForm.value.poolIncludeKeywords.map((k: string) => k.trim()).filter(Boolean),
-        excludeKeywords: notifyForm.value.poolExcludeKeywords.map((k: string) => k.trim()).filter(Boolean),
-        minEpisodeSizeMb: notifyForm.value.poolMinEpisodeSizeMb || 0,
-        maxEpisodeSizeMb: notifyForm.value.poolMaxEpisodeSizeMb || 0,
-      }),
+      value: poolFilterValue,
     }),
     axios.post('/api/settings', {name: 'panlian_host', value: notifyForm.value.panlianHost.trim()}),
     axios.post('/api/settings', {name: 'panlian_username', value: notifyForm.value.panlianUsername.trim()}),
@@ -1671,7 +1700,17 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'woniu_username', value: notifyForm.value.woniuUsername.trim()}),
     axios.post('/api/settings', {name: 'woniu_password', value: notifyForm.value.woniuPassword}),
     axios.post('/api/settings', {name: 'woniu_cookie', value: notifyForm.value.woniuCookie.trim()}),
-  ]
+  ] : (() => {
+    // 普通用户:仅写个人 TG 渠道与资源筛选偏好({key}:u{uid} 用户级行);空 botToken/chatId = 删除覆盖、回退全局
+    const saves = [
+      axios.put('/api/user-settings/msub_telegram_bot_token', {name: 'msub_telegram_bot_token', value: notifyForm.value.botToken}),
+      axios.put('/api/user-settings/msub_telegram_chat_id', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
+    ]
+    if (poolFilterValue !== userPoolRaw.value) {
+      saves.push(axios.put('/api/user-settings/msub_pool_filter', {name: 'msub_pool_filter', value: poolFilterValue}))
+    }
+    return saves
+  })()
   notifySaving.value = true
   // tsconfig lib 无 es2020(无 Promise.allSettled),逐项吞错再计数等价实现
   Promise.all(saves.map(p => p.then(() => true, () => false))).then(results => {

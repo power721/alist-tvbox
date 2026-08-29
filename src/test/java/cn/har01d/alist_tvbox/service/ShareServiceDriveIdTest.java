@@ -67,7 +67,8 @@ class ShareServiceDriveIdTest {
                 mock(OfflineDownloadService.class),
                 new RestTemplateBuilder(),
                 mock(Environment.class),
-                new ObjectMapper()));
+                new ObjectMapper(),
+                mock(cn.har01d.alist_tvbox.service.UserService.class)));
 
         doAnswer(invocation -> invocation.getArgument(0)).when(service).create(any(Share.class));
         when(shareRepository.existsByPath(any())).thenReturn(false);

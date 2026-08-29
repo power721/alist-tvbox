@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.dto.sync.*;
 import cn.har01d.alist_tvbox.exception.VersionMismatchException;
 import cn.har01d.alist_tvbox.service.sync.SyncService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +16,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/sync")
+@PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
 public class SyncController {
     private final SyncService syncService;
 
@@ -26,6 +28,7 @@ public class SyncController {
      * 验证用户身份但不创建会话
      * 使用 Basic Auth，避免导致现有会话失效
      */
+    @PreAuthorize("permitAll()")
     @GetMapping("/validate")
     public ResponseEntity<Map<String, Object>> validate(@RequestHeader("Authorization") String authHeader) {
         try {

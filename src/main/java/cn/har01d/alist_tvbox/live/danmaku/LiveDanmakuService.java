@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.live.danmaku;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.DanmakuConfig;
 import cn.har01d.alist_tvbox.dto.LiveDanmaku;
 import cn.har01d.alist_tvbox.live.service.BilibiliService;
 import cn.har01d.alist_tvbox.live.service.DouyinService;
@@ -89,7 +90,11 @@ public class LiveDanmakuService {
      * 下发给客户端的渲染配置(已把速度档换算为 duration 毫秒、rows 改名 lanes,语义即最终值)。
      */
     public Map<String, Object> resolvedConfig() {
-        var config = appProperties.getDanmakuConfig();
+        return resolvedConfig(appProperties.getDanmakuConfig());
+    }
+
+    /** 按请求者的用户级配置下发(无用户级配置时由调用方回落全局)。 */
+    public Map<String, Object> resolvedConfig(DanmakuConfig config) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("enabled", config.isEnabled());
         map.put("lanes", config.getRows());
@@ -106,16 +111,25 @@ public class LiveDanmakuService {
      * 增量拉取弹幕。after 为空返回最近弹幕,否则返回 seq 大于 after 的消息;
      * after 超过本房间当前最大 seq(跨房间带来的旧游标、后端重启计数归零)时同样回退最近弹幕自愈,
      * 保证过期游标最多错过一帧,不会把房间卡成永久静默。
-     * 总开关关闭时返回空且不 touch/不建会话,存量会话靠空闲清理自然断开上游。
+     * 请求者配置的总开关关闭时返回空且不 touch/不建会话,存量会话靠空闲清理自然断开上游。
+     * next 游标按未过滤切片推进:showOnline 已改按请求者出口过滤,若按返回列表取尾,
+     * 被过滤的 online 消息会让游标原地踏步、每轮重复空转。
      */
-    public List<LiveDanmaku> poll(String platform, String roomId, Long after) {
-        if (!appProperties.getDanmakuConfig().isEnabled()) {
-            return List.of();
+    public PollResult poll(String platform, String roomId, Long after, DanmakuConfig config) {
+        if (!config.isEnabled()) {
+            return new PollResult(List.of(), after == null ? 0L : after);
         }
         RoomSession session = sessions.computeIfAbsent(platform + "$" + roomId, key -> new RoomSession(platform, roomId));
         session.touch();
         session.ensureStarted();
-        return after == null || after > session.currentSeq() ? session.recent() : session.since(after);
+        List<LiveDanmaku> slice = after == null || after > session.currentSeq() ? session.recent() : session.since(after);
+        long next = slice.isEmpty() ? (after == null ? 0L : after) : slice.get(slice.size() - 1).getSeq();
+        List<LiveDanmaku> messages = config.isShowOnline() ? slice
+                : slice.stream().filter(m -> !LiveDanmaku.TYPE_ONLINE.equals(m.getType())).toList();
+        return new PollResult(messages, next);
+    }
+
+    public record PollResult(List<LiveDanmaku> messages, long next) {
     }
 
     private void cleanup() {
@@ -228,12 +242,7 @@ public class LiveDanmakuService {
         }
 
         void accept(LiveDanmaku message) {
-            // 在入口丢弃而非在 poll 出口过滤:出口过滤会把整批 online 消息留在缓冲里,
-            // next 游标不前进导致每轮重复拉到同一批;入口丢弃则 seq 照常被跳过
-            if (!appProperties.getDanmakuConfig().isShowOnline()
-                    && LiveDanmaku.TYPE_ONLINE.equals(message.getType())) {
-                return;
-            }
+            // 房间缓冲是全体观众共享的,online 消息一律入缓冲,showOnline 按各请求者配置在 poll 出口过滤
             message.setSeq(seq.incrementAndGet());
             synchronized (buffer) {
                 buffer.addLast(message);

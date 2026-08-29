@@ -5,6 +5,12 @@ import cn.har01d.alist_tvbox.auth.UserToken;
 import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.UserDto;
 import cn.har01d.alist_tvbox.dto.SessionDto;
+import cn.har01d.alist_tvbox.entity.Account;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.PikPakAccount;
+import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
 import cn.har01d.alist_tvbox.entity.Session;
 import cn.har01d.alist_tvbox.entity.SessionRepository;
 import cn.har01d.alist_tvbox.entity.User;
@@ -21,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,10 +37,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+
+import static cn.har01d.alist_tvbox.util.Constants.USER_TOKEN_PREFIX;
 
 @Slf4j
 @Service
@@ -44,7 +54,14 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final RestoreState restoreState;
+    private final DriverAccountRepository driverAccountRepository;
+    private final AccountRepository accountRepository;
+    private final PikPakAccountRepository pikPakAccountRepository;
     private final JdbcTemplate jdbcTemplate;
+    // ObjectProvider:账号服务依赖链较深,延迟解析避免启动期循环依赖
+    private final ObjectProvider<DriverAccountService> driverAccountService;
+    private final ObjectProvider<AccountService> accountService;
+    private final ObjectProvider<PikPakService> pikPakService;
 
     private final Set<String> usernames = new HashSet<>();
 
@@ -100,6 +117,52 @@ public class UserService {
 
     public boolean isUsernameExist(String username) {
         return usernames.contains(username);
+    }
+
+    /**
+     * 用户级 vod token = "u-{username}"。前缀 u- 保留给用户 token,全局 tokens 在保存时过滤该前缀,
+     * 两个空间永不撞车,解析无需再查全局列表。裸用户名不再是合法 token。
+     */
+    public static String userVodToken(String username) {
+        return USER_TOKEN_PREFIX + username;
+    }
+
+    /** 解析用户级 vod token:非 u- 前缀或空用户名返回 null。 */
+    public String usernameOfUserVodToken(String token) {
+        if (token == null || !token.startsWith(USER_TOKEN_PREFIX)) {
+            return null;
+        }
+        String username = token.substring(USER_TOKEN_PREFIX.length());
+        return StringUtils.isBlank(username) ? null : username;
+    }
+
+    /** vod token → 用户:仅识别 u-{username} 且用户存在;共享 token/空返回 null。 */
+    public User findByUserVodToken(String token) {
+        String username = usernameOfUserVodToken(token);
+        return username == null ? null : findByUsername(username);
+    }
+
+    /**
+     * 凭证形态 token(u-{username}-{vodSecret})→ 用户:密钥验真通过才返回;
+     * 裸 u-{username} 无熵(用户名可猜测),不能作为凭证权威,返回 null。
+     * 用户名已禁含 '-'(validateUsername),split 三段无歧义。
+     */
+    public User findUserByCredentialToken(String token) {
+        if (token == null || !token.startsWith(USER_TOKEN_PREFIX)) {
+            return null;
+        }
+        String[] parts = token.split("-");
+        if (parts.length != 3 || parts[1].isEmpty() || parts[2].isEmpty()) {
+            return null;
+        }
+        User user = findByUsername(parts[1]);
+        return user == null ? null : parts[2].equals(vodSecretOf(user)) ? user : null;
+    }
+
+    /** 裸 u-{username}(用户存在)→ 拼上密钥的凭证形态,供配置嵌入;其它形态原样返回。 */
+    public String toCredentialToken(String token) {
+        User user = findByUserVodToken(token);
+        return user == null ? token : token + "-" + vodSecretOf(user);
     }
 
     private void loadUsernames() {
@@ -241,6 +304,7 @@ public class UserService {
         if (StringUtils.isEmpty(dto.getUsername())) {
             throw new BadRequestException("用户名不能为空");
         }
+        validateUsername(dto.getUsername());
         if (StringUtils.isEmpty(dto.getPassword())) {
             throw new BadRequestException("密码不能为空");
         }
@@ -251,9 +315,37 @@ public class UserService {
         var user = new User();
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        user.setVodSecret(generateVodSecret());
         userRepository.save(user);
         usernames.add(user.getUsername());
         return user;
+    }
+
+    /** 用户名禁含 '-':凭证 token 形态 u-{username}-{secret} 靠 '-' 分段,用户名带 '-' 会造成归属解析歧义。 */
+    private void validateUsername(String username) {
+        if (username.contains("-")) {
+            throw new BadRequestException("用户名不能包含 '-'");
+        }
+    }
+
+    /** 用户凭证下载密钥:16 hex(SecureRandom)。用户名可猜测,u-{username} token 无熵,熵全靠此值。 */
+    public static String generateVodSecret() {
+        byte[] bytes = new byte[8];
+        new SecureRandom().nextBytes(bytes);
+        StringBuilder secret = new StringBuilder(16);
+        for (byte b : bytes) {
+            secret.append(String.format("%02x", b));
+        }
+        return secret.toString();
+    }
+
+    /** 凭证下载密钥(V39 迁移兜底:读时补生成,防旧库漏回填)。 */
+    public String vodSecretOf(User user) {
+        if (StringUtils.isBlank(user.getVodSecret())) {
+            user.setVodSecret(generateVodSecret());
+            userRepository.save(user);
+        }
+        return user.getVodSecret();
     }
 
     public User update(int id, UserDto dto) {
@@ -262,6 +354,7 @@ public class UserService {
         var sessions = sessionRepository.findAllByUsername(username);
         sessionRepository.deleteAll(sessions);
         if (StringUtils.isNotEmpty(dto.getUsername())) {
+            validateUsername(dto.getUsername());
             User other = userRepository.findByUsername(dto.getUsername());
             if (other != null && !other.getId().equals(user.getId())) {
                 throw new BadRequestException("用户名已经存在");
@@ -281,6 +374,45 @@ public class UserService {
         if (id == 1) {
             throw new BadRequestException("不能删除管理员");
         }
+        // 个人账号凭证即用户数字身份:人走凭证销毁;追剧订阅引用该账号的,解析时自然落空(已有容错)。
+        // 必须走各账号服务的 delete(连带移除内嵌 AList 的 storage/挂载),裸删库表会把活凭证遗留在 AList 里。
+        // AList 侧清理失败(服务未就绪等)时中止删用户,账号行保留待管理员重试;
+        // 唯一豁免:PikPak 主账号保护属业务拒绝而非清理失败,行照清
+        for (DriverAccount account : driverAccountRepository.findByOwnerUid(id)) {
+            try {
+                driverAccountService.getObject().delete(account.getId());
+            } catch (BadRequestException e) {
+                throw new BadRequestException("网盘账号 [" + account.getName() + "] 清理失败,请稍后重试:" + e.getMessage());
+            } catch (Exception e) {
+                throw new BadRequestException("网盘账号 [" + account.getName() + "] 清理失败(AList 不可用?),请稍后重试");
+            }
+        }
+        for (Account account : accountRepository.findByOwnerUid(id)) {
+            try {
+                accountService.getObject().delete(account.getId());
+            } catch (BadRequestException e) {
+                throw new BadRequestException("阿里账号 [user-" + account.getId() + "] 清理失败,请稍后重试:" + e.getMessage());
+            } catch (Exception e) {
+                throw new BadRequestException("阿里账号 [user-" + account.getId() + "] 清理失败(AList 不可用?),请稍后重试");
+            }
+        }
+        for (PikPakAccount account : pikPakAccountRepository.findByOwnerUid(id)) {
+            try {
+                pikPakService.getObject().delete(account.getId());
+            } catch (BadRequestException e) {
+                if (e.getMessage() != null && e.getMessage().contains("主账号")) {
+                    log.warn("pikpak account {} is master-protected, drop row for user {}", account.getId(), id);
+                    continue;
+                }
+                throw new BadRequestException("PikPak 账号 [" + account.getUsername() + "] 清理失败,请稍后重试:" + e.getMessage());
+            } catch (Exception e) {
+                throw new BadRequestException("PikPak 账号 [" + account.getUsername() + "] 清理失败(AList 不可用?),请稍后重试");
+            }
+        }
+        // 兜底清行:个别服务删除失败(如 PikPak 主账号保护)时也不留下孤儿账号行
+        driverAccountRepository.deleteAll(driverAccountRepository.findByOwnerUid(id));
+        accountRepository.deleteAll(accountRepository.findByOwnerUid(id));
+        pikPakAccountRepository.deleteAll(pikPakAccountRepository.findByOwnerUid(id));
         userRepository.deleteById(id);
         loadUsernames();
     }
@@ -293,6 +425,10 @@ public class UserService {
         }
 
         if (user.getRole() == Role.ADMIN && !username.equals(dto.getUsername())) {
+            if (StringUtils.isBlank(dto.getUsername())) {
+                throw new BadRequestException("用户名不能为空");
+            }
+            validateUsername(dto.getUsername());
             User other = userRepository.findByUsername(dto.getUsername());
             if (other != null && !other.getId().equals(user.getId())) {
                 throw new BadRequestException("用户名已经存在");

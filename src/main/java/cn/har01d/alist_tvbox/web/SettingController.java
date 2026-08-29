@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -52,11 +53,13 @@ public class SettingController {
         return service.get(name);
     }
 
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
     @PostMapping("/apikey")
     public String generateApiKey() {
         return service.generateApiKey();
     }
 
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
     @PostMapping
     public Setting update(@RequestBody Setting setting, HttpServletRequest request) {
         if ("user_agent".equals(setting.getName())) {
@@ -83,6 +86,7 @@ public class SettingController {
         return service.exportJsonDatabase();
     }
 
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
     @PostMapping("/import-json")
     public BackupRestoreResponse importJsonDatabase(@RequestParam("file") MultipartFile file,
                                                     @RequestParam(name = "mode", defaultValue = "OVERWRITE") BackupRestoreMode mode) throws Exception {
@@ -100,6 +104,7 @@ public class SettingController {
     /**
      * 并发测速多个 GitHub 代理节点（5线程）- 同步版本
      */
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
     @PostMapping("/github-proxy/benchmark")
     public List<GitHubProxyNode> benchmarkGitHubProxyNodes(@RequestBody GitHubProxyBenchmarkRequest request) {
         return gitHubProxyService.benchmarkNodes(request.getUrls());
@@ -108,6 +113,7 @@ public class SettingController {
     /**
      * 启动异步测速任务（实时更新）
      */
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
     @PostMapping("/github-proxy/benchmark/start")
     public Map<String, Object> startBenchmark(@RequestBody GitHubProxyBenchmarkRequest request) {
         gitHubProxyService.benchmarkNodesAsync(request.getUrls());
@@ -136,6 +142,7 @@ public class SettingController {
     /**
      * 保存 GitHub 代理列表（最多 5 个）
      */
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
     @PostMapping("/github-proxy/list")
     public Map<String, Object> saveGitHubProxyList(@RequestBody List<String> proxyList) throws IOException {
         gitHubProxyService.saveProxyListToFile(proxyList);
@@ -157,6 +164,7 @@ public class SettingController {
     /**
      * 保存用户自定义的 GitHub 代理节点列表
      */
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
     @PostMapping("/github-proxy/custom-nodes")
     public Map<String, Object> saveCustomNodes(@RequestBody List<String> nodes) {
         String value = String.join("\n", nodes);

@@ -402,14 +402,11 @@ const addFollowByUrl = () => {
   });
 };
 
+// 弹幕配置已用户级化:各登录用户独立存取,未配置时后端回落全局基线
 const loadDanmakuConfig = () => {
-  axios.get("/api/settings/danmaku_config").then(({data}) => {
-    if (data?.value) {
-      try {
-        danmaku.value = {...danmaku.value, ...JSON.parse(data.value)};
-      } catch {
-        // 配置解析失败保持默认值
-      }
+  axios.get("/api/live/danmaku-config").then(({data}) => {
+    if (data) {
+      danmaku.value = {...danmaku.value, ...data};
     }
   });
 };
@@ -425,10 +422,7 @@ const updateHotMode = () => {
 };
 
 const updateDanmakuConfig = () => {
-  axios.post("/api/settings", {
-    name: "danmaku_config",
-    value: JSON.stringify({...danmaku.value, color: danmaku.value.color || ""})
-  }).then(() => {
+  axios.put("/api/live/danmaku-config", {...danmaku.value, color: danmaku.value.color || ""}).then(() => {
     ElMessage.success("更新成功,播放中最迟 2 秒生效");
   });
 };
@@ -500,7 +494,7 @@ const loadCategories = (id: string) => {
       loadDanmakuConfig();
       return;
     }
-    if (id === "cookies") {
+    if (store.admin && id === "cookies") {
       category.value = categories.value[0];
       activeTab.value = "cookies";
       loadPlatformCookies();
@@ -791,7 +785,7 @@ onUnmounted(() => {
           </el-form-item>
         </el-form>
       </el-tab-pane>
-      <el-tab-pane label="平台Cookie" name="cookies">
+      <el-tab-pane label="平台Cookie" name="cookies" v-if="store.admin">
         <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
                   title="配置各直播平台的用户 Cookie:抖音风控自愈、SOOP 登录看受限房间、B站登录提高接口配额"
                   description="浏览器打开对应平台并登录,F12 → Network → 任选请求 → Request Headers 里复制完整 Cookie 值粘贴到编辑框"/>

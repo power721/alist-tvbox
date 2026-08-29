@@ -375,6 +375,7 @@ public class SettingService {
         Map<String, String> map = settingRepository.findAll()
                 .stream()
                 .filter(e -> e.getName() != null && e.getValue() != null)
+                .filter(e -> !USER_SETTING_ROW.matcher(e.getName()).matches())
                 .collect(Collectors.toMap(Setting::getName, Setting::getValue));
         //map.remove("api_key");
         map.remove("bilibili_cookie");
@@ -711,6 +712,88 @@ public class SettingService {
             log.warn("parse local proxy config failed: {}", value, e);
             return AppProperties.defaultLocalProxyConfig();
         }
+    }
+
+    /** 用户级弹幕配置行名:dammu_config 全局基线之外的每用户覆盖,不进设置页白名单。 */
+    public static String danmakuConfigKey(int uid) {
+        return "danmaku_config:u" + uid;
+    }
+
+    /** 用户级弹幕配置:未配置(或 uid<=0 表示无归属)回落全局基线(管理员设置页维护的 danmaku_config)。 */
+    public DanmakuConfig getDanmakuConfig(int uid) {
+        if (uid <= 0) {
+            return appProperties.getDanmakuConfig();
+        }
+        return settingRepository.findById(danmakuConfigKey(uid))
+                .map(Setting::getValue)
+                .filter(StringUtils::isNotBlank)
+                .map(this::parseDanmakuConfig)
+                .orElse(appProperties.getDanmakuConfig());
+    }
+
+    /** 保存用户级弹幕配置,归一化后落库(与全局基线同款钳位)。 */
+    public void saveDanmakuConfig(int uid, DanmakuConfig config) {
+        DanmakuConfig normalized = config == null ? new DanmakuConfig() : config;
+        normalized.normalize();
+        Setting setting = settingRepository.findById(danmakuConfigKey(uid))
+                .orElseGet(() -> new Setting(danmakuConfigKey(uid), null));
+        setting.setValue(writeDanmakuConfig(normalized));
+        settingRepository.save(setting);
+    }
+
+    /** 允许用户级覆盖的设置键白名单(普通用户经 /api/user-settings 读写自己的值,全局值仅管理员可改)。 */
+    public static final Set<String> USER_SETTING_KEYS = Set.of(
+            MediaSubscriptionCheckService.MSUB_POOL_FILTER,
+            "msub_telegram_bot_token",
+            "msub_telegram_chat_id");
+
+    /** 用户级设置行形态 {key}:u{uid}:findAll 一律剔除,不进设置页、不随配置下发(含密钥类值)。 */
+    private static final Pattern USER_SETTING_ROW = Pattern.compile(".+:u\\d+");
+
+    /** 用户级设置行名:{key}:u{uid}(与 danmaku_config:u{uid} 同款键级命名空间先例)。 */
+    public static String userSettingKey(String key, int uid) {
+        return key + ":u" + uid;
+    }
+
+    /** 用户级读取(带回退):uid>0 先查 {key}:u{uid},未配置/为空回落全局键;均未配置返回空串。 */
+    public String getUserSetting(String key, int uid) {
+        if (uid > 0) {
+            String value = settingRepository.findById(userSettingKey(key, uid))
+                    .map(Setting::getValue)
+                    .filter(StringUtils::isNotBlank)
+                    .orElse(null);
+            if (value != null) {
+                return value;
+            }
+        }
+        return settingRepository.findById(key).map(Setting::getValue).orElse("");
+    }
+
+    /** 是否已配置用户级值(前端区分「自己的值」与「继承的全局值」)。 */
+    public boolean hasUserSetting(String key, int uid) {
+        return uid > 0 && settingRepository.existsByName(userSettingKey(key, uid));
+    }
+
+    /**
+     * 保存用户级值:仅落 {key}:u{uid},不动全局键;值为空 = 删除用户行(恢复回退全局)。
+     * msub_pool_filter 与全局键同款归一化回写,坏值直接拒绝(不落库)。
+     */
+    public void saveUserSetting(String key, int uid, String value) {
+        if (!USER_SETTING_KEYS.contains(key)) {
+            throw new BadRequestException("不支持用户级覆盖: " + key);
+        }
+        String name = userSettingKey(key, uid);
+        if (StringUtils.isBlank(value)) {
+            settingRepository.deleteById(name);
+            return;
+        }
+        if (MediaSubscriptionCheckService.MSUB_POOL_FILTER.equals(key)) {
+            value = writePoolFilter(parsePoolFilter(value));
+        }
+        Setting setting = settingRepository.findById(name)
+                .orElseGet(() -> new Setting(name, null));
+        setting.setValue(value);
+        settingRepository.save(setting);
     }
 
     private DanmakuConfig loadDanmakuConfig() {
