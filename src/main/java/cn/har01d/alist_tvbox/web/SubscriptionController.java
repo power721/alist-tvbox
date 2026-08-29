@@ -141,6 +141,11 @@ public class SubscriptionController {
 
     @GetMapping("/{sid}/catalog")
     public Map<String, Object> getCatalog(@PathVariable String sid) {
+        // 归属隔离:个人订阅(ownerUid>0)仅本人/管理级可取目录(sid 默认数字 id 可枚举,与 /sub 路径同口径)
+        Subscription sub = subscriptionRepository.findBySid(sid).orElseThrow(() -> new BadRequestException("订阅不存在"));
+        if (!guard.isElevated() && sub.getOwnerUid() != 0 && sub.getOwnerUid() != guard.currentUid()) {
+            throw new BadRequestException("无权访问该订阅");
+        }
         return subscriptionService.getCatalog(sid);
     }
 

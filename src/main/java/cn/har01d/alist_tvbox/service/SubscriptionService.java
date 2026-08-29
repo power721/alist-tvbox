@@ -412,6 +412,11 @@ public class SubscriptionService {
                 : panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK);
     }
 
+    /** token 模式是否开启(运行时可经 /api/token 切换):TokenFilter 据此收紧无 token 的 /open。 */
+    public boolean isTokenEnabled() {
+        return appProperties.isEnabledToken();
+    }
+
     public TokenDto getTokens() {
         TokenDto tokenDto = new TokenDto();
         tokenDto.setEnabledToken(appProperties.isEnabledToken());
@@ -422,7 +427,9 @@ public class SubscriptionService {
                 .map(e -> e.iterator().next().getAuthority())
                 .orElse(Role.USER.name());
         tokenDto.setRole(role);
-        if (role.equals(Role.ADMIN.name())) {
+        // ADMIN 与服务端互访的 CLIENT(X-API-KEY)都返回共享 token;CLIENT principal 是 "client" 而非用户名,
+        // u-client 不是合法 vod token,按用户名分支拼会把 API-key 客户端的 VOD 地址弄成永远 400
+        if (role.equals(Role.ADMIN.name()) || role.equals(Role.CLIENT.name())) {
             tokenDto.setToken(tokens);
         } else {
             String username = Optional.of(SecurityContextHolder.getContext())
@@ -808,6 +815,11 @@ public class SubscriptionService {
 
     public Map<String, Object> subscription(String token, String id) {
         Subscription subscription = subscriptionRepository.findBySid(id).orElseThrow(NotFoundException::new);
+        // 归属隔离:个人订阅(ownerUid>0)仅归属人本人的 u- token(或管理级共享 token)可取;
+        // 个人订阅默认 sid=数字 id,可枚举,不做校验等于向任意用户泄漏其私有上游 URL 与 override 配置
+        if (subscription.getOwnerUid() > 0 && credentialUidFor(token) != subscription.getOwnerUid()) {
+            throw new NotFoundException();
+        }
         String apiUrl = subscription.getUrl();
         String override = subscription.getOverride();
         String sort = subscription.getSort();

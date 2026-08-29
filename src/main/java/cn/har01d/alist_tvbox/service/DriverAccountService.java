@@ -335,7 +335,8 @@ public class DriverAccountService {
             throw new BadRequestException("账号名称已经存在");
         }
         account.setId(null);
-        if (driverAccountRepository.countByType(account.getType()) == 0) {
+        // 首个账号自动升 master 仅限全局账号:普通用户给未配置的盘型开首个个人账号不得抢占全局主账号位
+        if (driverAccountRepository.countByType(account.getType()) == 0 && account.getOwnerUid() == 0) {
             account.setMaster(true);
         } else {
             updateMaster(account);

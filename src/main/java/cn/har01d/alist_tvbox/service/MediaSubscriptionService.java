@@ -35,7 +35,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -199,7 +198,7 @@ public class MediaSubscriptionService {
         subscriptionRepository.saveAndFlush(subscription);
 
         subscription.setMountPath(buildMountPath(subscription));
-        saveMountPathWithRetry(subscription);
+        subscriptionRepository.save(subscription);
         log.info("media subscription created: uid={} {} {} mode={}", uid, subscription.getId(), subscription.getName(), subscription.getMode());
         return toDto(subscription);
     }
@@ -2219,37 +2218,14 @@ public class MediaSubscriptionService {
             base = Constants.SUBSCRIPTION_MOUNT_ROOT + subscription.getId() + "-" + slug + seasonSuffix;
         }
         // 挂载(FOLLOW)模式共享挂载路径:多个用户追同一部剧共用同一路径背后的分享挂载,
-        // 播放历史按 uid 隔离互不影响;仅转存(TRANSFER)模式挂的是个人网盘,必须独占路径
+        // 播放历史按 uid 隔离互不影响;仅转存(TRANSFER)模式挂的是个人网盘,必须独占路径。
+        // 转存路径构造级带 uid 段(uid>0):跨用户天然不撞,从根上堵并发同路径劫持 —— 不能用库级
+        // 全局唯一索引,FOLLOW 的共享挂载收编(同路径复用主源)要求允许重复 mount_path
         if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
-            return ensureUniqueMountPath(base, subscription.getUid());
+            String path = subscription.getUid() > 0 ? base + " u" + subscription.getUid() : base;
+            return ensureUniqueMountPath(path, subscription.getUid());
         }
         return base;
-    }
-
-    /**
-     * mount_path 库级唯一(V39 唯一索引):并发创建同一元数据条目时预检(ensureUniqueMountPath)会被双双通过,
-     * 提交撞唯一约束时追加 uid 段重试,堵死跨用户挂载路径劫持。口径与 ensureUniqueMountPath 一致。
-     */
-    private void saveMountPathWithRetry(MediaSubscription subscription) {
-        String base = subscription.getMountPath();
-        try {
-            subscriptionRepository.saveAndFlush(subscription);
-            return;
-        } catch (DataIntegrityViolationException e) {
-            log.warn("mount path conflict: {}", base);
-        }
-        for (int n = 0; n < 100; n++) {
-            String suffix = " u" + subscription.getUid() + (n > 0 ? "-" + n : "");
-            String candidate = StringUtils.abbreviate(base + suffix, 512);
-            try {
-                subscription.setMountPath(candidate);
-                subscriptionRepository.saveAndFlush(subscription);
-                log.info("mount path renamed to {} after unique conflict", candidate);
-                return;
-            } catch (DataIntegrityViolationException ignored) {
-            }
-        }
-        throw new BadRequestException("挂载路径冲突,请重试");
     }
 
     /**

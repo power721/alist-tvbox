@@ -170,7 +170,10 @@ public class PikPakService {
         validate(dto);
         dto.setId(null);
         if (pikPakAccountRepository.count() == 0) {
-            dto.setMaster(true);
+            // 首个账号自动升 master 仅限全局账号:普通用户开首个个人账号不得抢占全局主账号位
+            if (dto.getOwnerUid() == 0) {
+                dto.setMaster(true);
+            }
             updateIndexFile();
         } else {
             if (pikPakAccountRepository.existsByNickname(dto.getNickname())) {

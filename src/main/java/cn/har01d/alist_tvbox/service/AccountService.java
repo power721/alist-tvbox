@@ -940,13 +940,15 @@ public class AccountService {
         account.setOwnerUid(dto.getOwnerUid());
         account.setShared(dto.isShared());
 
-        account.setMaster(dto.isMaster() || count == 0);
+        // 首个账号自动升 master 仅限全局账号:普通用户开首个个人账号不得抢占全局主账号位
+        boolean firstGlobal = count == 0 && account.getOwnerUid() == 0;
+        account.setMaster(dto.isMaster() || firstGlobal);
         if (account.isMaster()) {
             account.setShowMyAli(true);
         }
         accountRepository.save(account);
 
-        if (count == 0) {
+        if (firstGlobal) {
             updateTokens();
             int storageId = IDX + (account.getId() - 1) * 2;
             aListLocalService.setSetting("ali_account_id", String.valueOf(storageId), "number");

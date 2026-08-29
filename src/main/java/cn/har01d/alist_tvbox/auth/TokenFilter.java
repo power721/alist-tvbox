@@ -96,6 +96,15 @@ public class TokenFilter extends OncePerRequestFilter {
                     response.sendError(401);
                     return;
                 }
+                // /open 不带路径 token 时,配置渲染会走无上下文分支:回落全局首个订阅 token 并注入全局
+                // master 凭证(getCurrentOrFirstToken/credentialAliAccount)。basic 凭证已下发给 USER
+                //(猫影视客户端要求内嵌),token 模式下放行无 token 的 /open 等于向 USER 递管理员凭证。
+                // 关闭 token 模式的单用户形态维持原行为(basic 凭证即门槛);/node 路由本身强制 {token} 段
+                if (isTokenlessOpen(uri) && subscriptionService != null && subscriptionService.isTokenEnabled()) {
+                    response.setHeader("Www-Authenticate", "Basic realm=\"alist\"");
+                    response.sendError(401);
+                    return;
+                }
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -167,6 +176,11 @@ public class TokenFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** /open 不带路径 token 的形态(仅 "/open" 与 "/open/";/node 路由本身强制 {token}/{file} 段)。 */
+    private static boolean isTokenlessOpen(String uri) {
+        return "/open".equals(uri) || "/open/".equals(uri);
     }
 
     private String getToken(HttpServletRequest request) {
