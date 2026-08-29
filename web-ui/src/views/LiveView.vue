@@ -494,13 +494,13 @@ const loadCategories = (id: string) => {
       loadFollows();
       return;
     }
-    if (id === "danmaku") {
+    if (store.admin && id === "danmaku") {
       category.value = categories.value[0];
       activeTab.value = "danmaku";
       loadDanmakuConfig();
       return;
     }
-    if (id === "cookies") {
+    if (store.admin && id === "cookies") {
       category.value = categories.value[0];
       activeTab.value = "cookies";
       loadPlatformCookies();
@@ -746,7 +746,7 @@ onUnmounted(() => {
           </el-table-column>
         </el-table>
       </el-tab-pane>
-      <el-tab-pane label="弹幕管理" name="danmaku">
+      <el-tab-pane label="弹幕管理" name="danmaku" v-if="store.admin">
         <el-form label-width="110px" style="max-width: 620px">
           <el-form-item label="弹幕开关">
             <el-switch
@@ -791,7 +791,7 @@ onUnmounted(() => {
           </el-form-item>
         </el-form>
       </el-tab-pane>
-      <el-tab-pane label="平台Cookie" name="cookies">
+      <el-tab-pane label="平台Cookie" name="cookies" v-if="store.admin">
         <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
                   title="配置各直播平台的用户 Cookie:抖音风控自愈、SOOP 登录看受限房间、B站登录提高接口配额"
                   description="浏览器打开对应平台并登录,F12 → Network → 任选请求 → Request Headers 里复制完整 Cookie 值粘贴到编辑框"/>
