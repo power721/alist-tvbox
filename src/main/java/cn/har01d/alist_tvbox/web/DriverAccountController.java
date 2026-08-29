@@ -40,6 +40,8 @@ public class DriverAccountController {
     public DriverAccount create(@RequestBody DriverAccount account) {
         if (!guard.isElevated()) {
             account.setOwnerUid(guard.currentUid());
+            // master 是全局敏感标记(spider 注入/取链选主账号),非管理身份不得自封
+            account.setMaster(false);
         }
         return driverAccountService.create(account);
     }

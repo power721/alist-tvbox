@@ -64,7 +64,8 @@ class UserServiceTest {
         SecurityContextHolder.clearContext();
         userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
             new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-json.zip"),
-            driverAccountRepository, accountRepository, pikPakAccountRepository, jdbcTemplate);
+            driverAccountRepository, accountRepository, pikPakAccountRepository, jdbcTemplate,
+            null, null, null); // ObjectProvider<账号服务>:仅级联删除使用,mock 仓储默认空列表不会触达
     }
 
     @Test

@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.dto.CheckinLog;
 import cn.har01d.alist_tvbox.dto.CheckinResult;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.AccountAccessGuard;
 import cn.har01d.alist_tvbox.service.AccountService;
 import cn.har01d.alist_tvbox.service.AliyunTvTokenService;
@@ -50,12 +51,18 @@ public class AccountController {
     public Account create(@RequestBody AccountDto account) {
         if (!guard.isElevated()) {
             account.setOwnerUid(guard.currentUid());
+            // master 是全局敏感标记(tokenm 注入/AList 同步选主账号),非管理身份不得自封
+            account.setMaster(false);
         }
         return accountService.create(account);
     }
 
     @PostMapping("/api/ali/accounts/-/info")
     public AccountInfo getInfo(@RequestBody Account account) {
+        if (account.getId() != null) {
+            // 带 id 走库存账号(会刷新并回写 token):必须归属人本人/管理级,否则可窥探他人账号身份与配额
+            guard.checkManage(accountRepository.findById(account.getId()).orElseThrow().getOwnerUid());
+        }
         return accountService.getInfo(account);
     }
 
@@ -67,6 +74,10 @@ public class AccountController {
 
     @GetMapping("/api/ali/accounts/{id}/checkin")
     public List<CheckinLog> getCheckinLogs(@PathVariable Integer id) {
+        Account account = accountRepository.findById(id).orElseThrow();
+        if (!guard.canView(account.getOwnerUid(), account.isShared())) {
+            throw new BadRequestException("无权查看该账号");
+        }
         return accountService.getCheckinLogs(id);
     }
 
@@ -78,7 +89,11 @@ public class AccountController {
 
     @PostMapping("/api/ali/accounts/{id}")
     public Account update(@PathVariable Integer id, @RequestBody AccountDto account) {
-        guard.checkManage(accountRepository.findById(id).orElseThrow().getOwnerUid());
+        Account existing = accountRepository.findById(id).orElseThrow();
+        guard.checkManage(existing.getOwnerUid());
+        if (!guard.isElevated()) {
+            account.setMaster(existing.isMaster());
+        }
         return accountService.update(id, account);
     }
 

@@ -35,6 +35,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -198,7 +199,7 @@ public class MediaSubscriptionService {
         subscriptionRepository.saveAndFlush(subscription);
 
         subscription.setMountPath(buildMountPath(subscription));
-        subscriptionRepository.save(subscription);
+        saveMountPathWithRetry(subscription);
         log.info("media subscription created: uid={} {} {} mode={}", uid, subscription.getId(), subscription.getName(), subscription.getMode());
         return toDto(subscription);
     }
@@ -2223,6 +2224,32 @@ public class MediaSubscriptionService {
             return ensureUniqueMountPath(base, subscription.getUid());
         }
         return base;
+    }
+
+    /**
+     * mount_path 库级唯一(V39 唯一索引):并发创建同一元数据条目时预检(ensureUniqueMountPath)会被双双通过,
+     * 提交撞唯一约束时追加 uid 段重试,堵死跨用户挂载路径劫持。口径与 ensureUniqueMountPath 一致。
+     */
+    private void saveMountPathWithRetry(MediaSubscription subscription) {
+        String base = subscription.getMountPath();
+        try {
+            subscriptionRepository.saveAndFlush(subscription);
+            return;
+        } catch (DataIntegrityViolationException e) {
+            log.warn("mount path conflict: {}", base);
+        }
+        for (int n = 0; n < 100; n++) {
+            String suffix = " u" + subscription.getUid() + (n > 0 ? "-" + n : "");
+            String candidate = StringUtils.abbreviate(base + suffix, 512);
+            try {
+                subscription.setMountPath(candidate);
+                subscriptionRepository.saveAndFlush(subscription);
+                log.info("mount path renamed to {} after unique conflict", candidate);
+                return;
+            } catch (DataIntegrityViolationException ignored) {
+            }
+        }
+        throw new BadRequestException("挂载路径冲突,请重试");
     }
 
     /**

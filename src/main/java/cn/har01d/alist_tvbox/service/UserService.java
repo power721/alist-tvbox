@@ -7,7 +7,9 @@ import cn.har01d.alist_tvbox.dto.UserDto;
 import cn.har01d.alist_tvbox.dto.SessionDto;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.PikPakAccount;
 import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
 import cn.har01d.alist_tvbox.entity.Session;
 import cn.har01d.alist_tvbox.entity.SessionRepository;
@@ -25,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -54,6 +57,10 @@ public class UserService {
     private final AccountRepository accountRepository;
     private final PikPakAccountRepository pikPakAccountRepository;
     private final JdbcTemplate jdbcTemplate;
+    // ObjectProvider:账号服务依赖链较深,延迟解析避免启动期循环依赖
+    private final ObjectProvider<DriverAccountService> driverAccountService;
+    private final ObjectProvider<AccountService> accountService;
+    private final ObjectProvider<PikPakService> pikPakService;
 
     private final Set<String> usernames = new HashSet<>();
 
@@ -313,7 +320,30 @@ public class UserService {
         if (id == 1) {
             throw new BadRequestException("不能删除管理员");
         }
-        // 个人账号凭证即用户数字身份:人走凭证销毁;追剧订阅引用该账号的,解析时自然落空(已有容错)
+        // 个人账号凭证即用户数字身份:人走凭证销毁;追剧订阅引用该账号的,解析时自然落空(已有容错)。
+        // 必须走各账号服务的 delete(连带移除内嵌 AList 的 storage/挂载),裸删库表会把活凭证遗留在 AList 里
+        for (DriverAccount account : driverAccountRepository.findByOwnerUid(id)) {
+            try {
+                driverAccountService.getObject().delete(account.getId());
+            } catch (Exception e) {
+                log.warn("delete driver account {} for user {} failed", account.getId(), id, e);
+            }
+        }
+        for (Account account : accountRepository.findByOwnerUid(id)) {
+            try {
+                accountService.getObject().delete(account.getId());
+            } catch (Exception e) {
+                log.warn("delete ali account {} for user {} failed", account.getId(), id, e);
+            }
+        }
+        for (PikPakAccount account : pikPakAccountRepository.findByOwnerUid(id)) {
+            try {
+                pikPakService.getObject().delete(account.getId());
+            } catch (Exception e) {
+                log.warn("delete pikpak account {} for user {} failed", account.getId(), id, e);
+            }
+        }
+        // 兜底清行:个别服务删除失败(如 PikPak 主账号保护)时也不留下孤儿账号行
         driverAccountRepository.deleteAll(driverAccountRepository.findByOwnerUid(id));
         accountRepository.deleteAll(accountRepository.findByOwnerUid(id));
         pikPakAccountRepository.deleteAll(pikPakAccountRepository.findByOwnerUid(id));

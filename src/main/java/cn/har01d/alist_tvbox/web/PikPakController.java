@@ -40,13 +40,21 @@ public class PikPakController {
     public PikPakAccount create(@RequestBody PikPakAccount account) {
         if (!guard.isElevated()) {
             account.setOwnerUid(guard.currentUid());
+            // master 是全局敏感标记(共享 AList 凭证选主),非管理身份不得自封
+            account.setMaster(false);
         }
         return pikPakService.create(account);
     }
 
     @PostMapping("/accounts/{id}")
     public PikPakAccount update(@PathVariable Integer id, @RequestBody PikPakAccount account) {
-        guard.checkManage(accountRepository.findById(id).orElseThrow().getOwnerUid());
+        PikPakAccount existing = accountRepository.findById(id).orElseThrow();
+        guard.checkManage(existing.getOwnerUid());
+        if (!guard.isElevated()) {
+            // update 整体保存 DTO:master/ownerUid 必须保留存量,防止普通用户把自己的账号顶成全局主账号
+            account.setMaster(existing.isMaster());
+            account.setOwnerUid(existing.getOwnerUid());
+        }
         return pikPakService.update(id, account);
     }
 
