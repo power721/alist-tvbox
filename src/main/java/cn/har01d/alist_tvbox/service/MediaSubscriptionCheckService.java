@@ -532,11 +532,7 @@ public class MediaSubscriptionCheckService {
                 continue;
             }
             if (StringUtils.isNotBlank(resource.getMountPath())) {
-                try {
-                    shareService.deleteShare(resource.getShareId());
-                } catch (Exception e) {
-                    log.warn("purge foreign-season share failed: {} {}", resource.getShareId(), e.getMessage());
-                }
+                unmountShareIfUnused(resource.getShareId(), subscription.getId());
             }
             episodeSourceRepository.deleteByResourceIdIn(List.of(resource.getId()));
             resourceRepository.delete(resource);
@@ -644,12 +640,7 @@ public class MediaSubscriptionCheckService {
         List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscriptionId);
         for (MediaSubscriptionResource resource : resources) {
             if (resource.getShareId() != null) {
-                try {
-                    shareService.deleteShare(resource.getShareId());
-                } catch (Exception e) {
-                    log.warn("delete orphan share of removed subscription {} failed: {} {}",
-                            subscriptionId, resource.getShareId(), e.getMessage());
-                }
+                unmountShareIfUnused(resource.getShareId(), subscriptionId);
             }
         }
         List<Integer> resourceIds = resources.stream().map(MediaSubscriptionResource::getId).toList();
@@ -1044,11 +1035,7 @@ public class MediaSubscriptionCheckService {
             int season = subscription.getSeason();
             resetInventoryForSeason(subscription, season);
             for (Integer shareId : new java.util.LinkedHashSet<>(shareIds)) {
-                try {
-                    shareService.deleteShare(shareId);
-                } catch (Exception e) {
-                    log.warn("unmount share after season change failed: {} {}", shareId, e.getMessage());
-                }
+                unmountShareIfUnused(shareId, subscription.getId());
             }
         }
         refreshMetadata(subscription);
@@ -1057,7 +1044,10 @@ public class MediaSubscriptionCheckService {
         }
 
         if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
-            ensureSource(subscription);
+            // 共享挂载收编:同路径已有别的订阅挂好的有效主源时直接复用,不搜索不换挂不补缺
+            if (!adoptExistingMount(subscription)) {
+                ensureSource(subscription);
+            }
             if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
                 scheduleNext(subscription); // 连主源都挂不上:无目录可巡,等下轮再搜
                 return;
@@ -2038,12 +2028,7 @@ public class MediaSubscriptionCheckService {
             if (!belongsToShow(subscription, resource, files.keySet())) {
                 // 误挂异剧的补缺/线路挂载:其行会向"本地已有集"冒领错误集号,就地卸载回候选池
                 // (不走 retireResource:链接没死,不进跨订阅黑名单)
-                try {
-                    shareService.deleteShare(resource.getShareId());
-                } catch (Exception e) {
-                    log.warn("retire alien aux mount failed: {}", e.getMessage());
-                    continue;
-                }
+                unmountShareIfUnused(resource.getShareId(), subscription.getId());
                 resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
                 resource.setMountPath(null);
                 resource.setShareId(null);
@@ -2074,11 +2059,16 @@ public class MediaSubscriptionCheckService {
      */
     void retireResource(MediaSubscription subscription, MediaSubscriptionResource resource, String reason, boolean quiet) {
         if (resource.getShareId() != null) {
-            try {
-                shareService.deleteShare(resource.getShareId());
-            } catch (Exception e) {
-                log.warn("retire resource {} failed, keep for next round: {}", resource.getId(), e.getMessage());
-                return;
+            // 共享挂载:share 被其它订阅引用时不卸载(内容对别人仍有效),本订阅的资源行照常退役
+            boolean referencedByOthers = subscriptionRepository.existsByShareIdAndIdNot(resource.getShareId(), subscription.getId())
+                    || resourceRepository.existsByShareIdAndSubscriptionIdNot(resource.getShareId(), subscription.getId());
+            if (!referencedByOthers) {
+                try {
+                    shareService.deleteShare(resource.getShareId());
+                } catch (Exception e) {
+                    log.warn("retire resource {} failed, keep for next round: {}", resource.getId(), e.getMessage());
+                    return;
+                }
             }
         }
         boolean primary = subscription.getMountPath() != null && subscription.getMountPath().equals(resource.getMountPath());
@@ -2110,11 +2100,16 @@ public class MediaSubscriptionCheckService {
      */
     void retireAlienCandidate(MediaSubscription subscription, MediaSubscriptionResource resource) {
         if (resource.getShareId() != null) {
-            try {
-                shareService.deleteShare(resource.getShareId());
-            } catch (Exception e) {
-                log.warn("retire alien resource {} failed, keep for next round: {}", resource.getId(), e.getMessage());
-                return;
+            // 共享挂载:share 被其它订阅引用时不卸载
+            boolean referencedByOthers = subscriptionRepository.existsByShareIdAndIdNot(resource.getShareId(), subscription.getId())
+                    || resourceRepository.existsByShareIdAndSubscriptionIdNot(resource.getShareId(), subscription.getId());
+            if (!referencedByOthers) {
+                try {
+                    shareService.deleteShare(resource.getShareId());
+                } catch (Exception e) {
+                    log.warn("retire alien resource {} failed, keep for next round: {}", resource.getId(), e.getMessage());
+                    return;
+                }
             }
         }
         // 异剧不累计瞬时 streak:冷却期满重探若官方集数已修正应能通过门禁自愈,
@@ -3203,12 +3198,8 @@ public class MediaSubscriptionCheckService {
                     keptCount++;
                     continue;
                 }
-                try {
-                    shareService.deleteShare(resource.getShareId());
-                } catch (Exception e) {
-                    log.warn("retire covered aux mount failed: {}", e.getMessage());
-                    continue;
-                }
+                // 共享挂载:share 被其它订阅引用时不卸载,行照常回候选池
+                unmountShareIfUnused(resource.getShareId(), subscription.getId());
                 resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
                 resource.setMountPath(null);
                 resource.setShareId(null);
@@ -3228,6 +3219,79 @@ public class MediaSubscriptionCheckService {
     // ---------- 换源 ----------
 
     /** 首次挂载或主源行丢失:搜一遍填池并激活最优候选。 */
+    /**
+     * 共享挂载守卫:share 仍被其它订阅(主源或资源行)引用时不卸载 —— 挂载模式下多用户共用
+     * 同一路径背后的分享,谁的资源退役都不该把别人正在看的挂载摘掉。
+     */
+    private void unmountShareIfUnused(Integer shareId, int subscriptionId) {
+        if (shareId == null) {
+            return;
+        }
+        if (subscriptionRepository.existsByShareIdAndIdNot(shareId, subscriptionId)
+                || resourceRepository.existsByShareIdAndSubscriptionIdNot(shareId, subscriptionId)) {
+            log.debug("share {} still referenced by another subscription, skip unmount", shareId);
+            return;
+        }
+        try {
+            shareService.deleteShare(shareId);
+        } catch (Exception e) {
+            log.warn("unmount share {} failed: {}", shareId, e.getMessage());
+        }
+    }
+
+    /**
+     * 共享挂载收编:挂载(FOLLOW)模式下同一路径可能已有其它订阅挂好的主源(多用户追同一部剧)。
+     * 列目录通过本订阅门禁(集号/异剧/时长)就把它收为本订阅主源 —— 用该 share 的分享链接建
+     * 资源行(类型/标题从引用它的既有资源行借),不删不换、零补缺;门禁不过才走搜索-替换流程。
+     */
+    private boolean adoptExistingMount(MediaSubscription subscription) {
+        Share share = shareRepository.findByPath(subscription.getMountPath());
+        if (share == null || share.getId().equals(subscription.getShareId())) {
+            return false;
+        }
+        TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
+        try {
+            collectEpisodeFiles(site(), subscription.getSeason(), subscription.getMountPath(), 1, files,
+                    episodeSizePolicy(subscription), true);
+        } catch (Exception e) {
+            log.debug("adopt existing mount {} failed to list: {}", subscription.getMountPath(), e.getMessage());
+            return false;
+        }
+        stripForeignEpisodeNoise(subscription, files, metaGenres(subscription));
+        if (files.isEmpty()
+                || episodeNumbersForeign(subscription, files.keySet(), metaGenres(subscription))
+                || episodeDurationForeign(metaRuntimeMinutes(subscription), files.values())) {
+            return false;
+        }
+        MediaSubscriptionResource twin = resourceRepository.findFirstByShareIdOrderByIdAsc(share.getId()).orElse(null);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setSubscriptionId(subscription.getId());
+        resource.setLink(StringUtils.abbreviate(share.getShareId(), 1000));
+        resource.setPassword(share.getPassword());
+        if (twin != null) {
+            resource.setType(twin.getType());
+            resource.setSource(twin.getSource());
+            resource.setTitle(twin.getTitle());
+            resource.setScore(twin.getScore());
+        } else {
+            resource.setTitle(StringUtils.abbreviate(subscription.getName(), 250));
+        }
+        resource.setEpisodesFound(files.size());
+        resource.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        resource.setMountPath(subscription.getMountPath());
+        resource.setShareId(share.getId());
+        resource.setCreatedTime(System.currentTimeMillis());
+        resourceRepository.save(resource);
+        subscription.setShareId(share.getId());
+        subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
+        subscriptionRepository.save(subscription);
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_REPLACED,
+                "已复用共享挂载(收编现有主源):" + StringUtils.defaultIfBlank(resource.getTitle(), subscription.getName()));
+        log.info("subscription {} adopted shared mount {} (share {}): {} episodes",
+                subscription.getId(), subscription.getMountPath(), share.getId(), files.size());
+        return true;
+    }
+
     private void ensureSource(MediaSubscription subscription) {
         fillPool(subscription, true, null);
         if (!activateNextCandidate(subscription)) {
