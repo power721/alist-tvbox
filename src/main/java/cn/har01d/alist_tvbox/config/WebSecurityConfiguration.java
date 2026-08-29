@@ -75,6 +75,9 @@ public class WebSecurityConfiguration {
                         // 账号管理按归属隔离(AccountAccessGuard):USER 管本人账号,全局账号只读脱敏
                         .requestMatchers("/api/pan/accounts/**", "/api/ali/accounts/**", "/api/pikpak/accounts/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name(), Role.CLIENT.name())
+                        // VOD 订阅按归属隔离:USER 可用全局默认订阅(只读)+添加个人订阅
+                        .requestMatchers("/api/subscriptions/**")
+                        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name(), Role.CLIENT.name())
                         .requestMatchers("/api/live/follows", "/api/live/follows/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/media-subscriptions", "/api/media-subscriptions/**")
