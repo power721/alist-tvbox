@@ -402,14 +402,11 @@ const addFollowByUrl = () => {
   });
 };
 
+// 弹幕配置已用户级化:各登录用户独立存取,未配置时后端回落全局基线
 const loadDanmakuConfig = () => {
-  axios.get("/api/settings/danmaku_config").then(({data}) => {
-    if (data?.value) {
-      try {
-        danmaku.value = {...danmaku.value, ...JSON.parse(data.value)};
-      } catch {
-        // 配置解析失败保持默认值
-      }
+  axios.get("/api/live/danmaku-config").then(({data}) => {
+    if (data) {
+      danmaku.value = {...danmaku.value, ...data};
     }
   });
 };
@@ -425,10 +422,7 @@ const updateHotMode = () => {
 };
 
 const updateDanmakuConfig = () => {
-  axios.post("/api/settings", {
-    name: "danmaku_config",
-    value: JSON.stringify({...danmaku.value, color: danmaku.value.color || ""})
-  }).then(() => {
+  axios.put("/api/live/danmaku-config", {...danmaku.value, color: danmaku.value.color || ""}).then(() => {
     ElMessage.success("更新成功,播放中最迟 2 秒生效");
   });
 };
@@ -494,7 +488,7 @@ const loadCategories = (id: string) => {
       loadFollows();
       return;
     }
-    if (store.admin && id === "danmaku") {
+    if (id === "danmaku") {
       category.value = categories.value[0];
       activeTab.value = "danmaku";
       loadDanmakuConfig();
@@ -746,7 +740,7 @@ onUnmounted(() => {
           </el-table-column>
         </el-table>
       </el-tab-pane>
-      <el-tab-pane label="弹幕管理" name="danmaku" v-if="store.admin">
+      <el-tab-pane label="弹幕管理" name="danmaku">
         <el-form label-width="110px" style="max-width: 620px">
           <el-form-item label="弹幕开关">
             <el-switch

@@ -84,6 +84,9 @@ public class WebSecurityConfiguration {
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name(), Role.CLIENT.name())
                         .requestMatchers("/api/live/follows", "/api/live/follows/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        // 弹幕渲染配置是个人观看偏好,按登录用户独立存储
+                        .requestMatchers("/api/live/danmaku-config")
+                        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/media-subscriptions", "/api/media-subscriptions/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/users/**", "/api/tenants/**", "/api/files/**", "/api/alist/alias/**")

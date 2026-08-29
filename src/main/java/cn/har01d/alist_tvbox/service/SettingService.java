@@ -375,6 +375,7 @@ public class SettingService {
         Map<String, String> map = settingRepository.findAll()
                 .stream()
                 .filter(e -> e.getName() != null && e.getValue() != null)
+                .filter(e -> !e.getName().startsWith("danmaku_config:u"))
                 .collect(Collectors.toMap(Setting::getName, Setting::getValue));
         //map.remove("api_key");
         map.remove("bilibili_cookie");
@@ -711,6 +712,33 @@ public class SettingService {
             log.warn("parse local proxy config failed: {}", value, e);
             return AppProperties.defaultLocalProxyConfig();
         }
+    }
+
+    /** 用户级弹幕配置行名:dammu_config 全局基线之外的每用户覆盖,不进设置页白名单。 */
+    public static String danmakuConfigKey(int uid) {
+        return "danmaku_config:u" + uid;
+    }
+
+    /** 用户级弹幕配置:未配置(或 uid<=0 表示无归属)回落全局基线(管理员设置页维护的 danmaku_config)。 */
+    public DanmakuConfig getDanmakuConfig(int uid) {
+        if (uid <= 0) {
+            return appProperties.getDanmakuConfig();
+        }
+        return settingRepository.findById(danmakuConfigKey(uid))
+                .map(Setting::getValue)
+                .filter(StringUtils::isNotBlank)
+                .map(this::parseDanmakuConfig)
+                .orElse(appProperties.getDanmakuConfig());
+    }
+
+    /** 保存用户级弹幕配置,归一化后落库(与全局基线同款钳位)。 */
+    public void saveDanmakuConfig(int uid, DanmakuConfig config) {
+        DanmakuConfig normalized = config == null ? new DanmakuConfig() : config;
+        normalized.normalize();
+        Setting setting = settingRepository.findById(danmakuConfigKey(uid))
+                .orElseGet(() -> new Setting(danmakuConfigKey(uid), null));
+        setting.setValue(writeDanmakuConfig(normalized));
+        settingRepository.save(setting);
     }
 
     private DanmakuConfig loadDanmakuConfig() {
