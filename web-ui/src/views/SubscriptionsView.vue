@@ -81,8 +81,10 @@
       <span class="hint"></span>
       <span v-if="pgLocal==pgRemote"><el-icon color="green"><Check/></el-icon></span>
       <span v-else><el-icon color="orange"><Warning/></el-icon></span>
-      <span class="hint">自动更新：</span>
-      <el-switch v-model="autoUpdatePg" @change="saveAutoUpdate('auto_update_pg', autoUpdatePg)"/>
+      <template v-if="store.admin">
+        <span class="hint">自动更新：</span>
+        <el-switch v-model="autoUpdatePg" @change="saveAutoUpdate('auto_update_pg', autoUpdatePg)"/>
+      </template>
     </el-row>
 <!--    <el-row>-->
 <!--      真心全量包本地： {{ zxLocal2 }}-->
@@ -98,8 +100,10 @@
       <span class="hint"></span>
       <span v-if="zxLocal==zxRemote"><el-icon color="green"><Check/></el-icon></span>
       <span v-else><el-icon color="orange"><Warning/></el-icon></span>
-      <span class="hint">自动更新：</span>
-      <el-switch v-model="autoUpdateZx" @change="saveAutoUpdate('auto_update_zx', autoUpdateZx)"/>
+      <template v-if="store.admin">
+        <span class="hint">自动更新：</span>
+        <el-switch v-model="autoUpdateZx" @change="saveAutoUpdate('auto_update_zx', autoUpdateZx)"/>
+      </template>
     </el-row>
     <el-row>
       潇洒包本地： {{ xsLocal }}
@@ -108,10 +112,12 @@
       <span class="hint"></span>
       <span v-if="xsLocal==xsRemote"><el-icon color="green"><Check/></el-icon></span>
       <span v-else><el-icon color="orange"><Warning/></el-icon></span>
-      <span class="hint">自动更新：</span>
-      <el-switch v-model="autoUpdateXs" @change="saveAutoUpdate('auto_update_xs', autoUpdateXs)"/>
+      <template v-if="store.admin">
+        <span class="hint">自动更新：</span>
+        <el-switch v-model="autoUpdateXs" @change="saveAutoUpdate('auto_update_xs', autoUpdateXs)"/>
+      </template>
     </el-row>
-    <el-row>
+    <el-row v-if="store.admin">
       <el-button @click="syncCat">同步文件</el-button>
     </el-row>
     </div>
