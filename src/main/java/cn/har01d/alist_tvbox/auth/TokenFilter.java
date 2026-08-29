@@ -86,6 +86,12 @@ public class TokenFilter extends OncePerRequestFilter {
                 boolean ok = basicAuthCredentials != null && auth != null
                         && MessageDigest.isEqual(basicAuthCredentials.getBytes(StandardCharsets.UTF_8), auth.getBytes(StandardCharsets.UTF_8));
                 if (!ok) {
+                    // 猫影视接口带 vod token(/node/{token}/... /open/{token}):合法 token 即鉴权放行。
+                    // 普通用户的 u- token 没有 basic auth 凭证(那是管理员全局凭证),控制器会再校验 token
+                    if (hasValidVodTokenInPath(uri)) {
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
                     response.setHeader("Www-Authenticate", "Basic realm=\"alist\"");
                     response.sendError(401);
                     return;
@@ -139,6 +145,29 @@ public class TokenFilter extends OncePerRequestFilter {
     // permitAll 的播放同步端点:令牌即鉴权,由 PlaybackSyncController 解析(playback_token ∪ session)
     private static final Set<String> PLAYBACK_SYNC_PATHS = Set.of(
             "/api/playback/event", "/api/playback/events", "/api/playback/changes", "/api/playback/sync");
+
+    /**
+     * /node/{token}/... 与 /open/{token} 的路径第二段是 vod token:合法(共享 token 或 u- 用户 token)即放行。
+     * checkToken 同时会设置请求级 tenant/currentToken,控制器里会再走一遍,幂等。
+     */
+    private boolean hasValidVodTokenInPath(String uri) {
+        if (subscriptionService == null) {
+            return false;
+        }
+        String[] parts = uri.split("/");
+        if (parts.length < 3) {
+            return false;
+        }
+        if (!"node".equals(parts[1]) && !"open".equals(parts[1])) {
+            return false;
+        }
+        try {
+            subscriptionService.checkToken(parts[2]);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     private String getToken(HttpServletRequest request) {
         String token = request.getHeader("Authorization");
