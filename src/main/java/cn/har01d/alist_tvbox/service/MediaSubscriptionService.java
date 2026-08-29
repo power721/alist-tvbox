@@ -956,14 +956,14 @@ public class MediaSubscriptionService {
         }
     }
 
-    /** 播出时间轴:昨天 → 未来 7 天,每天更新的订阅与媒体播出时间。日程来自 provider 分集日期快照,窗口外退化为 nextAirTime。 */
+    /** 播出时间轴:昨天 → 未来 8 天,每天更新的订阅与媒体播出时间。日程来自 provider 分集日期快照,窗口外退化为 nextAirTime。 */
     public List<Map<String, Object>> schedule(int uid) {
         java.time.ZoneId zone = java.time.ZoneId.of(Constants.ZONE_ID);
         java.time.LocalDate startDate = java.time.LocalDate.now(zone).minusDays(1);
         String[] weekdays = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
         List<Map<String, Object>> days = new ArrayList<>();
         List<List<Map<String, Object>>> dayItems = new ArrayList<>();
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 10; i++) {
             java.time.LocalDate date = startDate.plusDays(i);
             String label = switch (i) {
                 case 0 -> "昨天";
@@ -971,7 +971,7 @@ public class MediaSubscriptionService {
                 case 2 -> "明天";
                 default -> weekdays[date.getDayOfWeek().getValue() - 1];
             };
-            Map<String, Object> day = new java.util.LinkedHashMap<>();
+            Map<String, Object> day = new LinkedHashMap<>();
             day.put("label", label);
             day.put("date", date.getMonthValue() + "/" + date.getDayOfMonth());
             day.put("today", i == 1);
