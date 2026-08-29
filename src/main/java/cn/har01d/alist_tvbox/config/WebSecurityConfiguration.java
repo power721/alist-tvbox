@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.domain.Role;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -16,6 +17,7 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class WebSecurityConfiguration {
     private final TokenFilter tokenFilter;
 
@@ -87,8 +89,13 @@ public class WebSecurityConfiguration {
                         // 弹幕渲染配置是个人观看偏好,按登录用户独立存储
                         .requestMatchers("/api/live/danmaku-config")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        // 用户级设置(白名单键):按登录用户存 {key}:u{uid},读取回退全局值
+                        .requestMatchers("/api/user-settings/**")
+                        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/media-subscriptions", "/api/media-subscriptions/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        // 代理行管理(/p 盘线路 pid 按用户吊销):须登录,USER 只见/只删自己的归属行
+                        .requestMatchers(HttpMethod.GET, "/play-urls").authenticated()
                         .requestMatchers("/api/users/**", "/api/tenants/**", "/api/files/**", "/api/alist/alias/**")
                         .hasAuthority(Role.ADMIN.name())
                         .requestMatchers("/api/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())

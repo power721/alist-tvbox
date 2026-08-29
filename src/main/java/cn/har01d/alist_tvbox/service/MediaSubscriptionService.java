@@ -128,11 +128,21 @@ public class MediaSubscriptionService {
     /** 订阅 token → 归属用户:凭证形态(u-{username}-{secret})验真或裸 u-{username} → 该用户;
      * 共享 token/空 → 首个管理员(全局 tokens 无 u- 前缀,不撞车)。与 live-follow/播放同步一致。
      * 必须先按凭证形态解析:带密钥 token 整段(含 '-' 的用户名拼接)不是合法用户名,裸形态查不到会误回落管理员。 */
-    public int resolveUid(String token) {
-        var user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findUserByCredentialToken(token);
-        if (user == null) {
-            user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findByUserVodToken(token);
+    /** token 归属用户(凭证形态优先、裸 u- 形态回退);全局/共享/无效 token 返回 null(管理级口径)。
+     * 供 /p 代理等只需「是否用户级 token」的调用方使用,不带 resolveUid 的首个 ADMIN 兜底。 */
+    public cn.har01d.alist_tvbox.entity.User resolveTokenUser(String token) {
+        if (StringUtils.isBlank(token) || "-".equals(token)) {
+            return null;
         }
+        var user = userService.findUserByCredentialToken(token);
+        if (user == null) {
+            user = userService.findByUserVodToken(token);
+        }
+        return user;
+    }
+
+    public int resolveUid(String token) {
+        var user = resolveTokenUser(token);
         if (user == null) {
             user = userService.list().stream()
                     .filter(candidate -> candidate.getRole() == Role.ADMIN)
@@ -582,7 +592,7 @@ public class MediaSubscriptionService {
                         sizeByEpisode.merge(entry.getKey(), file.size(), Math::max);
                         String path = file.dir() + "/" + file.name();
                         driveLine(driveLines, target.drive()).putIfAbsent(entry.getKey(),
-                                fileEntry(site, path, file.name(), file.size()));
+                                fileEntry(site, path, file.name(), file.size(), subscription.getUid()));
                     }
                 }
             } catch (Exception e) {
@@ -622,7 +632,7 @@ public class MediaSubscriptionService {
                 if (drive != null) {
                     String path = resource.getMountPath() + "/" + row.getRelPath();
                     driveLine(driveLines, drive).putIfAbsent(episode,
-                            fileEntry(site, path, row.getRelPath(), row.getFileSize() == null ? 0L : row.getFileSize()));
+                            fileEntry(site, path, row.getRelPath(), row.getFileSize() == null ? 0L : row.getFileSize(), subscription.getUid()));
                 }
             }
         }
@@ -655,11 +665,11 @@ public class MediaSubscriptionService {
      * 剧完结停止回放一年后由 clean 自然回收(默认 7 天有效期会把历史里的物理地址变成死链)。 */
     private static final java.time.Duration DRIVE_LINE_PID_TTL = java.time.Duration.ofDays(365);
 
-    /** 盘线路条目:`文件名(大小)$1@{pid}` —— pid 经 PlayUrl 长效注册(纯 DB),点击时才解析真链。 */
-    private String fileEntry(cn.har01d.alist_tvbox.entity.Site site, String path, String relPath, long size) {
+    /** 盘线路条目:`文件名(大小)$1@{pid}` —— pid 经 PlayUrl 长效注册(纯 DB,带订阅归属),点击时才解析真链。 */
+    private String fileEntry(cn.har01d.alist_tvbox.entity.Site site, String path, String relPath, long size, int ownerUid) {
         String name = relPath.contains("/") ? relPath.substring(relPath.lastIndexOf('/') + 1) : relPath;
         String sizeText = size > 0 ? "(" + cn.har01d.alist_tvbox.util.Utils.byte2size(size) + ")" : "";
-        return name + sizeText + "$1@" + proxyService.generateProxyUrl(site, path, DRIVE_LINE_PID_TTL);
+        return name + sizeText + "$1@" + proxyService.generateProxyUrl(site, path, DRIVE_LINE_PID_TTL, ownerUid);
     }
 
     /** 逻辑线路分集标题:`NN. 分集标题(大小)`(分集标题读元数据快照零网络;无标题兜底"第N集",无大小省略括号)。 */

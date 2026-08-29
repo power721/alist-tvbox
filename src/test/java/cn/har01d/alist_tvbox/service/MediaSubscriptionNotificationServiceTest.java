@@ -6,8 +6,6 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionNotifyTask;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionNotifyTaskRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +43,7 @@ class MediaSubscriptionNotificationServiceTest {
     private final MediaSubscriptionRepository subscriptionRepository = mock(MediaSubscriptionRepository.class);
     private final MediaSubscriptionEventRepository eventRepository = mock(MediaSubscriptionEventRepository.class);
     private final MediaSubscriptionNotifyTaskRepository taskRepository = mock(MediaSubscriptionNotifyTaskRepository.class);
-    private final SettingRepository settingRepository = mock(SettingRepository.class);
+    private final SettingService settingService = mock(SettingService.class);
     private final org.springframework.web.client.RestTemplate rest = mock(org.springframework.web.client.RestTemplate.class);
 
     private MediaSubscriptionNotificationService service;
@@ -53,11 +51,9 @@ class MediaSubscriptionNotificationServiceTest {
     @BeforeEach
     void setUp() {
         service = new MediaSubscriptionNotificationService(subscriptionRepository, eventRepository,
-                taskRepository, settingRepository, new ObjectMapper(), rest);
-        when(settingRepository.findById("msub_telegram_bot_token"))
-                .thenReturn(Optional.of(new Setting("msub_telegram_bot_token", "bot-token")));
-        when(settingRepository.findById("msub_telegram_chat_id"))
-                .thenReturn(Optional.of(new Setting("msub_telegram_chat_id", "100200")));
+                taskRepository, settingService, new ObjectMapper(), rest);
+        when(settingService.getUserSetting("msub_telegram_bot_token", 0)).thenReturn("bot-token");
+        when(settingService.getUserSetting("msub_telegram_chat_id", 0)).thenReturn("100200");
         when(eventRepository.findTop100BySubscriptionIdOrderByCreatedTimeDesc(Mockito.anyInt())).thenReturn(List.of());
     }
 
@@ -224,7 +220,7 @@ class MediaSubscriptionNotificationServiceTest {
 
     @Test
     void notificationUnconfiguredMarksTaskSentSilently() {
-        when(settingRepository.findById("msub_telegram_bot_token")).thenReturn(Optional.empty());
+        when(settingService.getUserSetting("msub_telegram_bot_token", 0)).thenReturn("");
         subscription(null, null);
         MediaSubscriptionNotifyTask task = pendingTask();
         stubTasks(task);

@@ -1688,7 +1688,7 @@ public class MediaSubscriptionCheckService {
         List<String> names = matchNames(subscription);
         List<String> genres = metaGenres(subscription);
         Set<String> allowedDrives = allowedCandidateDrives(subscription);
-        MediaSubscriptionPoolFilter global = globalPoolFilter();
+        MediaSubscriptionPoolFilter global = poolFilterFor(subscription);
         return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
                 .filter(r -> !MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState()))
                 .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()) || isBadCooled(r, now))
@@ -2708,6 +2708,27 @@ public class MediaSubscriptionCheckService {
     /** 全局资源筛选(Setting msub_pool_filter 单行 JSON):即读即用,坏配置/未配置回落空对象(全部门禁关闭),不炸巡检。 */
     MediaSubscriptionPoolFilter globalPoolFilter() {
         String raw = settingRepository.findById(MSUB_POOL_FILTER).map(s -> s.getValue()).orElse("");
+        return parsePoolFilter(raw);
+    }
+
+    /**
+     * 订阅生效的资源筛选:订阅人配置了用户级 msub_pool_filter:u{uid} 则以其为准(候选打分偏好,§3.1),
+     * 否则回退全局键。用户级行不存在/为空/坏值均回退全局,与全局侧「坏配置回落空对象」口径一致。
+     */
+    MediaSubscriptionPoolFilter poolFilterFor(MediaSubscription subscription) {
+        if (subscription != null && subscription.getUid() > 0) {
+            String raw = settingRepository
+                    .findById(SettingService.userSettingKey(MSUB_POOL_FILTER, subscription.getUid()))
+                    .map(s -> s.getValue())
+                    .orElse("");
+            if (StringUtils.isNotBlank(raw)) {
+                return parsePoolFilter(raw);
+            }
+        }
+        return globalPoolFilter();
+    }
+
+    private MediaSubscriptionPoolFilter parsePoolFilter(String raw) {
         if (StringUtils.isBlank(raw)) {
             return new MediaSubscriptionPoolFilter();
         }
@@ -3660,7 +3681,7 @@ public class MediaSubscriptionCheckService {
         MediaSubscriptionFilter filter = parseFilter(subscription);
         Integer maxMb = filter == null ? null : filter.getMaxEpisodeSizeMb();
         if (maxMb == null || maxMb <= 0) {
-            maxMb = globalPoolFilter().getMaxEpisodeSizeMb();
+            maxMb = poolFilterFor(subscription).getMaxEpisodeSizeMb();
         }
         if (maxMb == null || maxMb <= 0) {
             return 0;
@@ -3677,7 +3698,7 @@ public class MediaSubscriptionCheckService {
      * 底线,直接覆盖。
      */
     EpisodeSizePolicy episodeSizePolicy(MediaSubscription subscription) {
-        MediaSubscriptionPoolFilter global = globalPoolFilter();
+        MediaSubscriptionPoolFilter global = poolFilterFor(subscription);
         // 全局下限(未配置沿用部署默认 20MB 垃圾/样片防护线)
         long floorMb = global.getMinEpisodeSizeMb() != null && global.getMinEpisodeSizeMb() > 0
                 ? global.getMinEpisodeSizeMb() : appProperties.getSubscription().getMinEpisodeSizeMb();
@@ -4159,7 +4180,7 @@ public class MediaSubscriptionCheckService {
         }
 
         MediaSubscriptionFilter filter = parseFilter(subscription);
-        MediaSubscriptionPoolFilter global = globalPoolFilter();
+        MediaSubscriptionPoolFilter global = poolFilterFor(subscription);
         List<String> names = matchNames(subscription);
         Integer metaYear = metaYear(subscription);
         List<String> genres = metaGenres(subscription);

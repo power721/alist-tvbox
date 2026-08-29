@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.domain.SystemInfo;
 import cn.har01d.alist_tvbox.service.AListLocalService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,6 +15,7 @@ import java.sql.DatabaseMetaData;
 import java.util.Properties;
 
 @RestController
+@PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
 public class SystemController {
     private final AListLocalService aListLocalService;
     private final DataSource dataSource;

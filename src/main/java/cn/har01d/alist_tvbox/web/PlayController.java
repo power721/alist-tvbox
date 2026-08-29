@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.PlayUrl;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.service.AccountAccessGuard;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.ProxyService;
@@ -31,34 +32,41 @@ public class PlayController {
     private final SubscriptionService subscriptionService;
     private final ProxyService proxyService;
     private final MediaSubscriptionService mediaSubscriptionService;
+    private final AccountAccessGuard accountAccessGuard;
 
     public PlayController(TvBoxService tvBoxService,
                           BiliBiliService biliBiliService,
                           SubscriptionService subscriptionService,
                           ProxyService proxyService,
-                          MediaSubscriptionService mediaSubscriptionService) {
+                          MediaSubscriptionService mediaSubscriptionService,
+                          AccountAccessGuard accountAccessGuard) {
         this.tvBoxService = tvBoxService;
         this.biliBiliService = biliBiliService;
         this.subscriptionService = subscriptionService;
         this.proxyService = proxyService;
         this.mediaSubscriptionService = mediaSubscriptionService;
+        this.accountAccessGuard = accountAccessGuard;
     }
 
     @RequestMapping(value = "/p/{token}/{id}")
     public void proxy(@PathVariable String token, @PathVariable String id, HttpServletRequest request, HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);
 
-        proxyService.proxy(id, request, response);
+        // 盘线路 pid 归属校验(§3.3):用户级 token 解析 uid;全局/共享 token(管理级)uid=0 放行
+        cn.har01d.alist_tvbox.entity.User tokenUser = mediaSubscriptionService.resolveTokenUser(token);
+        int uid = tokenUser == null || tokenUser.getId() == null ? 0 : tokenUser.getId();
+        proxyService.proxy(id, uid, request, response);
     }
 
     @GetMapping("/play-urls")
     public Page <PlayUrl> list(Pageable pageable) {
-        return proxyService.list(pageable);
+        // 按用户吊销入口:管理级全量;USER 仅自己的归属行(解析失败 fail-closed,按无行可见处理)
+        return proxyService.list(pageable, accountAccessGuard.effectiveUid());
     }
 
     @DeleteMapping("/play-urls")
     public void delete() {
-        proxyService.deleteAll();
+        proxyService.deleteByOwner(accountAccessGuard.effectiveUid());
     }
 
     @GetMapping("/play")

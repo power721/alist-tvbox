@@ -22,22 +22,30 @@ import org.springframework.stereotype.Component;
 @Component
 public class AccountAccessGuard {
 
+    /** 解析失败哨兵:-1(非管理级且无法识别身份)。fail-closed(§3.4):不再回落 uid=0 冒充管理归属,
+     * canManage/canView/canUseCredentials 对 -1 天然拒绝;调用方做数据过滤时 -1 匹配不到任何归属行。 */
+    public static final int UNRESOLVED_UID = -1;
+
     public int currentUid() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
-            return 0;
-        }
         // 会话令牌路径 TokenFilter.setDetails(userId);Basic Auth 回落 principal 解析(id 字符串)
-        if (authentication.getDetails() instanceof Integer userId) {
+        if (authentication != null && authentication.getDetails() instanceof Integer userId) {
             return userId;
         }
-        if (authentication.getPrincipal() instanceof org.springframework.security.core.userdetails.User user) {
+        if (authentication != null
+                && authentication.getPrincipal() instanceof org.springframework.security.core.userdetails.User user) {
             try {
                 return Integer.parseInt(user.getUsername());
             } catch (NumberFormatException ignored) {
             }
         }
-        return 0;
+        // 解析失败:管理级身份(ADMIN/CLIENT)保持 0(全局管理者),其余一律 -1 拒绝
+        return isElevated() ? 0 : UNRESOLVED_UID;
+    }
+
+    /** 管理级视角 uid:0=全局管理(全量);非管理级返回 currentUid()(-1=解析失败,按无归属行处理)。 */
+    public int effectiveUid() {
+        return isElevated() ? 0 : currentUid();
     }
 
     /** 管理级身份(ADMIN 或服务端互访 CLIENT):等同账号全局管理者。 */
@@ -60,7 +68,8 @@ public class AccountAccessGuard {
     }
 
     public boolean canView(int ownerUid, boolean shared) {
-        return isElevated() || ownerUid == currentUid() || (ownerUid == 0 && shared);
+        return isElevated() || ownerUid == currentUid()
+                || (ownerUid == 0 && shared && currentUid() != UNRESOLVED_UID);
     }
 
     /** 凭证可否随直链/tokenm 下发给当前请求方:只有归属人(或管理级身份)。 */

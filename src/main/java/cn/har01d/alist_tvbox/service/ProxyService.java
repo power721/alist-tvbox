@@ -120,12 +120,20 @@ public class ProxyService {
 
     /** 长效代理注册(追剧盘线路等长期回放场景):行不存在新建;剩余寿命超过 ttl 一半直接复用(不写库);
      * 不足(含已过期)原地续满 ttl —— 播放历史/跨端同步绑定的 `siteId@pid` 物理地址持续可播,
-     * 不再被 7 天默认有效期回收;停止回放 ttl 后由 clean 自然清理。 */
+     * 不再被 7 天默认有效期回收;停止回放 ttl 后由 clean 自然清理。共享行(ownerUid=0)。 */
     public int generateProxyUrl(Site site, String path, Duration ttl) {
+        return generateProxyUrl(site, path, ttl, 0);
+    }
+
+    /** 带归属的长效代理注册:ownerUid&gt;0 的行 /p 校验 token 归属一致;同盘同路径已有行直接复用
+     * (归属不迁移,先注册者所有 —— 共享挂载下同剧多用户共用同一路径是预期行为)。 */
+    public int generateProxyUrl(Site site, String path, Duration ttl, int ownerUid) {
         Instant now = Instant.now();
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
         if (playUrl == null) {
-            return playUrlRepository.save(new PlayUrl(site.getId(), path, now.plus(ttl))).getId();
+            PlayUrl created = new PlayUrl(site.getId(), path, now.plus(ttl));
+            created.setOwnerUid(ownerUid);
+            return playUrlRepository.save(created).getId();
         }
         if (playUrl.getTime().isAfter(now.plus(ttl.dividedBy(2)))) {
             return playUrl.getId();
@@ -151,9 +159,14 @@ public class ProxyService {
         return playUrlRepository.findById(id).orElseThrow(() -> new NotFoundException("Not found: " + id));
     }
 
-    public void proxy(String tid, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    /** uid&lt;=0 视为管理级/共享 token(全局 tokens、匿名管理入口):归属行一律放行。 */
+    public void proxy(String tid, int uid, HttpServletRequest request, HttpServletResponse response) throws IOException {
         int id = parsePlayUrlId(tid);
         PlayUrl playUrl = playUrlRepository.findById(id).orElseThrow(() -> new NotFoundException("Not found: " + id));
+        // 盘线路 pid 归属校验(docs/multi-user-design.md §3.3):共享行(0)放行;归属行仅本人可播
+        if (playUrl.getOwnerUid() > 0 && uid > 0 && playUrl.getOwnerUid() != uid) {
+            throw new BadRequestException("无权播放该资源");
+        }
         String path = playUrl.getPath();
         String url;
 
@@ -284,7 +297,25 @@ public class ProxyService {
         playUrlRepository.deleteAll();
     }
 
+    /** 按用户吊销:管理级清全部;USER 只清自己的归属行(共享行/他人行不可动)。 */
+    @org.springframework.transaction.annotation.Transactional
+    public void deleteByOwner(int uid) {
+        if (uid <= 0) {
+            deleteAll();
+            return;
+        }
+        playUrlRepository.deleteByOwnerUid(uid);
+    }
+
     public Page<PlayUrl> list(Pageable pageable) {
         return playUrlRepository.findAll(pageable);
+    }
+
+    /** 列表按归属过滤:管理级全量;USER 仅自己的归属行。 */
+    public Page<PlayUrl> list(Pageable pageable, int uid) {
+        if (uid <= 0) {
+            return list(pageable);
+        }
+        return playUrlRepository.findByOwnerUid(uid, pageable);
     }
 }

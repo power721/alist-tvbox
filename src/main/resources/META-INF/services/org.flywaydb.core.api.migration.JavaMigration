@@ -31,3 +31,4 @@ db.migration.current.V36__MediaSubscriptionNotify
 db.migration.current.V37__AccountOwnership
 db.migration.current.V38__SubscriptionOwnership
 db.migration.current.V39__UserVodSecret
+db.migration.current.V40__PlayUrlOwnership
