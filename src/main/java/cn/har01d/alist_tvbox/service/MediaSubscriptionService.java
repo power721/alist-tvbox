@@ -313,6 +313,11 @@ public class MediaSubscriptionService {
         List<Integer> sharesToUnmount = List.copyOf(new java.util.LinkedHashSet<>(shareIds));
         Runnable cleanup = () -> {
             for (Integer shareId : sharesToUnmount) {
+                // 共享挂载:share 仍被其它订阅引用时不卸载(换季只是本订阅重置,别人的挂载不动)
+                if (isShareReferencedByOthers(shareId, id)) {
+                    log.debug("share {} still referenced by another subscription, skip unmount on season reset", shareId);
+                    continue;
+                }
                 try {
                     shareService.deleteShare(shareId);
                 } catch (Exception e) {
@@ -347,6 +352,10 @@ public class MediaSubscriptionService {
         List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(id);
         for (MediaSubscriptionResource resource : resources) {
             if (resource.getShareId() != null) {
+                if (isShareReferencedByOthers(resource.getShareId(), id)) {
+                    log.debug("share {} still referenced by another subscription, skip unmount", resource.getShareId());
+                    continue;
+                }
                 try {
                     shareService.deleteShare(resource.getShareId());
                 } catch (Exception e) {
@@ -354,7 +363,7 @@ public class MediaSubscriptionService {
                 }
             }
         }
-        if (subscription.getShareId() != null) {
+        if (subscription.getShareId() != null && !isShareReferencedByOthers(subscription.getShareId(), id)) {
             try {
                 shareService.deleteShare(subscription.getShareId());
             } catch (Exception e) {
@@ -2178,6 +2187,15 @@ public class MediaSubscriptionService {
         return subscription;
     }
 
+    /** 共享挂载守卫:该 share 仍被其它订阅(主源或资源行)引用时不卸载 —— 内容继续有效,别人还在看。 */
+    private boolean isShareReferencedByOthers(Integer shareId, int subscriptionId) {
+        if (shareId == null) {
+            return false;
+        }
+        return subscriptionRepository.existsByShareIdAndIdNot(shareId, subscriptionId)
+                || resourceRepository.existsByShareIdAndSubscriptionIdNot(shareId, subscriptionId);
+    }
+
     private String buildMountPath(MediaSubscription subscription) {
         String slug = subscription.getName().replaceAll("[\\s/\\\\:*?\"<>|#@$%\\.、,]+", "-");
         slug = StringUtils.strip(slug, "-");
@@ -2199,12 +2217,17 @@ public class MediaSubscriptionService {
         } else {
             base = Constants.SUBSCRIPTION_MOUNT_ROOT + subscription.getId() + "-" + slug + seasonSuffix;
         }
-        return ensureUniqueMountPath(base, subscription.getUid());
+        // 挂载(FOLLOW)模式共享挂载路径:多个用户追同一部剧共用同一路径背后的分享挂载,
+        // 播放历史按 uid 隔离互不影响;仅转存(TRANSFER)模式挂的是个人网盘,必须独占路径
+        if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
+            return ensureUniqueMountPath(base, subscription.getUid());
+        }
+        return base;
     }
 
     /**
-     * mountPath 全局唯一:同一部剧(同元数据 id)可被多个用户各自订阅,巡检按 mountPath 归属主源,
-     * 路径撞车会互相劫持挂载。被占用时追加 uid 段消歧;仅影响新建订阅,存量路径不动。
+     * mountPath 唯一化(仅转存模式):转存挂的是个人网盘必须独占路径,被占用时追加 uid 段消歧。
+     * 挂载模式共享路径不经过这里;仅影响新建订阅,存量路径不动。
      */
     private String ensureUniqueMountPath(String path, int uid) {
         if (!subscriptionRepository.existsByMountPath(path)) {
