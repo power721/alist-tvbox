@@ -5,6 +5,10 @@ import cn.har01d.alist_tvbox.auth.UserToken;
 import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.UserDto;
 import cn.har01d.alist_tvbox.dto.SessionDto;
+import cn.har01d.alist_tvbox.entity.Account;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
 import cn.har01d.alist_tvbox.entity.Session;
 import cn.har01d.alist_tvbox.entity.SessionRepository;
 import cn.har01d.alist_tvbox.entity.User;
@@ -35,6 +39,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import static cn.har01d.alist_tvbox.util.Constants.USER_TOKEN_PREFIX;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -44,6 +50,9 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final RestoreState restoreState;
+    private final DriverAccountRepository driverAccountRepository;
+    private final AccountRepository accountRepository;
+    private final PikPakAccountRepository pikPakAccountRepository;
     private final JdbcTemplate jdbcTemplate;
 
     private final Set<String> usernames = new HashSet<>();
@@ -100,6 +109,29 @@ public class UserService {
 
     public boolean isUsernameExist(String username) {
         return usernames.contains(username);
+    }
+
+    /**
+     * 用户级 vod token = "u-{username}"。前缀 u- 保留给用户 token,全局 tokens 在保存时过滤该前缀,
+     * 两个空间永不撞车,解析无需再查全局列表。裸用户名不再是合法 token。
+     */
+    public static String userVodToken(String username) {
+        return USER_TOKEN_PREFIX + username;
+    }
+
+    /** 解析用户级 vod token:非 u- 前缀或空用户名返回 null。 */
+    public String usernameOfUserVodToken(String token) {
+        if (token == null || !token.startsWith(USER_TOKEN_PREFIX)) {
+            return null;
+        }
+        String username = token.substring(USER_TOKEN_PREFIX.length());
+        return StringUtils.isBlank(username) ? null : username;
+    }
+
+    /** vod token → 用户:仅识别 u-{username} 且用户存在;共享 token/空返回 null。 */
+    public User findByUserVodToken(String token) {
+        String username = usernameOfUserVodToken(token);
+        return username == null ? null : findByUsername(username);
     }
 
     private void loadUsernames() {
@@ -281,6 +313,10 @@ public class UserService {
         if (id == 1) {
             throw new BadRequestException("不能删除管理员");
         }
+        // 个人账号凭证即用户数字身份:人走凭证销毁;追剧订阅引用该账号的,解析时自然落空(已有容错)
+        driverAccountRepository.deleteAll(driverAccountRepository.findByOwnerUid(id));
+        accountRepository.deleteAll(accountRepository.findByOwnerUid(id));
+        pikPakAccountRepository.deleteAll(pikPakAccountRepository.findByOwnerUid(id));
         userRepository.deleteById(id);
         loadUsernames();
     }

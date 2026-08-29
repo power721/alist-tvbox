@@ -54,6 +54,8 @@ public final class Constants {
     public static final String MOVIE_VERSION = "movie_version";
     public static final String OPEN_TOKEN_URL = "open_token_url";
     public static final String TOKEN = "token";
+    /** 用户级 vod token 前缀(u-{username}):该前缀保留给用户 token,全局 tokens 禁用,两个空间永不撞车。 */
+    public static final String USER_TOKEN_PREFIX = "u-";
     public static final String ENABLED_TOKEN = "enabled_token";
     public static final String INDEX_VERSION = "index_version";
     public static final String DOCKER_VERSION = "docker_version";

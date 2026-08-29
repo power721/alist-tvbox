@@ -937,6 +937,8 @@ public class AccountService {
         account.setClean(dto.isClean());
         account.setUseProxy(dto.isUseProxy());
         account.setConcurrency(dto.getConcurrency());
+        account.setOwnerUid(dto.getOwnerUid());
+        account.setShared(dto.isShared());
 
         account.setMaster(dto.isMaster() || count == 0);
         if (account.isMaster()) {
@@ -1051,6 +1053,7 @@ public class AccountService {
         account.setClean(dto.isClean());
         account.setUseProxy(dto.isUseProxy());
         account.setConcurrency(dto.getConcurrency());
+        account.setShared(dto.isShared());
 
         if (changed && account.isMaster()) {
             updateMaster(account);

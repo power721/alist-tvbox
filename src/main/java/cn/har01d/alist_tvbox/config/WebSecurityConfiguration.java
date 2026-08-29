@@ -52,6 +52,12 @@ public class WebSecurityConfiguration {
                                 "/live/*/unfollow"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
+                        // 全局配置写入只允许 ADMIN/CLIENT:USER 仅可读(脱敏后),不得改全局设置/重置全局 vod token
+                        .requestMatchers(HttpMethod.POST, "/api/token").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())
+                        .requestMatchers(HttpMethod.POST, "/api/settings/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())
+                        .requestMatchers(HttpMethod.PUT, "/api/settings/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())
+                        .requestMatchers(HttpMethod.PATCH, "/api/settings/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())
+                        .requestMatchers(HttpMethod.DELETE, "/api/settings/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())
                         .requestMatchers(
                                 "/api/token",
                                 "/api/settings",
@@ -66,6 +72,9 @@ public class WebSecurityConfiguration {
                         .requestMatchers("/api/playback/tokens/**", "/api/playback/records", "/api/playback/records/**",
                                 "/api/playback/tombstones/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        // 账号管理按归属隔离(AccountAccessGuard):USER 管本人账号,全局账号只读脱敏
+                        .requestMatchers("/api/pan/accounts/**", "/api/ali/accounts/**", "/api/pikpak/accounts/**")
+                        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name(), Role.CLIENT.name())
                         .requestMatchers("/api/live/follows", "/api/live/follows/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/media-subscriptions", "/api/media-subscriptions/**")

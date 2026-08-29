@@ -4,13 +4,13 @@
       <h1 class="page-title">网盘账号列表</h1>
       <div class="page-actions">
         <el-button @click="load">刷新</el-button>
-        <el-button @click="openConfig">配置</el-button>
+        <el-button v-if="store.admin" @click="openConfig">配置</el-button>
         <el-button type="primary" @click="handleAdd">添加</el-button>
       </div>
     </div>
     <div v-else class="page-actions" style="margin-bottom: 16px; display: flex; justify-content: flex-end; gap: 12px;">
       <el-button @click="load">刷新</el-button>
-      <el-button type="primary" @click="openConfig">配置</el-button>
+      <el-button v-if="store.admin" type="primary" @click="openConfig">配置</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
     </div>
 
@@ -40,6 +40,13 @@
         </template>
       </el-table-column>
       <el-table-column prop="name" label="名称" sortable width="200"/>
+      <el-table-column label="归属" width="90">
+        <template #default="scope">
+          <el-tag :type="scope.row.ownerUid === 0 ? 'info' : 'success'" size="small">
+            {{ scope.row.ownerUid === 0 ? (store.admin ? '全局' : '共享') : '我的' }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="路径">
         <template #default="scope">
           <router-link :to="'/vod' + fullPath(scope.row)">
@@ -70,8 +77,8 @@
       <el-table-column fixed="right" label="操作" width="270">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showAccountInfo(scope.row)">账号信息</el-button>
-          <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
-          <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
+          <el-button v-if="canManage(scope.row)" link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
+          <el-button v-if="canManage(scope.row)" link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -239,6 +246,15 @@
             active-text="是"
             inactive-text="否"
           />
+        </el-form-item>
+        <el-form-item label="共享给普通用户" v-if="store.admin && !form.ownerUid">
+          <el-switch
+            v-model="form.shared"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+          />
+          <span class="hint">允许普通用户经服务端代理使用该账号,凭证不会下发给普通用户</span>
         </el-form-item>
         <span style="margin-left: 72px" v-if="form.name">完整路径： {{ fullPath(form) }}</span>
       </el-form>
@@ -484,6 +500,10 @@ import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
 import clipBorad from "vue-clipboard3";
+import {store} from '@/services/store'
+
+// 多用户归属:全局账号(ownerUid=0)仅管理员可编辑;普通用户只能管理自己的账号(后端 AccountAccessGuard 兜底)
+const canManage = (row: any) => store.admin || row.ownerUid !== 0
 
 let {toClipboard} = clipBorad();
 
@@ -561,6 +581,8 @@ const driveTypes: Array<{ key: CloudDriveType; label: string }> = [
 const form = ref({
   id: 0,
   type: 'QUARK',
+  shared: true,
+  ownerUid: 0,
   name: '',
   cookie: '',
   token: '',
@@ -733,6 +755,8 @@ const handleAdd = () => {
   form.value = {
     id: 0,
     type: 'QUARK',
+    shared: true,
+    ownerUid: 0,
     name: '',
     cookie: '',
     token: '',

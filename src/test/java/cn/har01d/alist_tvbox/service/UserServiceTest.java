@@ -28,6 +28,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,6 +50,12 @@ class UserServiceTest {
     private TokenService tokenService;
     @Mock
     private JdbcTemplate jdbcTemplate;
+    @Mock
+    private cn.har01d.alist_tvbox.entity.DriverAccountRepository driverAccountRepository;
+    @Mock
+    private cn.har01d.alist_tvbox.entity.AccountRepository accountRepository;
+    @Mock
+    private cn.har01d.alist_tvbox.entity.PikPakAccountRepository pikPakAccountRepository;
 
     private UserService userService;
 
@@ -57,7 +64,20 @@ class UserServiceTest {
         SecurityContextHolder.clearContext();
         userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
             new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-json.zip"),
-            jdbcTemplate);
+            driverAccountRepository, accountRepository, pikPakAccountRepository, jdbcTemplate);
+    }
+
+    @Test
+    void userVodTokenShouldUsePrefixAndRoundTrip() {
+        when(userRepository.findByUsername("alice")).thenReturn(null);
+
+        assertEquals("u-alice", UserService.userVodToken("alice"));
+        assertEquals("alice", userService.usernameOfUserVodToken("u-alice"));
+        assertNull(userService.usernameOfUserVodToken("alice"));
+        assertNull(userService.usernameOfUserVodToken("u-"));
+        assertNull(userService.usernameOfUserVodToken(null));
+        assertNull(userService.findByUserVodToken("u-alice"));
+        verify(userRepository).findByUsername("alice");
     }
 
     @Test

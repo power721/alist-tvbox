@@ -394,6 +394,17 @@ public class MediaSubscriptionTransferService {
         }
     }
 
+    /** 首个管理员 uid(与 UserService 的 id=1 管理员不变量一致)。 */
+    private static final int adminUid = 1;
+
+    /** 转存目标归属:本人账号;全局账号(ownerUid=0)仅当订阅人是首个管理员(管理员自己的订阅)时可转存。 */
+    private boolean canTransfer(int ownerUid, int subscriptionUid) {
+        if (ownerUid == subscriptionUid) {
+            return true;
+        }
+        return ownerUid == 0 && subscriptionUid == adminUid;
+    }
+
     private List<TransferTarget> resolveTargets(MediaSubscription subscription) {
         List<TransferTarget> result = new ArrayList<>();
         long aliCount = aliAccountRepository.count();
@@ -402,14 +413,16 @@ public class MediaSubscriptionTransferService {
                 if (id.startsWith("ali:")) {
                     Account account = aliAccountRepository.findById(Integer.parseInt(id.substring(4))).orElse(null);
                     // 与 AccountService.enableMyAli 同规则:未挂载"我的阿里云盘"的账号不可作为转存目标
-                    if (account == null || !(account.isShowMyAli() || account.isMaster() || aliCount == 1)) {
+                    // 归属门禁:转存目标必须是订阅人本人账号(uid=0 全局账号仅 admin 订阅可用,shared 全局账号对 USER 只读不转存)
+                    if (account == null || !canTransfer(account.getOwnerUid(), subscription.getUid())
+                            || !(account.isShowMyAli() || account.isMaster() || aliCount == 1)) {
                         continue;
                     }
                     String name = StringUtils.defaultIfBlank(account.getNickname(), "阿里#" + account.getId());
                     result.add(new TransferTarget("ali:" + account.getId(), name, aliMountPath(account), 0, false));
                 } else {
                     DriverAccount account = accountRepository.findById(Integer.parseInt(id.startsWith("pan:") ? id.substring(4) : id)).orElse(null);
-                    if (account != null) {
+                    if (account != null && canTransfer(account.getOwnerUid(), subscription.getUid())) {
                         DriverType type = account.getType();
                         // 仅字节中转的目标:TV 账号无服务端转存;115 开放平台无分享接收接口,仅 cookie 版账号可转存
                         boolean relayOnly = type == DriverType.QUARK_TV || type == DriverType.UC_TV

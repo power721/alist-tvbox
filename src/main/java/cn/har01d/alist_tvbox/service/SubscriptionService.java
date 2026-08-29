@@ -84,6 +84,7 @@ import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.ENABLED_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
+import static cn.har01d.alist_tvbox.util.Constants.USER_TOKEN_PREFIX;
 
 @Slf4j
 @Service
@@ -335,15 +336,18 @@ public class SubscriptionService {
             return;
         }
 
-        // USER 角色的 vod token 即其用户名(/api/token 对非 ADMIN 返回用户名),内容接口需放行
-        if (userService.isUsernameExist(rawToken)) {
-            return;
-        }
-
+        // 全局 tokens 优先匹配:与用户名撞车时按共享 token 处理,避免被用户名分支抢走
         for (String t : tokens.split(",")) {
             if (t.equals(rawToken)) {
                 return;
             }
+        }
+
+        // USER 角色的 vod token 为 u-{username}(/api/token 对非 ADMIN 返回该值),内容接口需放行。
+        // 裸用户名不再是合法 token;全局 tokens 保存时已过滤 u- 前缀,两个空间不撞车。
+        if (userService.usernameOfUserVodToken(rawToken) != null
+                && userService.isUsernameExist(userService.usernameOfUserVodToken(rawToken))) {
+            return;
         }
 
         throw new BadRequestException();
@@ -381,6 +385,33 @@ public class SubscriptionService {
         return tokens.split(",")[0];
     }
 
+    /**
+     * vod token → 凭证视角 uid:u-{username} → 该用户 id;共享 token → 0(管理级);其它/空 → -1(无 token 上下文)。
+     * 播放直连/凭证下发的归属判定统一入口。
+     */
+    public int credentialUidFor(String token) {
+        var user = userService.findByUserVodToken(token);
+        if (user != null) {
+            return user.getId() == null ? -1 : user.getId();
+        }
+        if (isValidSubscriptionToken(token)) {
+            return 0;
+        }
+        return -1;
+    }
+
+    /** 配置生成时的凭证账号:u- token → 本人账号;共享 token/无上下文 → 全局 master。 */
+    private Optional<Account> credentialAliAccount() {
+        int uid = credentialUidFor(getCurrentToken());
+        return uid > 0 ? accountRepository.findFirstByOwnerUidOrderByIdAsc(uid) : accountRepository.getFirstByMasterTrue();
+    }
+
+    private Optional<DriverAccount> credentialQuarkAccount() {
+        int uid = credentialUidFor(getCurrentToken());
+        return uid > 0 ? panAccountRepository.findFirstByOwnerUidAndTypeOrderByIdAsc(uid, DriverType.QUARK)
+                : panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK);
+    }
+
     public TokenDto getTokens() {
         TokenDto tokenDto = new TokenDto();
         tokenDto.setEnabledToken(appProperties.isEnabledToken());
@@ -399,7 +430,7 @@ public class SubscriptionService {
                     .map(Authentication::getPrincipal)
                     .map(Object::toString)
                     .orElse("");
-            tokenDto.setToken(username);
+            tokenDto.setToken(UserService.userVodToken(username));
         }
 
         return tokenDto;
@@ -434,7 +465,11 @@ public class SubscriptionService {
         if (dto.isEnabledToken() && StringUtils.isBlank(dto.getToken())) {
             tokens = Utils.generateUsername();
         } else {
-            tokens = Arrays.stream(dto.getToken().split(",")).filter(StringUtils::isNotBlank).collect(Collectors.joining(","));
+            // u- 前缀保留给用户级 token(u-{username}),全局 tokens 一律过滤,防止两个空间撞车
+        tokens = Arrays.stream(dto.getToken().split(","))
+                .filter(StringUtils::isNotBlank)
+                .filter(t -> !t.startsWith(USER_TOKEN_PREFIX))
+                .collect(Collectors.joining(","));
         }
         // 兜底:任何路径都不得把 tokens 置空(否则 /pg/lib/tokenm 无有效 token 可校验)
         if (tokens.isBlank()) {
@@ -536,12 +571,13 @@ public class SubscriptionService {
         json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret));
         json = json.replace("YOUTUBE_URL", readHostAddress("/youtube" + secret));
         json = json.replace("EMBY_URL", readHostAddress("/emby" + secret));
-        String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
+        // 凭证注入按 token 归属:u- token 只注入本人账号凭证,全局 master 凭证不下发给普通用户
+        String ali = credentialAliAccount().map(Account::getRefreshToken).orElse("");
         json = json.replace("ALI_TOKEN", ali);
-        ali = accountRepository.getFirstByMasterTrue().map(Account::getOpenToken).orElse("");
+        ali = credentialAliAccount().map(Account::getOpenToken).orElse("");
         json = json.replace("ALI_OPEN_TOKEN", ali);
 
-        String quarkCookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("");
+        String quarkCookie = credentialQuarkAccount().map(DriverAccount::getCookie).orElse("");
         json = json.replace("QUARK_COOKIE", quarkCookie);
 
         String address = readHostAddress();
@@ -705,11 +741,12 @@ public class SubscriptionService {
         json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
         json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
         json = json.replace("ALIST_URL", readAListAddress());
-        String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
+        // 凭证注入按 token 归属:u- token 只注入本人账号凭证,全局 master 凭证不下发给普通用户
+        String ali = credentialAliAccount().map(Account::getRefreshToken).orElse("");
         json = json.replace("ALI_TOKEN", ali);
         json = json.replace("填入阿里token", ali);
         json = json.replace("阿里token", ali);
-        String quarkCookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("");
+        String quarkCookie = credentialQuarkAccount().map(DriverAccount::getCookie).orElse("");
         json = json.replace("夸克账号cookie", quarkCookie);
         json = json.replace("夸克cookie", quarkCookie);
         String token = siteRepository.findById(1).map(Site::getToken).orElse("");
@@ -1554,7 +1591,7 @@ public class SubscriptionService {
             log.debug("playback sync subscription disabled");
             return "";
         }
-        var user = StringUtils.isBlank(subscriptionToken) ? null : userService.findByUsername(subscriptionToken);
+        var user = StringUtils.isBlank(subscriptionToken) ? null : userService.findByUserVodToken(subscriptionToken);
         if (user == null) {
             user = userService.list().stream()
                     .filter(candidate -> candidate.getRole() == Role.ADMIN)

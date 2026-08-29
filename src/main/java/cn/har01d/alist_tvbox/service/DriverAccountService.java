@@ -405,6 +405,7 @@ public class DriverAccountService {
         account.setFolder(dto.getFolder());
         account.setConcurrency(dto.getConcurrency());
         account.setAddition(dto.getAddition());
+        account.setShared(dto.isShared());
         if (dto.getType() == DriverType.BAIDU && (StringUtils.isNotBlank(dto.getAddition())) && !"{}".equals(dto.getAddition())) {
             account.setToken("");
         }

@@ -159,10 +159,13 @@ public class PlaybackSyncService {
         List<History> rows = new ArrayList<>(
                 findAllSync(uid, syncScope, Sort.unsorted()));
         rows.sort(Comparator.comparingLong(this::timeOf).reversed());
-        Set<PlaybackIdentity> identities = new HashSet<>();
+        // 去重身份必须带 syncScope:uid 级 trim 覆盖全部分区,同一剧集在不同分区是两条独立记录,
+        // 按 (kind,key,vodId) 去重会把 scoped 分区的行误删
+        Set<TrimIdentity> identities = new HashSet<>();
         List<History> removed = new ArrayList<>();
         for (History row : rows) {
-            if (!identities.add(identityOf(row)) || identities.size() > SYNC_HISTORY_LIMIT) {
+            if (!identities.add(new TrimIdentity(row.getSyncScope(), row.getSourceKind(), row.getSourceKey(), row.getVodId()))
+                    || identities.size() > SYNC_HISTORY_LIMIT) {
                 removed.add(row);
             }
         }
@@ -170,6 +173,9 @@ public class PlaybackSyncService {
             historyRepository.deleteAll(removed);
             log.debug("trimmed playback sync history: uid={} scope={} removed={}", uid, syncScope, removed.size());
         }
+    }
+
+    private record TrimIdentity(String syncScope, String sourceKind, String sourceKey, String vodId) {
     }
 
     private void upsert(int uid, String syncScope, PlaybackSyncInput in, String eventId, String dedupeKey) {

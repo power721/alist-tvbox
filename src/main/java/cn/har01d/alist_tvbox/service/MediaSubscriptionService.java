@@ -125,9 +125,9 @@ public class MediaSubscriptionService {
         this.siteRepository = siteRepository;
     }
 
-    /** 订阅 token → 归属用户:用户名 token → 该用户;共享 token/空 → 首个管理员。与 live-follow/播放同步一致。 */
+    /** 订阅 token → 归属用户:u-{username} → 该用户;共享 token/空 → 首个管理员(全局 tokens 无 u- 前缀,不撞车)。与 live-follow/播放同步一致。 */
     public int resolveUid(String token) {
-        var user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findByUsername(token);
+        var user = StringUtils.isBlank(token) || "-".equals(token) ? null : userService.findByUserVodToken(token);
         if (user == null) {
             user = userService.list().stream()
                     .filter(candidate -> candidate.getRole() == Role.ADMIN)
@@ -2193,10 +2193,29 @@ public class MediaSubscriptionService {
         // 季后缀(第 2 季起):同一 TMDB tv id 跨季共用,不带季号时并行多季订阅(含「多季联动」入口)
         // 会生成同一路径互相覆盖挂载;仅创建时定名,存量订阅路径不动
         String seasonSuffix = seasonSuffix(subscription);
+        String base;
         if (tag != null) {
-            return Constants.SUBSCRIPTION_MOUNT_ROOT + slug + " " + tag + seasonSuffix;
+            base = Constants.SUBSCRIPTION_MOUNT_ROOT + slug + " " + tag + seasonSuffix;
+        } else {
+            base = Constants.SUBSCRIPTION_MOUNT_ROOT + subscription.getId() + "-" + slug + seasonSuffix;
         }
-        return Constants.SUBSCRIPTION_MOUNT_ROOT + subscription.getId() + "-" + slug + seasonSuffix;
+        return ensureUniqueMountPath(base, subscription.getUid());
+    }
+
+    /**
+     * mountPath 全局唯一:同一部剧(同元数据 id)可被多个用户各自订阅,巡检按 mountPath 归属主源,
+     * 路径撞车会互相劫持挂载。被占用时追加 uid 段消歧;仅影响新建订阅,存量路径不动。
+     */
+    private String ensureUniqueMountPath(String path, int uid) {
+        if (!subscriptionRepository.existsByMountPath(path)) {
+            return path;
+        }
+        String candidate = path + " u" + uid;
+        int n = 2;
+        while (subscriptionRepository.existsByMountPath(candidate) && n < 100) {
+            candidate = path + " u" + uid + "-" + n++;
+        }
+        return candidate;
     }
 
     /** 挂载目录季后缀:第 2 季起追加 " Sxx",首季/未标注不加(保持既有首季路径形态)。 */

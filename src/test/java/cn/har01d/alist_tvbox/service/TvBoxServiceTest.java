@@ -109,7 +109,8 @@ class TvBoxServiceTest {
                 proxyService,
                 index115Adapter,
                 new RestTemplateBuilder(),
-                pikPakAccountRepository
+                pikPakAccountRepository,
+                org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.AccountAccessGuard.class)
         );
     }
 
