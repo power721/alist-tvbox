@@ -907,6 +907,11 @@ public class SubscriptionService {
     }
 
     private void replaceAliToken(Map<String, Object> config) {
+        // u- 用户 token 不注入 secret URL:该 secret 解锁 /cookies/{secret} 全量凭证端点,不得进 USER 配置。
+        // 占位符原样保留,spider 按"无 token"降级(阿里可扫码登录)
+        if (credentialUidFor(getCurrentToken()) > 0) {
+            return;
+        }
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String secret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         String tokenUrl = shareRepository.countByType(0) > 0 ? readHostAddress("/ali/token/" + secret) : null;
@@ -1477,7 +1482,11 @@ public class SubscriptionService {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         String uid = generateUid();
         String playbackToken = playbackTokenForSubscription(token, subscriptionId);
-        String secret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
+        // 共享 token → ali_secret(管理员设备,全量凭证);u- 用户 token → 填 token 本身,
+        // spider 调 /cookies/{secret} 时服务端按归属只回本人账号凭证
+        String secret = token.startsWith(USER_TOKEN_PREFIX)
+                ? token
+                : settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         for (SubscriptionSourceService.SubscriptionSourceRef source : subscriptionSourceService.findEnabledSources()) {
             try {
                 if (source.builtin()) {
