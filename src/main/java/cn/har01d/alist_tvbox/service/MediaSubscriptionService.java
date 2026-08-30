@@ -505,7 +505,7 @@ public class MediaSubscriptionService {
             detail.setVod_id(VOD_ID_PREFIX + subscription.getId());
             detail.setVod_name(displayName(subscription));
             detail.setVod_pic(absoluteCover(coverOf(subscription)));
-            detail.setVod_remarks(buildRemarks(subscription));
+            detail.setVod_remarks(buildRemarks(subscription) + compactRatingSuffix(subscription));
             list.add(detail);
         }
         result.setList(list);
@@ -803,17 +803,8 @@ public class MediaSubscriptionService {
                                 .map(CastMember::getName).filter(StringUtils::isNotBlank)
                                 .collect(Collectors.joining(",")));
                     }
-                    // 多源评分 Map(RatingBridge 互补形态)逐源标注;旧快照只有单值 rating 时按 provider 标注
-                    if (meta.getRatings() != null && !meta.getRatings().isEmpty()) {
-                        for (String source : List.of("douban", "tmdb", "bangumi")) {
-                            String score = meta.getRatings().get(source);
-                            if (StringUtils.isNotBlank(score)) {
-                                remarks += " · " + ratingSourceLabel(source) + " " + score;
-                            }
-                        }
-                    } else if (StringUtils.isNotBlank(meta.getRating())) {
-                        remarks += " · " + ratingSourceLabel(subscription.getMetaProvider()) + meta.getRating();
-                    }
+                    // 评分不进 remarks(手机卡片/部分播放器详情 remarks 显示不全),
+                    // 紧凑单评分统一由 compactRatingSuffix 收口,全量多源评分挪进正文顶部
                 }
             } catch (Exception e) {
                 log.debug("load metadata snapshot for subscription {} failed: {}", subscription.getId(), e.getMessage());
@@ -847,12 +838,68 @@ public class MediaSubscriptionService {
             if (StringUtils.isBlank(detail.getVod_content()) && StringUtils.isNotBlank(douban.getDescription())) {
                 detail.setVod_content(douban.getDescription());
             }
-            if (StringUtils.isNotBlank(douban.getDbScore())
-                    && !remarks.contains("豆瓣" + douban.getDbScore())) {
-                remarks += " · 豆瓣" + douban.getDbScore();
+        }
+        remarks += compactRatingSuffix(subscription);
+        // 全量多源评分行置顶正文(remarks 只放紧凑单评分,部分播放器详情 remarks 会截断)
+        if (meta != null && meta.getRatings() != null && !meta.getRatings().isEmpty()) {
+            StringBuilder line = new StringBuilder("评分:");
+            for (String source : List.of("douban", "tmdb", "bangumi")) {
+                String score = meta.getRatings().get(source);
+                if (StringUtils.isNotBlank(score)) {
+                    if (line.charAt(line.length() - 1) != ':') {
+                        line.append(" / ");
+                    }
+                    line.append(ratingSourceLabel(source)).append(' ').append(score);
+                }
+            }
+            if (line.length() > 3) {
+                detail.setVod_content(line
+                        + (StringUtils.isBlank(detail.getVod_content()) ? "" : "\n" + detail.getVod_content()));
             }
         }
         detail.setVod_remarks(remarks);
+    }
+
+    /** 订阅元数据快照(持久层零网络);无 provider/metaId 或读取失败返回 null。 */
+    private MetadataDetails loadSubscriptionSnapshot(MediaSubscription subscription) {
+        if (StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
+            return null;
+        }
+        try {
+            return metadataService.cachedDetails(
+                    subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+        } catch (Exception e) {
+            log.debug("load metadata snapshot for subscription {} failed: {}",
+                    subscription.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    /** 列表/详情 remarks 共用的紧凑单评分后缀(卡片一行即截,只放一个分):
+     * 豆瓣(快照 Map → 本地豆瓣库)优先,回落 TMDB → Bangumi → 旧快照单值 rating。 */
+    private String compactRatingSuffix(MediaSubscription subscription) {
+        MetadataDetails meta = loadSubscriptionSnapshot(subscription);
+        Map<String, String> ratings = meta == null ? null : meta.getRatings();
+        String doubanScore = ratings == null ? null : ratings.get("douban");
+        if (StringUtils.isBlank(doubanScore) && subscription.getDoubanId() != null) {
+            Movie douban = movieRepository.findById(subscription.getDoubanId()).orElse(null);
+            doubanScore = douban == null ? null : douban.getDbScore();
+        }
+        if (StringUtils.isNotBlank(doubanScore)) {
+            return " · 豆瓣" + doubanScore;
+        }
+        if (ratings != null) {
+            for (String source : List.of("tmdb", "bangumi")) {
+                String score = ratings.get(source);
+                if (StringUtils.isNotBlank(score)) {
+                    return " · " + ratingSourceLabel(source) + score;
+                }
+            }
+        }
+        if (meta != null && StringUtils.isNotBlank(meta.getRating())) {
+            return " · " + ratingSourceLabel(subscription.getMetaProvider()) + meta.getRating();
+        }
+        return "";
     }
 
     /** 评分来源标签:tmdb→TMDB,bangumi→Bangumi(首字母大写),douban→豆瓣。 */
