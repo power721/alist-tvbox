@@ -2,11 +2,14 @@ package cn.har01d.alist_tvbox.telegram;
 
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionDto;
 import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -125,5 +128,92 @@ class TelegramRendererTest {
         assertTrue(noNewline.length() <= 3800);
         assertTrue(noNewline.endsWith("…"));
         assertEquals("短文本", TelegramRenderer.truncate(new StringBuilder("短文本")));
+    }
+
+    @Test
+    void escapesOnlyTelegramEntities() {
+        // TG 只认 &amp;/&lt;/&gt;/&quot;,escapeHtml4 会把「·」译成 &middot; 让客户端显示实体文本
+        assertEquals("豆瓣·热门电视剧", TelegramRenderer.esc("豆瓣·热门电视剧"));
+        assertEquals("哈利·波特 &amp; 密室", TelegramRenderer.esc("哈利·波特 & 密室"));
+        assertEquals("café &lt;b&gt;", TelegramRenderer.esc("café <b>"));
+    }
+
+    private MovieDetail entry(String vodId, String name) {
+        MovieDetail item = new MovieDetail();
+        item.setVod_id(vodId);
+        item.setVod_name(name);
+        item.setVod_year("2026");
+        return item;
+    }
+
+    @Test
+    void pianDanCategoriesPairPerRow() {
+        List<Category> categories = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            Category category = new Category();
+            category.setType_id("douban:c" + i);
+            category.setType_name("豆瓣·分类" + i);
+            categories.add(category);
+        }
+        TelegramRenderer.Rendered rendered = TelegramRenderer.pianDanCategories(categories);
+        assertTrue(rendered.text().contains("片单追更"));
+        assertEquals(2, rendered.keyboard().get(0).size());
+        assertEquals(1, rendered.keyboard().get(1).size()); // 奇数个末行落单
+        assertEquals("pdc:2", rendered.keyboard().get(1).get(0).callbackData());
+    }
+
+    @Test
+    void emptyPianDanCategoriesShowsPlaceholder() {
+        assertTrue(TelegramRenderer.pianDanCategories(List.of()).text().contains("暂时不可用"));
+        assertTrue(TelegramRenderer.pianDanCategories(null).text().contains("暂时不可用"));
+    }
+
+    @Test
+    void pianDanListMarksSubscribedAndPages() {
+        List<MovieDetail> items = List.of(entry("tmdb:tv:1", "剧甲"), entry("s:剧乙", "剧乙"));
+        TelegramRenderer.Rendered rendered = TelegramRenderer.pianDanList("豆瓣·热门电视剧", items, Set.of(1), 1, true);
+        assertTrue(rendered.text().contains("第 2 页"));
+        assertTrue(rendered.text().contains("✅已追"));
+        assertEquals("pde:0", rendered.keyboard().get(0).get(0).callbackData());
+        assertTrue(rendered.keyboard().stream().anyMatch(row ->
+                row.stream().anyMatch(b -> b.callbackData().equals("pdl:0"))));
+        assertTrue(rendered.keyboard().stream().anyMatch(row ->
+                row.stream().anyMatch(b -> b.callbackData().equals("pdl:2"))));
+
+        // 首页无上一页,无下一页时不出翻页钮
+        TelegramRenderer.Rendered single = TelegramRenderer.pianDanList("豆瓣·热门电视剧", items, Set.of(), 0, false);
+        assertFalse(single.keyboard().stream().anyMatch(row ->
+                row.stream().anyMatch(b -> b.callbackData().startsWith("pdl:"))));
+    }
+
+    @Test
+    void emptyPianDanListKeepsNavigation() {
+        TelegramRenderer.Rendered rendered = TelegramRenderer.pianDanList("豆瓣·热门电视剧", List.of(), Set.of(), 2, false);
+        assertTrue(rendered.text().contains("没有内容"));
+        assertTrue(rendered.keyboard().stream().anyMatch(row ->
+                row.stream().anyMatch(b -> b.callbackData().equals("pdl:1"))));
+    }
+
+    @Test
+    void pianDanEntryExpandsSeasonsThreePerRow() {
+        MovieDetail item = entry("tmdb:tv:1", "末日地堡");
+        item.setVod_content("简介");
+        TelegramRenderer.Rendered rendered = TelegramRenderer.pianDanEntry(
+                item, 4, 1, true, List.of(1, 2, 3, 4), Set.of(2));
+        assertEquals(3, rendered.keyboard().get(0).size());
+        assertEquals("pdadd:4:1", rendered.keyboard().get(0).get(0).callbackData());
+        assertEquals("subs:0", rendered.keyboard().get(0).get(1).callbackData()); // 已追季跳订阅列表
+        assertEquals("pdadd:4:4", rendered.keyboard().get(1).get(0).callbackData());
+        assertTrue(rendered.keyboard().stream().anyMatch(row ->
+                row.stream().anyMatch(b -> b.callbackData().equals("pdl:1")))); // 返回原页
+    }
+
+    @Test
+    void pianDanEntryWithoutSeasonsTogglesByState() {
+        MovieDetail item = entry("s:剧乙", "剧乙");
+        assertEquals("pdadd:2", TelegramRenderer.pianDanEntry(item, 2, 0, false, List.of(), Set.of())
+                .keyboard().get(0).get(0).callbackData());
+        assertEquals("subs:0", TelegramRenderer.pianDanEntry(item, 2, 0, true, null, null)
+                .keyboard().get(0).get(0).callbackData());
     }
 }

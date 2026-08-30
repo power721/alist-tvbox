@@ -7,10 +7,17 @@ import cn.har01d.alist_tvbox.dto.telegram.BotChat;
 import cn.har01d.alist_tvbox.dto.telegram.BotMessage;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
+import cn.har01d.alist_tvbox.service.PianDanService;
+import cn.har01d.alist_tvbox.service.PianDanSubscriptionService;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.CategoryList;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -36,12 +43,15 @@ class TelegramSubscriptionBotTest {
 
     private final MediaSubscriptionService subscriptionService = mock(MediaSubscriptionService.class);
     private final MediaSubscriptionCheckService checkService = mock(MediaSubscriptionCheckService.class);
+    private final PianDanService pianDanService = mock(PianDanService.class);
+    private final PianDanSubscriptionService pianDanSubscriptionService = mock(PianDanSubscriptionService.class);
     private final TelegramBotClient client = mock(TelegramBotClient.class);
     private TelegramSubscriptionBot bot;
 
     @BeforeEach
     void setUp() {
-        bot = new TelegramSubscriptionBot(subscriptionService, checkService, client);
+        bot = new TelegramSubscriptionBot(subscriptionService, checkService, pianDanService,
+                pianDanSubscriptionService, client);
     }
 
     private MetadataSearchItem item(String provider, String id, String name) {
@@ -180,5 +190,148 @@ class TelegramSubscriptionBotTest {
         verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("来源:"), any());
         verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), anyString(),
                 argThat(kb -> kb != null && kb.get(0).get(0).callbackData().startsWith("subs:")));
+    }
+
+    // ---------- 片单追更 ----------
+
+    private CategoryList categories(String... idAndNames) {
+        CategoryList list = new CategoryList();
+        for (int i = 0; i < idAndNames.length; i += 2) {
+            Category category = new Category();
+            category.setType_id(idAndNames[i]);
+            category.setType_name(idAndNames[i + 1]);
+            list.getCategories().add(category);
+        }
+        return list;
+    }
+
+    private MovieDetail entry(String vodId, String name) {
+        MovieDetail item = new MovieDetail();
+        item.setVod_id(vodId);
+        item.setVod_name(name);
+        item.setVod_year("2026");
+        return item;
+    }
+
+    /** 上游一页 20 条(TMDB 口径),机器人一屏 10 条。 */
+    private MovieList upstreamPage(int pagecount, String prefix) {
+        List<MovieDetail> items = new ArrayList<>();
+        for (int i = 1; i <= 20; i++) {
+            items.add(entry("tmdb:tv:" + i, prefix + i));
+        }
+        MovieList list = new MovieList();
+        list.setList(items);
+        list.setPagecount(pagecount);
+        return list;
+    }
+
+    private void openCategory() {
+        when(pianDanService.subscriptionCategory()).thenReturn(categories("douban:hot_tv", "豆瓣·热门电视剧"));
+        when(pianDanService.list(eq("douban:hot_tv"), eq("web"), anyInt(), eq(20), any()))
+                .thenReturn(upstreamPage(2, "剧"));
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdc:0"), TelegramCallbackData.parse("pdc:0"));
+    }
+
+    @Test
+    void categoryOpensFirstScreenOfTenItems() {
+        openCategory();
+        verify(pianDanService).list("douban:hot_tv", "web", 1, 20, Map.of());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
+                argThat(text -> text.contains("豆瓣·热门电视剧") && text.contains("剧10") && !text.contains("剧11")),
+                argThat(kb -> kb != null && kb.stream().anyMatch(row ->
+                        row.stream().anyMatch(b -> b.callbackData().equals("pdl:1")))));
+    }
+
+    @Test
+    void secondScreenReusesSameUpstreamPage() {
+        openCategory();
+        // 上游一页 20 条 → 第二屏取后 10 条,仍是上游第 1 页(按 10 条问上游会丢掉每页后 10 条)
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdl:1"), TelegramCallbackData.parse("pdl:1"));
+        verify(pianDanService, org.mockito.Mockito.times(2)).list("douban:hot_tv", "web", 1, 20, Map.of());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
+                argThat(text -> text.contains("剧11") && text.contains("剧20")), any());
+
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdl:2"), TelegramCallbackData.parse("pdl:2"));
+        verify(pianDanService).list("douban:hot_tv", "web", 2, 20, Map.of());
+    }
+
+    @Test
+    void subscribedEntriesMarkedInList() {
+        when(subscriptionService.isSubscribedTitle(5, "剧3")).thenReturn(true);
+        openCategory();
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("✅已追"), any());
+    }
+
+    @Test
+    void entryDetailExpandsSeasons() {
+        openCategory();
+        MovieDetail detail = entry("tmdb:tv:1", "剧1");
+        detail.setVod_content("简介");
+        detail.setExt(List.of(1, 2, 3));
+        when(pianDanService.tmdbDetail("tv", 1)).thenReturn(detail);
+        when(subscriptionService.isSubscribedTitle(5, "剧1 第2季")).thenReturn(true);
+
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pde:0"), TelegramCallbackData.parse("pde:0"));
+
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("简介"),
+                argThat(kb -> kb != null
+                        && kb.get(0).stream().anyMatch(b -> b.callbackData().equals("pdadd:0:1"))
+                        // 已追的第 2 季不给重复订阅入口,跳订阅列表
+                        && kb.get(0).stream().anyMatch(b -> b.text().equals("✅ 第2季"))
+                        && kb.get(0).stream().anyMatch(b -> b.callbackData().equals("pdadd:0:3"))));
+    }
+
+    @Test
+    void addFromPianDanPassesEntryPayload() {
+        openCategory();
+        MediaSubscriptionDto dto = new MediaSubscriptionDto();
+        dto.setId(66);
+        dto.setName("剧1");
+        dto.setStatus(cn.har01d.alist_tvbox.entity.MediaSubscription.STATUS_ACTIVE);
+        when(pianDanSubscriptionService.subscribe(eq(5), anyString()))
+                .thenReturn(new PianDanSubscriptionService.Result(dto, false, "剧1", 3, "已加入追剧"));
+
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdadd:0:3"), TelegramCallbackData.parse("pdadd:0:3"));
+
+        verify(pianDanSubscriptionService).subscribe(5, "tmdb:tv:1|剧1|3");
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已加入追剧"), any());
+    }
+
+    @Test
+    void addFromPianDanIdempotentWhenExisted() {
+        openCategory();
+        when(pianDanSubscriptionService.subscribe(eq(5), anyString()))
+                .thenReturn(new PianDanSubscriptionService.Result(null, true, "剧1", null, "已在追剧中"));
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdadd:0"), TelegramCallbackData.parse("pdadd:0"));
+        verify(pianDanSubscriptionService).subscribe(5, "tmdb:tv:1|剧1");
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已经在追剧列表"), any());
+    }
+
+    @Test
+    void expiredPianDanStateFallsBackToCategories() {
+        when(pianDanService.subscriptionCategory()).thenReturn(categories("douban:hot_tv", "豆瓣·热门电视剧"));
+        String result = bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pde:0"),
+                TelegramCallbackData.parse("pde:0"));
+        assertEquals("片单浏览已过期,请重新选择分类", result);
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("片单追更"), any());
+    }
+
+    @Test
+    void unknownCategoryIndexFallsBackToCategories() {
+        when(pianDanService.subscriptionCategory()).thenReturn(categories("douban:hot_tv", "豆瓣·热门电视剧"));
+        String result = bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdc:9"),
+                TelegramCallbackData.parse("pdc:9"));
+        assertEquals("片单分类已变更,请重新选择", result);
+        verify(pianDanService, never()).list(anyString(), anyString(), anyInt(), anyInt(), any());
+    }
+
+    @Test
+    void pianDanListFailureReturnsToast() {
+        when(pianDanService.subscriptionCategory()).thenReturn(categories("douban:hot_tv", "豆瓣·热门电视剧"));
+        when(pianDanService.list(anyString(), anyString(), anyInt(), anyInt(), any()))
+                .thenThrow(new RuntimeException("upstream down"));
+        String result = bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdc:0"),
+                TelegramCallbackData.parse("pdc:0"));
+        assertTrue(result.contains("片单加载失败"));
     }
 }

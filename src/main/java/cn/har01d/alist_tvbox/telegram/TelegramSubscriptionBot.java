@@ -7,6 +7,11 @@ import cn.har01d.alist_tvbox.dto.telegram.BotCallbackQuery;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
+import cn.har01d.alist_tvbox.service.PianDanService;
+import cn.har01d.alist_tvbox.service.PianDanSubscriptionService;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.commons.lang3.StringUtils;
@@ -15,39 +20,60 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Telegram 交互的业务编排:菜单/订阅列表/详情/搜索/追加/退订/巡检。
+ * Telegram 交互的业务编排:菜单/订阅列表/详情/搜索/片单/追加/退订/巡检。
  * <p>
- * 零业务逻辑 —— 全部委托 {@link MediaSubscriptionService}(uid 第一参数,归属校验 getOwned 内建)与
- * {@link MediaSubscriptionCheckService};本类只做 TG 交互适配:渲染、编辑锚点、callback 分发。
- * 搜索结果本体暂存在内存(单实例口径,10min 过期),callback 只携带索引。
+ * 零业务逻辑 —— 全部委托 {@link MediaSubscriptionService}(uid 第一参数,归属校验 getOwned 内建)、
+ * {@link MediaSubscriptionCheckService} 与 {@link PianDanSubscriptionService}(片单条目 ⇄ 订阅编排,
+ * 与电视端 msubadd- 同一口径);本类只做 TG 交互适配:渲染、编辑锚点、callback 分发。
+ * 搜索结果与片单当前页本体暂存在内存(单实例口径,10min 过期),callback 只携带索引。
  * token 由轮询层逐次传入以支持热切换,一律不入日志。
  */
 @Component
 public class TelegramSubscriptionBot {
     private static final Logger log = LoggerFactory.getLogger(TelegramSubscriptionBot.class);
     static final int MAX_KEYWORD_LENGTH = 100;
+    /** 片单每屏条数;上游一页取 {@link #PIAN_DAN_FETCH_SIZE} 条 → 每上游页两屏,翻页不跳过条目。 */
+    static final int PIAN_DAN_PAGE_SIZE = 10;
+    private static final int PIAN_DAN_FETCH_SIZE = PIAN_DAN_PAGE_SIZE * 2;
 
     /** 搜索结果暂存:chatId → 结果集(点击 pick/add/res 翻页时按索引取回)。 */
     record SearchState(String keyword, List<MetadataSearchItem> items, int page) {
     }
 
+    /** 片单浏览暂存:chatId → 当前分类与本屏条目(pde/pdadd 的索引在此解析)。 */
+    record PianDanState(String typeId, String typeName, int page, List<MovieDetail> items) {
+    }
+
     private final MediaSubscriptionService subscriptionService;
     private final MediaSubscriptionCheckService checkService;
+    private final PianDanService pianDanService;
+    private final PianDanSubscriptionService pianDanSubscriptionService;
     private final TelegramBotClient client;
     private final Cache<String, SearchState> searchStates = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofMinutes(10))
+            .maximumSize(100)
+            .build();
+    private final Cache<String, PianDanState> pianDanStates = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofMinutes(10))
             .maximumSize(100)
             .build();
 
     public TelegramSubscriptionBot(MediaSubscriptionService subscriptionService,
                                     MediaSubscriptionCheckService checkService,
+                                    PianDanService pianDanService,
+                                    PianDanSubscriptionService pianDanSubscriptionService,
                                     TelegramBotClient client) {
         this.subscriptionService = subscriptionService;
         this.checkService = checkService;
+        this.pianDanService = pianDanService;
+        this.pianDanSubscriptionService = pianDanSubscriptionService;
         this.client = client;
     }
 
@@ -60,6 +86,11 @@ public class TelegramSubscriptionBot {
 
     public void sendSubscriptions(String token, String chatId, int uid) {
         editFresh(token, chatId, TelegramRenderer.subsPage(subscriptionService.list(uid), 0));
+    }
+
+    /** /piandan:片单分类页(命令直达,发新消息作为后续编辑锚点)。 */
+    public void sendPianDan(String token, String chatId) {
+        editFresh(token, chatId, TelegramRenderer.pianDanCategories(pianDanCategories()));
     }
 
     /** 搜索提示由 Router 在进入会话时发出(新消息,记 message_id 作为后续编辑锚点)。 */
@@ -160,6 +191,32 @@ public class TelegramSubscriptionBot {
             }
             case TelegramCallbackData.INBOX -> edit(token, chatId, messageId,
                     TelegramRenderer.inbox(subscriptionService.inbox(uid)));
+            case TelegramCallbackData.PIAN_DAN -> edit(token, chatId, messageId,
+                    TelegramRenderer.pianDanCategories(pianDanCategories()));
+            case TelegramCallbackData.PIAN_DAN_CATEGORY -> {
+                List<Category> categories = pianDanCategories();
+                if (cb.arg() < 0 || cb.arg() >= categories.size()) {
+                    edit(token, chatId, messageId, TelegramRenderer.pianDanCategories(categories));
+                    return "片单分类已变更,请重新选择";
+                }
+                Category category = categories.get(cb.arg());
+                return openPianDan(token, uid, chatId, messageId,
+                        category.getType_id(), category.getType_name(), 0);
+            }
+            case TelegramCallbackData.PIAN_DAN_PAGE -> {
+                PianDanState state = pianDanStates.getIfPresent(chatId);
+                if (state == null) {
+                    return expirePianDan(token, chatId, messageId);
+                }
+                return openPianDan(token, uid, chatId, messageId, state.typeId(), state.typeName(),
+                        Math.max(cb.arg(), 0));
+            }
+            case TelegramCallbackData.PIAN_DAN_ENTRY -> {
+                return showPianDanEntry(token, uid, chatId, messageId, cb.arg());
+            }
+            case TelegramCallbackData.PIAN_DAN_ADD -> {
+                return addPianDan(token, uid, chatId, messageId, cb.arg(), cb.arg2());
+            }
             default -> {
             }
         }
@@ -188,6 +245,132 @@ public class TelegramSubscriptionBot {
         log.info("telegram subscribe: uid={} {} provider={} id={}", uid, dto.getId(), item.getProvider(), item.getId());
         edit(token, chatId, messageId, TelegramRenderer.subscribed(dto));
         return null;
+    }
+
+    // ---------- 片单追更 ----------
+
+    /** 片单分类:与电视端「我的追剧」同一份(已剔除纯电影类目);构建纯内存,取不到时回空态。 */
+    private List<Category> pianDanCategories() {
+        try {
+            return pianDanService.subscriptionCategory().getCategories();
+        } catch (RuntimeException e) {
+            log.warn("load pian-dan categories failed", e);
+            return List.of();
+        }
+    }
+
+    /**
+     * 拉取并渲染片单某一屏:上游一页 20 条,机器人 10 条一屏 —— 页码换算成「上游页 + 半页偏移」,
+     * 翻页既不丢条目也不重复(直接按 10 条问上游会丢掉每页后 10 条)。
+     */
+    private String openPianDan(String token, int uid, String chatId, long messageId,
+                               String typeId, String typeName, int page) {
+        MovieList result;
+        try {
+            result = pianDanService.list(typeId, "web", page / 2 + 1, PIAN_DAN_FETCH_SIZE, Map.of());
+        } catch (RuntimeException e) {
+            log.warn("load pian-dan list failed: {}", typeId, e);
+            return "❌ 片单加载失败,请稍后重试";
+        }
+        List<MovieDetail> all = result.getList() == null ? List.of() : result.getList();
+        int from = Math.min((page % 2) * PIAN_DAN_PAGE_SIZE, all.size());
+        List<MovieDetail> items = List.copyOf(all.subList(from, Math.min(from + PIAN_DAN_PAGE_SIZE, all.size())));
+        boolean hasNext = !items.isEmpty()
+                && (from + items.size() < all.size() || page / 2 + 1 < result.getPagecount());
+        pianDanStates.put(chatId, new PianDanState(typeId, typeName, page, items));
+        Set<Integer> subscribed = new HashSet<>();
+        for (int i = 0; i < items.size(); i++) {
+            if (subscriptionService.isSubscribedTitle(uid, items.get(i).getVod_name())) {
+                subscribed.add(i);
+            }
+        }
+        edit(token, chatId, messageId, TelegramRenderer.pianDanList(typeName, items, subscribed, page, hasNext));
+        return null;
+    }
+
+    /** 条目详情:TMDB 条目补简介/演员/季号,已追状态按整剧与逐季分别判定(与电视端标题口径一致)。 */
+    private String showPianDanEntry(String token, int uid, String chatId, long messageId, int index) {
+        PianDanState state = pianDanStates.getIfPresent(chatId);
+        if (state == null || index < 0 || index >= state.items().size()) {
+            return expirePianDan(token, chatId, messageId);
+        }
+        MovieDetail detail = pianDanDetail(state.items().get(index));
+        List<Integer> seasons = seasonsOf(detail);
+        Set<Integer> subscribedSeasons = new HashSet<>();
+        for (Integer season : seasons) {
+            if (subscriptionService.isSubscribedTitle(uid, detail.getVod_name() + " 第" + season + "季")) {
+                subscribedSeasons.add(season);
+            }
+        }
+        edit(token, chatId, messageId, TelegramRenderer.pianDanEntry(detail, index, state.page(),
+                subscriptionService.isSubscribedTitle(uid, detail.getVod_name()), seasons, subscribedSeasons));
+        return null;
+    }
+
+    /** 片单条目加入追剧:载荷 {vodId}|{剧名}|{季?} 交给共用编排(元数据直绑,同剧幂等)。 */
+    private String addPianDan(String token, int uid, String chatId, long messageId, int index, Integer season) {
+        PianDanState state = pianDanStates.getIfPresent(chatId);
+        if (state == null || index < 0 || index >= state.items().size()) {
+            return expirePianDan(token, chatId, messageId);
+        }
+        MovieDetail item = state.items().get(index);
+        String name = StringUtils.defaultString(item.getVod_name());
+        String payload = item.getVod_id() + "|" + name + (season == null ? "" : "|" + season);
+        PianDanSubscriptionService.Result result;
+        try {
+            result = pianDanSubscriptionService.subscribe(uid, payload);
+        } catch (BadRequestException e) {
+            // 条目载荷不可解析/元数据拉取失败:toast 即可,当前详情页原样留着让用户重试
+            log.info("telegram pian-dan subscribe rejected: uid={} {}", uid, payload);
+            return "❌ 条目信息获取失败,请稍后重试";
+        }
+        String title = season == null ? name : name + " 第" + season + "季";
+        if (result.existed() || result.dto() == null) {
+            edit(token, chatId, messageId, TelegramRenderer.alreadySubscribed(title));
+            return null;
+        }
+        log.info("telegram pian-dan subscribe: uid={} {} {}", uid, result.dto().getId(), title);
+        edit(token, chatId, messageId, TelegramRenderer.subscribed(result.dto()));
+        return null;
+    }
+
+    /** 暂存过期:索引失去意义(继续用会点到别的条目),回分类页重来。 */
+    private String expirePianDan(String token, String chatId, long messageId) {
+        edit(token, chatId, messageId, TelegramRenderer.pianDanCategories(pianDanCategories()));
+        return "片单浏览已过期,请重新选择分类";
+    }
+
+    /** TMDB 条目详情(命中 PianDanService 短缓存,返回共享实例 —— 只读不改);豆瓣条目与失败都回落列表条目。 */
+    private MovieDetail pianDanDetail(MovieDetail item) {
+        String vodId = StringUtils.defaultString(item.getVod_id());
+        if (!vodId.startsWith(PianDanService.TMDB_PREFIX)) {
+            return item;
+        }
+        String[] parts = vodId.split(":");
+        if (parts.length < 3) {
+            return item;
+        }
+        try {
+            MovieDetail detail = pianDanService.tmdbDetail(parts[1], Integer.parseInt(parts[2]));
+            return detail == null ? item : detail;
+        } catch (RuntimeException e) {
+            log.debug("load pian-dan entry detail failed: {}", vodId);
+            return item;
+        }
+    }
+
+    /** 剧集季号清单(tmdbDetail 放在 ext 里,已滤掉特典与未开播占位季);电影/豆瓣条目为空。 */
+    private static List<Integer> seasonsOf(MovieDetail detail) {
+        if (!(detail.getExt() instanceof List<?> values)) {
+            return List.of();
+        }
+        List<Integer> seasons = new ArrayList<>();
+        for (Object value : values) {
+            if (value instanceof Number number) {
+                seasons.add(number.intValue());
+            }
+        }
+        return seasons;
     }
 
     private MediaSubscriptionDto dtoOf(int uid, int id) {

@@ -183,4 +183,11 @@ class TelegramUpdateRouterTest {
         router.dispatch("TOKEN", callback(100L, 10, "subchk:7"));
         verify(client).answerCallbackQuery("TOKEN", "q1", "已开始巡检");
     }
+
+    @Test
+    void pianDanCommandOpensCategories() {
+        router.dispatch("TOKEN", message(100L, "/piandan"));
+        router.dispatch("TOKEN", message(100L, "/pd"));
+        verify(bot, org.mockito.Mockito.times(2)).sendPianDan("TOKEN", "100");
+    }
 }

@@ -93,6 +93,7 @@ public class TelegramUpdateRouter {
                     bot.sendMenu(token, String.valueOf(chatId));
                 }
                 case "/subs", "/subscriptions" -> bot.sendSubscriptions(token, String.valueOf(chatId), uid);
+                case "/piandan", "/pd" -> bot.sendPianDan(token, String.valueOf(chatId));
                 case "/search" -> enterSearch(token, chatId);
                 default -> bot.sendMenu(token, String.valueOf(chatId));
             }

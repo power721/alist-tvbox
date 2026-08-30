@@ -113,6 +113,7 @@ public class TelegramBotClient {
         commands.addObject().put("command", "start").put("description", "主菜单");
         commands.addObject().put("command", "subs").put("description", "我的追剧订阅");
         commands.addObject().put("command", "search").put("description", "搜索并加入追剧");
+        commands.addObject().put("command", "piandan").put("description", "片单追更(榜单挑剧)");
         try {
             exchange(token, "setMyCommands", body);
         } catch (Exception e) {

@@ -97,4 +97,16 @@ class TelegramBotClientTest {
         client.answerCallbackQuery("TOKEN", "q9", "x".repeat(300));
         server.verify();
     }
+
+    @Test
+    void setMyCommandsRegistersEveryEntryCommand() {
+        // 命令菜单是 TG 客户端「/」提示的唯一来源:新入口不登记这里,用户在菜单里看不到
+        server.expect(requestTo(URI.create("https://api.telegram.org/botTOKEN/setMyCommands")))
+                .andExpect(content().json("""
+                        {"commands":[{"command":"start"},{"command":"subs"},
+                         {"command":"search"},{"command":"piandan"}]}"""))
+                .andRespond(withSuccess("{\"ok\":true,\"result\":true}", MediaType.APPLICATION_JSON));
+        client.setMyCommands("TOKEN");
+        server.verify();
+    }
 }

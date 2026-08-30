@@ -51,5 +51,29 @@ class TelegramCallbackDataTest {
     @Test
     void ofBuildsData() {
         assertEquals("subdelc:42", TelegramCallbackData.of(TelegramCallbackData.SUB_DELETE_CONFIRM, 42));
+        assertEquals("pdadd:3:5", TelegramCallbackData.of(TelegramCallbackData.PIAN_DAN_ADD, 3, 5));
+    }
+
+    @Test
+    void parsePianDanActions() {
+        TelegramCallbackData.Callback cb = TelegramCallbackData.parse("pd");
+        assertNotNull(cb);
+        assertEquals(TelegramCallbackData.PIAN_DAN, cb.action());
+        assertEquals(0, cb.arg());
+        assertNull(cb.arg2());
+
+        cb = TelegramCallbackData.parse("pdadd:3:5");
+        assertNotNull(cb);
+        assertEquals(TelegramCallbackData.PIAN_DAN_ADD, cb.action());
+        assertEquals(3, cb.arg());
+        assertEquals(5, cb.arg2());
+
+        // 不带季号的加入追剧:第二参数缺省
+        cb = TelegramCallbackData.parse("pdadd:3");
+        assertNotNull(cb);
+        assertNull(cb.arg2());
+
+        assertNull(TelegramCallbackData.parse("pdadd"));
+        assertNull(TelegramCallbackData.parse("pdadd:3:x"));
     }
 }
