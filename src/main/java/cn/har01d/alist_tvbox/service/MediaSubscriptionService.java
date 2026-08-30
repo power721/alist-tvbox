@@ -790,10 +790,10 @@ public class MediaSubscriptionService {
                         detail.setType_name(String.join(",", meta.getGenres()));
                     }
                     if (meta.getCountries() != null && !meta.getCountries().isEmpty()) {
-                        detail.setVod_area(String.join(",", meta.getCountries()));
+                        detail.setVod_area(localizeArea(String.join(",", meta.getCountries())));
                     }
                     if (meta.getLanguages() != null && !meta.getLanguages().isEmpty()) {
-                        detail.setVod_lang(String.join(",", meta.getLanguages()));
+                        detail.setVod_lang(localizeLang(String.join(",", meta.getLanguages())));
                     }
                     if (meta.getDirectors() != null && !meta.getDirectors().isEmpty()) {
                         detail.setVod_director(String.join(",", meta.getDirectors()));
@@ -804,7 +804,7 @@ public class MediaSubscriptionService {
                                 .collect(Collectors.joining(",")));
                     }
                     if (StringUtils.isNotBlank(meta.getRating())) {
-                        remarks += " · 评分" + meta.getRating();
+                        remarks += " · " + ratingSourceLabel(subscription.getMetaProvider()) + meta.getRating();
                     }
                 }
             } catch (Exception e) {
@@ -840,11 +840,25 @@ public class MediaSubscriptionService {
                 detail.setVod_content(douban.getDescription());
             }
             if (StringUtils.isNotBlank(douban.getDbScore())
-                    && !remarks.contains("评分" + douban.getDbScore())) {
-                remarks += " · 评分" + douban.getDbScore();
+                    && !remarks.contains("豆瓣" + douban.getDbScore())) {
+                remarks += " · 豆瓣" + douban.getDbScore();
             }
         }
         detail.setVod_remarks(remarks);
+    }
+
+    /** 评分来源标签:metaProvider 归一大写(tmdb→TMDB,douban→豆瓣)。 */
+    private static String ratingSourceLabel(String metaProvider) {
+        return "douban".equalsIgnoreCase(metaProvider) ? "豆瓣" : metaProvider.toUpperCase(java.util.Locale.ROOT);
+    }
+
+    /** 快照里的国家/语言代码转中文展示(TMDB 存 ISO 码:CN/zh 等)。 */
+    private static String localizeArea(String code) {
+        return "CN".equalsIgnoreCase(code) ? "中国" : code;
+    }
+
+    private static String localizeLang(String code) {
+        return "zh".equalsIgnoreCase(code) || "zh-CN".equalsIgnoreCase(code) ? "中文" : code;
     }
 
     /** 链接解析专用客户端(跟随重定向;String 收包 + UTF-8 默认字符集防中文乱码) */
