@@ -61,7 +61,6 @@ public class SettingService {
     private final JdbcTemplate jdbcTemplate;
     private final Environment environment;
     private final AppProperties appProperties;
-    private final TmdbService tmdbService;
     private final AListLocalService aListLocalService;
     private final TokenFilter tokenFilter;
     private final SettingRepository settingRepository;
@@ -73,7 +72,6 @@ public class SettingService {
     public SettingService(JdbcTemplate jdbcTemplate,
                           Environment environment,
                           AppProperties appProperties,
-                          TmdbService tmdbService,
                           AListLocalService aListLocalService,
                           TokenFilter tokenFilter,
                           SettingRepository settingRepository,
@@ -84,7 +82,6 @@ public class SettingService {
         this.jdbcTemplate = jdbcTemplate;
         this.environment = environment;
         this.appProperties = appProperties;
-        this.tmdbService = tmdbService;
         this.aListLocalService = aListLocalService;
         this.tokenFilter = tokenFilter;
         this.settingRepository = settingRepository;
@@ -589,9 +586,6 @@ public class SettingService {
         }
         if ("user_agent".equals(setting.getName())) {
             appProperties.setUserAgent(setting.getValue());
-        }
-        if ("tmdb_api_key".equals(setting.getName())) {
-            tmdbService.setApiKey(setting.getValue());
         }
         if ("debug_log".equals(setting.getName())) {
             setLogLevel(setting);

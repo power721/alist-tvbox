@@ -34,7 +34,6 @@ class SettingServiceBasicAuthTest {
     @Mock JdbcTemplate jdbcTemplate;
     @Mock Environment environment;
     @Mock AppProperties appProperties;
-    @Mock TmdbService tmdbService;
     @Mock AListLocalService aListLocalService;
     @Mock TokenFilter tokenFilter;
     @Mock SettingRepository settingRepository;
@@ -48,7 +47,7 @@ class SettingServiceBasicAuthTest {
 
     @BeforeEach
     void setUp() {
-        service = new SettingService(jdbcTemplate, environment, appProperties, tmdbService,
+        service = new SettingService(jdbcTemplate, environment, appProperties,
                 aListLocalService, tokenFilter, settingRepository, driverAccountRepository,
                 objectMapper, gitHubProxyService, databaseBackupService);
         store.clear();

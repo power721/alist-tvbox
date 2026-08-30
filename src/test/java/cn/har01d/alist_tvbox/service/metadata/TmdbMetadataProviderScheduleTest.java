@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service.metadata;
 import cn.har01d.alist_tvbox.dto.EpisodeAirDate;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.TmdbEndpoint;
 import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,7 +39,7 @@ class TmdbMetadataProviderScheduleTest {
     TmdbMetadataProviderScheduleTest() {
         MetadataHttp metadataHttp = Mockito.mock(MetadataHttp.class);
         Mockito.when(metadataHttp.create()).thenReturn(restTemplate);
-        provider = new TmdbMetadataProvider(Mockito.mock(SettingRepository.class), metadataHttp, new MetadataHealth(), null, null,
+        provider = new TmdbMetadataProvider(new TmdbEndpoint(Mockito.mock(SettingRepository.class)), metadataHttp, new MetadataHealth(), null, null,
                 null, null);
     }
 
@@ -46,14 +47,14 @@ class TmdbMetadataProviderScheduleTest {
     void upcomingKeepsYesterdayAiredEpisodes() {
         LocalDate today = LocalDate.now(ZONE);
         String key = Constants.TMDB_API_KEY;
-        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521?api_key=" + key + "&language=zh-CN&append_to_response=images"))
+        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521?language=zh-CN&append_to_response=images&api_key=" + key))
                 .andRespond(withSuccess("{\"id\":9521,\"name\":\"慕兰之战\",\"status\":\"Returning Series\"}",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/alternative_titles?api_key=" + key))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
-        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/credits?api_key=" + key + "&language=zh-CN"))
+        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/credits?language=zh-CN&api_key=" + key))
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/season/1?api_key=" + key + "&language=zh-CN"))
+        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/season/1?language=zh-CN&api_key=" + key))
                 .andRespond(withSuccess(seasonBody(today), MediaType.APPLICATION_JSON));
 
         MetadataDetails details = provider.details("9521", 1);

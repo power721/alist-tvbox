@@ -36,7 +36,7 @@ class SettingServiceUserSettingsTest {
     @BeforeEach
     void setUp() {
         service = new SettingService(null, null, new AppProperties(), null, null,
-                null, settingRepository, null, new ObjectMapper(), null, null);
+                settingRepository, null, new ObjectMapper(), null, null);
         lenient().when(settingRepository.findById(any())).thenAnswer(inv -> {
             String key = inv.getArgument(0);
             return store.containsKey(key) ? Optional.of(new Setting(key, store.get(key))) : Optional.empty();

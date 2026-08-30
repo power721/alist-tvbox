@@ -60,11 +60,11 @@ class TmdbServiceTest {
                 tmdbRepository,
                 tmdbMetaRepository,
                 metaRepository,
-                settingRepository,
                 siteService,
                 taskService,
                 new RestTemplateBuilder(),
-                new ObjectMapper()
+                new ObjectMapper(),
+                new TmdbEndpoint(settingRepository)
         );
         Tmdb tagged = movie("一念永恒");
         when(tmdbRepository.findByTypeAndTmdbId("tv", 456)).thenReturn(java.util.Optional.of(tagged));
@@ -80,11 +80,11 @@ class TmdbServiceTest {
                 tmdbRepository,
                 tmdbMetaRepository,
                 metaRepository,
-                settingRepository,
                 siteService,
                 taskService,
                 new RestTemplateBuilder(),
-                new ObjectMapper()
+                new ObjectMapper(),
+                new TmdbEndpoint(settingRepository)
         );
         when(tmdbRepository.getByName("天才，女友")).thenReturn(List.of(movie("天才，女友")));
 
@@ -102,11 +102,11 @@ class TmdbServiceTest {
                     tmdbRepository,
                     tmdbMetaRepository,
                     metaRepository,
-                    settingRepository,
                     siteService,
                     taskService,
                     new RestTemplateBuilder(),
-                    new ObjectMapper()
+                    new ObjectMapper(),
+                    new TmdbEndpoint(settingRepository)
             );
 
             Task task1 = runningTask(1);

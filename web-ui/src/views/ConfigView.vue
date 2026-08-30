@@ -209,6 +209,13 @@
           <el-input v-model="tmdbApiKey" type="password" show-password/>
           <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
         </el-form-item>
+        <el-form-item label="TMDB 线路">
+          <el-select v-model="tmdbApiHost" style="width: 320px">
+            <el-option v-for="opt in tmdbApiHostOptions" :key="opt.value" :label="opt.label" :value="opt.value"/>
+          </el-select>
+          <el-button type="primary" @click="updateTmdbApiHost">更新</el-button>
+          <span class="hint" style="margin-left: 8px">国内直连官方不通时切换反代;Worker 型 API 与封面同域,NAStool 型自动分开配置图床,立即生效</span>
+        </el-form-item>
         <el-form-item label="115分享本地索引" v-if="has115Account">
           <el-button type="primary" :loading="index115Loading" @click="updateIndex115">下载</el-button>
           <el-tag v-if="index115Checking" type="info" style="margin-left: 8px">检查中</el-tag>
@@ -431,6 +438,14 @@ const openTokenUrl = ref('')
 const dockerAddress = ref('')
 const aliSecret = ref('')
 const tmdbApiKey = ref('')
+const tmdbApiHost = ref('')
+const tmdbApiHostOptions = [
+  {label: '官方 API - https://api.themoviedb.org', value: ''},
+  {label: 'Worker - https://tmdb.8866033.xyz', value: 'https://tmdb.8866033.xyz'},
+  {label: 'Worker - https://tmdb.swust-oj.workers.dev', value: 'https://tmdb.swust-oj.workers.dev'},
+  {label: 'Worker - https://tmdb.8866033.workers.dev', value: 'https://tmdb.8866033.workers.dev'},
+  {label: 'NAStool - https://tmdb.nastool.org (API) + img.nastool.org (图床)', value: 'https://tmdb.nastool.org'},
+]
 const userAgent = ref('')
 const atvPass = ref('')
 const apiKey = ref('')
@@ -521,6 +536,19 @@ const updateOpenTokenUrl = () => {
 
 const updateTmdbApiKey = () => {
   axios.post('/api/settings', {name: 'tmdb_api_key', value: tmdbApiKey.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateTmdbApiHost = () => {
+  const posts: { name: string, value: string }[] = [{name: 'tmdb_api_host', value: tmdbApiHost.value}]
+  // 图床与 API 分线路的预设(NAStool)落 tmdb_image_host;切回官方时一并清掉;Worker 单键走后端回落跟随
+  if (tmdbApiHost.value === 'https://tmdb.nastool.org') {
+    posts.push({name: 'tmdb_image_host', value: 'https://img.nastool.org'})
+  } else if (tmdbApiHost.value === '') {
+    posts.push({name: 'tmdb_image_host', value: ''})
+  }
+  Promise.all(posts.map(post => axios.post('/api/settings', post))).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -721,6 +749,7 @@ onMounted(() => {
     dockerAddress.value = data.docker_address
     aliSecret.value = data.ali_secret
     tmdbApiKey.value = data.tmdb_api_key
+    tmdbApiHost.value = data.tmdb_api_host || ''
     userAgent.value = data.user_agent
     autoCheckin.value = data.auto_checkin === 'true'
     aListRestart.value = data.alist_restart_required === 'true'

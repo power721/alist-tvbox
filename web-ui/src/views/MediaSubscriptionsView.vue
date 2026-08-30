@@ -565,6 +565,19 @@
             </el-form-item>
             <span class="sub-text">对所有订阅生效(下轮巡检起):入池、存量候选换源、单集文件筛选统一收紧;订阅级单集体积优先、排除词两边并集;已挂载主源不主动更换,自然失效后按新规则换源</span>
           </el-tab-pane>
+          <el-tab-pane v-if="store.admin" label="TMDB" name="tmdb">
+            <el-form-item label="API Key / Token">
+              <el-input v-model="notifyForm.tmdbApiKey" type="password" show-password
+                        placeholder="v3 API key(32位)或 v4 read access token(eyJ... 开头);留空用内置公共 key"/>
+              <span class="sub-text">两种凭证自动识别:api key 拼请求 URL,read access token 走 Bearer 请求头(不落 URL 与代理访问日志);与 系统设置→TMDB API Key 为同一配置,保存即生效</span>
+            </el-form-item>
+            <el-form-item label="TMDB 线路">
+              <el-select v-model="notifyForm.tmdbApiHost" style="width: 100%">
+                <el-option v-for="opt in tmdbApiHostOptions" :key="opt.value" :label="opt.label" :value="opt.value"/>
+              </el-select>
+              <span class="sub-text">国内直连官方不通时切换反代;Worker 型 API 与封面同域,NAStool 型自动分开配置图床(系统设置页同一配置)</span>
+            </el-form-item>
+          </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="盘链" name="panlian">
         <el-form-item label="站点">
           <el-input v-model="notifyForm.panlianHost" placeholder="留空用内置地址;自定义镜像站填 https://..."/>
@@ -1023,6 +1036,8 @@ const notifyForm = ref({
   chatId: '',
   doubanCookie: '',
   archiveDays: 0,
+  tmdbApiKey: '',
+  tmdbApiHost: '',
   vipAccounts: [] as number[],
   mainDrives: [] as number[],
   extendedDrives: [] as number[],
@@ -1070,6 +1085,13 @@ const panSouLinkCheckTypeOptions = [
   {label: '115网盘', value: '115'},
   {label: '迅雷网盘', value: 'xunlei'},
   {label: '123网盘', value: '123'},
+]
+const tmdbApiHostOptions = [
+  {label: '官方 API - https://api.themoviedb.org', value: ''},
+  {label: 'Worker - https://tmdb.8866033.xyz', value: 'https://tmdb.8866033.xyz'},
+  {label: 'Worker - https://tmdb.swust-oj.workers.dev', value: 'https://tmdb.swust-oj.workers.dev'},
+  {label: 'Worker - https://tmdb.8866033.workers.dev', value: 'https://tmdb.8866033.workers.dev'},
+  {label: 'NAStool - https://tmdb.nastool.org (API) + img.nastool.org (图床)', value: 'https://tmdb.nastool.org'},
 ]
 const navigationVisible = ref(false)
 const navCategories = ref<{ type_id: string, type_name: string }[]>([])
@@ -1744,6 +1766,8 @@ const openNotify = () => {
     notifyForm.value.botToken = settings['msub_telegram_bot_token'] || ''
     notifyForm.value.chatId = settings['msub_telegram_chat_id'] || ''
     notifyForm.value.doubanCookie = settings['douban_cookie'] || ''
+    notifyForm.value.tmdbApiKey = settings['tmdb_api_key'] || ''
+    notifyForm.value.tmdbApiHost = settings['tmdb_api_host'] || ''
     notifyForm.value.archiveDays = parseInt(settings['msub_archive_days'] || '0') || 0
     notifyForm.value.vipAccounts = (settings['msub_vip_accounts'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
@@ -1807,6 +1831,14 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'msub_telegram_bot_token', value: notifyForm.value.botToken}),
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
     axios.post('/api/settings', {name: 'douban_cookie', value: notifyForm.value.doubanCookie}),
+    axios.post('/api/settings', {name: 'tmdb_api_key', value: notifyForm.value.tmdbApiKey}),
+    axios.post('/api/settings', {name: 'tmdb_api_host', value: notifyForm.value.tmdbApiHost}),
+    // 图床与 API 分线路的预设(NAStool)落 tmdb_image_host;切回官方时一并清掉;Worker 单键走后端回落跟随
+    ...(notifyForm.value.tmdbApiHost === 'https://tmdb.nastool.org'
+        ? [axios.post('/api/settings', {name: 'tmdb_image_host', value: 'https://img.nastool.org'})]
+        : notifyForm.value.tmdbApiHost === ''
+            ? [axios.post('/api/settings', {name: 'tmdb_image_host', value: ''})]
+            : []),
     axios.post('/api/settings', {name: 'msub_archive_days', value: String(notifyForm.value.archiveDays)}),
     axios.post('/api/settings', {name: 'msub_vip_accounts', value: notifyForm.value.vipAccounts.join(',')}),
     axios.post('/api/settings', {

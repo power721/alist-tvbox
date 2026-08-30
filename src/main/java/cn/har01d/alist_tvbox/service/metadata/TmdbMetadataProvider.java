@@ -2,7 +2,7 @@ package cn.har01d.alist_tvbox.service.metadata;
 
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.TmdbEndpoint;
 import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -34,7 +34,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
     public static final String NAME = "tmdb";
     private static final ZoneId ZONE = ZoneId.of(Constants.ZONE_ID);
 
-    private final SettingRepository settingRepository;
+    private final TmdbEndpoint tmdbEndpoint;
     private final RestTemplate restTemplate;
     private final Cache<String, MetadataDetails> detailsCache = Caffeine.newBuilder()
             .maximumSize(200).expireAfterWrite(Duration.ofHours(6)).build();
@@ -45,10 +45,10 @@ public class TmdbMetadataProvider implements MetadataProvider {
     private final BilibiliScheduleRefiner biliScheduleRefiner;
     private final BangumiEpisodeBridge bangumiEpisodeBridge;
 
-    public TmdbMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp, MetadataHealth health,
+    public TmdbMetadataProvider(TmdbEndpoint tmdbEndpoint, MetadataHttp metadataHttp, MetadataHealth health,
                                 RatingBridge ratingBridge, PlayScheduleBridge playScheduleBridge,
                                 BilibiliScheduleRefiner biliScheduleRefiner, BangumiEpisodeBridge bangumiEpisodeBridge) {
-        this.settingRepository = settingRepository;
+        this.tmdbEndpoint = tmdbEndpoint;
         this.health = health;
         this.restTemplate = metadataHttp.create();
         this.ratingBridge = ratingBridge;
@@ -62,11 +62,6 @@ public class TmdbMetadataProvider implements MetadataProvider {
         return NAME;
     }
 
-    private String apiKey() {
-        return settingRepository.findById("tmdb_api_key").map(s -> s.getValue())
-                .filter(StringUtils::isNotBlank).orElse(Constants.TMDB_API_KEY);
-    }
-
     @Override
     public List<MetadataSearchItem> search(String keyword) {
         List<MetadataSearchItem> result = new ArrayList<>();
@@ -74,9 +69,8 @@ public class TmdbMetadataProvider implements MetadataProvider {
             return result;
         }
         try {
-            String url = UriComponentsBuilder.fromUriString("https://api.themoviedb.org/3/search/tv")
+            String url = UriComponentsBuilder.fromUriString(tmdbEndpoint.apiHost() + "/3/search/tv")
                     .queryParam("query", keyword.trim())
-                    .queryParam("api_key", apiKey())
                     .queryParam("language", "zh-CN")
                     .build().encode().toUriString();
             JsonNode body = get(url);
@@ -132,8 +126,8 @@ public class TmdbMetadataProvider implements MetadataProvider {
             return null;
         }
         try {
-            JsonNode find = get("https://api.themoviedb.org/3/find/" + imdbId
-                    + "?api_key=" + apiKey() + "&external_source=imdb_id&language=zh-CN");
+            JsonNode find = get(tmdbEndpoint.apiHost() + "/3/find/" + imdbId
+                    + "?external_source=imdb_id&language=zh-CN");
             JsonNode tv = find == null ? null : find.path("tv_results").path(0);
             if (!tv.isObject() || !tv.hasNonNull("id")) {
                 return null;
@@ -152,8 +146,8 @@ public class TmdbMetadataProvider implements MetadataProvider {
         details.setProvider(NAME);
         details.setId(id);
         try {
-            JsonNode tv = get("https://api.themoviedb.org/3/tv/" + id
-                    + "?api_key=" + apiKey() + "&language=zh-CN&append_to_response=images");
+            JsonNode tv = get(tmdbEndpoint.apiHost() + "/3/tv/" + id
+                    + "?language=zh-CN&append_to_response=images");
             if (tv == null) {
                 return details;
             }
@@ -231,7 +225,7 @@ public class TmdbMetadataProvider implements MetadataProvider {
                 details.setRuntimeMinutes(tv.get("episode_run_time").get(0).asInt());
             }
             // 别名(搜索关键词扩展用)
-            JsonNode alt = get("https://api.themoviedb.org/3/tv/" + id + "/alternative_titles?api_key=" + apiKey());
+            JsonNode alt = get(tmdbEndpoint.apiHost() + "/3/tv/" + id + "/alternative_titles");
             List<String> aliases = new ArrayList<>();
             if (alt != null && alt.has("results")) {
                 for (JsonNode item : alt.get("results")) {
@@ -244,8 +238,8 @@ public class TmdbMetadataProvider implements MetadataProvider {
             details.setAliases(aliases);
 
             // 演职人员(详情页演员卡):cast=主演饰演角色,crew=导演/编剧职务
-            JsonNode credits = get("https://api.themoviedb.org/3/tv/" + id + "/credits?api_key=" + apiKey()
-                    + "&language=zh-CN");
+            JsonNode credits = get(tmdbEndpoint.apiHost() + "/3/tv/" + id + "/credits"
+                    + "?language=zh-CN");
             if (credits != null) {
                 List<cn.har01d.alist_tvbox.dto.CastMember> cast = new ArrayList<>();
                 if (credits.has("cast") && credits.get("cast").isArray()) {
@@ -288,8 +282,8 @@ public class TmdbMetadataProvider implements MetadataProvider {
             }
 
             // 目标季集数与播出日程
-            JsonNode seasonNode = get("https://api.themoviedb.org/3/tv/" + id + "/season/" + season
-                    + "?api_key=" + apiKey() + "&language=zh-CN");
+            JsonNode seasonNode = get(tmdbEndpoint.apiHost() + "/3/tv/" + id + "/season/" + season
+                    + "?language=zh-CN");
             if (seasonNode != null && seasonNode.has("episodes")) {
                 applySeasonEpisodes(details, seasonNode, System.currentTimeMillis());
             }
@@ -407,12 +401,13 @@ public class TmdbMetadataProvider implements MetadataProvider {
     }
 
     /** 外网 GET:失败上抛(调用方 catch 记 health/降级)—— 吞掉返回 null 会让熔断器永远打不开,
-     * 还会把网络故障当"无结果"记成 health 成功、清零失败计数。 */
+     * 还会把网络故障当"无结果"记成 health 成功、清零失败计数。认证收口在 tmdbEndpoint(api key 拼 query / Bearer 走头)。 */
     private JsonNode get(String url) {
         try {
             // String 收包再手动解析:与消息转换器组合解耦(Jackson2/Jackson3 均可)
-            ResponseEntity<String> response = restTemplate.exchange(URI.create(url), HttpMethod.GET,
-                    new HttpEntity<>(null, jsonHeaders()), String.class);
+            HttpHeaders headers = tmdbEndpoint.applyAuth(jsonHeaders());
+            ResponseEntity<String> response = restTemplate.exchange(URI.create(tmdbEndpoint.appendApiKey(url)), HttpMethod.GET,
+                    new HttpEntity<>(null, headers), String.class);
             return response.getBody() == null ? null : MAPPER.readTree(response.getBody());
         } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
             return null; // 条目不存在是正常业务结果(如 IMDb 桥接 id 无对应剧集),不计健康失败

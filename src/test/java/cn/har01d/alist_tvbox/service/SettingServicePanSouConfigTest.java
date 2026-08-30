@@ -31,7 +31,6 @@ import static org.mockito.Mockito.when;
 class SettingServicePanSouConfigTest {
     @Mock JdbcTemplate jdbcTemplate;
     @Mock Environment environment;
-    @Mock TmdbService tmdbService;
     @Mock AListLocalService aListLocalService;
     @Mock TokenFilter tokenFilter;
     @Mock SettingRepository settingRepository;
@@ -46,7 +45,7 @@ class SettingServicePanSouConfigTest {
 
     @BeforeEach
     void setUp() {
-        service = new SettingService(jdbcTemplate, environment, appProperties, tmdbService,
+        service = new SettingService(jdbcTemplate, environment, appProperties,
                 aListLocalService, tokenFilter, settingRepository, driverAccountRepository,
                 objectMapper, gitHubProxyService, databaseBackupService);
         lenient().when(settingRepository.findById(any())).thenAnswer(inv -> {

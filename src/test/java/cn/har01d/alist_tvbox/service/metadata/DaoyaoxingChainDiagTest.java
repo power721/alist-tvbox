@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service.metadata;
 
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.TmdbEndpoint;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,7 +37,7 @@ class DaoyaoxingChainDiagTest {
     void fullChainForDaoyaoxing() {
         when(settingRepository.findById(anyString())).thenReturn(Optional.empty());
         MetadataHttp http = new MetadataHttp(null);
-        TmdbMetadataProvider provider = new TmdbMetadataProvider(settingRepository, http, new MetadataHealth(),
+        TmdbMetadataProvider provider = new TmdbMetadataProvider(new TmdbEndpoint(settingRepository), http, new MetadataHealth(),
                 new RatingBridge(http), new PlayScheduleBridge(http),
                 new BilibiliScheduleRefiner(http), new BangumiEpisodeBridge(http));
 

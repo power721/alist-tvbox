@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service.metadata;
 
 import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.TmdbEndpoint;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +38,7 @@ class MetaSearchDiagTest {
             System.out.println("DIAG bangumi EX: " + e);
         }
         try {
-            List<MetadataSearchItem> tmdb = new TmdbMetadataProvider(settingRepository, new MetadataHttp(null), new MetadataHealth(), null, null, null, null).search(keyword);
+            List<MetadataSearchItem> tmdb = new TmdbMetadataProvider(new TmdbEndpoint(settingRepository), new MetadataHttp(null), new MetadataHealth(), null, null, null, null).search(keyword);
             System.out.println("DIAG tmdb: " + tmdb.size() + (tmdb.isEmpty() ? "" : " 首条=" + tmdb.get(0).getName()));
         } catch (Exception e) {
             System.out.println("DIAG tmdb EX: " + e);

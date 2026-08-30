@@ -1,7 +1,5 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
 import cn.har01d.alist_tvbox.tvbox.Category;
@@ -19,10 +17,14 @@ import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Duration;
+import java.net.URI;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,14 +34,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static cn.har01d.alist_tvbox.util.Constants.TMDB_API_KEY;
 
 @Slf4j
 @Service
 public class PianDanService {
     public static final String DOUBAN_PREFIX = "douban:";
     public static final String TMDB_PREFIX = "tmdb:";
-    private static final String TMDB_API = "https://api.themoviedb.org/3";
+    private static final String TMDB_API_PATH = "/3";
     private static final String TMDB_IMAGE = "https://image.tmdb.org/t/p/w500";
     private static final Set<String> TRENDING_MEDIA = Set.of("all", "movie", "tv");
     private static final Set<String> TRENDING_WINDOWS = Set.of("day", "week");
@@ -73,10 +74,10 @@ public class PianDanService {
     );
 
     private final TelegramService telegramService;
-    private final SettingRepository settingRepository;
     private final SubscriptionSourceService subscriptionSourceService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final TmdbEndpoint tmdbEndpoint;
     private final Cache<String, MovieList> listCache = Caffeine.newBuilder()
             .maximumSize(256)
             .expireAfterWrite(Duration.ofMinutes(5))
@@ -92,15 +93,15 @@ public class PianDanService {
             .build();
 
     public PianDanService(TelegramService telegramService,
-                          SettingRepository settingRepository,
                           SubscriptionSourceService subscriptionSourceService,
                           RestTemplateBuilder builder,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          TmdbEndpoint tmdbEndpoint) {
         this.telegramService = telegramService;
-        this.settingRepository = settingRepository;
         this.subscriptionSourceService = subscriptionSourceService;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
+        this.tmdbEndpoint = tmdbEndpoint;
     }
 
     public CategoryList category() {
@@ -312,8 +313,7 @@ public class PianDanService {
      */
     public MovieList search(String wd, int page, int size) {
         int safePage = Math.min(TMDB_MAX_PAGE, Math.max(1, page));
-        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(TMDB_API + "/search/multi")
-                .queryParam("api_key", apiKey())
+        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(tmdbEndpoint.apiHost() + TMDB_API_PATH + "/search/multi")
                 .queryParam("language", "zh-CN")
                 .queryParam("include_adult", false)
                 .queryParam("query", wd)
@@ -373,8 +373,7 @@ public class PianDanService {
         if (cached != null) {
             return cached;
         }
-        String url = UriComponentsBuilder.fromUriString(TMDB_API + (movie ? "/movie/" : "/tv/") + tmdbId)
-                .queryParam("api_key", apiKey())
+        String url = UriComponentsBuilder.fromUriString(tmdbEndpoint.apiHost() + TMDB_API_PATH + (movie ? "/movie/" : "/tv/") + tmdbId)
                 .queryParam("language", "zh-CN")
                 .queryParam("append_to_response", "credits") // 同一次请求带回演员,详情页 vod_actor 渲染的是"演员"
                 .build()
@@ -493,8 +492,7 @@ public class PianDanService {
             return emptyList(safePage, size);
         }
 
-        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(TMDB_API + path)
-                .queryParam("api_key", apiKey())
+        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(tmdbEndpoint.apiHost() + TMDB_API_PATH + path)
                 .queryParam("language", "zh-CN")
                 .queryParam("include_adult", false)
                 .queryParam("page", safePage);
@@ -730,11 +728,16 @@ public class PianDanService {
         }
     }
 
+    /** 认证收口在 tmdbEndpoint(v3 api key 拼 query / read access token 走 Bearer 头);429/5xx 退避重试。 */
     private String fetchTmdb(String url) {
+        String target = tmdbEndpoint.appendApiKey(url);
+        HttpHeaders headers = tmdbEndpoint.applyAuth(new HttpHeaders());
         RestClientException lastError = null;
         for (int attempt = 0; attempt < 3; attempt++) {
             try {
-                return restTemplate.getForObject(url, String.class);
+                // 字符串重载走 URI 模板编码(与原 getForObject(String) 同口径,`|` 等会被编码)
+                return restTemplate.exchange(target, HttpMethod.GET,
+                        new HttpEntity<>(null, headers), String.class).getBody();
             } catch (RestClientException e) {
                 lastError = e;
                 if (attempt == 2 || !isRetryable(e)) {
@@ -821,13 +824,6 @@ public class PianDanService {
 //            return year + " · " + rating;
 //        }
         return StringUtils.defaultIfBlank(rating, year);
-    }
-
-    private String apiKey() {
-        return settingRepository.findById("tmdb_api_key")
-                .map(Setting::getValue)
-                .filter(StringUtils::isNotBlank)
-                .orElse(TMDB_API_KEY);
     }
 
     private void addTmdbCategory(CategoryList result, String id, String name) {

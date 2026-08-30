@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.ExpectedCount.once;
@@ -52,7 +53,9 @@ class PianDanServiceTest {
     void setUp() {
         restTemplate = new RestTemplate();
         when(builder.build()).thenReturn(restTemplate);
-        service = new PianDanService(telegramService, settingRepository, subscriptionSourceService, builder, new ObjectMapper());
+        // TmdbEndpoint 即读即用:未配置镜像回落官方直连,不改变测试里的 URL 断言
+        lenient().when(settingRepository.findById("tmdb_api_host")).thenReturn(java.util.Optional.empty());
+        service = new PianDanService(telegramService, subscriptionSourceService, builder, new ObjectMapper(), new TmdbEndpoint(settingRepository));
     }
 
     @Test

@@ -46,7 +46,7 @@ public class SyncService {
         "video_cover", "use_quark_tv", "quark_multi_account_proxy", "plugin_run_mode",
         "open_token_url", "open_api_client_id", "open_api_client_secret",
         "local_proxy_config", "offline_download_config", "global_subscription_override",
-        "user_agent", "tmdb_api_key", "debug_log"
+        "user_agent", "tmdb_api_key", "tmdb_api_host", "tmdb_image_host", "debug_log"
     );
 
     public SyncService(SettingRepository settingRepository,

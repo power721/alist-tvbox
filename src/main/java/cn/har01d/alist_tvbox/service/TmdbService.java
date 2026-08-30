@@ -8,8 +8,6 @@ import cn.har01d.alist_tvbox.dto.TmdbDto;
 import cn.har01d.alist_tvbox.dto.TmdbList;
 import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.entity.Tmdb;
@@ -30,6 +28,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -37,6 +38,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.net.URI;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,11 +60,11 @@ public class TmdbService {
     private final TmdbRepository tmdbRepository;
     private final TmdbMetaRepository tmdbMetaRepository;
     private final MetaRepository metaRepository;
-    private final SettingRepository settingRepository;
     private final SiteService siteService;
     private final TaskService taskService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final TmdbEndpoint tmdbEndpoint;
 
     private final int rateLimit = 2000;
     private static final Set<String> SPECIAL_FOLDERS = Set.of(
@@ -71,40 +73,29 @@ public class TmdbService {
     );
     private Map<String, String> countryNames = new HashMap<>();
 
-    private String apiKey;
     private long lastRequestTime;
     private final ThreadLocal<Integer> siteId = ThreadLocal.withInitial(() -> 1);
 
     public TmdbService(TmdbRepository tmdbRepository,
                        TmdbMetaRepository tmdbMetaRepository,
                        MetaRepository metaRepository,
-                       SettingRepository settingRepository,
                        SiteService siteService,
                        TaskService taskService,
                        RestTemplateBuilder builder,
-                       ObjectMapper objectMapper) {
+                       ObjectMapper objectMapper,
+                       TmdbEndpoint tmdbEndpoint) {
         this.tmdbRepository = tmdbRepository;
         this.tmdbMetaRepository = tmdbMetaRepository;
         this.metaRepository = metaRepository;
-        this.settingRepository = settingRepository;
         this.siteService = siteService;
         this.taskService = taskService;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
-    }
-
-    public void setApiKey(String apiKey) {
-        if (StringUtils.isBlank(apiKey)) {
-            this.apiKey = TMDB_API_KEY;
-        } else {
-            this.apiKey = apiKey;
-        }
+        this.tmdbEndpoint = tmdbEndpoint;
     }
 
     @PostConstruct
     public void init() {
-        setApiKey(settingRepository.findById("tmdb_api_key").map(Setting::getValue).orElse(""));
-
         try {
             sync();
         } catch (Exception e) {
@@ -726,21 +717,28 @@ public class TmdbService {
         }
     }
 
+    /** 认证收口:v3 api key 拼 query(appendApiKey),read access token 走 Authorization: Bearer 头。
+     * 传字符串 url 走 URI 模板编码路径(与原 getForObject(String) 同口径,`|` 等字符会被编码)。 */
+    private <T> T tmdbGet(String url, Class<T> type) {
+        HttpHeaders headers = tmdbEndpoint.applyAuth(new HttpHeaders());
+        return restTemplate.exchange(tmdbEndpoint.appendApiKey(url), HttpMethod.GET,
+                new HttpEntity<>(null, headers), type).getBody();
+    }
+
     public Tmdb search(String type, String name, String year, boolean match) {
-        String url = UriComponentsBuilder.fromUriString("https://api.themoviedb.org/3/search/" + type)
+        String url = UriComponentsBuilder.fromUriString(tmdbEndpoint.apiHost() + "/3/search/" + type)
                 .queryParam("query", name)
-                .queryParam("api_key", apiKey)
                 .queryParam("language", "zh-CN")
                 .queryParam("year", year)
                 .build()
                 .encode()
                 .toUriString();
         long now = System.currentTimeMillis();
-        if (!log.isDebugEnabled() && TMDB_API_KEY.equals(apiKey) && now - lastRequestTime < rateLimit) {
+        if (!log.isDebugEnabled() && TMDB_API_KEY.equals(tmdbEndpoint.apiKey()) && now - lastRequestTime < rateLimit) {
             sleep(lastRequestTime + rateLimit - now);
         }
         log.debug("search: {}", url);
-        TmdbList list = restTemplate.getForObject(url, TmdbList.class);
+        TmdbList list = tmdbGet(url, TmdbList.class);
         lastRequestTime = now;
         if (list != null && list.getResults() != null) {
             log.debug("get {} reasults", list.getResults().size());
@@ -765,19 +763,18 @@ public class TmdbService {
     }
 
     public Tmdb getDetails(String type, Integer id) {
-        String url = UriComponentsBuilder.fromUriString("https://api.themoviedb.org/3/" + type + "/" + id)
+        String url = UriComponentsBuilder.fromUriString(tmdbEndpoint.apiHost() + "/3/" + type + "/" + id)
                 .queryParam("language", "zh-CN")
                 .queryParam("append_to_response", "credits")
-                .queryParam("api_key", apiKey)
                 .build()
                 .encode()
                 .toUriString();
         long now = System.currentTimeMillis();
-        if (!log.isDebugEnabled() && TMDB_API_KEY.equals(apiKey) && now - lastRequestTime < rateLimit) {
+        if (!log.isDebugEnabled() && TMDB_API_KEY.equals(tmdbEndpoint.apiKey()) && now - lastRequestTime < rateLimit) {
             sleep(lastRequestTime + rateLimit - now);
         }
         log.debug("getDetails: {}", url);
-        TmdbDto dto = restTemplate.getForObject(url, TmdbDto.class);
+        TmdbDto dto = tmdbGet(url, TmdbDto.class);
         lastRequestTime = now;
         log.debug("getDetails: {} {} {}", type, id, dto);
         Tmdb tmdb = new Tmdb();

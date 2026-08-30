@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service.metadata;
 
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.TmdbEndpoint;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class TmdbMetadataProviderBackdropTest {
     TmdbMetadataProviderBackdropTest() {
         MetadataHttp metadataHttp = Mockito.mock(MetadataHttp.class);
         Mockito.when(metadataHttp.create()).thenReturn(restTemplate);
-        provider = new TmdbMetadataProvider(Mockito.mock(SettingRepository.class), metadataHttp, new MetadataHealth(),
+        provider = new TmdbMetadataProvider(new TmdbEndpoint(Mockito.mock(SettingRepository.class)), metadataHttp, new MetadataHealth(),
                 null, null, null, null);
     }
 
@@ -43,17 +44,16 @@ class TmdbMetadataProviderBackdropTest {
     void detailsReturnsOriginalBackdropsWithPrimaryFirst() {
         String key = cn.har01d.alist_tvbox.util.Constants.TMDB_API_KEY;
         // images 随详情一次带回(append_to_response),候选按分排序、主图置顶
-        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521?api_key=" + key
-                        + "&language=zh-CN&append_to_response=images"))
+        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521?language=zh-CN&append_to_response=images&api_key=" + key))
                 .andRespond(withSuccess("{\"id\":9521,\"name\":\"测试剧\",\"backdrop_path\":\"/primary.jpg\",\"images\":{\"backdrops\":["
                         + backdrop("/highvote.jpg", 5.5, 200, 1920, 1080) + ","
                         + backdrop("/primary.jpg", 0, 0, 1920, 1080) + ","
                         + backdrop("/lowvote.jpg", 5.4, 1, 1280, 720) + "]}}", MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/alternative_titles?api_key=" + key))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
-        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/credits?api_key=" + key + "&language=zh-CN"))
+        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/credits?language=zh-CN&api_key=" + key))
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/season/1?api_key=" + key + "&language=zh-CN"))
+        server.expect(once(), requestTo("https://api.themoviedb.org/3/tv/9521/season/1?language=zh-CN&api_key=" + key))
                 .andRespond(withSuccess("{\"episodes\":[]}", MediaType.APPLICATION_JSON));
 
         MetadataDetails details = provider.details("9521", 1);
