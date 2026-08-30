@@ -897,18 +897,18 @@ public class MediaSubscriptionService {
             doubanScore = douban == null ? null : douban.getDbScore();
         }
         if (StringUtils.isNotBlank(doubanScore)) {
-            return "豆瓣" + doubanScore;
+            return "豆瓣 " + doubanScore;
         }
         if (ratings != null) {
             for (String source : List.of("tmdb", "bangumi")) {
                 String score = ratings.get(source);
                 if (StringUtils.isNotBlank(score)) {
-                    return ratingSourceLabel(source) + score;
+                    return ratingSourceLabel(source) + " " + score;
                 }
             }
         }
         if (meta != null && StringUtils.isNotBlank(meta.getRating())) {
-            return ratingSourceLabel(subscription.getMetaProvider()) + meta.getRating();
+            return ratingSourceLabel(subscription.getMetaProvider()) + " " + meta.getRating();
         }
         return "";
     }
