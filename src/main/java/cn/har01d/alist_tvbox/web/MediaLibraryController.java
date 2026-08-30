@@ -27,7 +27,7 @@ import java.util.Set;
  * {@link MediaSubscriptionService#playEpisode} 实时选源(转存 &gt; 主源 &gt; 补缺)并逐源回退,
  * 同一集多个分享源切换对用户无感。集 id 为逻辑 id(msubep-{subId}-{episode}),播放时才解析。
  * <p>
- * 分类在 全部/追更中/已完结 之外合并片单追更分类(豆瓣/TMDB 榜单,复用 web 片单追更的
+ * 分类在 最近更新/连载中/已完结/全部 之外合并片单追更分类(豆瓣/TMDB 榜单,复用 web 片单追更的
  * {@link PianDanService#subscriptionCategory}):片单条目详情带一条「➕ 加入追剧」伪播放线路,
  * 点击经 /play 的 msubadd-{vodId} 一键建订阅(电视端闭环,无需开 web)。
  */
@@ -211,9 +211,9 @@ public class MediaLibraryController {
         CategoryList result = new CategoryList();
         List<Category> categories = new ArrayList<>();
         categories.add(category("recent", "最近更新"));
-        categories.add(category("active", "追更中"));
+        categories.add(category("active", "连载中"));
         categories.add(category("ended", "已完结"));
-        categories.add(category("all", "全部"));
+        categories.add(category("all", "全部订阅"));
         // 片单追更分类(豆瓣/TMDB 榜单+筛选,排除电影类目):type_id 带 douban:/tmdb: 前缀,与上方短 id 不撞车
         CategoryList pianDan = pianDanService.subscriptionCategory();
         categories.addAll(pianDan.getCategories());
