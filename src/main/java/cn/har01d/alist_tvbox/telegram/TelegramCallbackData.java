@@ -24,6 +24,8 @@ public final class TelegramCallbackData {
     public static final String RESULT_PAGE = "pickp";
     public static final String RESULT_BACK = "res";
     public static final String INBOX = "inbox";
+    /** 追更日历(播出时间轴):无状态,每次实时拉 schedule(uid) */
+    public static final String CALENDAR = "cal";
     // 片单追更:分类列表 → 分类条目(索引)→ 条目详情 → 按季订阅
     public static final String PIAN_DAN = "pd";
     public static final String PIAN_DAN_CATEGORY = "pdc";
@@ -60,7 +62,7 @@ public final class TelegramCallbackData {
             return null;
         }
         switch (action) {
-            case HOME, SEARCH, CANCEL, INBOX, PIAN_DAN -> {
+            case HOME, SEARCH, CANCEL, INBOX, CALENDAR, PIAN_DAN -> {
                 return new Callback(action, 0, null);
             }
             case SUBS, SUB, SUB_DELETE, SUB_DELETE_CONFIRM, SUB_CHECK, SUB_UPDATE, SUB_PAUSE,

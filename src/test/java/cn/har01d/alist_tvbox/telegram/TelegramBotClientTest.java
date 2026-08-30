@@ -104,7 +104,7 @@ class TelegramBotClientTest {
         server.expect(requestTo(URI.create("https://api.telegram.org/botTOKEN/setMyCommands")))
                 .andExpect(content().json("""
                         {"commands":[{"command":"start"},{"command":"subs"},
-                         {"command":"search"},{"command":"piandan"}]}"""))
+                         {"command":"search"},{"command":"piandan"},{"command":"calendar"}]}"""))
                 .andRespond(withSuccess("{\"ok\":true,\"result\":true}", MediaType.APPLICATION_JSON));
         client.setMyCommands("TOKEN");
         server.verify();

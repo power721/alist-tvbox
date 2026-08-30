@@ -93,6 +93,11 @@ public class TelegramSubscriptionBot {
         editFresh(token, chatId, TelegramRenderer.pianDanCategories(pianDanCategories()));
     }
 
+    /** /calendar:追更日历(与网页端横向日历条同源,每次实时拉,无暂存)。 */
+    public void sendCalendar(String token, String chatId, int uid) {
+        editFresh(token, chatId, TelegramRenderer.calendar(subscriptionService.schedule(uid)));
+    }
+
     /** 搜索提示由 Router 在进入会话时发出(新消息,记 message_id 作为后续编辑锚点)。 */
     public long sendSearchPrompt(String token, String chatId) {
         TelegramRenderer.Rendered prompt = TelegramRenderer.searchPrompt();
@@ -191,6 +196,8 @@ public class TelegramSubscriptionBot {
             }
             case TelegramCallbackData.INBOX -> edit(token, chatId, messageId,
                     TelegramRenderer.inbox(subscriptionService.inbox(uid)));
+            case TelegramCallbackData.CALENDAR -> edit(token, chatId, messageId,
+                    TelegramRenderer.calendar(subscriptionService.schedule(uid)));
             case TelegramCallbackData.PIAN_DAN -> edit(token, chatId, messageId,
                     TelegramRenderer.pianDanCategories(pianDanCategories()));
             case TelegramCallbackData.PIAN_DAN_CATEGORY -> {

@@ -190,4 +190,11 @@ class TelegramUpdateRouterTest {
         router.dispatch("TOKEN", message(100L, "/pd"));
         verify(bot, org.mockito.Mockito.times(2)).sendPianDan("TOKEN", "100");
     }
+
+    @Test
+    void calendarCommandCarriesResolvedUid() {
+        router.dispatch("TOKEN", message(100L, "/calendar"));
+        router.dispatch("TOKEN", message(100L, "/cal"));
+        verify(bot, org.mockito.Mockito.times(2)).sendCalendar("TOKEN", "100", 5);
+    }
 }

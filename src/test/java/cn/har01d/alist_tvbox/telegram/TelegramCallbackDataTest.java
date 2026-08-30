@@ -24,12 +24,15 @@ class TelegramCallbackDataTest {
 
     @Test
     void parseActionsWithoutArg() {
-        for (String data : new String[]{"home", "search", "cancel", "inbox"}) {
+        for (String data : new String[]{"home", "search", "cancel", "inbox", "cal", "pd"}) {
             TelegramCallbackData.Callback cb = TelegramCallbackData.parse(data);
             assertNotNull(cb);
             assertEquals(data, cb.action());
             assertEquals(0, cb.arg());
+            assertNull(cb.arg2());
         }
+        // 无参 action 带参也归一到 0,野按钮不炸
+        assertEquals(0, TelegramCallbackData.parse("cal:1").arg());
     }
 
     @Test

@@ -334,4 +334,24 @@ class TelegramSubscriptionBotTest {
                 TelegramCallbackData.parse("pdc:0"));
         assertTrue(result.contains("片单加载失败"));
     }
+
+    // ---------- 追更日历 ----------
+
+    @Test
+    void calendarCallbackRendersSchedule() {
+        when(subscriptionService.schedule(5)).thenReturn(List.of(Map.of(
+                "label", "今天", "date", "8/30", "today", true,
+                "items", List.of(Map.of("subscriptionId", 7, "name", "重器",
+                        "airTime", 1756555200000L, "episodes", "29-33", "paused", false)))));
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "cal"), TelegramCallbackData.parse("cal"));
+        verify(subscriptionService).schedule(5);
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("追更日历"), any());
+    }
+
+    @Test
+    void sendCalendarPostsFreshMessage() {
+        when(subscriptionService.schedule(5)).thenReturn(List.of());
+        bot.sendCalendar("TOKEN", "100", 5);
+        verify(client).sendMessage(eq("TOKEN"), eq("100"), contains("没有排播日程"), any());
+    }
 }

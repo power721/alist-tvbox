@@ -6,12 +6,14 @@ import cn.har01d.alist_tvbox.entity.MediaSubscription;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
+import cn.har01d.alist_tvbox.util.Constants;
 import org.apache.commons.lang3.StringUtils;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,8 +30,14 @@ public final class TelegramRenderer {
     /** 搜索结果每页条数 */
     static final int RESULTS_PAGE_SIZE = 8;
     private static final int MAX_TEXT_LENGTH = 3800;
+    /** 日历条目行封顶(22 订阅 × 10 天可轻松过百行);超出截断并注明。 */
+    private static final int CALENDAR_MAX_LINES = 40;
+    /** 今明快捷跳转钮上限,超出只在正文里列。 */
+    private static final int CALENDAR_MAX_SHORTCUTS = 6;
     private static final DateTimeFormatter TIME_FORMAT =
             DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter CLOCK_FORMAT =
+            DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of(Constants.ZONE_ID));
 
     public record Rendered(String text, List<List<TelegramButton>> keyboard) {
     }
@@ -43,7 +51,8 @@ public final class TelegramRenderer {
                         row(new TelegramButton("📺 我的订阅", TelegramCallbackData.of(TelegramCallbackData.SUBS, 0)),
                                 new TelegramButton("🔍 搜索追剧", TelegramCallbackData.SEARCH)),
                         row(new TelegramButton("🎞 片单追更", TelegramCallbackData.PIAN_DAN),
-                                new TelegramButton("🔄 最近更新", TelegramCallbackData.INBOX))));
+                                new TelegramButton("📅 追更日历", TelegramCallbackData.CALENDAR)),
+                        row(new TelegramButton("🔄 最近更新", TelegramCallbackData.INBOX))));
     }
 
     public static Rendered subsPage(List<MediaSubscriptionDto> all, int page) {
@@ -350,9 +359,7 @@ public final class TelegramRenderer {
     @SuppressWarnings("unchecked")
     public static Rendered inbox(List<Map<String, Object>> events) {
         if (events == null || events.isEmpty()) {
-            return new Rendered("🔄 最近 3 天没有新动态。",
-                    List.of(row(new TelegramButton("📺 我的订阅", TelegramCallbackData.of(TelegramCallbackData.SUBS, 0)),
-                            new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME))));
+            return new Rendered("🔄 最近 3 天没有新动态。", inboxNav());
         }
         StringBuilder text = new StringBuilder("🔄 <b>最近更新</b>(近 3 天)\n");
         String lastName = null;
@@ -377,9 +384,116 @@ public final class TelegramRenderer {
             }
             lines++;
         }
-        return new Rendered(truncate(text),
-                List.of(row(new TelegramButton("📺 我的订阅", TelegramCallbackData.of(TelegramCallbackData.SUBS, 0)),
-                        new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME))));
+        return new Rendered(truncate(text), inboxNav());
+    }
+
+    /** 最近更新页导航:日历是它的时间对偶(已播 vs 待播),放同一屏方便来回切。 */
+    private static List<List<TelegramButton>> inboxNav() {
+        return List.of(
+                row(new TelegramButton("📅 追更日历", TelegramCallbackData.CALENDAR),
+                        new TelegramButton("📺 我的订阅", TelegramCallbackData.of(TelegramCallbackData.SUBS, 0))),
+                row(new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME)));
+    }
+
+    /**
+     * 追更日历:{@code MediaSubscriptionService.schedule(uid)} 的成品数据(昨天 → 未来 8 天共 10 天)直渲染,
+     * 与网页端横向日历条同源 —— 同剧同时段多集已在服务端压成区间,已完结订阅已剔除。
+     * <p>
+     * 空天跳过,但今天/明天即使没排播也出「—」当锚点(全跳过会让人以为是拉取失败)。
+     * 键盘给今明两天去重后的剧各一个直达详情钮 —— 看到「今晚 20:00 更新」下一步必然是去看抓没抓到。
+     */
+    public static Rendered calendar(List<Map<String, Object>> days) {
+        List<Map<String, Object>> safe = days == null ? List.of() : days;
+        boolean any = safe.stream().anyMatch(day -> !dayItems(day).isEmpty());
+        if (!any) {
+            return new Rendered("📅 近 10 天没有排播日程。\n\n日程来自订阅绑定的元数据(TMDB/豆瓣分集播出日期),"
+                    + "刚订阅或未绑定条目的剧要等首轮巡检补齐。", calendarNav());
+        }
+        StringBuilder text = new StringBuilder("📅 <b>追更日历</b>(昨天 → 未来 8 天)\n");
+        int lines = 0;
+        boolean truncated = false;
+        for (Map<String, Object> day : safe) {
+            List<Map<String, Object>> items = dayItems(day);
+            String label = String.valueOf(day.getOrDefault("label", ""));
+            boolean anchor = "今天".equals(label) || "明天".equals(label);
+            if (items.isEmpty() && !anchor) {
+                continue;
+            }
+            if (truncated) {
+                break;
+            }
+            text.append("\n<b>").append(esc(label)).append(" ")
+                    .append(esc(String.valueOf(day.getOrDefault("date", "")))).append("</b>");
+            if (items.isEmpty()) {
+                text.append("\n —");
+                continue;
+            }
+            for (Map<String, Object> item : items) {
+                if (lines >= CALENDAR_MAX_LINES) {
+                    text.append("\n…仅显示前 ").append(CALENDAR_MAX_LINES).append(" 条");
+                    truncated = true;
+                    break;
+                }
+                text.append("\n ").append(clock(item.get("airTime")))
+                        .append(" ").append(esc(abbrev(String.valueOf(item.getOrDefault("name", "")), 30)));
+                Object episodes = item.get("episodes");
+                if (episodes != null && StringUtils.isNotBlank(String.valueOf(episodes))) {
+                    text.append(" 第").append(esc(abbrev(String.valueOf(episodes), 16))).append("集");
+                }
+                if (Boolean.TRUE.equals(item.get("paused"))) {
+                    text.append(" ⏸");
+                }
+                lines++;
+            }
+        }
+        return new Rendered(truncate(text), calendarKeyboard(safe));
+    }
+
+    /** 今明两天出现的剧去重后直达详情(最多 6 个,两列);顺序即排播顺序。 */
+    private static List<List<TelegramButton>> calendarKeyboard(List<Map<String, Object>> days) {
+        List<List<TelegramButton>> keyboard = new ArrayList<>();
+        Set<Object> seen = new LinkedHashSet<>();
+        List<TelegramButton> pair = new ArrayList<>();
+        for (Map<String, Object> day : days) {
+            String label = String.valueOf(day.getOrDefault("label", ""));
+            if (!"今天".equals(label) && !"明天".equals(label)) {
+                continue;
+            }
+            for (Map<String, Object> item : dayItems(day)) {
+                Object id = item.get("subscriptionId");
+                if (!(id instanceof Number number) || !seen.add(id) || seen.size() > CALENDAR_MAX_SHORTCUTS) {
+                    continue;
+                }
+                pair.add(new TelegramButton(abbrev(String.valueOf(item.getOrDefault("name", "")), 22),
+                        TelegramCallbackData.of(TelegramCallbackData.SUB, number.longValue())));
+                if (pair.size() == 2) {
+                    keyboard.add(List.copyOf(pair));
+                    pair.clear();
+                }
+            }
+        }
+        if (!pair.isEmpty()) {
+            keyboard.add(List.copyOf(pair));
+        }
+        keyboard.addAll(calendarNav());
+        return keyboard;
+    }
+
+    private static List<List<TelegramButton>> calendarNav() {
+        return List.of(row(new TelegramButton("📺 我的订阅", TelegramCallbackData.of(TelegramCallbackData.SUBS, 0)),
+                new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> dayItems(Map<String, Object> day) {
+        return day != null && day.get("items") instanceof List<?> items
+                ? (List<Map<String, Object>>) items : List.of();
+    }
+
+    /** 日历时钟:与 schedule() 的分天时区同源,不能用 systemDefault —— 容器 TZ 非上海时会出现「归到今天却显示昨晚」。 */
+    private static String clock(Object airTime) {
+        return airTime instanceof Number number
+                ? CLOCK_FORMAT.format(Instant.ofEpochMilli(number.longValue())) : "";
     }
 
     public static Rendered notFound(long id) {

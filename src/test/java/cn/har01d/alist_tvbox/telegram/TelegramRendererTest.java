@@ -216,4 +216,119 @@ class TelegramRendererTest {
         assertEquals("subs:0", TelegramRenderer.pianDanEntry(item, 2, 0, true, null, null)
                 .keyboard().get(0).get(0).callbackData());
     }
+
+    // ---------- 追更日历 ----------
+
+    /** 上海时区 2026-08-30 20:00 的毫秒(日历时钟按 Asia/Shanghai 渲染,不随 JVM 默认时区飘)。 */
+    private long air(int hour, int minute) {
+        return java.time.LocalDateTime.of(2026, 8, 30, hour, minute)
+                .atZone(java.time.ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli();
+    }
+
+    private Map<String, Object> slot(int id, String name, long airTime, String episodes, boolean paused) {
+        Map<String, Object> item = new java.util.LinkedHashMap<>();
+        item.put("subscriptionId", id);
+        item.put("name", name);
+        item.put("airTime", airTime);
+        item.put("episodes", episodes);
+        item.put("paused", paused);
+        return item;
+    }
+
+    private Map<String, Object> day(String label, String date, Map<String, Object>... items) {
+        Map<String, Object> day = new java.util.LinkedHashMap<>();
+        day.put("label", label);
+        day.put("date", date);
+        day.put("today", "今天".equals(label));
+        day.put("items", List.of(items));
+        return day;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calendarSkipsEmptyDaysButKeepsTodayAndTomorrowAnchors() {
+        TelegramRenderer.Rendered rendered = TelegramRenderer.calendar(List.of(
+                day("昨天", "8/29"),
+                day("今天", "8/30", slot(1, "重器", air(20, 0), "29-33", false)),
+                day("明天", "8/31"),
+                day("周一", "9/1"),
+                day("周三", "9/3", slot(2, "剑来", air(19, 30), "8", false))));
+        String text = rendered.text();
+        assertTrue(text.contains("今天 8/30"));
+        assertTrue(text.contains("20:00 重器 第29-33集"));
+        assertTrue(text.contains("明天 8/31"));
+        assertTrue(text.contains("—"));            // 今明空天出锚点
+        assertFalse(text.contains("昨天 8/29"));    // 其余空天跳过(抬头里的「昨天 →」不算)
+        assertFalse(text.contains("周一"));
+        assertTrue(text.contains("周三 9/3"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calendarMarksPausedAndOmitsMissingEpisodes() {
+        // episodes 为 null:nextAirTime 回落径(episode=0),只报时间不报集数
+        TelegramRenderer.Rendered rendered = TelegramRenderer.calendar(List.of(
+                day("今天", "8/30", slot(3, "某国漫", air(12, 0), null, true))));
+        assertTrue(rendered.text().contains("12:00 某国漫 ⏸"));
+        assertFalse(rendered.text().contains("集"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calendarShortcutsCoverTodayAndTomorrowDeduped() {
+        TelegramRenderer.Rendered rendered = TelegramRenderer.calendar(List.of(
+                day("今天", "8/30", slot(1, "重器", air(20, 0), "29", false),
+                        slot(2, "末日地堡", air(22, 0), "5", false)),
+                day("明天", "8/31", slot(1, "重器", air(20, 0), "30", false),
+                        slot(3, "某国漫", air(12, 0), "12", false)),
+                day("周三", "9/3", slot(9, "剑来", air(19, 30), "8", false))));
+        List<String> shortcuts = rendered.keyboard().stream().flatMap(List::stream)
+                .map(TelegramButton::callbackData).filter(data -> data.startsWith("sub:")).toList();
+        // 重器 今明都排 → 只出一次;周三的剧不进快跳
+        assertEquals(List.of("sub:1", "sub:2", "sub:3"), shortcuts);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calendarShortcutsCappedAtSix() {
+        Map<String, Object>[] items = new Map[9];
+        for (int i = 0; i < 9; i++) {
+            items[i] = slot(i + 1, "剧" + i, air(20, 0), "1", false);
+        }
+        TelegramRenderer.Rendered rendered = TelegramRenderer.calendar(List.of(day("今天", "8/30", items)));
+        assertEquals(6, rendered.keyboard().stream().flatMap(List::stream)
+                .filter(b -> b.callbackData().startsWith("sub:")).count());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void calendarTruncatesAtFortyLines() {
+        Map<String, Object>[] items = new Map[60];
+        for (int i = 0; i < 60; i++) {
+            items[i] = slot(i + 1, "剧" + i, air(20, 0), "1", false);
+        }
+        TelegramRenderer.Rendered rendered = TelegramRenderer.calendar(List.of(day("今天", "8/30", items)));
+        assertTrue(rendered.text().contains("仅显示前 40 条"));
+        assertFalse(rendered.text().contains("剧45"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void emptyCalendarExplainsWhy() {
+        assertTrue(TelegramRenderer.calendar(List.of()).text().contains("没有排播日程"));
+        assertTrue(TelegramRenderer.calendar(null).text().contains("没有排播日程"));
+        // 10 天全空(items 都为空)也算空态,不出一屏「—」
+        TelegramRenderer.Rendered rendered = TelegramRenderer.calendar(List.of(day("今天", "8/30"), day("明天", "8/31")));
+        assertTrue(rendered.text().contains("没有排播日程"));
+        assertEquals(TelegramCallbackData.of(TelegramCallbackData.SUBS, 0),
+                rendered.keyboard().get(0).get(0).callbackData());
+    }
+
+    @Test
+    void menuAndInboxExposeCalendar() {
+        assertTrue(TelegramRenderer.menu().keyboard().stream().flatMap(List::stream)
+                .anyMatch(b -> b.callbackData().equals(TelegramCallbackData.CALENDAR)));
+        assertTrue(TelegramRenderer.inbox(List.of()).keyboard().stream().flatMap(List::stream)
+                .anyMatch(b -> b.callbackData().equals(TelegramCallbackData.CALENDAR)));
+    }
 }
