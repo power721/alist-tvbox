@@ -14,7 +14,7 @@
 
     <div class="stats-row" v-if="stats">
       <div class="stat-card"><div class="stat-value">{{ stats.total }}</div><div class="stat-label">订阅</div></div>
-      <div class="stat-card"><div class="stat-value">{{ stats.active }}</div><div class="stat-label">追更中</div></div>
+      <div class="stat-card"><div class="stat-value">{{ stats.active }}</div><div class="stat-label">连载中</div></div>
       <div class="stat-card"><div class="stat-value">{{ stats.todayNewEpisodes }}</div><div class="stat-label">今日更新</div></div>
       <div class="stat-card"><div class="stat-value">{{ stats.ended }}</div><div class="stat-label">已完结</div></div>
       <div class="stat-card danger"><div class="stat-value">{{ stats.error }}</div><div class="stat-label">异常</div></div>
@@ -49,7 +49,7 @@
       <div class="batch-bar" v-if="subscriptions.length">
         <el-select v-model="statusFilter" size="small" style="width: 110px" placeholder="全部状态">
           <el-option label="全部状态" value=""/>
-          <el-option label="追更中" value="ACTIVE"/>
+          <el-option label="连载中" value="ACTIVE"/>
           <el-option label="已完结" value="ENDED"/>
           <el-option label="已暂停" value="PAUSED"/>
           <el-option label="异常" value="ERROR"/>
@@ -1945,7 +1945,7 @@ const displayName = (row: any) =>
 const statusText = (status: string) => {
   switch (status) {
     case 'ACTIVE':
-      return '追更中'
+      return '连载中'
     case 'PAUSED':
       return '已暂停'
     case 'ENDED':
