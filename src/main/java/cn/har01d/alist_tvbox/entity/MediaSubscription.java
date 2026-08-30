@@ -48,6 +48,16 @@ public class MediaSubscription {
 
     private Integer season;
 
+    /**
+     * 季起始集号(手动):资源按<b>季内编号</b>组织而官方元数据是<b>全剧连续集号</b>时
+     * (线上:一念永恒 —— TMDB 单季连续总集数,网盘按「第二季/第01集」季内编号),
+     * 声明本季第 1 集对应全剧第 N 集:解析出的季内集号统一 +N-1 映射进官方连续集号空间,
+     * 缺集检测按下界 N 运行(季前旧集不算缺)。null = 季内编号即官方编号(默认)。
+     * 与 {@link #remapAbsoluteNumbering 自动重映射}互斥:手动声明优先,自动推断跳过。
+     */
+    @Column(name = "season_start_episode")
+    private Integer seasonStartEpisode;
+
     @Column(name = "douban_id")
     private Integer doubanId;
 

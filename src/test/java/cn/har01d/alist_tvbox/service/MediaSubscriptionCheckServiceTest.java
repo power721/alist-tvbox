@@ -3876,6 +3876,40 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void applySeasonStartOffsetMapsIntraSeasonToContinuousNumbering() {
+        // 一念永恒形态:TMDB 单季连续总集数(全剧),网盘按「第二季/第01集」季内编号。
+        // 用户声明本季第 1 集 = 全剧第 63 集:季内 1-5 → 全剧 63-67
+        MediaSubscription subscription = cangYuanTu();
+        subscription.setSeason(2);
+        subscription.setSeasonStartEpisode(63);
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files =
+                absoluteFiles("/temp/quark@nyhdt/第二季", 1, 5);
+        MediaSubscriptionCheckService.applySeasonStartOffset(subscription, files);
+        assertEquals(List.of(63, 64, 65, 66, 67), new ArrayList<>(files.keySet()));
+        assertEquals("1.mp4", files.get(63).name(), "第 63 集应指向季内 1 号文件");
+
+        // 缺集检测下界钳到 63:季前旧集(1-62)不算缺,缺口只在 63..base
+        Set<Integer> present = Set.of(63, 64, 65, 67);
+        assertEquals(Set.of(66), service.computeMissing(subscription, present));
+
+        // 未声明(null)时行为不变:1..base 全集号空间,季前集 1/62 都算缺
+        subscription.setSeasonStartEpisode(null);
+        Set<Integer> plainMissing = service.computeMissing(subscription, present);
+        assertTrue(plainMissing.contains(1) && plainMissing.contains(62));
+        assertFalse(plainMissing.contains(63));
+    }
+
+    @Test
+    void applySeasonStartOffsetNoOpWhenStartAtOne() {
+        MediaSubscription subscription = cangYuanTu();
+        subscription.setSeasonStartEpisode(1);
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files =
+                absoluteFiles("/temp/quark@nyhdt/第二季", 3, 4);
+        MediaSubscriptionCheckService.applySeasonStartOffset(subscription, files);
+        assertEquals(List.of(3, 4), new ArrayList<>(files.keySet()), "起始 1 = 无偏移");
+    }
+
+    @Test
     void remapAbsoluteNumberingUsesSeasonFolderRangeStart() {
         // 「067-更新中 4K 第三季」目录自带全剧起点 067:基准 66,67-87 → 1-21
         TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files =

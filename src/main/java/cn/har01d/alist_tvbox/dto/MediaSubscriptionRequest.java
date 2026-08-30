@@ -8,6 +8,8 @@ public class MediaSubscriptionRequest {
     private String name;
     private String keyword;
     private Integer season;
+    /** 季起始集号(≤0 = 清除):本季第 1 集对应全剧第 N 集;资源季内编号而官方连续编号时用 */
+    private Integer seasonStartEpisode;
     private Integer doubanId;
     /** 元数据平台与条目 id(douban/tmdb/bangumi,§4.8) */
     private String metaProvider;

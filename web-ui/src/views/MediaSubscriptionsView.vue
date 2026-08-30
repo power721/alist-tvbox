@@ -187,6 +187,10 @@
         <el-form-item label="季">
           <el-input-number v-model="form.season" :min="1" :max="50"/>
         </el-form-item>
+        <el-form-item label="季起始集号">
+          <el-input-number v-model="form.seasonStartEpisode" :min="0" :max="9999"/>
+          <span class="sub-text" style="margin-left:8px">本季第 1 集对应全剧第 N 集 —— 元数据全剧连续集号而网盘按季内编号时用(如一念永恒);0/空 = 关闭;修改后集数记录会重置重扫</span>
+        </el-form-item>
         <el-form-item label="期望集数">
           <el-input-number v-model="form.expectedEpisodes" :min="0" :max="9999"/>
           <span class="sub-text" style="margin-left:8px">0/空 = 用官方总集数,均无则不自动完结</span>
@@ -794,6 +798,7 @@ interface SubscriptionDto {
   mainDrives: number[] | null
   keyword: string
   season: number | null
+  seasonStartEpisode: number | null
   doubanId: number | null
   metaProvider: string | null
   metaId: string | null
@@ -1280,6 +1285,7 @@ const handleAdd = () => {
     name: '',
     keyword: '',
     season: 1,
+    seasonStartEpisode: null,
     doubanId: null,
     metaProvider: null,
     metaId: null,
@@ -1313,6 +1319,7 @@ const handleEdit = (row: SubscriptionDto) => {
     name: row.name,
     keyword: row.keyword,
     season: row.season ?? 1,
+    seasonStartEpisode: row.seasonStartEpisode ?? null,
     doubanId: row.doubanId,
     metaProvider: row.metaProvider,
     metaId: row.metaId,
@@ -1413,6 +1420,7 @@ const buildBody = () => ({
   name: form.value.name,
   keyword: form.value.keyword,
   season: form.value.season,
+  seasonStartEpisode: form.value.seasonStartEpisode ?? 0,
   doubanId: form.value.doubanId,
   metaProvider: form.value.metaProvider,
   metaId: form.value.metaId,

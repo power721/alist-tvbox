@@ -11,6 +11,8 @@ public class MediaSubscriptionDto {
     private String name;
     private String keyword;
     private Integer season;
+    /** 季起始集号(null = 季内编号即官方编号) */
+    private Integer seasonStartEpisode;
     private Integer doubanId;
     private String metaProvider;
     private String metaId;

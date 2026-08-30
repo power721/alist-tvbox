@@ -1630,7 +1630,10 @@ public class MediaSubscriptionCheckService {
             return Set.of();
         }
         Set<Integer> missing = new TreeSet<>();
-        for (int i = 1; i <= base; i++) {
+        // 季起始集号下界:本季从全剧第 N 集开始,季前旧集不在本订阅补缺范围(资源侧本来就没有)
+        int lower = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
+                ? subscription.getSeasonStartEpisode() : 1;
+        for (int i = lower; i <= base; i++) {
             if (!present.contains(i)) {
                 missing.add(i);
             }
@@ -1937,8 +1940,35 @@ public class MediaSubscriptionCheckService {
     /** 巡检口径的集文件清洗:先做年番全剧连续编号重映射(救回超界真集),再剔不相干噪声。
      * 重映射必须在噪声剔除之前 —— 连续编号的正片集号天然超出官方总集数,先剔会把好集全删光。 */
     void sanitizeEpisodeFiles(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files, String contextTitle) {
-        remapAbsoluteNumbering(subscription, files, contextTitle);
+        if (subscription.getSeasonStartEpisode() != null) {
+            applySeasonStartOffset(subscription, files);
+        } else {
+            remapAbsoluteNumbering(subscription, files, contextTitle);
+        }
         stripForeignEpisodeNoise(subscription, files, metaGenres(subscription));
+    }
+
+    /**
+     * 手动季起始集号偏移(remapAbsoluteNumbering 的反向场景):官方元数据是全剧连续集号
+     * (TMDB 单季装全剧,线上:一念永恒总集数连续),而网盘资源按季内编号组织
+     * (「第二季/第01集」)—— 季内集号 1..N 偏移 +N-1 映射到官方连续集号空间,
+     * 缺集检测/集源行/播放列表随即全部落在同一套连续编号上。
+     * 与自动重映射互斥:手动声明是用户的明确事实,自动推断(锚定条件可能不满足)不得覆盖。
+     */
+    static void applySeasonStartOffset(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files) {
+        Integer start = subscription.getSeasonStartEpisode();
+        if (start == null || start <= 1 || files.isEmpty()) {
+            return;
+        }
+        int base = start - 1;
+        TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
+        for (Map.Entry<Integer, EpisodeFile> entry : files.entrySet()) {
+            int episode = entry.getKey() + base;
+            EpisodeFile file = entry.getValue();
+            result.put(episode, new EpisodeFile(episode, file.dir(), file.name(), file.size(), file.duration()));
+        }
+        files.clear();
+        files.putAll(result);
     }
 
     /**
@@ -3866,13 +3896,21 @@ public class MediaSubscriptionCheckService {
         }
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, policy, true, metaYear(subscription));
-        remapAbsoluteNumbering(subscription, result, null);
+        if (subscription.getSeasonStartEpisode() != null) {
+            applySeasonStartOffset(subscription, result);
+        } else {
+            remapAbsoluteNumbering(subscription, result, null);
+        }
         if (includeAux) {
             for (MediaSubscriptionResource resource : auxMounts(subscription)) {
                 try {
                     TreeMap<Integer, EpisodeFile> aux = new TreeMap<>();
                     collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, aux, policy, true, metaYear(subscription));
-                    remapAbsoluteNumbering(subscription, aux, resource.getTitle());
+                    if (subscription.getSeasonStartEpisode() != null) {
+                        applySeasonStartOffset(subscription, aux);
+                    } else {
+                        remapAbsoluteNumbering(subscription, aux, resource.getTitle());
+                    }
                     aux.values().forEach(file -> preferPut(result, file, policy));
                 } catch (Exception e) {
                     log.warn("walk aux files failed: {} {}", resource.getMountPath(), e.getMessage());
@@ -3898,7 +3936,11 @@ public class MediaSubscriptionCheckService {
         try {
             collectEpisodeFiles(site(), subscription.getSeason(), path, 1, result,
                     episodeSizePolicy(subscription), false, metaYear(subscription));
-            remapAbsoluteNumbering(subscription, result, null);
+            if (subscription.getSeasonStartEpisode() != null) {
+                applySeasonStartOffset(subscription, result);
+            } else {
+                remapAbsoluteNumbering(subscription, result, null);
+            }
         } catch (Exception e) {
             log.debug("episodeFilesAt {} failed: {}", path, e.getMessage());
         }
