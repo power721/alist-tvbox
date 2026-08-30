@@ -803,7 +803,15 @@ public class MediaSubscriptionService {
                                 .map(CastMember::getName).filter(StringUtils::isNotBlank)
                                 .collect(Collectors.joining(",")));
                     }
-                    if (StringUtils.isNotBlank(meta.getRating())) {
+                    // 多源评分 Map(RatingBridge 互补形态)逐源标注;旧快照只有单值 rating 时按 provider 标注
+                    if (meta.getRatings() != null && !meta.getRatings().isEmpty()) {
+                        for (String source : List.of("douban", "tmdb", "bangumi")) {
+                            String score = meta.getRatings().get(source);
+                            if (StringUtils.isNotBlank(score)) {
+                                remarks += " · " + ratingSourceLabel(source) + " " + score;
+                            }
+                        }
+                    } else if (StringUtils.isNotBlank(meta.getRating())) {
                         remarks += " · " + ratingSourceLabel(subscription.getMetaProvider()) + meta.getRating();
                     }
                 }
@@ -847,9 +855,16 @@ public class MediaSubscriptionService {
         detail.setVod_remarks(remarks);
     }
 
-    /** 评分来源标签:metaProvider 归一大写(tmdb→TMDB,douban→豆瓣)。 */
+    /** 评分来源标签:tmdb→TMDB,bangumi→Bangumi(首字母大写),douban→豆瓣。 */
     private static String ratingSourceLabel(String metaProvider) {
-        return "douban".equalsIgnoreCase(metaProvider) ? "豆瓣" : metaProvider.toUpperCase(java.util.Locale.ROOT);
+        if ("douban".equalsIgnoreCase(metaProvider)) {
+            return "豆瓣";
+        }
+        if ("tmdb".equalsIgnoreCase(metaProvider)) {
+            return "TMDB";
+        }
+        return metaProvider.substring(0, 1).toUpperCase(java.util.Locale.ROOT)
+                + metaProvider.substring(1).toLowerCase(java.util.Locale.ROOT);
     }
 
     /** 快照里的国家/语言代码转中文展示(TMDB 存 ISO 码:CN/zh 等)。 */
