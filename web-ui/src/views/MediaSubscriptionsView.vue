@@ -495,7 +495,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="notifyVisible" title="追剧设置" width="600">
+    <el-dialog v-model="notifyVisible" title="追剧设置" width="50%">
       <el-form label-width="140">
         <el-tabs v-model="notifyTab">
           <el-tab-pane label="通用" name="general">
@@ -609,6 +609,83 @@
           <el-input v-model="notifyForm.woniuCookie" type="textarea" :rows="2"
                     placeholder="须含 user_check(登录后复制);未登录网盘链接会被打码,无凭证时该搜索源自动关闭"/>
         </el-form-item>
+          </el-tab-pane>
+          <el-tab-pane v-if="store.admin" label="TG-Search" name="tgsearch">
+            <el-form-item label="TG-Search地址">
+              <el-input v-model="notifyForm.tgSearch" placeholder="http://IP:9900"/>
+              <span class="sub-text"><a href="https://github.com/power721/tg-search" target="_blank">部署 TG-Search</a>;与播放设置共用,留空关闭</span>
+            </el-form-item>
+            <el-form-item label="TG-Search API Key">
+              <el-input v-model="notifyForm.tgSearchApiKey" type="password" show-password/>
+            </el-form-item>
+            <span class="sub-text">追剧巡检的链接有效性检测(候选换源/挂载前探测)按 盘检 tab 的优先级走对应后端</span>
+          </el-tab-pane>
+          <el-tab-pane v-if="store.admin" label="盘搜" name="pansou">
+            <el-form-item label="PanSou地址">
+              <el-input v-model="notifyForm.panSouUrl" placeholder="http://IP:8888"/>
+              <span class="sub-text">与播放设置-盘搜配置共用;配置后追剧搜索源启用「鱼佬盘搜/盘搜 • 分组」</span>
+            </el-form-item>
+            <el-form-item label="PanSou用户名" v-if="notifyForm.panSouUrl && panSouAuthEnabled">
+              <el-input v-model="notifyForm.panSouUsername"/>
+            </el-form-item>
+            <el-form-item label="PanSou密码" v-if="notifyForm.panSouUrl && panSouAuthEnabled">
+              <el-input v-model="notifyForm.panSouPassword" type="password" show-password/>
+            </el-form-item>
+            <el-form-item label="PanSou数据源" v-if="notifyForm.panSouUrl">
+              <el-radio-group v-model="notifyForm.panSouSource" class="ml-4">
+                <el-radio size="large" value="all">全部</el-radio>
+                <el-radio size="large" value="tg">电报</el-radio>
+                <el-radio size="large" value="plugin">插件</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="PanSou频道列表" v-if="notifyForm.panSouUrl">
+              <el-radio-group v-model="notifyForm.panSouChannels" class="ml-4">
+                <el-radio size="large" value="custom">自定义</el-radio>
+                <el-radio size="large" value="project">项目内置</el-radio>
+                <el-radio size="large" value="pansou">盘搜内置</el-radio>
+              </el-radio-group>
+              <span class="sub-text">自定义=频道管理里勾选的频道,项目内置=本站内置频道清单,盘搜内置=PanSou 自带频道</span>
+            </el-form-item>
+            <el-form-item label="并发数" v-if="notifyForm.panSouUrl">
+              <el-input-number v-model="notifyForm.panSouConc" :min="0" placeholder="自动"/>
+              <span class="sub-text" style="margin-left:8px">0=上游自动并发(频道数+插件数+10)</span>
+            </el-form-item>
+            <el-form-item label="强制刷新" v-if="notifyForm.panSouUrl">
+              <el-switch v-model="notifyForm.panSouRefresh"/>
+              <span class="sub-text" style="margin-left:8px">跳过 PanSou 缓存,获取最新数据</span>
+            </el-form-item>
+            <el-form-item label="包含词" v-if="notifyForm.panSouUrl">
+              <el-input v-model="notifyForm.panSouFilterInclude" placeholder="多个用逗号分隔,如 1080,4K"/>
+            </el-form-item>
+            <el-form-item label="排除词" v-if="notifyForm.panSouUrl">
+              <el-input v-model="notifyForm.panSouFilterExclude" placeholder="多个用逗号分隔,如 枪版,广告"/>
+            </el-form-item>
+            <span class="sub-text">地址留空=关闭盘搜源;是否需要用户名密码登录由 PanSou /api/health 返回的鉴权状态决定;数据源/频道列表/并发/刷新/包含词/排除词与播放设置完全同步</span>
+          </el-tab-pane>
+          <el-tab-pane v-if="store.admin" label="盘检" name="pancheck">
+            <el-form-item label="盘检地址">
+              <el-input v-model="notifyForm.panCheckUrl" placeholder="http://IP:6080"/>
+              <span class="sub-text"><a href="https://github.com/Lampon/PanCheck" target="_blank">部署 PanCheck</a>;独立网盘链接检测后端,配置后优先使用;优先级:盘检地址 &gt; TG-Search &gt; PanSou,留空则回退</span>
+            </el-form-item>
+            <el-form-item label="盘检超时(ms)">
+              <el-input-number v-model="notifyForm.panCheckTimeoutMs" :min="0" :step="1000" placeholder="默认5000"/>
+              <span class="sub-text" style="margin-left:8px">仅在走 TG-Search 盘检时作为 timeout_ms 生效,0=上游默认(PanCheck/PanSou 无此参数)</span>
+            </el-form-item>
+            <el-form-item label="链接检测">
+              <el-switch v-model="notifyForm.panSouLinkCheckEnabled"/>
+              <span class="sub-text" style="margin-left:8px">自动检查盘搜搜索结果的有效性</span>
+            </el-form-item>
+            <el-form-item label="检测网盘类型">
+              <el-checkbox-group v-model="notifyForm.panSouLinkCheckTypes">
+                <el-checkbox v-for="t in panSouLinkCheckTypeOptions" :key="t.value" :label="t.label" :value="t.value"/>
+              </el-checkbox-group>
+              <span class="sub-text">留空=检测全部9种</span>
+            </el-form-item>
+            <el-form-item label="检测数量上限">
+              <el-input-number v-model="notifyForm.panSouLinkCheckMaxCount" :min="0" :max="1000"/>
+              <span class="sub-text" style="margin-left:8px">仅当网盘结果数量小于等于该值时检查,磁力和ED2K不计算数量</span>
+            </el-form-item>
+            <span class="sub-text">追剧巡检的链接有效性检测(候选换源/挂载前探测)走这里配置的后端</span>
           </el-tab-pane>
         </el-tabs>
       </el-form>
@@ -932,6 +1009,15 @@ const importText = ref('')
 const importing = ref(false)
 const notifyVisible = ref(false)
 const notifyTab = ref('general')
+// PanSou 是否开启鉴权:由 /api/pansou(健康检查缓存)返回的 auth_enabled 决定,决定是否展示用户名/密码
+const panSouAuthEnabled = ref(false)
+const loadPanSouAuth = () => {
+  axios.get('/api/pansou').then(({data}) => {
+    panSouAuthEnabled.value = data.auth_enabled === true
+  }).catch(() => {
+    panSouAuthEnabled.value = false
+  })
+}
 const notifyForm = ref({
   botToken: '',
   chatId: '',
@@ -957,7 +1043,34 @@ const notifyForm = ref({
   woniuUsername: '',
   woniuPassword: '',
   woniuCookie: '',
+  panSouUrl: '',
+  panSouUsername: '',
+  panSouPassword: '',
+  panSouSource: 'all',
+  panSouChannels: 'custom',
+  panSouConc: null as number | null,
+  panSouRefresh: false,
+  panSouFilterInclude: '',
+  panSouFilterExclude: '',
+  tgSearch: '',
+  tgSearchApiKey: '',
+  panCheckUrl: '',
+  panCheckTimeoutMs: null as number | null,
+  panSouLinkCheckEnabled: false,
+  panSouLinkCheckTypes: [] as string[],
+  panSouLinkCheckMaxCount: 300,
 })
+const panSouLinkCheckTypeOptions = [
+  {label: '百度网盘', value: 'baidu'},
+  {label: '阿里云盘', value: 'aliyun'},
+  {label: '夸克网盘', value: 'quark'},
+  {label: '天翼云盘', value: 'tianyi'},
+  {label: 'UC网盘', value: 'uc'},
+  {label: '移动云盘', value: 'mobile'},
+  {label: '115网盘', value: '115'},
+  {label: '迅雷网盘', value: 'xunlei'},
+  {label: '123网盘', value: '123'},
+]
 const navigationVisible = ref(false)
 const navCategories = ref<{ type_id: string, type_name: string }[]>([])
 const navAllFilters = ref<Record<string, any[]>>({})
@@ -1656,10 +1769,30 @@ const openNotify = () => {
     notifyForm.value.woniuUsername = settings['woniu_username'] || ''
     notifyForm.value.woniuPassword = settings['woniu_password'] || ''
     notifyForm.value.woniuCookie = settings['woniu_cookie'] || ''
+    notifyForm.value.panSouUrl = settings['pan_sou_url'] || ''
+    notifyForm.value.panSouUsername = settings['pan_sou_username'] || ''
+    notifyForm.value.panSouPassword = settings['pan_sou_password'] || ''
+    notifyForm.value.panSouSource = settings['pan_sou_source'] || 'all'
+    notifyForm.value.panSouChannels = settings['pan_sou_channels'] || 'custom'
+    notifyForm.value.panSouConc = settings['pan_sou_conc'] ? +settings['pan_sou_conc'] : null
+    notifyForm.value.panSouRefresh = settings['pan_sou_refresh'] === 'true'
+    notifyForm.value.panSouFilterInclude = settings['pan_sou_filter_include'] || ''
+    notifyForm.value.panSouFilterExclude = settings['pan_sou_filter_exclude'] || ''
+    notifyForm.value.tgSearch = settings['tg_search'] || ''
+    notifyForm.value.tgSearchApiKey = settings['tg_search_api_key'] || ''
+    notifyForm.value.panCheckUrl = settings['pan_check_url'] || ''
+    notifyForm.value.panCheckTimeoutMs = settings['pan_check_timeout_ms'] ? +settings['pan_check_timeout_ms'] : null
+    notifyForm.value.panSouLinkCheckEnabled = settings['pan_sou_link_check_enabled'] === 'true'
+    notifyForm.value.panSouLinkCheckTypes = (settings['pan_sou_link_check_types'] || '')
+        .split(',').map((v: string) => v.trim()).filter(Boolean)
+    notifyForm.value.panSouLinkCheckMaxCount = parseInt(settings['pan_sou_link_check_max_count'] || '300') || 300
+    if (notifyForm.value.panSouUrl) {
+      loadPanSouAuth()
+    }
     notifyLoaded.value = true
     notifyVisible.value = true
   }).catch(() => {
-    // 加载失败绝不能打开空表单:保存会把 20 项配置(含 botToken/豆瓣 cookie/搜索源凭证/资源筛选)整体覆写为空
+      // 加载失败绝不能打开空表单:保存会把 30 余项配置(含 botToken/豆瓣 cookie/搜索源凭证/盘搜/TG-Search/资源筛选)整体覆写为空
     ElMessage.error('设置加载失败,未打开对话框,请重试')
   })
 }
@@ -1700,6 +1833,22 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'woniu_username', value: notifyForm.value.woniuUsername.trim()}),
     axios.post('/api/settings', {name: 'woniu_password', value: notifyForm.value.woniuPassword}),
     axios.post('/api/settings', {name: 'woniu_cookie', value: notifyForm.value.woniuCookie.trim()}),
+    axios.post('/api/settings', {name: 'pan_sou_url', value: notifyForm.value.panSouUrl.trim()}),
+    axios.post('/api/settings', {name: 'pan_sou_username', value: notifyForm.value.panSouUsername.trim()}),
+    axios.post('/api/settings', {name: 'pan_sou_password', value: notifyForm.value.panSouPassword}),
+    axios.post('/api/settings', {name: 'pan_sou_source', value: notifyForm.value.panSouSource}),
+    axios.post('/api/settings', {name: 'pan_sou_channels', value: notifyForm.value.panSouChannels}),
+    axios.post('/api/settings', {name: 'pan_sou_conc', value: notifyForm.value.panSouConc || ''}),
+    axios.post('/api/settings', {name: 'pan_sou_refresh', value: notifyForm.value.panSouRefresh}),
+    axios.post('/api/settings', {name: 'pan_sou_filter_include', value: notifyForm.value.panSouFilterInclude.trim()}),
+    axios.post('/api/settings', {name: 'pan_sou_filter_exclude', value: notifyForm.value.panSouFilterExclude.trim()}),
+    axios.post('/api/settings', {name: 'tg_search', value: notifyForm.value.tgSearch.trim()}),
+    axios.post('/api/settings', {name: 'tg_search_api_key', value: notifyForm.value.tgSearchApiKey.trim()}),
+    axios.post('/api/settings', {name: 'pan_check_url', value: notifyForm.value.panCheckUrl.trim()}),
+    axios.post('/api/settings', {name: 'pan_check_timeout_ms', value: notifyForm.value.panCheckTimeoutMs || ''}),
+    axios.post('/api/settings', {name: 'pan_sou_link_check_enabled', value: notifyForm.value.panSouLinkCheckEnabled}),
+    axios.post('/api/settings', {name: 'pan_sou_link_check_types', value: notifyForm.value.panSouLinkCheckTypes.join(',')}),
+    axios.post('/api/settings', {name: 'pan_sou_link_check_max_count', value: notifyForm.value.panSouLinkCheckMaxCount}),
   ] : (() => {
     // 普通用户:仅写个人 TG 渠道与资源筛选偏好({key}:u{uid} 用户级行);空 botToken/chatId = 删除覆盖、回退全局
     const saves = [
