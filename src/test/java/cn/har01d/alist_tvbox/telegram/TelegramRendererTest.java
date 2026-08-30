@@ -13,6 +13,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** 渲染层:HTML 转义、分页边界、空态文案、超长截断。 */
@@ -330,5 +331,55 @@ class TelegramRendererTest {
                 .anyMatch(b -> b.callbackData().equals(TelegramCallbackData.CALENDAR)));
         assertTrue(TelegramRenderer.inbox(List.of()).keyboard().stream().flatMap(List::stream)
                 .anyMatch(b -> b.callbackData().equals(TelegramCallbackData.CALENDAR)));
+    }
+
+    // ---------- 海报 ----------
+
+    @Test
+    void posterUrlRestoresUpstreamFromCoverProxy() {
+        // 服务层 proxiedCover 的产物:TG 抓不到内网相对路径,得还原上游直链
+        assertEquals("https://image.tmdb.org/t/p/w500/a b.jpg",
+                TelegramRenderer.posterUrl("/images?url=https%3A%2F%2Fimage.tmdb.org%2Ft%2Fp%2Fw500%2Fa+b.jpg"));
+        // 多参数形态只取 url
+        assertEquals("https://img.doubanio.com/x.jpg",
+                TelegramRenderer.posterUrl("/images?url=https%3A%2F%2Fimg.doubanio.com%2Fx.jpg&w=200"));
+        // 原始 http 直链原样透传(片单条目的 vod_pic 未过代理)
+        assertEquals("https://image.tmdb.org/t/p/w500/x.jpg",
+                TelegramRenderer.posterUrl("https://image.tmdb.org/t/p/w500/x.jpg"));
+    }
+
+    @Test
+    void posterUrlRejectsUnreachableForms() {
+        assertNull(TelegramRenderer.posterUrl(null));
+        assertNull(TelegramRenderer.posterUrl(""));
+        assertNull(TelegramRenderer.posterUrl("/assets/placeholder.png")); // 其它相对路径 TG 一样抓不到
+        assertNull(TelegramRenderer.posterUrl("/images?url=%2Flocal%2Fx.jpg")); // 解出来仍非 http
+    }
+
+    @Test
+    void detailViewsCarryPoster() {
+        MediaSubscriptionDto dto = dto(1, "重器");
+        dto.setCover("/images?url=https%3A%2F%2Fimage.tmdb.org%2Fp.jpg");
+        assertEquals("https://image.tmdb.org/p.jpg", TelegramRenderer.subDetail(dto, null).poster());
+
+        MetadataSearchItem item = new MetadataSearchItem();
+        item.setProvider("tmdb");
+        item.setId("42");
+        item.setName("斗破苍穹");
+        item.setCover("/images?url=https%3A%2F%2Fimage.tmdb.org%2Fs.jpg");
+        assertEquals("https://image.tmdb.org/s.jpg", TelegramRenderer.searchDetail(item, 0, 0, false).poster());
+
+        MovieDetail entry = entry("tmdb:tv:1", "剧甲");
+        entry.setVod_pic("https://image.tmdb.org/e.jpg");
+        assertEquals("https://image.tmdb.org/e.jpg",
+                TelegramRenderer.pianDanEntry(entry, 0, 0, false, List.of(), Set.of()).poster());
+    }
+
+    @Test
+    void listViewsCarryNoPoster() {
+        // 列表/菜单不挂预览:一屏多剧挂谁都不对,且预览会把键盘挤下去
+        assertNull(TelegramRenderer.menu().poster());
+        assertNull(TelegramRenderer.subsPage(List.of(dto(1, "重器")), 0).poster());
+        assertNull(TelegramRenderer.calendar(List.of()).poster());
     }
 }

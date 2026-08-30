@@ -60,12 +60,35 @@ class TelegramBotClientTest {
         server.expect(requestTo(URI.create("https://api.telegram.org/botTOKEN/sendMessage")))
                 .andExpect(content().json("""
                         {"chat_id":"100","text":"<b>hi</b>","parse_mode":"HTML",
+                         "link_preview_options":{"is_disabled":true},
                          "reply_markup":{"inline_keyboard":[[{"text":"按钮","callback_data":"home"}]]}}"""))
                 .andRespond(withSuccess("{\"ok\":true,\"result\":{\"message_id\":77}}", MediaType.APPLICATION_JSON));
         long messageId = client.sendMessage("TOKEN", "100", "<b>hi</b>",
                 List.of(List.of(new TelegramButton("按钮", "home"))));
         server.verify();
         assertEquals(77, messageId);
+    }
+
+    @Test
+    void posterGoesThroughLinkPreviewNotSendPhoto() {
+        // 文本消息不能被编辑成媒体消息,而 Bot 全程单锚点编辑 —— 海报走 link_preview_options.url,图不必进正文
+        server.expect(requestTo(URI.create("https://api.telegram.org/botTOKEN/editMessageText")))
+                .andExpect(content().json("""
+                        {"chat_id":"100","message_id":5,"text":"详情",
+                         "link_preview_options":{"url":"https://image.tmdb.org/p.jpg",
+                          "prefer_large_media":true,"show_above_text":true}}"""))
+                .andRespond(withSuccess("{\"ok\":true,\"result\":{}}", MediaType.APPLICATION_JSON));
+        client.editMessageText("TOKEN", "100", 5, "详情", null, "https://image.tmdb.org/p.jpg");
+        server.verify();
+    }
+
+    @Test
+    void nonHttpPosterFallsBackToDisabledPreview() {
+        server.expect(requestTo(URI.create("https://api.telegram.org/botTOKEN/editMessageText")))
+                .andExpect(content().json("{\"link_preview_options\":{\"is_disabled\":true}}"))
+                .andRespond(withSuccess("{\"ok\":true,\"result\":{}}", MediaType.APPLICATION_JSON));
+        client.editMessageText("TOKEN", "100", 5, "详情", null, "/images?url=x");
+        server.verify();
     }
 
     @Test

@@ -9,6 +9,8 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.util.Constants;
 import org.apache.commons.lang3.StringUtils;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -30,6 +32,8 @@ public final class TelegramRenderer {
     /** 搜索结果每页条数 */
     static final int RESULTS_PAGE_SIZE = 8;
     private static final int MAX_TEXT_LENGTH = 3800;
+    /** 服务层封面代理前缀({@code MediaSubscriptionService.proxiedCover});海报要还原成上游直链才抓得到。 */
+    private static final String COVER_PROXY_PREFIX = "/images?url=";
     /** 日历条目行封顶(22 订阅 × 10 天可轻松过百行);超出截断并注明。 */
     private static final int CALENDAR_MAX_LINES = 40;
     /** 今明快捷跳转钮上限,超出只在正文里列。 */
@@ -39,10 +43,47 @@ public final class TelegramRenderer {
     private static final DateTimeFormatter CLOCK_FORMAT =
             DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of(Constants.ZONE_ID));
 
-    public record Rendered(String text, List<List<TelegramButton>> keyboard) {
+    /**
+     * 渲染结果:文本 + inline keyboard + 可选海报直链。
+     * <p>
+     * 海报不发图片消息 —— TG 不允许把文本消息编辑成媒体消息(editMessageMedia 要求消息本身带媒体),
+     * 而本 Bot 全程单锚点编辑;改走 link preview(link_preview_options.url,图不必出现在正文里),
+     * 编辑模型一点不动。抓不到图 TG 只是不渲染预览,不报错 —— 天然静默降级。
+     */
+    public record Rendered(String text, List<List<TelegramButton>> keyboard, String poster) {
+        public Rendered(String text, List<List<TelegramButton>> keyboard) {
+            this(text, keyboard, null);
+        }
     }
 
     private TelegramRenderer() {
+    }
+
+    /**
+     * 封面 → TG 可抓的直链:服务层把封面一律改写成本地 {@code /images?url={原址}}(豆瓣防盗链代理),
+     * Telegram 服务器抓不到内网路径 —— 这里还原上游直链。
+     * <p>
+     * 还原后仍非人人可抓:TMDB(image.tmdb.org)公网直取没问题,豆瓣(doubanio)有防盗链、TG 抓图不带
+     * Referer,多半 403 出不了图。抓不到只是没预览,故不做可达性探测。
+     */
+    static String posterUrl(String cover) {
+        if (StringUtils.isBlank(cover)) {
+            return null;
+        }
+        if (cover.startsWith("http")) {
+            return cover;
+        }
+        if (!cover.startsWith(COVER_PROXY_PREFIX)) {
+            return null; // 其它相对路径(占位图等)TG 一样抓不到,不如不给
+        }
+        try {
+            String encoded = cover.substring(COVER_PROXY_PREFIX.length());
+            int and = encoded.indexOf('&');
+            String url = URLDecoder.decode(and < 0 ? encoded : encoded.substring(0, and), StandardCharsets.UTF_8);
+            return url.startsWith("http") ? url : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     public static Rendered menu() {
@@ -127,12 +168,22 @@ public final class TelegramRenderer {
                 row(new TelegramButton("❌ 退订", TelegramCallbackData.of(TelegramCallbackData.SUB_DELETE, dto.getId()))),
                 row(new TelegramButton("🔍 搜索", TelegramCallbackData.SEARCH),
                         new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME))));
-        return new Rendered(truncate(text), keyboard);
+        return new Rendered(truncate(text), keyboard, posterUrl(dto.getCover()));
     }
 
     public static Rendered searchPrompt() {
         return new Rendered("🔍 <b>搜索追剧</b>\n\n请直接输入剧名(100 字以内):\n例如:庆余年 / 斗破苍穹",
                 List.of(row(new TelegramButton("❌ 取消", TelegramCallbackData.CANCEL))));
+    }
+
+    /** 搜索源不可用(未配 API Key / 熔断 / 网络不通):与「真没搜到」分开报,免得用户白换关键词。 */
+    public static Rendered searchUnavailable(String reason) {
+        return new Rendered("⚠️ <b>搜索源暂时不可用</b>\n\nTMDB:" + esc(abbrev(reason, 200))
+                        + "\n\n请到网页端「追剧设置 → 元数据」检查 TMDB API Key 与线路,或稍后重试。\n"
+                        + "也可以先用「🎞 片单追更」从榜单里挑剧,那条路不依赖搜索。",
+                List.of(row(new TelegramButton("🔄 重试搜索", TelegramCallbackData.SEARCH),
+                                new TelegramButton("🎞 片单追更", TelegramCallbackData.PIAN_DAN)),
+                        row(new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME))));
     }
 
     public static Rendered searchResults(String keyword, List<MetadataSearchItem> items, int page) {
@@ -174,6 +225,16 @@ public final class TelegramRenderer {
     }
 
     public static Rendered searchDetail(MetadataSearchItem item, int index, int resultPage, boolean subscribed) {
+        return searchDetail(item, index, resultPage, subscribed, null);
+    }
+
+    /**
+     * 搜索结果详情。{@code detail} 为可选的元数据详情补全 —— provider.search 只回 名称/年份/评分/封面,
+     * 简介一律没有(豆瓣的 description 是「剧集」这类类型标签,TMDB/Bangumi 连这个都没有),
+     * 只靠搜索条目渲染出来就两行,像没加载完。拉不到详情时退化成原来的薄版本。
+     */
+    public static Rendered searchDetail(MetadataSearchItem item, int index, int resultPage, boolean subscribed,
+                                        MovieDetail detail) {
         StringBuilder text = new StringBuilder("🎬 <b>").append(esc(abbrev(item.getName(), 60))).append("</b>");
         if (StringUtils.isNotBlank(item.getYear())) {
             text.append("(").append(esc(item.getYear())).append(")");
@@ -182,8 +243,16 @@ public final class TelegramRenderer {
         if (StringUtils.isNotBlank(item.getScore())) {
             text.append(" · 评分 ").append(esc(item.getScore()));
         }
-        if (StringUtils.isNotBlank(item.getDescription())) {
-            text.append("\n\n").append(esc(StringUtils.abbreviate(item.getDescription(), 400)));
+        if (detail != null && StringUtils.isNotBlank(detail.getType_name())) {
+            text.append("\n类型:").append(esc(abbrev(detail.getType_name(), 60)));
+        }
+        if (detail != null && StringUtils.isNotBlank(detail.getVod_actor())) {
+            text.append("\n主演:").append(esc(abbrev(detail.getVod_actor(), 60)));
+        }
+        String overview = detail != null && StringUtils.isNotBlank(detail.getVod_content())
+                ? detail.getVod_content() : item.getDescription();
+        if (StringUtils.isNotBlank(overview)) {
+            text.append("\n\n").append(esc(StringUtils.abbreviate(overview, 400)));
         }
         List<List<TelegramButton>> keyboard = new ArrayList<>();
         if (subscribed) {
@@ -194,7 +263,9 @@ public final class TelegramRenderer {
         keyboard.add(row(new TelegramButton("◀ 返回结果", TelegramCallbackData.of(TelegramCallbackData.RESULT_BACK, resultPage))));
         keyboard.add(row(new TelegramButton("🔍 重新搜索", TelegramCallbackData.SEARCH),
                 new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME)));
-        return new Rendered(truncate(text), keyboard);
+        String poster = detail != null && StringUtils.isNotBlank(detail.getVod_pic())
+                ? detail.getVod_pic() : item.getCover();
+        return new Rendered(truncate(text), keyboard, posterUrl(poster));
     }
 
     public static Rendered confirmDelete(MediaSubscriptionDto dto) {
@@ -353,7 +424,8 @@ public final class TelegramRenderer {
                 TelegramCallbackData.of(TelegramCallbackData.PIAN_DAN_PAGE, page))));
         keyboard.add(row(new TelegramButton("🎞 换个分类", TelegramCallbackData.PIAN_DAN),
                 new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME)));
-        return new Rendered(truncate(text), keyboard);
+        // 片单条目的 vod_pic 直取 TMDB/豆瓣列表,未过服务层封面代理,原样可用
+        return new Rendered(truncate(text), keyboard, posterUrl(item.getVod_pic()));
     }
 
     @SuppressWarnings("unchecked")

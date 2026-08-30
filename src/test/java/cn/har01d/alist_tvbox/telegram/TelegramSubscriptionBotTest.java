@@ -77,24 +77,50 @@ class TelegramSubscriptionBotTest {
     }
 
     private void runSearch(String keyword) {
-        when(subscriptionService.metaSearch("", keyword)).thenReturn(Map.of(
+        when(subscriptionService.metaSearch("tmdb", keyword)).thenReturn(Map.of(
                 "items", List.of(item("tmdb", "42", "斗破苍穹"), item("douban", "99", "斗破苍穹 特别篇")),
                 "errors", Map.of()));
         bot.runSearch("TOKEN", "100", 5, keyword, 55L);
     }
 
     @Test
+    void searchUsesTmdbOnly() {
+        // 全源 searchReport 按源整块拼接(每源 10 条),一页 8 条会被最前那源吃满 —— 收敛到 TMDB
+        runSearch("斗破苍穹");
+        verify(subscriptionService).metaSearch("tmdb", "斗破苍穹");
+        verify(subscriptionService, never()).metaSearch(eq(""), anyString());
+    }
+
+    @Test
+    void searchSurfacesProviderFailureInsteadOfEmptyResult() {
+        when(subscriptionService.metaSearch("tmdb", "庆余年")).thenReturn(Map.of(
+                "items", List.of(), "errors", Map.of("tmdb", "401 Unauthorized")));
+        bot.runSearch("TOKEN", "100", 5, "庆余年", 55L);
+        // 单源意味着它挂了就没结果:报原因而不是「换个关键词试试」
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
+                argThat(text -> text.contains("搜索源暂时不可用") && text.contains("401 Unauthorized")), any(), any());
+    }
+
+    @Test
+    void emptyResultWithoutErrorStaysAsNoMatch() {
+        when(subscriptionService.metaSearch("tmdb", "不存在的剧")).thenReturn(Map.of(
+                "items", List.of(), "errors", Map.of()));
+        bot.runSearch("TOKEN", "100", 5, "不存在的剧", 55L);
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("没有找到"), any(), any());
+    }
+
+    @Test
     void runSearchEditsPromptIntoResults() {
         runSearch("斗破苍穹");
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("共 2 条"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("共 2 条"), any(), any());
     }
 
     @Test
     void runSearchFailureEditsPromptIntoNotice() {
-        when(subscriptionService.metaSearch("", "坏词")).thenThrow(new RuntimeException("provider down"));
+        when(subscriptionService.metaSearch("tmdb", "坏词")).thenThrow(new RuntimeException("provider down"));
         bot.runSearch("TOKEN", "100", 5, "坏词", 55L);
         // 提示消息仍有锚点:就地编辑成错误提示,不发新消息
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("搜索失败"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("搜索失败"), any(), any());
     }
 
     @Test
@@ -121,7 +147,7 @@ class TelegramSubscriptionBotTest {
         assertEquals("tmdb", captor.getValue().getMetaProvider());
         assertEquals("42", captor.getValue().getMetaId());
         verify(checkService).checkAsync(5, 88);
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已加入追剧"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已加入追剧"), any(), any());
     }
 
     @Test
@@ -130,7 +156,7 @@ class TelegramSubscriptionBotTest {
         when(subscriptionService.isSubscribedTitle(5, "斗破苍穹")).thenReturn(true);
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "add:0"), TelegramCallbackData.parse("add:0"));
         verify(subscriptionService, never()).create(anyInt(), any());
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已经在追剧列表"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已经在追剧列表"), any(), any());
     }
 
     @Test
@@ -138,7 +164,7 @@ class TelegramSubscriptionBotTest {
         String result = bot.handleCallback("TOKEN", 5, callback(100L, 55L, "add:0"),
                 TelegramCallbackData.parse("add:0"));
         assertEquals("搜索结果已过期,请重新搜索", result);
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("请直接输入剧名"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("请直接输入剧名"), any(), any());
     }
 
     @Test
@@ -149,11 +175,11 @@ class TelegramSubscriptionBotTest {
         dto.setStatus(cn.har01d.alist_tvbox.entity.MediaSubscription.STATUS_ACTIVE);
         when(subscriptionService.detail(5, 7)).thenReturn(Map.of("subscription", dto));
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "subdel:7"), TelegramCallbackData.parse("subdel:7"));
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("确定退订"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("确定退订"), any(), any());
 
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "subdelc:7"), TelegramCallbackData.parse("subdelc:7"));
         verify(subscriptionService).delete(5, 7);
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已退订"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已退订"), any(), any());
     }
 
     @Test
@@ -176,9 +202,9 @@ class TelegramSubscriptionBotTest {
     void editNotFoundFallsBackToSendMessage() {
         org.mockito.Mockito.doThrow(new TelegramApiException(
                 "telegram editMessageText failed: Bad Request: message to edit not found"))
-                .when(client).editMessageText(anyString(), anyString(), anyLong(), anyString(), any());
+                .when(client).editMessageText(anyString(), anyString(), anyLong(), anyString(), any(), any());
         bot.sendMenu("TOKEN", "100");
-        verify(client).sendMessage(eq("TOKEN"), eq("100"), contains("追剧助手"), any());
+        verify(client).sendMessage(eq("TOKEN"), eq("100"), contains("追剧助手"), any(), any());
     }
 
     @Test
@@ -187,9 +213,36 @@ class TelegramSubscriptionBotTest {
         when(subscriptionService.isSubscribedTitle(5, "斗破苍穹")).thenReturn(true);
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pick:0"), TelegramCallbackData.parse("pick:0"));
         // 详情文本独有「来源:」行,与结果列表区分;已订阅 → 按钮跳列表而非追加
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("来源:"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("来源:"), any(), any());
         verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), anyString(),
-                argThat(kb -> kb != null && kb.get(0).get(0).callbackData().startsWith("subs:")));
+                argThat(kb -> kb != null && kb.get(0).get(0).callbackData().startsWith("subs:")), any());
+    }
+
+    @Test
+    void pickBackfillsDetailFromTmdb() {
+        runSearch("斗破苍穹");
+        MovieDetail detail = entry("tmdb:tv:42", "斗破苍穹");
+        detail.setVod_content("萧炎三年之约");
+        detail.setVod_actor("配音甲 / 配音乙");
+        detail.setType_name("动画 / 剧情");
+        detail.setVod_pic("https://image.tmdb.org/p.jpg");
+        when(pianDanService.tmdbDetail("tv", 42)).thenReturn(detail);
+
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pick:0"), TelegramCallbackData.parse("pick:0"));
+
+        // search 只回名称/年份/评分,简介与主演靠详情补,海报也换成详情里的直链
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
+                argThat(text -> text.contains("萧炎三年之约") && text.contains("配音甲") && text.contains("动画")),
+                any(), eq("https://image.tmdb.org/p.jpg"));
+    }
+
+    @Test
+    void pickFallsBackWhenDetailUnavailable() {
+        runSearch("斗破苍穹");
+        when(pianDanService.tmdbDetail("tv", 42)).thenThrow(new RuntimeException("tmdb down"));
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pick:0"), TelegramCallbackData.parse("pick:0"));
+        // 详情拉不到不炸,退化成薄版本
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("来源:"), any(), any());
     }
 
     // ---------- 片单追更 ----------
@@ -239,7 +292,7 @@ class TelegramSubscriptionBotTest {
         verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
                 argThat(text -> text.contains("豆瓣·热门电视剧") && text.contains("剧10") && !text.contains("剧11")),
                 argThat(kb -> kb != null && kb.stream().anyMatch(row ->
-                        row.stream().anyMatch(b -> b.callbackData().equals("pdl:1")))));
+                        row.stream().anyMatch(b -> b.callbackData().equals("pdl:1")))), any());
     }
 
     @Test
@@ -249,7 +302,7 @@ class TelegramSubscriptionBotTest {
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdl:1"), TelegramCallbackData.parse("pdl:1"));
         verify(pianDanService, org.mockito.Mockito.times(2)).list("douban:hot_tv", "web", 1, 20, Map.of());
         verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
-                argThat(text -> text.contains("剧11") && text.contains("剧20")), any());
+                argThat(text -> text.contains("剧11") && text.contains("剧20")), any(), any());
 
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdl:2"), TelegramCallbackData.parse("pdl:2"));
         verify(pianDanService).list("douban:hot_tv", "web", 2, 20, Map.of());
@@ -259,7 +312,7 @@ class TelegramSubscriptionBotTest {
     void subscribedEntriesMarkedInList() {
         when(subscriptionService.isSubscribedTitle(5, "剧3")).thenReturn(true);
         openCategory();
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("✅已追"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("✅已追"), any(), any());
     }
 
     @Test
@@ -278,7 +331,7 @@ class TelegramSubscriptionBotTest {
                         && kb.get(0).stream().anyMatch(b -> b.callbackData().equals("pdadd:0:1"))
                         // 已追的第 2 季不给重复订阅入口,跳订阅列表
                         && kb.get(0).stream().anyMatch(b -> b.text().equals("✅ 第2季"))
-                        && kb.get(0).stream().anyMatch(b -> b.callbackData().equals("pdadd:0:3"))));
+                        && kb.get(0).stream().anyMatch(b -> b.callbackData().equals("pdadd:0:3"))), any());
     }
 
     @Test
@@ -294,7 +347,7 @@ class TelegramSubscriptionBotTest {
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdadd:0:3"), TelegramCallbackData.parse("pdadd:0:3"));
 
         verify(pianDanSubscriptionService).subscribe(5, "tmdb:tv:1|剧1|3");
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已加入追剧"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已加入追剧"), any(), any());
     }
 
     @Test
@@ -304,7 +357,7 @@ class TelegramSubscriptionBotTest {
                 .thenReturn(new PianDanSubscriptionService.Result(null, true, "剧1", null, "已在追剧中"));
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pdadd:0"), TelegramCallbackData.parse("pdadd:0"));
         verify(pianDanSubscriptionService).subscribe(5, "tmdb:tv:1|剧1");
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已经在追剧列表"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("已经在追剧列表"), any(), any());
     }
 
     @Test
@@ -313,7 +366,7 @@ class TelegramSubscriptionBotTest {
         String result = bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pde:0"),
                 TelegramCallbackData.parse("pde:0"));
         assertEquals("片单浏览已过期,请重新选择分类", result);
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("片单追更"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("片单追更"), any(), any());
     }
 
     @Test
@@ -345,13 +398,13 @@ class TelegramSubscriptionBotTest {
                         "airTime", 1756555200000L, "episodes", "29-33", "paused", false)))));
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "cal"), TelegramCallbackData.parse("cal"));
         verify(subscriptionService).schedule(5);
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("追更日历"), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("追更日历"), any(), any());
     }
 
     @Test
     void sendCalendarPostsFreshMessage() {
         when(subscriptionService.schedule(5)).thenReturn(List.of());
         bot.sendCalendar("TOKEN", "100", 5);
-        verify(client).sendMessage(eq("TOKEN"), eq("100"), contains("没有排播日程"), any());
+        verify(client).sendMessage(eq("TOKEN"), eq("100"), contains("没有排播日程"), any(), any());
     }
 }

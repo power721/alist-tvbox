@@ -70,10 +70,17 @@ public class TelegramBotClient {
 
     /** 发送新消息(HTML),返回 message_id 供后续编辑锚定。 */
     public long sendMessage(String token, String chatId, String text, List<List<TelegramButton>> keyboard) {
+        return sendMessage(token, chatId, text, keyboard, null);
+    }
+
+    /** poster 非空时挂 link preview 出海报(详情页),否则显式关预览防正文里的链接被抢镜。 */
+    public long sendMessage(String token, String chatId, String text, List<List<TelegramButton>> keyboard,
+                            String poster) {
         var body = objectMapper.createObjectNode();
         body.put("chat_id", chatId);
         body.put("text", text);
         body.put("parse_mode", "HTML");
+        linkPreview(body, poster);
         keyboard(keyboard, body);
         String response = exchange(token, "sendMessage", body);
         try {
@@ -86,13 +93,35 @@ public class TelegramBotClient {
     /** 编辑已有消息(翻页/进出详情复用同一条消息,防刷屏)。"message is not modified" 视为成功。 */
     public void editMessageText(String token, String chatId, long messageId, String text,
                                 List<List<TelegramButton>> keyboard) {
+        editMessageText(token, chatId, messageId, text, keyboard, null);
+    }
+
+    public void editMessageText(String token, String chatId, long messageId, String text,
+                                List<List<TelegramButton>> keyboard, String poster) {
         var body = objectMapper.createObjectNode();
         body.put("chat_id", chatId);
         body.put("message_id", messageId);
         body.put("text", text);
         body.put("parse_mode", "HTML");
+        linkPreview(body, poster);
         keyboard(keyboard, body);
         exchange(token, "editMessageText", body);
+    }
+
+    /**
+     * 海报走 link preview 而非 sendPhoto:文本消息不能被编辑成媒体消息,而本 Bot 全程单锚点编辑。
+     * {@code link_preview_options.url} 让图不必出现在正文里(Bot API 7.0+);抓不到图 TG 只是不渲染,不报错。
+     * 无海报的页面显式 {@code is_disabled},免得剧名/简介里的链接被 TG 抓来当预览。
+     */
+    private void linkPreview(com.fasterxml.jackson.databind.node.ObjectNode body, String poster) {
+        var options = body.putObject("link_preview_options");
+        if (poster == null || !poster.startsWith("http")) {
+            options.put("is_disabled", true);
+            return;
+        }
+        options.put("url", poster);
+        options.put("prefer_large_media", true);
+        options.put("show_above_text", true);
     }
 
     /** 应答回调(TG 客户端的转圈止于此);text 为弹出提示,可空。 */

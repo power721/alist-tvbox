@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.PianDanService;
 import cn.har01d.alist_tvbox.service.PianDanSubscriptionService;
+import cn.har01d.alist_tvbox.service.metadata.TmdbMetadataProvider;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
@@ -104,7 +105,13 @@ public class TelegramSubscriptionBot {
         return client.sendMessage(token, chatId, prompt.text(), prompt.keyboard());
     }
 
-    /** 用户输入关键词:全源元数据搜索 → 暂存 → 编辑提示消息为结果列表。 */
+    /**
+     * 用户输入关键词:TMDB 元数据搜索 → 暂存 → 编辑提示消息为结果列表。
+     * <p>
+     * 只用 TMDB 而非全源:searchReport 是按源整块拼接(每源上限 10 条)而非交错或按相关度排,
+     * bot 一页 8 条,第一页必然被排在最前那一源吃满 —— 与其在窗口里做混排,不如收敛到追更最需要的源
+     * (TMDB 有官方集数与分集播出日期,直接喂给巡检排程)。单源意味着它挂了就没结果,故失败原因要报出来。
+     */
     @SuppressWarnings("unchecked")
     public void runSearch(String token, String chatId, int uid, String keyword, long promptMessageId) {
         String trimmed = StringUtils.trimToEmpty(keyword);
@@ -118,12 +125,21 @@ public class TelegramSubscriptionBot {
             return;
         }
         List<MetadataSearchItem> items;
+        Map<String, String> errors;
         try {
-            Map<String, Object> report = subscriptionService.metaSearch("", trimmed);
+            Map<String, Object> report = subscriptionService.metaSearch(TmdbMetadataProvider.NAME, trimmed);
             items = (List<MetadataSearchItem>) report.get("items");
+            errors = report.get("errors") instanceof Map<?, ?> map ? (Map<String, String>) map : Map.of();
         } catch (Exception e) {
             log.warn("telegram meta search failed: uid={} keyword={}", uid, trimmed, e);
             editOrSend(token, chatId, promptMessageId, TelegramRenderer.message("❌ 搜索失败,请稍后重试。"));
+            return;
+        }
+        if ((items == null || items.isEmpty()) && !errors.isEmpty()) {
+            // 源不可用(未配 API Key / 被熔断 / 网络不通)与「真没搜到」是两回事,报原因免得用户白换关键词
+            log.info("telegram meta search unavailable: uid={} keyword={} errors={}", uid, trimmed, errors);
+            editOrSend(token, chatId, promptMessageId,
+                    TelegramRenderer.searchUnavailable(String.join(";", errors.values())));
             return;
         }
         searchStates.put(chatId, new SearchState(trimmed, items == null ? List.of() : items, 0));
@@ -178,7 +194,7 @@ public class TelegramSubscriptionBot {
                 }
                 MetadataSearchItem item = state.items().get(cb.arg());
                 edit(token, chatId, messageId, TelegramRenderer.searchDetail(item, cb.arg(), state.page(),
-                        subscriptionService.isSubscribedTitle(uid, item.getName())));
+                        subscriptionService.isSubscribedTitle(uid, item.getName()), searchItemDetail(item)));
             }
             case TelegramCallbackData.ADD -> {
                 return addSubscription(token, uid, chatId, messageId, cb.arg());
@@ -228,6 +244,23 @@ public class TelegramSubscriptionBot {
             }
         }
         return null;
+    }
+
+    /**
+     * 搜索结果详情补全:provider.search 只回 名称/年份/评分/封面,简介一律没有(TMDB 连字段都不填),
+     * 光靠搜索条目渲染出来就两行像没加载完 —— 按 TMDB id 补拉一次剧集详情(命中 PianDanService 5min 短缓存,
+     * 与片单详情共用同一份)。搜索走 /3/search/tv,故 mediaType 恒为 tv;拿不到就回落薄版本。
+     */
+    private MovieDetail searchItemDetail(MetadataSearchItem item) {
+        if (!TmdbMetadataProvider.NAME.equals(item.getProvider()) || !StringUtils.isNumeric(item.getId())) {
+            return null;
+        }
+        try {
+            return pianDanService.tmdbDetail("tv", Integer.parseInt(item.getId()));
+        } catch (RuntimeException e) {
+            log.debug("load search item detail failed: {}", item.getId());
+            return null;
+        }
     }
 
     /** 追加订阅:幂等(语义匹配已订 → 提示;新建 → 元数据直绑零搜索零网络 + 首轮巡检)。 */
@@ -407,18 +440,18 @@ public class TelegramSubscriptionBot {
     // ---------- 发送/编辑 ----------
 
     void send(String token, String chatId, TelegramRenderer.Rendered rendered) {
-        client.sendMessage(token, String.valueOf(chatId), rendered.text(), rendered.keyboard());
+        client.sendMessage(token, String.valueOf(chatId), rendered.text(), rendered.keyboard(), rendered.poster());
     }
 
     void edit(String token, String chatId, long messageId, TelegramRenderer.Rendered rendered) {
         try {
-            client.editMessageText(token, chatId, messageId, rendered.text(), rendered.keyboard());
+            client.editMessageText(token, chatId, messageId, rendered.text(), rendered.keyboard(), rendered.poster());
         } catch (TelegramApiException e) {
             // 编辑目标失效(消息被删/超龄不可编辑):降级发新消息,不炸会话(口径同通知服务 editBindingLost)
             String message = StringUtils.defaultString(e.getMessage());
             if (message.contains("message to edit not found") || message.contains("message can't be edited")
                     || message.contains("message not found") || message.contains("MESSAGE_ID_INVALID")) {
-                client.sendMessage(token, chatId, rendered.text(), rendered.keyboard());
+                send(token, chatId, rendered);
                 return;
             }
             throw e;
@@ -432,9 +465,9 @@ public class TelegramSubscriptionBot {
 
     void editOrSend(String token, String chatId, long messageId, TelegramRenderer.Rendered rendered) {
         try {
-            client.editMessageText(token, chatId, messageId, rendered.text(), rendered.keyboard());
+            client.editMessageText(token, chatId, messageId, rendered.text(), rendered.keyboard(), rendered.poster());
         } catch (TelegramApiException e) {
-            client.sendMessage(token, chatId, rendered.text(), rendered.keyboard());
+            send(token, chatId, rendered);
         }
     }
 }
