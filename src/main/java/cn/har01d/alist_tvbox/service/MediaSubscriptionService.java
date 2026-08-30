@@ -467,6 +467,28 @@ public class MediaSubscriptionService {
         }).toList();
     }
 
+    /**
+     * 资源级起始集号(手动):该资源第 1 集对应全剧第 N 集,≤0/null = 清除。
+     * 元数据全剧连续集号而该资源按季内/局部编号时(完结季季包)声明;改动后该资源集源行
+     * 全按旧编号落库、平移后整体错位 —— 删行重扫,其它资源与挂载不动。
+     */
+    @Transactional
+    public void setResourceEpisodeStart(int uid, int id, int resourceId, Integer startEpisode) {
+        getOwned(uid, id);
+        MediaSubscriptionResource resource = resourceRepository.findById(resourceId)
+                .filter(r -> r.getSubscriptionId() == id)
+                .orElseThrow(() -> new cn.har01d.alist_tvbox.exception.NotFoundException("资源不存在"));
+        Integer start = startEpisode != null && startEpisode > 1 ? startEpisode : null;
+        if (Objects.equals(start, resource.getStartEpisode())) {
+            return;
+        }
+        resource.setStartEpisode(start);
+        resource.setEpisodesFound(null);
+        resourceRepository.save(resource);
+        episodeSourceRepository.deleteByResourceId(resourceId);
+        log.info("media subscription {} resource {} episode start set to {}: inventory reset", id, resourceId, start);
+    }
+
     public List<MediaSubscriptionResourceDto> resources(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
         Set<String> allowedDrives = checkService.allowedCandidateDrives(subscription);
@@ -491,6 +513,7 @@ public class MediaSubscriptionService {
             dto.setPrimary(MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
                     && subscription.getMountPath() != null && subscription.getMountPath().equals(r.getMountPath()));
             dto.setPinned(Boolean.TRUE.equals(r.getPinned()));
+            dto.setStartEpisode(r.getStartEpisode());
             dto.setCheckedTime(r.getCheckedTime());
             dto.setCreatedTime(r.getCreatedTime());
             return dto;
@@ -1524,9 +1547,12 @@ public class MediaSubscriptionService {
             return;
         }
         MovieDetail detail = result.getList().get(0);
-        // 主源条目
+        // 主源条目(编号归一口径与巡检一致:资源级起始集号 > 订阅级季起始集号)
+        MediaSubscriptionResource primaryResource = checkService.primaryResource(subscription);
         TreeMap<Integer, String> primary = new TreeMap<>();
-        if (!parsePlayEntries(detail.getVod_play_url(), subscription.getSeason(), subscription.getSeasonStartEpisode(), primary)) {
+        Integer primaryStart = effectiveStartEpisode(primaryResource, subscription);
+        Integer primaryCollectSeason = checkService.collectSeason(subscription, primaryResource);
+        if (!parsePlayEntries(detail.getVod_play_url(), primaryCollectSeason, primaryStart, primary)) {
             return; // 主源列表解析失败不动原始输出
         }
         List<MediaSubscriptionResource> gaps = checkService.auxMounts(subscription);
@@ -1542,11 +1568,11 @@ public class MediaSubscriptionService {
         // 1) 转存副本(自有盘,按目标顺序):已转存的集优先从自有盘播
         if (transferMode) {
             for (var target : transferService.transferredTargets(subscription.getUid(), subscription.getId())) {
-                mergePlaylistFrom(subscription, target.path(), ac, merged, driveLine(driveLines, target.drive()));
+                mergePlaylistFrom(subscription, target.path(), ac, subscription.getSeason(),
+                        subscription.getSeasonStartEpisode(), merged, driveLine(driveLines, target.drive()));
             }
         }
         // 2) 主源
-        MediaSubscriptionResource primaryResource = checkService.primaryResource(subscription);
         String primaryDrive = primaryResource != null && primaryResource.getType() != null
                 ? DriveId.toDrive(primaryResource.getType()) : null;
         TreeMap<Integer, String> primaryLine = driveLine(driveLines, primaryDrive);
@@ -1556,7 +1582,8 @@ public class MediaSubscriptionService {
         });
         // 3) 补缺源
         for (MediaSubscriptionResource gap : gaps) {
-            mergePlaylistFrom(subscription, gap.getMountPath(), ac, merged,
+            mergePlaylistFrom(subscription, gap.getMountPath(), ac, checkService.collectSeason(subscription, gap),
+                    effectiveStartEpisode(gap, subscription), merged,
                     driveLine(driveLines, gap.getType() == null ? null : DriveId.toDrive(gap.getType())));
         }
         if (tvboxRequest) {
@@ -1802,8 +1829,14 @@ public class MediaSubscriptionService {
     /** 拉取挂载路径播放列表并按集合并进合并线路与盘线路。
      * 显式 depth=3:getPlaylist 对 detail/web 默认 depth=1,嵌套目录结构的补缺/转存挂载会列空;
      * ac 透传——TVBox 请求(空 ac)产出紧凑播放 id(备用线路可直连 /play),web 产出代理地址。 */
-    private void mergePlaylistFrom(MediaSubscription subscription, String path, String ac, TreeMap<Integer, String> merged,
-                                   TreeMap<Integer, String> driveLine) {
+    /** 编号归一的播放侧口径:资源级起始集号 &gt; 订阅级季起始集号(与巡检 applyNumbering 同序)。 */
+    private static Integer effectiveStartEpisode(MediaSubscriptionResource resource, MediaSubscription subscription) {
+        return resource != null && resource.getStartEpisode() != null
+                ? resource.getStartEpisode() : subscription.getSeasonStartEpisode();
+    }
+
+    private void mergePlaylistFrom(MediaSubscription subscription, String path, String ac, Integer collectSeason,
+                                   Integer startEpisode, TreeMap<Integer, String> merged, TreeMap<Integer, String> driveLine) {
         try {
             MovieList playlist = tvBoxService.getDetail(StringUtils.defaultString(ac), "1$" + path + Constants.PLAYLIST,
                     subscription.getName(), null, 3, true);
@@ -1811,8 +1844,8 @@ public class MediaSubscriptionService {
                 return;
             }
             TreeMap<Integer, String> entries = new TreeMap<>();
-            parsePlayEntries(playlist.getList().get(0).getVod_play_url(), subscription.getSeason(),
-                    subscription.getSeasonStartEpisode(), entries);
+            parsePlayEntries(playlist.getList().get(0).getVod_play_url(), collectSeason,
+                    startEpisode, entries);
             entries.forEach((episode, entry) -> {
                 merged.putIfAbsent(episode, entry);
                 driveLine.putIfAbsent(episode, entry);

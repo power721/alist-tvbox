@@ -109,6 +109,15 @@ public class MediaSubscriptionResource {
      * 每订阅至多一个,失效退役不清除 —— 恢复可用后优先回归。null 视为未钉选。 */
     private Boolean pinned;
 
+    /**
+     * 资源级起始集号(手动):该资源第 1 集对应全剧第 N 集 —— 元数据全剧连续集号而该资源
+     * 按季内/局部编号时(完结季季包裸 1-8 实为全剧 153-160),解析出的集号统一 +N-1
+     * 平移进官方连续集号空间。null = 不平移。与订阅级 season_start_episode 共存,资源级优先;
+     * 声明后该资源的自动重映射(remapAbsoluteNumbering)跳过,手动事实优先。
+     */
+    @Column(name = "start_episode")
+    private Integer startEpisode;
+
     @Column(name = "created_time", nullable = false)
     private long createdTime;
 }

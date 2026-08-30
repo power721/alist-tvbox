@@ -21,6 +21,8 @@ public class MediaSubscriptionResourceDto {
     private boolean primary;
     /** 手动钉选:换源候选序置顶、归属复核豁免(用户否决自动换源) */
     private boolean pinned;
+    /** 资源级起始集号:该资源第 1 集对应全剧第 N 集(null = 不平移)。季包资源混进连续编号订阅时用 */
+    private Integer startEpisode;
     private Long checkedTime;
     private long createdTime;
 }

@@ -1000,8 +1000,7 @@ class MediaSubscriptionCheckServiceTest {
         fixture.service.check(1);
         assertEquals(MediaSubscription.STATUS_ACTIVE, fixture.subscription.getStatus()); // 未误判失效
         assertClose(now + 15 * 60_000L, fixture.subscription.getNextCheckTime()); // 短间隔重试
-        Mockito.verify(fixture.resourceRepository, Mockito.never())
-                .findBySubscriptionIdOrderByScoreDesc(Mockito.anyInt()); // 未走换源
+        Mockito.verify(fixture.resourceRepository, Mockito.never()).save(Mockito.any()); // 未换源未退役
     }
 
     @Test
@@ -1039,7 +1038,7 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(MediaSubscription.STATUS_ACTIVE, fixture.subscription.getStatus());
         assertClose(now + 15 * 60_000L, fixture.subscription.getNextCheckTime());
         Mockito.verify(fixture.resourceRepository, Mockito.never())
-                .findBySubscriptionIdOrderByScoreDesc(Mockito.anyInt());
+                .save(Mockito.any()); // 未换源未退役(主源解析查询不算换源)
     }
 
     @Test
@@ -3907,6 +3906,132 @@ class MediaSubscriptionCheckServiceTest {
                 absoluteFiles("/temp/quark@nyhdt/第二季", 3, 4);
         MediaSubscriptionCheckService.applySeasonStartOffset(subscription, files);
         assertEquals(List.of(3, 4), new ArrayList<>(files.keySet()), "起始 1 = 无偏移");
+    }
+
+    @Test
+    void applyNumberingPrefersResourceLevelStart() {
+        // 资源级起始集号优先:同一订阅混多套编号语义(完结季季包 vs 连续合集),
+        // 完结季资源声明 153 → 裸 1-8 平移为全剧 153-160;订阅级偏移与自动重映射都不参与
+        MediaSubscription subscription = cangYuanTu();
+        subscription.setSeason(1);
+        subscription.setOfficialTotal(200);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setStartEpisode(153);
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files =
+                absoluteFiles("/temp/quark@nyhdt/完结季", 1, 8);
+        MediaSubscriptionCheckService.applyNumbering(subscription, resource, files, "一念永恒 完结季 更新至08集");
+        assertEquals(List.of(153, 154, 155, 156, 157, 158, 159, 160), new ArrayList<>(files.keySet()));
+
+        // 未声明的资源走原逻辑(此处订阅级也未设 → 不动)
+        MediaSubscriptionResource plain = new MediaSubscriptionResource();
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> raw =
+                absoluteFiles("/temp/quark@nyhdt/合集", 166, 168);
+        MediaSubscriptionCheckService.applyNumbering(subscription, plain, raw, "一念永恒 更至168集");
+        assertEquals(List.of(166, 167, 168), new ArrayList<>(raw.keySet()));
+    }
+
+    @Test
+    void sanitizeAutoAlignsSeasonPackViaDoubanSeasons() {
+        // 一念永恒形态:TMDB 单季连续编号(173/200),主源是完结季季包(裸 1-8)。
+        // 豆瓣分季集数累推 S4 起始 153 → 门禁通过自动写入 startEpisode 并平移集号
+        var resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
+        var episodeSourceRepository = Mockito.mock(cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository.class);
+        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
+                null, resourceRepository, null, null, episodeSourceRepository, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
+                new AppProperties(), new ObjectMapper(), null, null, null);
+        var aligner = Mockito.mock(cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.class);
+        svc.setSeasonAligner(aligner);
+
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setId(64);
+        subscription.setName("一念永恒");
+        subscription.setKeyword("一念永恒");
+        subscription.setSeason(1);
+        subscription.setOfficialTotal(200);
+        subscription.setOfficialEpisodes(173);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(9);
+        resource.setSubscriptionId(64);
+        resource.setTitle("一念永恒 完结季 4K臻彩MAX [更新至08集]");
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = absoluteFiles("/temp/quark@nyhdt/完结季", 1, 8);
+        Mockito.when(aligner.inferSeasonStart(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(153);
+
+        svc.sanitizeEpisodeFiles(subscription, resource, files, resource.getTitle());
+        assertEquals(153, resource.getStartEpisode());
+        assertEquals(List.of(153, 154, 155, 156, 157, 158, 159, 160), new ArrayList<>(files.keySet()));
+        Mockito.verify(resourceRepository).save(resource);
+        Mockito.verify(episodeSourceRepository).deleteByResourceId(9);
+    }
+
+    @Test
+    void sanitizeSkipsAutoAlignWhenShiftOverflowsOfficialTotal() {
+        // 门禁:平移后最大集号超官方口径(总 100,平移后 160)→ 不写 startEpisode,集号维持原语义
+        var resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
+        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
+                null, resourceRepository, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
+                new AppProperties(), new ObjectMapper(), null, null, null);
+        var aligner = Mockito.mock(cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.class);
+        svc.setSeasonAligner(aligner);
+
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setId(64);
+        subscription.setName("一念永恒");
+        subscription.setSeason(1);
+        subscription.setOfficialTotal(100);
+        subscription.setOfficialEpisodes(100);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(9);
+        resource.setSubscriptionId(64);
+        resource.setTitle("一念永恒 完结季");
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = absoluteFiles("/temp/完结季", 1, 8);
+        Mockito.when(aligner.inferSeasonStart(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(153);
+
+        svc.sanitizeEpisodeFiles(subscription, resource, files, resource.getTitle());
+        assertNull(resource.getStartEpisode());
+        assertTrue(files.isEmpty(), "放宽收进来的季包无偏移可用:整体弃收防冒领(与放宽前行为一致)");
+        Mockito.verify(resourceRepository, Mockito.never()).save(Mockito.any());
+    }
+
+    @Test
+    void collectSeasonWidensForSeasonPackOfSingleSeasonMeta() {
+        // 一念永恒形态:TMDB 单季(totalSeasons=1)连续编号订阅,完结季季包文件是 S04Eyy ——
+        // 列目录季按资源形态放宽,否则 parseEpisode 季过滤把整包拒成「无可识别」
+        var metadataService = Mockito.mock(cn.har01d.alist_tvbox.service.metadata.MetadataService.class);
+        var details = new cn.har01d.alist_tvbox.dto.MetadataDetails();
+        details.setTotalSeasons(1);
+        Mockito.when(metadataService.details(Mockito.anyString(), Mockito.anyString(), Mockito.any()))
+                .thenReturn(details);
+        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, metadataService, null, null,
+                new AppProperties(), new ObjectMapper(), null, null, null);
+
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setId(64);
+        subscription.setName("一念永恒");
+        subscription.setSeason(1);
+        subscription.setMetaProvider("tmdb");
+        subscription.setMetaId("107371");
+        MediaSubscriptionResource finale = new MediaSubscriptionResource();
+        finale.setTitle("一念永恒 完结季 4K臻彩MAX [更新至08集]");
+        assertNull(svc.collectSeason(subscription, finale), "完结季无季号:接受任意 SxxEyy");
+
+        MediaSubscriptionResource declared = new MediaSubscriptionResource();
+        declared.setTitle("一念永恒 第4季 2160P");
+        assertEquals(4, svc.collectSeason(subscription, declared), "标题声明季 4:按 4 收");
+
+        // 多季元数据/多季订阅:季过滤是防冒领的正确语义,不放宽
+        details.setTotalSeasons(4);
+        assertEquals(1, svc.collectSeason(subscription, finale));
+        assertEquals(1, svc.collectSeason(subscription, declared));
+        details.setTotalSeasons(1);
+        subscription.setSeason(2);
+        assertEquals(2, svc.collectSeason(subscription, declared));
+
+        // 无资源上下文(共享挂载收编/转存路径):维持订阅季
+        assertEquals(2, svc.collectSeason(subscription, null));
     }
 
     @Test

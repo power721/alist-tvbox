@@ -311,9 +311,10 @@
             <el-tag v-if="scope.row.primary" size="small" type="success">主源</el-tag>
             <el-tag v-else-if="scope.row.state === 'MOUNTED'" size="small" type="warning">补缺</el-tag>
             <el-tag v-if="scope.row.pinned" size="small" type="danger" style="margin-left: 4px">钉选</el-tag>
+            <el-tag v-if="scope.row.startEpisode" size="small" type="info" style="margin-left: 4px">起{{ scope.row.startEpisode }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="180">
+        <el-table-column fixed="right" label="操作" width="220">
           <template #default="scope">
             <el-button v-if="scope.row.state === 'CANDIDATE'" link type="primary" size="small"
                        @click="activateResource(scope.row)">启用</el-button>
@@ -323,6 +324,8 @@
                        @click="unpinResource(scope.row)">取消钉选</el-button>
             <el-button v-else link type="danger" size="small"
                        @click="pinResource(scope.row)">钉选</el-button>
+            <el-button link type="warning" size="small"
+                       @click="setResourceStart(scope.row)">起始集号</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -854,6 +857,8 @@ interface ResourceDto {
   primary: boolean
   /** 手动钉选:换源候选序置顶、归属复核豁免(用户否决自动换源) */
   pinned: boolean
+  /** 资源级起始集号:该资源第 1 集对应全剧第 N 集(null = 不平移) */
+  startEpisode: number | null
 }
 
 interface EventDto {
@@ -1601,6 +1606,26 @@ const unpinResource = (resource: ResourceDto) => {
     ElMessage.success('已取消钉选,恢复自动换源')
     schedule(loadResources, 2000)
   })
+}
+
+/** 资源级起始集号:该资源第 1 集对应全剧第 N 集(季包资源混进连续编号订阅时手动对齐) */
+const setResourceStart = (resource: ResourceDto) => {
+  if (!current.value) return
+  ElMessageBox.prompt(
+      '该资源第 1 集对应全剧第几集?(如完结季包实为全剧 153 起填 153;0 = 清除)。修改后该资源的集数记录会重扫',
+      '起始集号 - ' + (resource.title || ''), {
+        inputValue: resource.startEpisode ? String(resource.startEpisode) : '',
+        inputPattern: /^\d{0,4}$/,
+        inputErrorMessage: '请输入 0-9999 的数字',
+      }).then(({value}) => {
+    const startEpisode = parseInt(value, 10)
+    axios.post(`/api/media-subscriptions/${current.value!.id}/resources/${resource.id}/episode-start`,
+        {startEpisode: isNaN(startEpisode) ? 0 : startEpisode}).then(() => {
+      ElMessage.success('起始集号已更新,该资源集数记录将重扫')
+      schedule(loadResources, 2000)
+      schedule(loadAll, 8000)
+    })
+  }).catch(() => {})
 }
 
 const showEpisodes = (row: SubscriptionDto) => {
