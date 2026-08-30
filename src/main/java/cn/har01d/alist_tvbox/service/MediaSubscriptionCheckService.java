@@ -1491,7 +1491,7 @@ public class MediaSubscriptionCheckService {
                     : missing.get(0) + "-" + missing.get(missing.size() - 1) + " 等 " + missing.size() + " 集";
             log.info("media subscription {} update checked by user: official={} missing={}",
                     id, official, missing.size());
-            return event(id, "官方已播至第 " + official + " 集,本地缺第 " + summary + " 集(点列表「检查」立即搜索挂载)");
+            return event(id, "官方已播至第 " + official + " 集,本地缺第 " + summary + " 集(点列表「巡检」立即搜索挂载)");
         } catch (Exception e) {
             log.warn("check update {} failed: {}", id, e.getMessage());
             return "检查更新失败:" + e.getMessage();

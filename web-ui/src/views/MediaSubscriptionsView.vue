@@ -59,7 +59,7 @@
         <el-button size="small" @click="selectNone">全不选</el-button>
         <el-button size="small" @click="invertSelection">反选</el-button>
         <el-divider direction="vertical"/>
-        <el-button size="small" type="primary" :disabled="!selected.length" @click="batch('check')">批量检查</el-button>
+        <el-button size="small" type="primary" :disabled="!selected.length" @click="batch('check')">批量巡检</el-button>
         <el-button size="small" :disabled="!selected.length" @click="batch('pause')">批量暂停</el-button>
         <el-button size="small" :disabled="!selected.length" @click="batch('resume')">批量恢复</el-button>
         <el-button size="small" type="danger" :disabled="!selected.length" @click="batch('delete')">批量删除</el-button>
@@ -116,16 +116,16 @@
             </template>
           </el-table-column>
           <el-table-column prop="resourceCount" label="候选" width="65"/>
-          <el-table-column label="检查/播出" width="210">
+          <el-table-column label="巡检/播出" width="210">
             <template #default="scope">
               <div class="sub-text" v-if="scope.row.nextAirTime">下集播出:{{ formatTime(scope.row.nextAirTime) }}</div>
-              <div class="sub-text">下次检查:{{ formatTime(scope.row.nextCheckTime) }}</div>
-              <div class="sub-text">上次检查:{{ formatTime(scope.row.lastCheckTime) }}</div>
+              <div class="sub-text">下次巡检:{{ formatTime(scope.row.nextCheckTime) }}</div>
+              <div class="sub-text">上次巡检:{{ formatTime(scope.row.lastCheckTime) }}</div>
             </template>
           </el-table-column>
           <el-table-column fixed="right" label="操作" width="280">
             <template #default="scope">
-              <el-button link type="primary" size="small" @click="checkNow(scope.row)">检查</el-button>
+              <el-button link type="primary" size="small" @click="checkNow(scope.row)">巡检</el-button>
               <el-button link type="primary" size="small" @click="showResources(scope.row)">候选源</el-button>
               <el-button link type="primary" size="small" @click="showEpisodes(scope.row)">集数</el-button>
               <el-button link type="primary" size="small" @click="showEvents(scope.row)">动态</el-button>
@@ -211,7 +211,7 @@
           <el-switch v-model="form.crossDrive"/>
           <span class="sub-text" style="margin-left:8px">默认仅同盘转存(快而稳);开启后跨盘也转(慢,走服务端中转);AList 跨盘秒传配置允许的方向不受此开关限制</span>
         </el-form-item>
-        <el-form-item label="检查周期(时)">
+        <el-form-item label="巡检周期(时)">
           <el-input-number v-model="form.checkIntervalHours" :min="1" :max="168"/>
           <span class="sub-text" style="margin-left:8px">绑定元数据后按播出日程自动调度</span>
         </el-form-item>
@@ -1509,7 +1509,7 @@ const handleDelete = (row: SubscriptionDto) => {
 
 const checkNow = (row: SubscriptionDto) => {
   axios.post(`/api/media-subscriptions/${row.id}/check`).then(() => {
-    ElMessage.success('已开始检查,稍后刷新查看结果')
+    ElMessage.success('已开始巡检,稍后刷新查看结果')
     schedule(loadAll, 6000)
   })
 }
