@@ -22,6 +22,8 @@ public class MediaSubscriptionRequest {
     /** 显式允许跨网盘转存(默认仅同盘,AList 秒传配置允许的方向除外) */
     private Boolean crossDrive;
     private Integer checkIntervalHours;
+    /** 手动播出时刻校正("HH:mm",空=自动;仅日期无时刻的剧按 20:00 兜底,可按实际排播改写) */
+    private String customAirClock;
     /** 主网盘覆盖(分享类型码,空 = 跟随全局 msub_main_drives) */
     private java.util.List<Integer> mainDrives;
     private MediaSubscriptionFilter filter;

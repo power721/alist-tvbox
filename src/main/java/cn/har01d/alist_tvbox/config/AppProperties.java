@@ -141,6 +141,10 @@ public class AppProperties {
         private int preheatAheadIntervalHours = 1;
         /** 播出后短轮窗口(小时):窗口内每小时一查(网盘资源常在播出后 1~12h 才上线) */
         private int shortPollWindowHours = 12;
+        /** 无播出日程订阅的高峰时段兜底检查点("HH:mm" 列表,北京时间,含 15min 上线缓冲):
+         *  完全无日程的订阅除常规间隔外,取 min(常规间隔, 下一档位) 排程 —— 国产平台午间档 12:00 /
+         *  黄金档 19:00-20:00 双高峰,国漫晨间簇 11:00(4567 实例 15 个有日程订阅实测分布)。 */
+        private java.util.List<String> primeCheckTimes = java.util.List.of("11:15", "12:15", "19:15", "20:15");
         /** 追更中(官方状态 RETURNING)无新集退避封顶(小时);完结/无元数据维持 24h */
         private int returningBackoffCapHours = 12;
         /** BAD 候选冷却(天):超期允许重探一次(误标自愈),再失败重新计时 */

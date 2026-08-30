@@ -215,6 +215,11 @@
           <el-input-number v-model="form.checkIntervalHours" :min="1" :max="168"/>
           <span class="sub-text" style="margin-left:8px">绑定元数据后按播出日程自动调度</span>
         </el-form-item>
+        <el-form-item label="播出时刻">
+          <el-time-select v-model="form.customAirClock" start="00:00" end="23:45" step="00:15"
+                          placeholder="自动(官方日程/平台桥接,默认 20:00)" clearable style="width: 160px"/>
+          <span class="sub-text" style="margin-left:8px">官方只给日期没给时刻的剧按 20:00 兜底;确认实际排播后手动校正,清空恢复自动</span>
+        </el-form-item>
         <el-form-item label="主网盘(覆盖)">
           <el-select v-model="form.mainDrives" multiple clearable :placeholder="`跟随全局${globalMainDrivesLabel}`">
             <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
@@ -793,6 +798,7 @@ interface SubscriptionDto {
   missingEpisodes: number[]
   stallCount: number
   checkIntervalHours: number | null
+  customAirClock: string | null
   nextCheckTime: number | null
   lastCheckTime: number | null
   resourceCount: number
@@ -1265,6 +1271,7 @@ const handleAdd = () => {
     accountIds: [] as string[],
     crossDrive: false,
     checkIntervalHours: 6,
+    customAirClock: null,
     mainDrives: [] as number[],
     driveTypes: [],
     qualities: [],
@@ -1297,6 +1304,7 @@ const handleEdit = (row: SubscriptionDto) => {
     accountIds: row.accountIds?.length ? row.accountIds : (row.accountId ? ['pan:' + row.accountId] : []),
     crossDrive: !!row.crossDrive,
     checkIntervalHours: row.checkIntervalHours ?? 6,
+    customAirClock: row.customAirClock ?? null,
     mainDrives: row.mainDrives || [],
     driveTypes: row.filter?.driveTypes || [],
     qualities: row.filter?.qualities || [],
@@ -1396,6 +1404,7 @@ const buildBody = () => ({
   accountIds: form.value.accountIds,
   crossDrive: form.value.crossDrive,
   checkIntervalHours: form.value.checkIntervalHours,
+  customAirClock: form.value.customAirClock || '',
   mainDrives: [...new Set(form.value.mainDrives || [])].slice(0, 2),
   filter: {
     driveTypes: form.value.driveTypes,

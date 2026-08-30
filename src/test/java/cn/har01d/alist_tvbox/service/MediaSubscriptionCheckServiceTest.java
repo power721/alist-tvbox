@@ -30,6 +30,7 @@ import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -64,9 +65,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class MediaSubscriptionCheckServiceTest {
 
+    private final AppProperties appProperties = new AppProperties();
+
     private final MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            new AppProperties(), new ObjectMapper(), (MediaSubscriptionNotificationService) null);
+            appProperties, new ObjectMapper(), (MediaSubscriptionNotificationService) null);
+
+    @BeforeEach
+    void disablePrimeCheckSlots() {
+        // 高峰档位兜底让常规间隔断言随一天内的时刻漂移:默认关闭,档位专项测试自行开启
+        appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of());
+    }
 
     @Test
     void seasonEpisodePattern() {
@@ -178,6 +187,22 @@ class MediaSubscriptionCheckServiceTest {
                 .collect(java.util.stream.Collectors.toSet());
 
         assertTrue(service.computeMissing(subscription, present).isEmpty());
+    }
+
+    @Test
+    void computeMissingIncludesScheduleAiredBeyondStaleOfficial() {
+        // 播后首查:官方已播还是 refresh 前的旧值(8),schedule 快照里第 9 集播出时刻已到 ——
+        // 缺口按直播径算出第 9 集,fillGaps 立即搜索,不等下一轮元数据刷新
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialEpisodes(8);
+        long now = System.currentTimeMillis();
+        subscription.setSchedule("[{\"episode\":8,\"airTime\":" + (now - 2 * 3600_000L)
+                + "},{\"episode\":9,\"airTime\":" + (now - 15 * 60_000L)
+                + "},{\"episode\":10,\"airTime\":" + (now + 24 * 3600_000L) + "}]");
+        Set<Integer> present = IntStream.rangeClosed(1, 8).boxed()
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertEquals(Set.of(9), service.computeMissing(subscription, present), "未到播出时刻的第 10 集不算缺");
     }
 
     @Test
@@ -617,8 +642,148 @@ class MediaSubscriptionCheckServiceTest {
         MediaSubscription subscription = subscription();
         long now = System.currentTimeMillis();
         subscription.setNextAirTime(now - 2 * 3600_000L); // 播出 2h:12h 窗口内
+        subscription.setOfficialEpisodes(10);
+        subscription.setCurrentEpisodes(9); // 已播集仍缺
         service.scheduleNext(subscription);
         assertClose(now + 3600_000L, subscription.getNextCheckTime());
+    }
+
+    @Test
+    void scheduleNextShortPollExitsWhenAiredCaughtUp() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        subscription.setNextAirTime(now - 2 * 3600_000L);
+        subscription.setOfficialEpisodes(10);
+        subscription.setCurrentEpisodes(10); // 已播集全部在手:播后轮询收工
+        service.scheduleNext(subscription);
+        assertClose(now + 6 * 3600_000L, subscription.getNextCheckTime(), "追平已播集不该继续小时轮");
+    }
+
+    @Test
+    void scheduleNextFirstPostAirLookMissRetriesIn30min() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        // 线上诉求:20:00 播、20:15 首查未命中 → 20:45 重试一次
+        long air = now - 15 * 60_000L; // 刚播 15min(首查 = 播出+15min 槽位)
+        subscription.setSchedule("[{\"episode\":10,\"airTime\":" + air + "}]");
+        subscription.setLastCheckTime(now); // 本轮首查刚开始
+        subscription.setCurrentEpisodes(9); // 已播的第 10 集仍未到手(缺口驱动)
+        service.scheduleNext(subscription);
+        assertClose(now + 30 * 60_000L, subscription.getNextCheckTime(), "首查仍有缺集应 +30min 快速重试");
+    }
+
+    @Test
+    void scheduleNextFirstPostAirLookHitExitsPolling() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        long air = now - 15 * 60_000L;
+        subscription.setSchedule("[{\"episode\":10,\"airTime\":" + air + "}]");
+        subscription.setLastCheckTime(now);
+        subscription.setCurrentEpisodes(10); // 本轮已找到新集,已播集追平
+        service.scheduleNext(subscription);
+        assertClose(now + 6 * 3600_000L, subscription.getNextCheckTime(), "已追平应收工回常规间隔");
+    }
+
+    @Test
+    void scheduleNextQuickRetryOnlyOnce() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        long air = now - 45 * 60_000L; // 播出 45min:20:45 重试轮,本轮仍未命中
+        subscription.setSchedule("[{\"episode\":10,\"airTime\":" + air + "}]");
+        subscription.setLastCheckTime(now);
+        subscription.setCurrentEpisodes(9);
+        service.scheduleNext(subscription);
+        assertClose(now + 3600_000L, subscription.getNextCheckTime(), "快速重试仅一次,之后回小时节奏");
+    }
+
+    @Test
+    void scheduleNextShortPollAnchoredOnScheduleDespiteAdvancedAir() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        // 播后检查恰好触发元数据刷新:nextAirTime 已前移到下一集,但 schedule 快照仍留刚播条目 ——
+        // 短轮不因 air 前移被播出前休眠截断
+        subscription.setNextAirTime(now + 24 * 3600_000L);
+        subscription.setSchedule("[{\"episode\":10,\"airTime\":" + (now - 15 * 60_000L) + "}]");
+        subscription.setLastCheckTime(now);
+        subscription.setCurrentEpisodes(9);
+        service.scheduleNext(subscription);
+        assertClose(now + 30 * 60_000L, subscription.getNextCheckTime(), "快照锚定的播后窗口优先于下一集的播出前休眠");
+    }
+
+    @Test
+    void scheduleNextImminentAirSleepsToAirPlus15() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        subscription.setNextAirTime(now + 10 * 60_000L); // 距播出 <15min:直接睡到播出+15min,不再隔 1h
+        service.scheduleNext(subscription);
+        assertEquals(now + 10 * 60_000L + 15 * 60_000L, subscription.getNextCheckTime());
+    }
+
+    // ---------- 无日程订阅的高峰档位兜底 + 手动播出时刻校正 ----------
+
+    @Test
+    void scheduleNextPrimeSlotFallbackForScheduleless() {
+        java.time.ZoneId zone = java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID);
+        java.time.LocalDateTime slotTime = java.time.LocalDateTime.now(zone).plusHours(2)
+                .truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of(slotTime.toLocalTime().toString()));
+        long slot = slotTime.toLocalDate().atTime(slotTime.toLocalTime()).atZone(zone).toInstant().toEpochMilli();
+        MediaSubscription subscription = subscription(); // 无 nextAirTime 无 schedule
+        service.scheduleNext(subscription);
+        assertClose(slot, subscription.getNextCheckTime(), "无日程订阅排到最近高峰档位(2h 后,早于 6h 常规间隔)");
+    }
+
+    @Test
+    void scheduleNextPrimeSlotWithinHourFloorIgnored() {
+        java.time.ZoneId zone = java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID);
+        java.time.LocalDateTime nearTime = java.time.LocalDateTime.now(zone).plusMinutes(30)
+                .truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        // 半小时后的档被 1h 地板跳过,同刻明天档在 24h 外 → 回常规 6h
+        appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of(nearTime.toLocalTime().toString()));
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        service.scheduleNext(subscription);
+        assertClose(now + 6 * 3600_000L, subscription.getNextCheckTime(), "1h 内的档位不算,回常规间隔");
+    }
+
+    @Test
+    void applyCustomAirClockRewritesScheduleClocks() {
+        java.time.ZoneId zone = java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID);
+        java.time.LocalDate today = java.time.LocalDate.now(zone);
+        long yesterdayDefault = today.minusDays(1).atTime(20, 0).atZone(zone).toInstant().toEpochMilli();
+        long tomorrowDefault = today.plusDays(1).atTime(20, 0).atZone(zone).toInstant().toEpochMilli();
+        MediaSubscription subscription = subscription();
+        subscription.setSchedule("[{\"episode\":9,\"airTime\":" + yesterdayDefault
+                + "},{\"episode\":10,\"airTime\":" + tomorrowDefault + "}]");
+        subscription.setNextAirTime(tomorrowDefault);
+        subscription.setCustomAirClock("11:30");
+        service.applyCustomAirClock(subscription);
+        long tomorrow1130 = today.plusDays(1).atTime(11, 30).atZone(zone).toInstant().toEpochMilli();
+        assertTrue(subscription.getSchedule().contains(String.valueOf(tomorrow1130)), "日程条目时分改写为 11:30(日期不动)");
+        assertEquals(Long.valueOf(tomorrow1130), subscription.getNextAirTime(), "nextAirTime 取改写后第一个未来条目");
+    }
+
+    @Test
+    void applyCustomAirClockRewritesBareNextAirTime() {
+        java.time.ZoneId zone = java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID);
+        java.time.LocalDate day = java.time.LocalDate.now(zone).plusDays(2);
+        MediaSubscription subscription = subscription();
+        subscription.setNextAirTime(day.atTime(20, 0).atZone(zone).toInstant().toEpochMilli());
+        subscription.setCustomAirClock("18:00");
+        service.applyCustomAirClock(subscription);
+        assertEquals(Long.valueOf(day.atTime(18, 0).atZone(zone).toInstant().toEpochMilli()),
+                subscription.getNextAirTime(), "无日程时只改写 nextAirTime 的时分");
+    }
+
+    @Test
+    void normalizeAirClockFormats() {
+        assertEquals("09:05", MediaSubscriptionCheckService.normalizeAirClock("9:05"));
+        assertEquals("11:30", MediaSubscriptionCheckService.normalizeAirClock("11:30"));
+        assertNull(MediaSubscriptionCheckService.normalizeAirClock("24:00"));
+        assertNull(MediaSubscriptionCheckService.normalizeAirClock("11:60"));
+        assertNull(MediaSubscriptionCheckService.normalizeAirClock("中午"));
+        assertNull(MediaSubscriptionCheckService.normalizeAirClock(" "));
+        assertNull(MediaSubscriptionCheckService.normalizeAirClock(null));
     }
 
     @Test
@@ -667,6 +832,20 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void scheduleNextAiredGapYieldDoesNotSleepPastAirTime() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        subscription.setNextAirTime(now + (long) (2.5 * 3600_000L)); // 2.5h 后开播(线上:08:25 排程 11:00 播)
+        subscription.setOfficialEpisodes(55);
+        subscription.setCurrentEpisodes(10); // 缺官方已播老集
+        subscription.setCheckIntervalHours(12); // 常规间隔比距播出时间长:不能睡穿播出时刻
+        subscription.setStallCount(0);
+        service.scheduleNext(subscription);
+        assertEquals(now + (long) (2.5 * 3600_000L) + 15 * 60_000L, subscription.getNextCheckTime(),
+                "缺老集让位常规间隔时也要取与播出时刻的较早者");
+    }
+
+    @Test
     void scheduleNextPreAirSleepKeptWhenAiredCaughtUp() {
         MediaSubscription subscription = subscription();
         long now = System.currentTimeMillis();
@@ -680,13 +859,27 @@ class MediaSubscriptionCheckServiceTest {
     @Test
     void behindAiredEpisodesRequiresBothSides() {
         MediaSubscription subscription = subscription();
-        assertFalse(MediaSubscriptionCheckService.behindAiredEpisodes(subscription), "官方无数据不判缺");
-        subscription.setOfficialEpisodes(55);
-        assertFalse(MediaSubscriptionCheckService.behindAiredEpisodes(subscription), "本地未知不判缺");
+        assertFalse(MediaSubscriptionCheckService.behindAiredEpisodes(subscription, 0), "官方无数据不判缺");
+        assertFalse(MediaSubscriptionCheckService.behindAiredEpisodes(subscription, 55), "本地未知不判缺");
         subscription.setCurrentEpisodes(55);
-        assertFalse(MediaSubscriptionCheckService.behindAiredEpisodes(subscription), "追平不算缺");
+        assertFalse(MediaSubscriptionCheckService.behindAiredEpisodes(subscription, 55), "追平不算缺");
         subscription.setCurrentEpisodes(10);
-        assertTrue(MediaSubscriptionCheckService.behindAiredEpisodes(subscription));
+        assertTrue(MediaSubscriptionCheckService.behindAiredEpisodes(subscription, 55));
+    }
+
+    @Test
+    void airedTargetCombinesOfficialAndSchedule() {
+        MediaSubscription subscription = subscription();
+        long now = System.currentTimeMillis();
+        assertEquals(0, service.airedTarget(subscription, now), "无官方无日程:0");
+        subscription.setOfficialEpisodes(8);
+        assertEquals(8, service.airedTarget(subscription, now));
+        // schedule 已到时刻的第 10 集 > 官方旧值 8;未到的第 11 集不计;总集数夹住超登集
+        subscription.setSchedule("[{\"episode\":10,\"airTime\":" + (now - 60_000L)
+                + "},{\"episode\":11,\"airTime\":" + (now + 24 * 3600_000L) + "}]");
+        assertEquals(10, service.airedTarget(subscription, now));
+        subscription.setOfficialTotal(9);
+        assertEquals(9, service.airedTarget(subscription, now), "官方总集数夹紧");
     }
 
     // ---------- 补搜节制:播出窗口内只缺最新集不降级、隔轮限频 ----------
@@ -3672,6 +3865,7 @@ class MediaSubscriptionCheckServiceTest {
         Fixture() {
             AppProperties appProperties = new AppProperties();
             appProperties.setFormats(Set.of("mkv", "mp4")); // 生产由 yaml 绑定,裸实例需手动补
+            appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of()); // 档位兜底关闭,断言确定性
             service = new MediaSubscriptionCheckService(subscriptionRepository, resourceRepository, eventRepository,
                     episodeRepository, episodeSourceRepository, deadLinkRepository,
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),

@@ -217,6 +217,7 @@ public class MediaSubscriptionService {
         subscription.setCrossDrive(request.getCrossDrive() != null && request.getCrossDrive());
         subscription.setCheckIntervalHours(request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0
                 ? request.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours());
+        subscription.setCustomAirClock(requireAirClock(request.getCustomAirClock()));
         subscription.setFilterConfig(serializeFilter(resolveFilter(uid, request.getFilter())));
         subscription.setMainDrives(serializeMainDrives(request.getMainDrives()));
         subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
@@ -281,6 +282,12 @@ public class MediaSubscriptionService {
         }
         if (request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0) {
             subscription.setCheckIntervalHours(request.getCheckIntervalHours());
+        }
+        if (request.getCustomAirClock() != null) {
+            subscription.setCustomAirClock(requireAirClock(request.getCustomAirClock()));
+            // 立即重放改写 schedule/nextAirTime(元数据刷新 24h 节流,等下轮太迟)并按新时刻重排
+            checkService.applyCustomAirClock(subscription);
+            checkService.scheduleNext(subscription);
         }
         if (request.getFilter() != null) {
             subscription.setFilterConfig(serializeFilter(request.getFilter()));
@@ -2651,6 +2658,18 @@ public class MediaSubscriptionService {
         }
     }
 
+    /** 校验手动播出时刻:空=清除(null),"H:mm"/"HH:mm" 归一为 "HH:mm",非法格式拒绝。 */
+    private static String requireAirClock(String clock) {
+        if (StringUtils.isBlank(clock)) {
+            return null;
+        }
+        String normalized = MediaSubscriptionCheckService.normalizeAirClock(clock);
+        if (normalized == null) {
+            throw new BadRequestException("播出时刻格式应为 HH:mm");
+        }
+        return normalized;
+    }
+
     MediaSubscriptionDto toDto(MediaSubscription subscription) {
         MediaSubscriptionDto dto = new MediaSubscriptionDto();
         dto.setId(subscription.getId());
@@ -2679,6 +2698,7 @@ public class MediaSubscriptionService {
         dto.setMissingEpisodes(missingEpisodes(subscription));
         dto.setStallCount(subscription.getStallCount());
         dto.setCheckIntervalHours(subscription.getCheckIntervalHours());
+        dto.setCustomAirClock(subscription.getCustomAirClock());
         dto.setNextCheckTime(subscription.getNextCheckTime());
         dto.setLastCheckTime(subscription.getLastCheckTime());
         dto.setCreatedTime(subscription.getCreatedTime());

@@ -130,6 +130,12 @@ public class MediaSubscription {
     @Column(columnDefinition = "TEXT", name = "schedule")
     private String schedule;
 
+    /** 手动播出时刻校正("HH:mm",空=自动):无官方时刻的剧 nextAirTime 按当日 20:00 硬编码,
+     *  用户可按实际排播校正;每次元数据刷新后重放改写 schedule/nextAirTime 的时分(日期不动),
+     *  优先级 手动 > PlayScheduleBridge 平台桥 > 默认 20:00。 */
+    @Column(name = "custom_air_clock", length = 5)
+    private String customAirClock;
+
     /** 显式允许跨网盘转存(默认仅同盘:AList 秒传配置允许的方向除外) */
     @Column(name = "cross_drive")
     private boolean crossDrive;

@@ -53,6 +53,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -101,8 +105,10 @@ public class MediaSubscriptionCheckService {
     public static final String MSUB_POOL_FILTER = "msub_pool_filter";
     /** 预告/花絮等非正片 */
     private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost)");
-    /** 完结资源包形态:对追更中的订阅不会持续更新 */
+    /** 完结资源包形态:追更中的订阅不会持续更新 */
     private static final Pattern COMPLETE_PACK = Pattern.compile("全\\s*\\d{1,4}\\s*集|全集|完整版|已?完结");
+    /** 手动播出时刻("H:mm" 或 "HH:mm") */
+    private static final Pattern AIR_CLOCK = Pattern.compile("^(\\d{1,2}):(\\d{2})$");
     /** 扫集号前先剥掉的技术标签(避免 1080/2160/4K 被当成集数)。声道位/版本号必须一并剥:
      * 剧场版电影常以 {@code 2025.V2.1080p.BluRay.Remux.AVC.TrueHD.5.1} 命名,不剥的话末号规则把
      * {@code 5.1} 的 1 当集号,109 分钟的电影混进剧集清单冒充「第1集」(线上:柯南订阅唯一
@@ -1538,16 +1544,76 @@ public class MediaSubscriptionCheckService {
                 log.debug("serialize schedule failed: {}", e.getMessage());
             }
         }
+        applyCustomAirClock(subscription);
     }
 
-    /** 缺口 = 1..base 中本地没有的集;base = max(观测最大, 官方已播, 期望集数)。 */
+    /** "H:mm"/"HH:mm" 归一为 "HH:mm";空/非法返回 null(调用方决定拒绝或忽略)。 */
+    static String normalizeAirClock(String clock) {
+        if (StringUtils.isBlank(clock)) {
+            return null;
+        }
+        Matcher matcher = AIR_CLOCK.matcher(clock.trim());
+        if (!matcher.matches()) {
+            return null;
+        }
+        int hour = Integer.parseInt(matcher.group(1));
+        int minute = Integer.parseInt(matcher.group(2));
+        if (hour > 23 || minute > 59) {
+            return null;
+        }
+        return String.format("%02d:%02d", hour, minute);
+    }
+
+    /** 手动播出时刻重放:customAirClock("HH:mm")改写 schedule 快照与 nextAirTime 的时分(日期不动),
+     *  nextAirTime 按改写后的日程重取第一个未来条目。只校正时刻不造日期 —— 无日程的剧改完仍无触发,
+     *  由高峰档位兜底(scheduleNext)。挂在 applyMetadataSnapshot 尾部:每次刷新重写快照后重放,
+     *  优先级 手动 > PlayScheduleBridge 平台桥 > 默认 20:00(天然覆盖前两者)。 */
+    void applyCustomAirClock(MediaSubscription subscription) {
+        String normalized = normalizeAirClock(subscription.getCustomAirClock());
+        if (normalized == null) {
+            return;
+        }
+        LocalTime time = LocalTime.parse(normalized);
+        ZoneId zone = ZoneId.of(Constants.ZONE_ID);
+        long now = System.currentTimeMillis();
+        if (StringUtils.isNotBlank(subscription.getSchedule())) {
+            try {
+                List<EpisodeAirDate> entries = objectMapper.readValue(subscription.getSchedule(),
+                        new TypeReference<List<EpisodeAirDate>>() {
+                        });
+                Long next = null;
+                for (EpisodeAirDate entry : entries) {
+                    entry.setAirTime(Instant.ofEpochMilli(entry.getAirTime()).atZone(zone).with(time)
+                            .toInstant().toEpochMilli());
+                    if (entry.getAirTime() > now && (next == null || entry.getAirTime() < next)) {
+                        next = entry.getAirTime();
+                    }
+                }
+                subscription.setSchedule(objectMapper.writeValueAsString(entries));
+                if (next != null) {
+                    subscription.setNextAirTime(next);
+                } else if (subscription.getNextAirTime() != null) {
+                    subscription.setNextAirTime(Instant.ofEpochMilli(subscription.getNextAirTime())
+                            .atZone(zone).with(time).toInstant().toEpochMilli());
+                }
+            } catch (Exception e) {
+                log.debug("apply custom air clock failed: {}", e.getMessage());
+            }
+        } else if (subscription.getNextAirTime() != null) {
+            subscription.setNextAirTime(Instant.ofEpochMilli(subscription.getNextAirTime())
+                    .atZone(zone).with(time).toInstant().toEpochMilli());
+        }
+    }
+
+    /** 缺口 = 1..base 中本地没有的集;base = max(观测最大, 官方已播, 期望集数)。
+     *  官方已播取 airedTarget 直播径(含 schedule 已到时刻的集):refresh 节流下 officialEpisodes
+     *  滞后刚播的集,播后首查若按旧值算基准会判"不缺"、fillGaps 根本不搜新集。 */
     Set<Integer> computeMissing(MediaSubscription subscription, Set<Integer> present) {
         int base = present.stream().max(Integer::compareTo).orElse(0);
         // 官方已播/期望互选取大后被官方总集数夹住:已播数逻辑上不可能超过总集数,
         // 不夹则上游污染数据(瑞克 S9 官方总 10 完结/已播 11 系 S1 分集桥接污染)会让巡检
         // 每轮报缺不存在的集、fillGaps 空转攒 stallCount;观测最大集号不参与夹紧(官方滞后)
-        int projected = Math.max(
-                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes(),
+        int projected = Math.max(airedTarget(subscription, System.currentTimeMillis()),
                 subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes());
         Integer total = subscription.getOfficialTotal();
         if (total != null && total > 0) {
@@ -4985,19 +5051,17 @@ public class MediaSubscriptionCheckService {
     void scheduleNext(MediaSubscription subscription) {
         Long air = subscription.getNextAirTime();
         long now = System.currentTimeMillis();
-        if (air != null && air > 0) {
-            if (air > now + 15 * 60_000L) {
-                if (!behindAiredEpisodes(subscription)) {
-                    // 播出前休眠:播出时刻 +15min 起查(上限 24h,防日程异常导致长眠漏检)
-                    subscription.setNextCheckTime(Math.min(air + 15 * 60_000L, now + 24 * 3600_000L));
-                    return;
-                }
-                // 官方已播仍缺老集(线上:换到只留尾部几集的分享,缺45集却睡到播出前):老集缺口
-                // 与播出日程无关,不让位长眠 —— 落到常规间隔让补缺尽早跑
-            } else if (now < air + appProperties.getSubscription().getShortPollWindowHours() * 3600_000L) {
-                subscription.setNextCheckTime(now + 3600_000L); // 播后短轮:窗口内每小时一查(资源常在播后 1~12h 上线)
-                return;
-            }
+        Long recentAir = recentAiredTime(subscription, now);
+        if (recentAir != null && behindAiredEpisodes(subscription, airedTarget(subscription, now))) {
+            // 播后短轮(缺口驱动):已播集(官方口径含 schedule 已到时刻)仍有缺口时,窗口内每小时一查,
+            // 资源常在播后 1~12h 上线;首查(播出+15min 槽位或跨播出时刻的检查)+30min 快速重试一次
+            // (线上诉求:20:00 播、20:15 首查,未命中 20:45 再试一次)。
+            // currentEpisodes 是本轮巡检尾部 applyInventory/补缺刷新后的快照 —— 追平即收工,
+            // 落回下一集播出触发/常规间隔,不空转整窗
+            boolean firstLook = subscription.getLastCheckTime() != null
+                    && subscription.getLastCheckTime() < recentAir + 30 * 60_000L;
+            subscription.setNextCheckTime(firstLook ? now + 30 * 60_000L : now + 3600_000L);
+            return;
         }
         int hours = subscription.getCheckIntervalHours() != null && subscription.getCheckIntervalHours() > 0
                 ? subscription.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours();
@@ -5007,15 +5071,100 @@ public class MediaSubscriptionCheckService {
                 ? appProperties.getSubscription().getReturningBackoffCapHours() : 24;
         double factor = Math.min(Math.pow(1.5, Math.min(subscription.getStallCount(), 6)), 4);
         long interval = (long) (Math.min(hours * factor, cap) * 3600_000L);
-        subscription.setNextCheckTime(now + interval);
+        if (air != null && air > now) {
+            if (!behindAiredEpisodes(subscription, airedTarget(subscription, now))) {
+                // 播出前休眠:播出时刻 +15min 起查(上限 24h,防日程异常导致长眠漏检)
+                subscription.setNextCheckTime(Math.min(air + 15 * 60_000L, now + 24 * 3600_000L));
+                return;
+            }
+            // 已播集仍有缺口(线上:换到只留尾部几集的分享,缺45集却睡到播出前):缺口与播出
+            // 日程无关,不让位长眠 —— 落到常规间隔让补缺尽早跑;但常规间隔可能睡穿播出时刻
+            // (线上:11:00 开播、12h 间隔排到 20:25,新集发现晚 9h),取两者较早
+            subscription.setNextCheckTime(Math.min(now + interval, air + 15 * 60_000L));
+            return;
+        }
+        // 无日程/日程已过尽:常规间隔与高峰档位兜底取早 —— 高峰时段后自动加一轮检查,
+        // 检查零成本(重列主源+缺集判定),无日程订阅的新集发现不再纯等固定周期
+        long slot = nextPrimeCheckTime(now);
+        subscription.setNextCheckTime(slot > 0 ? Math.min(now + interval, slot) : now + interval);
     }
 
-    /** 官方已播集数仍落后于本地集数快照(缺老集):换源挂到只留尾部几集的分享等场景,
-     * 缺口与播出日程无关,播出前休眠应让位。官方无数据/本地未知不判缺(维持休眠)。 */
-    static boolean behindAiredEpisodes(MediaSubscription subscription) {
-        Integer official = subscription.getOfficialEpisodes();
+    /** 下一个高峰检查档位(epoch ms):primeCheckTimes 里最近的未来时刻,只认 ≥now+1h 的档
+     *  (避开刚查完的冗余轮),今天无可用档取明天首个;未配置返回 0。 */
+    private long nextPrimeCheckTime(long now) {
+        List<String> times = appProperties.getSubscription().getPrimeCheckTimes();
+        if (times == null || times.isEmpty()) {
+            return 0;
+        }
+        ZoneId zone = ZoneId.of(Constants.ZONE_ID);
+        LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
+        for (int day = 0; day <= 1; day++) {
+            long best = 0;
+            for (String candidate : times) {
+                LocalTime time;
+                try {
+                    time = LocalTime.parse(candidate.trim());
+                } catch (DateTimeParseException | NullPointerException e) {
+                    continue;
+                }
+                long moment = today.plusDays(day).atTime(time).atZone(zone).toInstant().toEpochMilli();
+                if (moment >= now + 3600_000L && (best == 0 || moment < best)) {
+                    best = moment;
+                }
+            }
+            if (best > 0) {
+                return best;
+            }
+        }
+        return 0;
+    }
+
+    /** 播后短轮锚点:最近一个已到时刻的播出(= 刚播的这集)。优先 schedule 快照 —— refreshMetadata
+     *  一旦执行 nextAirTime 即前移到下一集(严格取未播集),快照(昨日 00:00 起的窗口)仍保留刚播条目,
+     *  短轮不依赖 refresh 节流恰好没跑的巧合;快照缺失时退回节流未刷新的 stale nextAirTime。
+     *  超出短轮窗口(播后 shortPollWindowHours 小时)返回 null,让位播出前休眠/常规退避。 */
+    private Long recentAiredTime(MediaSubscription subscription, long now) {
+        long window = appProperties.getSubscription().getShortPollWindowHours() * 3600_000L;
+        long latest = 0;
+        for (EpisodeAirDate entry : scheduleOf(subscription).values()) {
+            if (entry.getAirTime() <= now && entry.getAirTime() > latest) {
+                latest = entry.getAirTime();
+            }
+        }
+        Long air = subscription.getNextAirTime();
+        if (air != null && air > 0 && air <= now && air > latest) {
+            latest = air;
+        }
+        return latest > 0 && now < latest + window ? latest : null;
+    }
+
+    /** 当前官方已播集数(搜索与调度共用的目标集数):officialEpisodes(上次刷新口径)与
+     *  schedule 快照里播出时刻已到的最大集号(直播径,refresh 节流下不滞后)取大,
+     *  再被官方总集数夹住(与 computeMissing 的瑞克 S1 桥接污染夹紧同口径)。 */
+    int airedTarget(MediaSubscription subscription, long now) {
+        int target = Math.max(
+                subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes(),
+                airedBySchedule(subscription, now));
+        Integer total = subscription.getOfficialTotal();
+        return total != null && total > 0 ? Math.min(target, total) : target;
+    }
+
+    /** schedule 快照(昨日 00:00 起的窗口)里播出时刻已到的最大集号;episode=0(集数未知)不计。 */
+    private int airedBySchedule(MediaSubscription subscription, long now) {
+        int max = 0;
+        for (EpisodeAirDate entry : scheduleOf(subscription).values()) {
+            if (entry.getEpisode() > max && entry.getAirTime() <= now) {
+                max = entry.getEpisode();
+            }
+        }
+        return max;
+    }
+
+    /** 已播集数(目标口径 {@link #airedTarget})仍落后于本地集数快照:缺已播集(新集或老集)。
+     *  官方无数据/本地未知不判缺(维持休眠)。 */
+    static boolean behindAiredEpisodes(MediaSubscription subscription, int target) {
         Integer current = subscription.getCurrentEpisodes();
-        return official != null && official > 0 && current != null && official > current;
+        return target > 0 && current != null && target > current;
     }
 
     // ---------- 工具 ----------

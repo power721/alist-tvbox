@@ -31,6 +31,8 @@ public class MediaSubscriptionDto {
     private List<Integer> missingEpisodes;
     private int stallCount;
     private Integer checkIntervalHours;
+    /** 手动播出时刻校正("HH:mm",空=自动) */
+    private String customAirClock;
     private Long nextCheckTime;
     private Long lastCheckTime;
     private int resourceCount;
