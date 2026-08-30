@@ -9,11 +9,19 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
+
 /**
  * TMDB 访问线路:官方 api/image 域名国内直连不通,Setting tmdb_api_host / tmdb_image_host 可切换到反代镜像。
  * Worker 型镜像 API 与图片同域(只配 tmdb_api_host 即可);NAStool 型分开(tmdb.nastool.org 管 API、
  * img.nastool.org/t/p 管图床),需另配 tmdb_image_host。即读即用无缓存,改设置立即生效;
  * 未配置/非法值一律回落官方直连,行为与历史版本一致。
+ *
+ * 镜像池:两个 Setting 均支持逗号/分号/空白分隔多个镜像(免费 Worker 各有每日限额,轮询分摊额度),
+ * 逐请求 round robin(API 与图片各自独立计数);单项值行为与历史版本完全一致。
  *
  * 凭证同此:Setting tmdb_api_key 支持两形态——v3 api key(32 位,拼 query)与 v4 read access
  * token(eyJ 开头 JWT,走 Authorization: Bearer,不落 URL/代理访问日志),按值自动识别。
@@ -27,17 +35,20 @@ public class TmdbEndpoint {
     public static final String OFFICIAL_API = "https://api.themoviedb.org";
     private static final String MEDIA_HOST = "https://media.themoviedb.org";
     private static final String IMAGE_HOST = "https://image.tmdb.org";
+    private static final Pattern POOL_SEPARATOR = Pattern.compile("[,，;；\\s]+");
 
     private final SettingRepository settingRepository;
+    private final AtomicInteger apiRotation = new AtomicInteger();
+    private final AtomicInteger imageRotation = new AtomicInteger();
 
     public TmdbEndpoint(SettingRepository settingRepository) {
         this.settingRepository = settingRepository;
     }
 
-    /** API base(形如 https://api.themoviedb.org,不带 /3);尾斜杠归一,http(s) 之外的值视为无效回落官方。 */
+    /** API base(形如 https://api.themoviedb.org,不带 /3);池为空回落官方,多项时逐请求轮询。 */
     public String apiHost() {
-        String host = normalize(readSetting(SETTING_NAME));
-        return host != null ? host : OFFICIAL_API;
+        List<String> pool = parsePool(readSetting(SETTING_NAME));
+        return pool.isEmpty() ? OFFICIAL_API : next(pool, apiRotation);
     }
 
     public boolean isMirrorEnabled() {
@@ -45,14 +56,16 @@ public class TmdbEndpoint {
     }
 
     /** 图片镜像 base(不含 /t/p 路径);null = 不重写(官方直连)。
-     * 未单独配置图床时跟随 tmdb_api_host(Worker 同域反代 /t/p/),两者均未配置才回落官方。 */
+     * 未单独配置图床时跟随 tmdb_api_host 池(Worker 同域反代 /t/p/),两者均未配置才回落官方;
+     * 显式配官方 API 不构成镜像线路(官方图床国内不通,重写到它等于没救)。 */
     String imageHost() {
-        String host = normalize(readSetting(SETTING_NAME_IMAGE));
-        if (host != null) {
-            return host;
+        List<String> imagePool = parsePool(readSetting(SETTING_NAME_IMAGE));
+        if (!imagePool.isEmpty()) {
+            return next(imagePool, imageRotation);
         }
-        String api = apiHost();
-        return OFFICIAL_API.equals(api) ? null : api;
+        List<String> apiPool = parsePool(readSetting(SETTING_NAME));
+        apiPool.remove(OFFICIAL_API);
+        return apiPool.isEmpty() ? null : next(apiPool, apiRotation);
     }
 
     /** 官方图床(media.themoviedb.org 301→image.tmdb.org,两者国内均被墙,/images 代理的后端出网跳就是死在这)拉取前重写为镜像;
@@ -102,7 +115,7 @@ public class TmdbEndpoint {
     }
 
     /** 尾斜杠与 /t/p 路径尾巴归一(img.nastool.org/t/p 这类图床前缀写法);空值或非 http(s) 返回 null。 */
-    private String normalize(String value) {
+    private static String normalize(String value) {
         while (value.endsWith("/")) {
             value = value.substring(0, value.length() - 1);
         }
@@ -117,5 +130,28 @@ public class TmdbEndpoint {
             return null;
         }
         return value;
+    }
+
+    /** 拆镜像池:逗号/分号/空白(含全角)分隔,逐项归一,丢弃空项/非法项/重复项。 */
+    private static List<String> parsePool(String value) {
+        List<String> pool = new ArrayList<>();
+        for (String item : POOL_SEPARATOR.split(value)) {
+            if (item.isBlank()) {
+                continue;
+            }
+            String host = normalize(item);
+            if (host != null && !pool.contains(host)) {
+                pool.add(host);
+            }
+        }
+        return pool;
+    }
+
+    /** 单镜像直取,多镜像 round robin(floorMod 防溢出取整;计数只增不减,池大小变化时自然重新分布)。 */
+    private static String next(List<String> pool, AtomicInteger rotation) {
+        if (pool.size() == 1) {
+            return pool.get(0);
+        }
+        return pool.get(Math.floorMod(rotation.getAndIncrement(), pool.size()));
     }
 }

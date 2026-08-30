@@ -574,13 +574,15 @@
             <el-form-item label="API Key / Token">
               <el-input v-model="notifyForm.tmdbApiKey" type="password" show-password
                         placeholder="v3 API key(32位)或 v4 read access token(eyJ... 开头);留空用内置公共 key"/>
-              <span class="sub-text">两种凭证自动识别:api key 拼请求 URL,read access token 走 Bearer 请求头(不落 URL 与代理访问日志);与 系统设置→TMDB API Key 为同一配置,保存即生效</span>
+              <span class="sub-text">两种凭证自动识别:api key 拼请求 URL,read access token 走 Bearer 请求头(不落 URL 与代理访问日志);与 系统设置→TMDB API Key 为同一配置,保存即生效;
+                <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">到官网获取 →</a>
+              </span>
             </el-form-item>
             <el-form-item label="TMDB 线路">
               <el-select v-model="notifyForm.tmdbApiHost" style="width: 100%">
                 <el-option v-for="opt in tmdbApiHostOptions" :key="opt.value" :label="opt.label" :value="opt.value"/>
               </el-select>
-              <span class="sub-text">国内直连官方不通时切换反代;Worker 型 API 与封面同域,NAStool 型自动分开配置图床(系统设置页同一配置)</span>
+              <span class="sub-text">国内直连官方不通时切换反代;Worker 轮询池分摊各 worker 每日限额,Worker 型 API 与封面同域,NAStool 型自动分开配置图床(系统设置页同一配置)</span>
             </el-form-item>
           </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="盘链" name="panlian">
@@ -1094,6 +1096,7 @@ const panSouLinkCheckTypeOptions = [
 ]
 const tmdbApiHostOptions = [
   {label: '官方 API - https://api.themoviedb.org', value: ''},
+  {label: 'Worker 轮询池 - 3 个全用,round robin 分摊每日限额', value: 'https://tmdb.8866033.xyz,https://tmdb.swust-oj.workers.dev,https://tmdb.8866033.workers.dev'},
   {label: 'Worker - https://tmdb.8866033.xyz', value: 'https://tmdb.8866033.xyz'},
   {label: 'Worker - https://tmdb.swust-oj.workers.dev', value: 'https://tmdb.swust-oj.workers.dev'},
   {label: 'Worker - https://tmdb.8866033.workers.dev', value: 'https://tmdb.8866033.workers.dev'},

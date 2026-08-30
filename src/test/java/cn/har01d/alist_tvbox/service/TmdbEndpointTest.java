@@ -115,6 +115,55 @@ class TmdbEndpointTest {
                 endpoint.rewriteImage("https://image.tmdb.org/t/p/w500/p.jpg"));
     }
 
+    // ---------- 镜像池(免费 Worker 每日限额,round robin 分摊) ----------
+
+    private static final String POOL = "https://w1.example.workers.dev,https://w2.example.workers.dev,https://w3.example.workers.dev";
+
+    @Test
+    void roundRobinsApiAcrossWorkerPool() {
+        TmdbEndpoint endpoint = endpoint(POOL, null);
+        java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < 6; i++) {
+            counts.merge(endpoint.apiHost(), 1, Integer::sum);
+        }
+        assertEquals(3, counts.size());
+        counts.values().forEach(count -> assertEquals(2, count)); // 均匀轮询:每个 worker 各 2 次
+    }
+
+    @Test
+    void poolDropsInvalidAndDuplicateItems() {
+        // 全角逗号分隔 + 非法项 + 重复项:只剩一个有效镜像时退化为单项直取
+        TmdbEndpoint endpoint = endpoint("ftp://bad.example，" + MIRROR + "，" + MIRROR + " ,", null);
+        assertEquals(MIRROR, endpoint.apiHost());
+    }
+
+    @Test
+    void imageRewriteRotatesAcrossPool() {
+        TmdbEndpoint endpoint = endpoint(POOL, null); // 图床未单独配置:跟随 API 池轮询
+        String url = "https://image.tmdb.org/t/p/w500/p.jpg";
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (int i = 0; i < 3; i++) {
+            seen.add(endpoint.rewriteImage(url));
+        }
+        assertEquals(3, seen.size()); // 三次重写落在三个不同 worker 上
+        for (String rewritten : seen) {
+            assertTrue(rewritten.endsWith("/t/p/w500/p.jpg"));
+            assertTrue(rewritten.startsWith("https://w"));
+        }
+    }
+
+    @Test
+    void imagePoolConfiguredSeparatelyRotatesIndependently() {
+        // API 单镜像、图床独立池:图床按自己的计数轮询,不与 API 混
+        TmdbEndpoint endpoint = endpoint(MIRROR, POOL.replace("w1", "img1"));
+        assertEquals(MIRROR, endpoint.apiHost());
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (int i = 0; i < 3; i++) {
+            seen.add(endpoint.rewriteImage("https://image.tmdb.org/t/p/w500/p.jpg"));
+        }
+        assertEquals(3, seen.size());
+    }
+
     private static final String V3_KEY = "0123456789abcdef0123456789abcdef";
     private static final String V4_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig";
 
