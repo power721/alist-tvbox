@@ -18,7 +18,7 @@ class DoubanSeasonAlignerTest {
         }
 
         @Override
-        List<DoubanCandidate> suggest(String keyword) {
+        public List<DoubanCandidate> suggest(String keyword) {
             return List.of(
                     new DoubanCandidate("1", "一念永恒", "", "2020"),
                     new DoubanCandidate("2", "一念永恒 第二季", "", "2021"),
@@ -29,7 +29,7 @@ class DoubanSeasonAlignerTest {
         }
 
         @Override
-        Optional<Integer> fetchEpisodeCount(String doubanId) {
+        public Optional<Integer> fetchEpisodeCount(String doubanId) {
             return switch (doubanId) {
                 case "1" -> Optional.of(52);
                 case "2" -> Optional.of(52);
@@ -65,14 +65,14 @@ class DoubanSeasonAlignerTest {
         // 豆瓣缺 S2 条目:S3 起始无从累加 → 宁可不推
         DoubanSeasonAligner stub = new DoubanSeasonAligner(null) {
             @Override
-            List<DoubanCandidate> suggest(String keyword) {
+            public List<DoubanCandidate> suggest(String keyword) {
                 return List.of(
                         new DoubanCandidate("1", "一念永恒", "", "2020"),
                         new DoubanCandidate("3", "一念永恒 第三季", "", "2023"));
             }
 
             @Override
-            Optional<Integer> fetchEpisodeCount(String doubanId) {
+            public Optional<Integer> fetchEpisodeCount(String doubanId) {
                 return "1".equals(doubanId) ? Optional.of(52) : Optional.of(48);
             }
         };
@@ -84,12 +84,12 @@ class DoubanSeasonAlignerTest {
         // S1 裸名条目年份与首播年差 >1:同名异剧,拒
         DoubanSeasonAligner stub = new DoubanSeasonAligner(null) {
             @Override
-            List<DoubanCandidate> suggest(String keyword) {
+            public List<DoubanCandidate> suggest(String keyword) {
                 return List.of(new DoubanCandidate("1", "一念永恒", "", "2010"));
             }
 
             @Override
-            Optional<Integer> fetchEpisodeCount(String doubanId) {
+            public Optional<Integer> fetchEpisodeCount(String doubanId) {
                 return Optional.of(52);
             }
         };
@@ -97,18 +97,36 @@ class DoubanSeasonAlignerTest {
     }
 
     @Test
+    void seasonStartsTableForms() {
+        // 各季起点表:S1=1 / S2=53 / S3=105(52+52+1),多季合一包文件级映射用
+        var starts = new YiNianStub().seasonStarts("一念永恒", 2020);
+        assertEquals(1, starts.get(1));
+        assertEquals(53, starts.get(2));
+        assertEquals(105, starts.get(3));
+        assertEquals(3, starts.size(), "豆瓣尚无 S4 条目:起点表只含已登记季");
+    }
+
+    @Test
+    void finaleSeasonForms() {
+        DoubanSeasonAligner stub = new YiNianStub();
+        assertEquals(4, stub.finaleSeason("一念永恒", 2020, 173), "已播 173 > 已登记之和 152:目标 = 3+1");
+        assertEquals(3, stub.finaleSeason("一念永恒", 2020, 100), "已播 100 ≤ 152:目标 = 最后一季");
+        assertEquals(3, stub.finaleSeason("一念永恒", 2020, null), "无已播数据:已登记最后一季");
+    }
+
+    @Test
     void seasonMarkInSubTitleCounts() {
         // 豆瓣部分条目季标在 sub_title(标题是裸名)
         DoubanSeasonAligner stub = new DoubanSeasonAligner(null) {
             @Override
-            List<DoubanCandidate> suggest(String keyword) {
+            public List<DoubanCandidate> suggest(String keyword) {
                 return List.of(
                         new DoubanCandidate("1", "一念永恒", "", "2020"),
                         new DoubanCandidate("2", "一念永恒", "第二季", "2021"));
             }
 
             @Override
-            Optional<Integer> fetchEpisodeCount(String doubanId) {
+            public Optional<Integer> fetchEpisodeCount(String doubanId) {
                 return "1".equals(doubanId) ? Optional.of(52) : Optional.of(52);
             }
         };

@@ -118,6 +118,16 @@ public class MediaSubscriptionResource {
     @Column(name = "start_episode")
     private Integer startEpisode;
 
+    /**
+     * 季包编号映射表(自动,豆瓣分季集数累推):「季号:全剧起始集号」逗号串(如
+     * {@code 1:1,2:53,3:107,4:166})。多季合一包(S04E01 还带前 3 季)里各季文件季内集号
+     * 互相碰撞(S01E01/S02E01 裸号都是 1),单值 start_episode 平移表达不了 —— 列举时按
+     * 文件各自 SxxEyy 的季逐个映射进全剧连续集号空间,映射成功即持久化(豆瓣缓存过期/条目
+     * 下线后不再依赖外网)。手动声明 start_episode 时本字段作废(手动事实优先)。null = 未映射。
+     */
+    @Column(name = "season_starts")
+    private String seasonStarts;
+
     @Column(name = "created_time", nullable = false)
     private long createdTime;
 }

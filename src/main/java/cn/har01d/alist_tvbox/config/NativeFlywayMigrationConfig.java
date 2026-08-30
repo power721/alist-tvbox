@@ -37,6 +37,7 @@ import db.migration.current.V40__PlayUrlOwnership;
 import db.migration.current.V41__MediaSubscriptionAirClock;
 import db.migration.current.V42__MediaSubscriptionSeasonStart;
 import db.migration.current.V43__MediaSubscriptionResourceStart;
+import db.migration.current.V44__MediaSubscriptionResourceSeasonStarts;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -104,7 +105,8 @@ public class NativeFlywayMigrationConfig {
                     new V40__PlayUrlOwnership(),
                     new V41__MediaSubscriptionAirClock(),
                     new V42__MediaSubscriptionSeasonStart(),
-                    new V43__MediaSubscriptionResourceStart());
+                    new V43__MediaSubscriptionResourceStart(),
+                    new V44__MediaSubscriptionResourceSeasonStarts());
         };
     }
 }

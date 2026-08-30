@@ -95,8 +95,47 @@ public class DoubanSeasonAligner {
         return sum >= 0 ? sum + 1 : null;
     }
 
+    /**
+     * 各季 → 全剧起始集号表(S1→1,S2→S1 集数+1,…)。多季合一包(S04E01 还带前 3 季)
+     * 的文件级映射用:按文件各自 SxxEyy 的季逐个平移。搜不到/数据不全/失败返回 null。
+     */
+    public Map<Integer, Integer> seasonStarts(String seriesName, Integer firstYear) {
+        if (StringUtils.isBlank(seriesName)) {
+            return null;
+        }
+        String bare = StringUtils.defaultIfBlank(TextUtils.stripSeasonSuffix(seriesName), seriesName).trim();
+        Map<Integer, Integer> counts = seasonsCache.get(bare, key -> fetchSeasonCounts(bare, firstYear))
+                .orElse(null);
+        if (counts == null || counts.isEmpty()) {
+            return null;
+        }
+        Map<Integer, Integer> starts = new TreeMap<>();
+        int sum = 0;
+        for (Map.Entry<Integer, Integer> entry : new TreeMap<>(counts).entrySet()) {
+            starts.put(entry.getKey(), sum + 1);
+            sum += entry.getValue();
+        }
+        return starts;
+    }
+
+    /** 完结季目标季(公开给调用方定 SINGLE 季包的包季):豆瓣分季条目通常滞后,完结季资源
+     常常还没条目 —— 已播数超出已登记各季之和说明最后一季未登记,目标 = 最后一季 + 1。
+     与 seasonStarts 同缓存命中,不额外打外网。 */
+    public Integer finaleSeason(String seriesName, Integer firstYear, Integer officialAired) {
+        if (StringUtils.isBlank(seriesName)) {
+            return null;
+        }
+        String bare = StringUtils.defaultIfBlank(TextUtils.stripSeasonSuffix(seriesName), seriesName).trim();
+        Map<Integer, Integer> seasons = seasonsCache.get(bare, key -> fetchSeasonCounts(bare, firstYear))
+                .orElse(null);
+        if (seasons == null || seasons.isEmpty()) {
+            return null;
+        }
+        return finaleTarget(seasons, officialAired);
+    }
+
     /** 完结季目标季:豆瓣分季条目通常滞后,完结季资源常常还没条目 —— 已播数超出已登记各季之和
-     *  说明最后一季未登记,目标 = 已登记最后一季 + 1;否则完结季 = 已登记最后一季。 */
+     说明最后一季未登记,目标 = 已登记最后一季 + 1;否则完结季 = 已登记最后一季。 */
     private static int finaleTarget(Map<Integer, Integer> seasons, Integer officialAired) {
         int last = java.util.Collections.max(seasons.keySet());
         int registered = seasons.values().stream().mapToInt(Integer::intValue).sum();
@@ -178,7 +217,7 @@ public class DoubanSeasonAligner {
     }
 
     /** 豆瓣 suggest(游客可用,滤非影视条目);失败 null。单测可覆写。 */
-    List<DoubanCandidate> suggest(String keyword) {
+    public List<DoubanCandidate> suggest(String keyword) {
         if (StringUtils.isBlank(keyword)) {
             return null;
         }
@@ -202,7 +241,7 @@ public class DoubanSeasonAligner {
     }
 
     /** rexxar tv 条目的 episodes_count;失败/非剧集条目返 Optional.empty。单测可覆写。 */
-    Optional<Integer> fetchEpisodeCount(String doubanId) {
+    public Optional<Integer> fetchEpisodeCount(String doubanId) {
         if (StringUtils.isBlank(doubanId)) {
             return Optional.empty();
         }
@@ -228,6 +267,6 @@ public class DoubanSeasonAligner {
         }
     }
 
-    record DoubanCandidate(String id, String title, String subTitle, String year) {
+    public record DoubanCandidate(String id, String title, String subTitle, String year) {
     }
 }

@@ -2537,6 +2537,170 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(fixture.service.belongsToShow(fixture.subscription, s2), "订阅未指定季:门禁关闭");
     }
 
+    // ---------- 本剧季包放行(2026-08-31,线上:一念永恒,TMDB 单季装全剧/豆瓣分 4 季) ----------
+    // 元数据 totalSeasons==1 且订阅季≤1 时,「第N季/完结季/合集」资源是本剧自己的季包:
+    // 季包年份是该季年份(完结季 2026 vs 首播 2020)、季号≠订阅季,年份/季号门禁全是误杀,
+    // 72 条「它季资源」+49 条「年份不符」在入池前就被扔掉,资源级起始集号根本没机会跑。
+
+    private static void stubAbsoluteSeries(Fixture fixture, String name) {
+        MetadataDetails details = new MetadataDetails();
+        details.setTotalSeasons(1);
+        details.setYear("2020");
+        Mockito.when(fixture.metadataService.details(Mockito.anyString(), Mockito.anyString(), Mockito.any()))
+                .thenReturn(details);
+        fixture.subscription.setMetaProvider("tmdb");
+        fixture.subscription.setMetaId("107371");
+        fixture.subscription.setName(name);
+        fixture.subscription.setKeyword(name);
+        fixture.subscription.setSeason(1);
+    }
+
+    @Test
+    void fillPoolAdmitsOwnSeasonPackTitles() {
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/s1", "一念永恒 完结季(2026) 【更08集】【4K】"),
+                        message("https://pan.quark.cn/s/s2", "一念永恒 第四季 4K [更新至08集]"),
+                        message("https://pan.quark.cn/s/s3", "一念永恒 第1-4季 合集 2160P")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.anyInt(), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository, Mockito.times(3)).save(captor.capture());
+        assertEquals(3, captor.getAllValues().size(), "完结季(2026 年份门禁)/第四季(季号门禁)/1-4季合集 全部入池");
+    }
+
+    @Test
+    void fillPoolStillRejectsForeignSeasonWithoutAbsoluteMetadata() {
+        // 元数据未知/分季:季号门禁照旧 —— 同名异剧的前季资源不能借「季包」名义混进来
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("悬案");
+        fixture.subscription.setSeason(1);
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/s1", "悬案 第三季(2026) 全8集")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.anyInt(), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        Mockito.verify(fixture.resourceRepository, Mockito.never()).save(Mockito.any(MediaSubscriptionResource.class));
+    }
+
+    @Test
+    void belongsToShowAndPurgeKeepOwnSeasonPacks() {
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        MediaSubscriptionResource finale = new MediaSubscriptionResource();
+        finale.setId(31);
+        finale.setTitle("一念永恒 完结季(2026) 【更08集】");
+        MediaSubscriptionResource s4 = new MediaSubscriptionResource();
+        s4.setId(32);
+        s4.setTitle("一念永恒 第四季 4K");
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, finale), "完结季年份 2026≠2020:季包放行");
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, s4), "第四季≠订阅季 1:季包放行");
+
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(finale, s4));
+        fixture.service.purgeForeignSeasonResources(fixture.subscription);
+        Mockito.verify(fixture.resourceRepository, Mockito.never()).delete(Mockito.any(MediaSubscriptionResource.class));
+    }
+
+    @Test
+    void seasonPackMapForms() {
+        // SINGLE:完结季包(包季 4,起点 153)—— 裸编号/S01Eyy(季内编号习惯)都按包季平移,别季拒收
+        MediaSubscriptionCheckService.SeasonPackMap single =
+                new MediaSubscriptionCheckService.SeasonPackMap(java.util.Map.of(4, 153), 4, false);
+        assertEquals(153, single.map("第01集 4K.mkv", "", 1));
+        assertEquals(160, single.map("S01E08.mkv", "", 8), "S01Eyy=季内编号,不是第 1 季");
+        assertEquals(-1, single.map("S02E01.mkv", "", 1), "别季文件:SINGLE 包只供声明的季");
+
+        // MULTI:1-4 季合集 —— SxxEyy 按各自季起点,裸编号按目录季,无目录季按最高季
+        MediaSubscriptionCheckService.SeasonPackMap multi = new MediaSubscriptionCheckService.SeasonPackMap(
+                java.util.Map.of(1, 1, 2, 53, 3, 105, 4, 153), null, true);
+        assertEquals(1, multi.map("S01E01.mkv", "", 1));
+        assertEquals(53, multi.map("S02E01.mkv", "", 1));
+        assertEquals(165, multi.map("S03E61.mkv", "", 61));
+        assertEquals(153, multi.map("S04E01.mkv", "", 1));
+        assertEquals(53, multi.map("第01集.mkv", "第二季", 1), "裸编号在「第二季」目录:按目录季");
+        assertEquals(161, multi.map("第09集.mkv", "", 9), "裸编号无目录季:兜底最高季(零散更新=最新季,153-1+9)");
+        assertEquals(-1, multi.map("S05E01.mkv", "", 1), "起点表外的季拒收");
+
+        // 持久化编解码回环
+        MediaSubscriptionCheckService.SeasonPackMap parsed =
+                MediaSubscriptionCheckService.SeasonPackMap.parse(multi.encode(), null, true);
+        assertEquals(107, parsed.map("S03E03.mkv", "", 3), "S03E03 = 105-1+3");
+        assertNull(MediaSubscriptionCheckService.SeasonPackMap.parse("junk", null, true));
+    }
+
+    @Test
+    void seasonPackMapPersistsAndCaches() {
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.service.setSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner(null) {
+            @Override
+            public List<cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.DoubanCandidate> suggest(String keyword) {
+                return List.of(
+                        new cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.DoubanCandidate("1", "一念永恒", "", "2020"),
+                        new cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.DoubanCandidate("2", "一念永恒 第二季", "", "2021"),
+                        new cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.DoubanCandidate("3", "一念永恒 第三季", "", "2023"));
+            }
+
+            @Override
+            public Optional<Integer> fetchEpisodeCount(String doubanId) {
+                return switch (doubanId) {
+                    case "1" -> Optional.of(52);
+                    case "2" -> Optional.of(52);
+                    case "3" -> Optional.of(48);
+                    default -> Optional.empty();
+                };
+            }
+        });
+        MediaSubscriptionResource finale = new MediaSubscriptionResource();
+        finale.setId(41);
+        finale.setSubscriptionId(1);
+        finale.setTitle("一念永恒 完结季 4K臻彩MAX [更新至08集]");
+        fixture.subscription.setOfficialEpisodes(173);
+
+        MediaSubscriptionCheckService.SeasonPackMap map = fixture.service.seasonPackMap(fixture.subscription, finale);
+
+        assertNotNull(map, "已播 173 > 已登记 152:完结季目标 = S4,起点 153");
+        assertEquals(153, map.map("S01E01.mkv", "", 1));
+        assertEquals("4:153", finale.getSeasonStarts(), "映射表持久化到资源行");
+        Mockito.verify(fixture.episodeSourceRepository).deleteByResourceId(41);
+
+        // 二次取用走持久化表,不再依赖豆瓣
+        MediaSubscriptionCheckService.SeasonPackMap again = fixture.service.seasonPackMap(fixture.subscription, finale);
+        assertEquals(160, again.map("第08集.mkv", "", 8));
+
+        // 手动声明优先:清自动映射
+        finale.setStartEpisode(166);
+        assertNull(fixture.service.seasonPackMap(fixture.subscription, finale));
+    }
+
+    @Test
+    void sanitizeKeepsAlreadyMappedFilesUnshifted() {
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        MediaSubscriptionResource mapped = new MediaSubscriptionResource();
+        mapped.setId(51);
+        mapped.setTitle("一念永恒 完结季 4K [更新至08集]");
+        mapped.setSeasonStarts("4:166"); // 已按文件级映射列举:文件已在全剧连续集号空间
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
+        for (int ep = 166; ep <= 173; ep++) {
+            files.put(ep, new MediaSubscriptionCheckService.EpisodeFile(ep, "/x", "第" + (ep - 165) + "集.mkv", 1, 0));
+        }
+
+        fixture.service.sanitizeEpisodeFiles(fixture.subscription, mapped, files, mapped.getTitle());
+
+        assertEquals(166, files.firstKey());
+        assertEquals(173, files.lastKey(), "已映射资源:不再平移、不清池");
+    }
+
     @Test
     void purgeForeignSeasonResourcesRemovesStaleSeasonRows() {
         Fixture fixture = new Fixture();
@@ -4020,7 +4184,8 @@ class MediaSubscriptionCheckServiceTest {
 
         MediaSubscriptionResource declared = new MediaSubscriptionResource();
         declared.setTitle("一念永恒 第4季 2160P");
-        assertEquals(4, svc.collectSeason(subscription, declared), "标题声明季 4:按 4 收");
+        assertNull(svc.collectSeason(subscription, declared),
+                "标题声明季也放宽到 null:包内文件常标 S01Eyy(季内编号),按 4 收会整包拒收;季归属交给文件级映射");
 
         // 多季元数据/多季订阅:季过滤是防冒领的正确语义,不放宽
         details.setTotalSeasons(4);

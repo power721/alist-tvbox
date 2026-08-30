@@ -479,10 +479,11 @@ public class MediaSubscriptionService {
                 .filter(r -> r.getSubscriptionId() == id)
                 .orElseThrow(() -> new cn.har01d.alist_tvbox.exception.NotFoundException("资源不存在"));
         Integer start = startEpisode != null && startEpisode > 1 ? startEpisode : null;
-        if (Objects.equals(start, resource.getStartEpisode())) {
+        if (Objects.equals(start, resource.getStartEpisode()) && resource.getSeasonStarts() == null) {
             return;
         }
         resource.setStartEpisode(start);
+        resource.setSeasonStarts(null); // 手动声明优先:清自动季包映射,列举回到裸编号+平移口径
         resource.setEpisodesFound(null);
         resourceRepository.save(resource);
         episodeSourceRepository.deleteByResourceId(resourceId);
