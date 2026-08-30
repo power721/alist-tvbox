@@ -523,6 +523,10 @@
               <el-input v-model="notifyForm.chatId" placeholder="与 bot 对话后获取"/>
               <span v-if="!store.admin" class="sub-text">个人 TG 通知渠道:留空时沿用管理员配置的全局渠道</span>
             </el-form-item>
+            <el-form-item v-if="store.admin" label="Bot 交互">
+              <el-switch v-model="notifyForm.botEnabled"/>
+              <span class="sub-text" style="margin-left:8px">允许在 Telegram 里与 Bot 对话(查订阅/搜索/追剧/退订);只需收通知不需要对话时可关闭</span>
+            </el-form-item>
             <el-form-item v-if="store.admin" label="完结归档(天)">
               <el-input-number v-model="notifyForm.archiveDays" :min="0" :max="3650"/>
               <span class="sub-text" style="margin-left:8px">完结 N 天后自动释放转存文件,0=关闭</span>
@@ -1042,6 +1046,7 @@ const loadPanSouAuth = () => {
 const notifyForm = ref({
   botToken: '',
   chatId: '',
+  botEnabled: true,
   doubanCookie: '',
   archiveDays: 0,
   tmdbApiKey: '',
@@ -1777,6 +1782,7 @@ const openNotify = () => {
     const settings = response.data || {}
     notifyForm.value.botToken = settings['msub_telegram_bot_token'] || ''
     notifyForm.value.chatId = settings['msub_telegram_chat_id'] || ''
+    notifyForm.value.botEnabled = settings['msub_telegram_bot_enabled'] !== 'false'
     notifyForm.value.doubanCookie = settings['douban_cookie'] || ''
     notifyForm.value.tmdbApiKey = settings['tmdb_api_key'] || ''
     notifyForm.value.tmdbApiHost = settings['tmdb_api_host'] || ''
@@ -1842,6 +1848,7 @@ const saveNotify = () => {
   const saves = store.admin ? [
     axios.post('/api/settings', {name: 'msub_telegram_bot_token', value: notifyForm.value.botToken}),
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
+    axios.post('/api/settings', {name: 'msub_telegram_bot_enabled', value: String(notifyForm.value.botEnabled)}),
     axios.post('/api/settings', {name: 'douban_cookie', value: notifyForm.value.doubanCookie}),
     axios.post('/api/settings', {name: 'tmdb_api_key', value: notifyForm.value.tmdbApiKey}),
     axios.post('/api/settings', {name: 'tmdb_api_host', value: notifyForm.value.tmdbApiHost}),

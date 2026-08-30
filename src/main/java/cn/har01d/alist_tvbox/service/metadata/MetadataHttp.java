@@ -23,17 +23,22 @@ public class MetadataHttp {
     }
 
     public RestTemplate create() {
+        return create(Duration.ofSeconds(15));
+    }
+
+    /** 长轮询等特殊调用需要更长的读超时(如 Telegram getUpdates 的 25s 挂起)。 */
+    public RestTemplate create(Duration readTimeout) {
         RestTemplateBuilder base = builder != null ? builder : new RestTemplateBuilder();
         RestTemplate template = base
                 .connectTimeout(Duration.ofSeconds(10))
-                .readTimeout(Duration.ofSeconds(15))
+                .readTimeout(readTimeout)
                 .build();
         // builder 配的超时会被 RestTemplateConfig 全局 customizer(60s 地板)的 setRequestFactory 覆盖
         // (customizer 在 build 时运行,JDK factory 无超时 getter 可透传)—— build 后自设 Simple
-        // factory 收回主动权:消息转换器不受影响,巡检线程对挂起平台最多等 15s 而非 60s×N 请求
+        // factory 收回主动权:消息转换器不受影响,巡检线程对挂起平台最多等 readTimeout 而非 60s×N 请求
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
-        factory.setReadTimeout((int) Duration.ofSeconds(15).toMillis());
+        factory.setReadTimeout((int) readTimeout.toMillis());
         template.setRequestFactory(factory);
         return template;
     }
