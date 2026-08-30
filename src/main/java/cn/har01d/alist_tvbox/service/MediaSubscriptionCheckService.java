@@ -33,6 +33,7 @@ import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner;
+import cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
 import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
@@ -168,6 +169,15 @@ public class MediaSubscriptionCheckService {
      *  放宽季口径会把正常全季包整包弃收。 */
     private static final Pattern MULTI_SEASON_PACK = Pattern.compile(
             "第\\s*\\d{1,2}\\s*[-~至]\\s*\\d{1,2}\\s*季|(?i)s\\s?\\d{1,2}\\s*[-~至]\\s*s?\\s?\\d{1,2}\\b");
+    /** 小说/电子书资源信号:txt/epub 等电子书扩展名 + 作者署名/校对精校/全本等网文打包术语
+     *  (线上:一念永恒的候选池混入《一念永恒》(校对版全本)作者:耳根.txt 一族,同名召回命中剧名门禁) */
+    private static final Pattern NOVEL_TITLE = Pattern.compile(
+            "(?i)\\.(txt|epub|mobi|azw3?)$|作者|校对|精校|全本|有声书?");
+    /** 同名小说/电子书资源判定(入池门禁用) */
+    static boolean isNovelTitle(String title) {
+        return StringUtils.isNotBlank(title) && NOVEL_TITLE.matcher(title).find();
+    }
+
     /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
     private static final Pattern TITLE_PROGRESS = Pattern.compile(
             "(?i)更新?至\\s*(\\d{1,4})|全\\s*(\\d{1,4})\\s*集|第\\s*(\\d{1,4})\\s*[-~至]\\s*(\\d{1,4})\\s*集|第\\s*(\\d{1,4})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,4})(?!\\d)");
@@ -246,11 +256,17 @@ public class MediaSubscriptionCheckService {
     private final Map<Integer, Long> aheadRescueTime = new ConcurrentHashMap<>();
     /** 字节级流探测客户端(默认 OkHttp 实现,单测注入桩) */
     private StreamProbeClient streamProbeClient = new StreamProbeClient.Default();
-    /** 豆瓣分季集数 → 资源级起始集号自动推断(单测注入桩) */
+    /** 豆瓣分季集数 → 资源级起始集号自动推断(兜底源,单测注入桩) */
     private DoubanSeasonAligner seasonAligner;
+    /** 腾讯分季集数 → 全剧起始集号(首选源:分季集数与绝对集号严格对齐,单测注入桩) */
+    private TencentSeasonAligner tencentSeasonAligner;
 
     void setSeasonAligner(DoubanSeasonAligner seasonAligner) {
         this.seasonAligner = seasonAligner;
+    }
+
+    void setTencentSeasonAligner(TencentSeasonAligner tencentSeasonAligner) {
+        this.tencentSeasonAligner = tencentSeasonAligner;
     }
     /**
      * 订阅巡检执行池:并发度可配(checkConcurrency,默认 3),到期订阅并发检查、手动触发的
@@ -292,9 +308,11 @@ public class MediaSubscriptionCheckService {
                                          ObjectMapper objectMapper,
                                          ObjectProvider<MediaSubscriptionTransferService> transferServiceProvider,
                                          MediaSubscriptionNotificationService notificationService,
-                                         DoubanSeasonAligner seasonAligner) {
+                                         DoubanSeasonAligner seasonAligner,
+                                         TencentSeasonAligner tencentSeasonAligner) {
         this.transferServiceProvider = transferServiceProvider;
         this.seasonAligner = seasonAligner;
+        this.tencentSeasonAligner = tencentSeasonAligner;
         this.notificationService = notificationService;
         this.subscriptionRepository = subscriptionRepository;
         this.resourceRepository = resourceRepository;
@@ -362,7 +380,7 @@ public class MediaSubscriptionCheckService {
                 aListService, telegramService, wanouSearchService, panLianSearchService,
                 guanYingSearchService, woniuSearchService, panjuSearchService, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper,
-                fixedProvider(transferService), notificationService, null);
+                fixedProvider(transferService), notificationService, null, null);
     }
 
     private static ObjectProvider<MediaSubscriptionTransferService> fixedProvider(
@@ -410,7 +428,7 @@ public class MediaSubscriptionCheckService {
                 aListService, telegramService, wanouSearchService, panLianSearchService,
                 guanYingSearchService, woniuSearchService, panjuSearchService, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper, fixedProvider(null),
-                notificationService, null);
+                notificationService, null, null);
     }
 
     @PreDestroy
@@ -1997,7 +2015,7 @@ public class MediaSubscriptionCheckService {
      */
     private void alignResourceNumbering(MediaSubscription subscription, MediaSubscriptionResource resource,
                                         TreeMap<Integer, EpisodeFile> files, String contextTitle) {
-        if (seasonAligner == null || resource == null || files.isEmpty()
+        if ((seasonAligner == null && tencentSeasonAligner == null) || resource == null || files.isEmpty()
                 || resource.getStartEpisode() != null || resource.getSeasonStarts() != null
                 || subscription.getSeasonStartEpisode() != null) {
             return;
@@ -2007,9 +2025,9 @@ public class MediaSubscriptionCheckService {
         if (season != null && season > 1 || total == null || total <= 0) {
             return;
         }
-        Integer start = seasonAligner.inferSeasonStart(
+        Integer start = alignSeasonStart(subscription,
                 StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()),
-                metaYear(subscription), contextTitle, subscription.getOfficialEpisodes());
+                metaYear(subscription), contextTitle);
         if (start == null || start <= 1) {
             return;
         }
@@ -2028,6 +2046,47 @@ public class MediaSubscriptionCheckService {
         episodeSourceRepository.deleteByResourceId(resource.getId()); // 旧编号行错位,清行重扫
         addEvent(subscription.getId(), "ALIGN",
                 "资源「" + resource.getTitle() + "」按豆瓣分季集数自动对齐:第 1 集对应全剧第 " + start + " 集");
+    }
+
+    /** 分季对齐统一入口:腾讯优先(分季集数与绝对集号严格对齐,线上实测一念永恒 52/54/59/
+     * 完结季起点 166,与 Bangumi 一致),腾讯无数据回落豆瓣(其分季集数有漏登,完结季累推
+     * 153 与真实 166 差 13 集 —— 自动对齐宁可慢一拍也要准,两个源都返回才更可信时不做,
+     * 简单优先源 + 兜底)。 */
+    Map<Integer, Integer> alignSeasonStarts(MediaSubscription subscription, String seriesName, Integer firstYear) {
+        if (tencentSeasonAligner != null) {
+            Map<Integer, Integer> starts = tencentSeasonAligner.seasonStarts(seriesName, firstYear);
+            if (starts != null && !starts.isEmpty()) {
+                return starts;
+            }
+        }
+        return seasonAligner == null ? null : seasonAligner.seasonStarts(seriesName, firstYear);
+    }
+
+    Integer alignSeasonStart(MediaSubscription subscription, String seriesName, Integer firstYear, String resourceTitle) {
+        if (tencentSeasonAligner != null) {
+            Integer start = tencentSeasonAligner.inferSeasonStart(seriesName, firstYear, resourceTitle,
+                    subscription.getOfficialEpisodes());
+            if (start != null) {
+                return start;
+            }
+        }
+        return seasonAligner == null ? null
+                : seasonAligner.inferSeasonStart(seriesName, firstYear, resourceTitle,
+                        subscription.getOfficialEpisodes());
+    }
+
+    Integer alignFinaleSeason(MediaSubscription subscription) {
+        String seriesName = StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName());
+        Integer firstYear = metaYear(subscription);
+        if (tencentSeasonAligner != null) {
+            Integer season = tencentSeasonAligner.finaleSeason(seriesName, firstYear,
+                    subscription.getOfficialEpisodes());
+            if (season != null) {
+                return season;
+            }
+        }
+        return seasonAligner == null ? null
+                : seasonAligner.finaleSeason(seriesName, firstYear, subscription.getOfficialEpisodes());
     }
 
     /**
@@ -2207,7 +2266,8 @@ public class MediaSubscriptionCheckService {
      * 实时累推成功即持久化到资源行并记事件(后续轮次不再依赖外网)。
      */
     SeasonPackMap seasonPackMap(MediaSubscription subscription, MediaSubscriptionResource resource) {
-        if (resource == null || seasonAligner == null || !seasonPackWidened(subscription, resource)
+        if (resource == null || (seasonAligner == null && tencentSeasonAligner == null)
+                || !seasonPackWidened(subscription, resource)
                 || resource.getStartEpisode() != null || subscription.getSeasonStartEpisode() != null) {
             return null;
         }
@@ -2220,9 +2280,7 @@ public class MediaSubscriptionCheckService {
         Integer declared = TextUtils.parseTitleSeason(title);
         Integer target = declared != null && declared > 1 ? declared : null;
         if (target == null && DoubanSeasonAligner.finaleMarked(title)) {
-            target = seasonAligner.finaleSeason(
-                    StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()),
-                    metaYear(subscription), subscription.getOfficialEpisodes());
+            target = alignFinaleSeason(subscription);
         }
         if (!multi && target == null) {
             return null; // SINGLE 包无季锚点(裸标题),交给旧链路(对齐器按标题推断,无则弃收)
@@ -2236,12 +2294,11 @@ public class MediaSubscriptionCheckService {
         Integer firstYear = metaYear(subscription);
         Map<Integer, Integer> table;
         if (multi) {
-            table = seasonAligner.seasonStarts(seriesName, firstYear);
+            table = alignSeasonStarts(subscription, seriesName, firstYear);
         } else {
             // SINGLE 起点用 inferSeasonStart:完结季常无豆瓣条目,起点=已登记各季之和+1,
             // 起点表(seasonStarts)里没有这一行
-            Integer start = seasonAligner.inferSeasonStart(seriesName, firstYear, title,
-                    subscription.getOfficialEpisodes());
+            Integer start = alignSeasonStart(subscription, seriesName, firstYear, title);
             table = start == null || start <= 1 || finalTarget == null ? null : Map.of(finalTarget, start);
         }
         if (table == null || table.isEmpty()) {
@@ -4902,6 +4959,10 @@ public class MediaSubscriptionCheckService {
                 audit.drop(PoolDrop.EXCLUDED, title); // 订阅级与全局排除词并集:命中任一即拒
                 continue;
             }
+            if (isNovelTitle(title)) {
+                audit.drop(PoolDrop.NOVEL, title); // 同名小说/电子书:剧名门禁挡不住同名召回,须在挂载试错前剔除
+                continue;
+            }
             if (!globallyIncluded(global, title)) {
                 audit.drop(PoolDrop.INCLUDE, title); // 全局包含词硬门禁:配置非空时标题须至少含其一
                 continue;
@@ -5078,6 +5139,7 @@ public class MediaSubscriptionCheckService {
         EXCLUDED("命中排除词", true),
         INCLUDE("缺包含词", true),
         QUALITY("清晰度不足", true),
+        NOVEL("小说资源", true),
         TITLE("剧名不符", true),
         YEAR("年份不符", true),
         FOREIGN("异剧形态", true),

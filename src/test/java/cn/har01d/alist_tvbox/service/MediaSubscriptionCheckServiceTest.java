@@ -1313,6 +1313,21 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void isNovelTitleRejectsNovelSharesAndKeepsVideoTitles() {
+        assertTrue(MediaSubscriptionCheckService.isNovelTitle("《一念永恒》(校对版全本)作者:耳根.txt"));
+        assertTrue(MediaSubscriptionCheckService.isNovelTitle("《一念永恒》作者:耳根.txt"));
+        assertTrue(MediaSubscriptionCheckService.isNovelTitle("《一念永恒》[精校]作者:耳根.txt"));
+        assertTrue(MediaSubscriptionCheckService.isNovelTitle("一念永恒版全本作者耳根.txt"));
+        assertTrue(MediaSubscriptionCheckService.isNovelTitle("《一念永恒》(校对版全本)作者:耳根"));
+        assertTrue(MediaSubscriptionCheckService.isNovelTitle("一念永恒 by 耳根.txt"));
+        assertTrue(MediaSubscriptionCheckService.isNovelTitle("一念永恒.epub"));
+        assertFalse(MediaSubscriptionCheckService.isNovelTitle("一念永恒 完结季 [更新至08集] 4K"));
+        assertFalse(MediaSubscriptionCheckService.isNovelTitle("一念永恒 全212集 完整版 1080P"));
+        assertFalse(MediaSubscriptionCheckService.isNovelTitle("The Last of Us S01E05 1080p WEB-DL"));
+        assertFalse(MediaSubscriptionCheckService.isNovelTitle(""));
+    }
+
+    @Test
     void matchesTitleToleratesSingleCharObfuscation() {
         List<String> names = List.of("漫长的季节");
         assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "漫氦的季节 全12集 4K")); // 1 字防审查变形
@@ -2680,6 +2695,48 @@ class MediaSubscriptionCheckServiceTest {
         // 手动声明优先:清自动映射
         finale.setStartEpisode(166);
         assertNull(fixture.service.seasonPackMap(fixture.subscription, finale));
+    }
+
+    @Test
+    void seasonPackMapPrefersTencentOverDouban() {
+        // 腾讯分季集数与绝对集号严格对齐(线上:一念永恒完结季起点 166),豆瓣累推 153 有漏登 —— 首选腾讯
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.service.setTencentSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner(null) {
+            @Override
+            public com.fasterxml.jackson.databind.JsonNode search(String keyword) {
+                try {
+                    return new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                            "{\"normalList\":{\"itemList\":[{\"doc\":{\"dataType\":2},\"videoInfo\":{\"title\":\"一念永恒 第1季\",\"year\":2020,"
+                                    + "\"playSites\":[{\"totalEpisode\":52,\"episodeInfoList\":[{\"url\":\"https://v.qq.com/x/cover/a/e.html\"}]}]}},"
+                                    + "{\"doc\":{\"dataType\":2},\"videoInfo\":{\"title\":\"一念永恒 第2季\",\"year\":2022,"
+                                    + "\"playSites\":[{\"totalEpisode\":54,\"episodeInfoList\":[{\"url\":\"https://v.qq.com/x/cover/b/e.html\"}]}]}},"
+                                    + "{\"doc\":{\"dataType\":2},\"videoInfo\":{\"title\":\"一念永恒 第3季\",\"year\":2024,"
+                                    + "\"playSites\":[{\"totalEpisode\":59,\"episodeInfoList\":[{\"url\":\"https://v.qq.com/x/cover/c/e.html\"}]}]}},"
+                                    + "{\"doc\":{\"dataType\":2},\"videoInfo\":{\"title\":\"一念永恒 完结季\",\"year\":2026,"
+                                    + "\"playSites\":[{\"totalEpisode\":16,\"episodeInfoList\":[{\"url\":\"https://v.qq.com/x/cover/d/e.html\"}]}]}}]}}");
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+        });
+        fixture.service.setSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner(null) {
+            @Override
+            public List<cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.DoubanCandidate> suggest(String keyword) {
+                return List.of(); // 豆瓣即使有数据也不该被用到
+            }
+        });
+        MediaSubscriptionResource finale = new MediaSubscriptionResource();
+        finale.setId(61);
+        finale.setSubscriptionId(1);
+        finale.setTitle("一念永恒 完结季 4K [更新至08集]");
+        fixture.subscription.setOfficialEpisodes(173);
+
+        MediaSubscriptionCheckService.SeasonPackMap map = fixture.service.seasonPackMap(fixture.subscription, finale);
+
+        assertEquals("4:166", finale.getSeasonStarts(), "腾讯口径:完结季起点 166(豆瓣口径是 153)");
+        assertEquals(166, map.map("S01E01.mkv", "", 1));
+        assertEquals(173, map.map("第08集.mkv", "", 8));
     }
 
     @Test
@@ -4103,7 +4160,7 @@ class MediaSubscriptionCheckServiceTest {
         MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
                 null, resourceRepository, null, null, episodeSourceRepository, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null,
-                new AppProperties(), new ObjectMapper(), null, null, null);
+                new AppProperties(), new ObjectMapper(), null, null);
         var aligner = Mockito.mock(cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.class);
         svc.setSeasonAligner(aligner);
 
@@ -4135,7 +4192,7 @@ class MediaSubscriptionCheckServiceTest {
         MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
                 null, resourceRepository, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null,
-                new AppProperties(), new ObjectMapper(), null, null, null);
+                new AppProperties(), new ObjectMapper(), null, null);
         var aligner = Mockito.mock(cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.class);
         svc.setSeasonAligner(aligner);
 
@@ -4170,7 +4227,7 @@ class MediaSubscriptionCheckServiceTest {
         MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
                 null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, metadataService, null, null,
-                new AppProperties(), new ObjectMapper(), null, null, null);
+                new AppProperties(), new ObjectMapper(), null, null);
 
         MediaSubscription subscription = new MediaSubscription();
         subscription.setId(64);
