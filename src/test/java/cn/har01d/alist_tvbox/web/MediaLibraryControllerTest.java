@@ -2,7 +2,10 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
+import cn.har01d.alist_tvbox.service.PianDanService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +20,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
@@ -31,12 +36,14 @@ class MediaLibraryControllerTest {
     private SubscriptionService subscriptionService;
     @Mock
     private MediaSubscriptionService mediaSubscriptionService;
+    @Mock
+    private PianDanService pianDanService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new MediaLibraryController(subscriptionService, mediaSubscriptionService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new MediaLibraryController(subscriptionService, mediaSubscriptionService, pianDanService))
                 .setControllerAdvice(new RestErrorHandler())
                 .build();
         when(mediaSubscriptionService.resolveUid("token-a")).thenReturn(7);
@@ -52,12 +59,108 @@ class MediaLibraryControllerTest {
 
     @Test
     void homeContentReturnsStatusCategories() throws Exception {
+        when(pianDanService.subscriptionCategory()).thenReturn(new CategoryList());
         mockMvc.perform(get("/media/token-a"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.class[0].type_id").value("all"))
                 .andExpect(jsonPath("$.class[0].type_name").value("全部"))
                 .andExpect(jsonPath("$.class[1].type_id").value("active"))
                 .andExpect(jsonPath("$.class[2].type_id").value("ended"));
+    }
+
+    @Test
+    void homeContentMergesPianDanCategories() throws Exception {
+        CategoryList pianDan = new CategoryList();
+        Category category = new Category();
+        category.setType_id(PianDanService.TMDB_PREFIX + "tv_popular");
+        category.setType_name("TMDB热门剧集");
+        pianDan.getCategories().add(category);
+        when(pianDanService.subscriptionCategory()).thenReturn(pianDan);
+
+        mockMvc.perform(get("/media/token-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.class[3].type_id").value("tmdb:tv_popular"))
+                .andExpect(jsonPath("$.class[3].type_name").value("TMDB热门剧集"));
+    }
+
+    @Test
+    void pianDanCategoryContentMarksSubscribed() throws Exception {
+        MovieList source = new MovieList();
+        MovieDetail item = new MovieDetail();
+        item.setVod_id(PianDanService.TMDB_PREFIX + "tv:42");
+        item.setVod_name("测试剧");
+        item.setVod_pic("https://image.tmdb.org/t/p/w500/x.jpg");
+        source.getList().add(item);
+        when(pianDanService.list(eq("tmdb:tv_popular"), eq("web"), eq(1), eq(24), anyMap())).thenReturn(source);
+        when(mediaSubscriptionService.isSubscribedTitle(7, "测试剧")).thenReturn(true);
+        when(mediaSubscriptionService.absoluteClientCover(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        mockMvc.perform(get("/media/token-a").param("t", "tmdb:tv_popular"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.list[0].vod_id").value("tmdb:tv:42"))
+                .andExpect(jsonPath("$.list[0].vod_remarks").value("已追 "));
+    }
+
+    @Test
+    void pianDanTmdbDetailCarriesSubscribePlayItem() throws Exception {
+        MovieDetail meta = new MovieDetail();
+        meta.setVod_id("tmdb:tv:42");
+        meta.setVod_name("测试剧");
+        when(pianDanService.tmdbDetail("tv", 42)).thenReturn(meta);
+        when(mediaSubscriptionService.isSubscribedTitle(org.mockito.ArgumentMatchers.eq(7), org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
+        when(mediaSubscriptionService.absoluteClientCover(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        mockMvc.perform(get("/media/token-a").param("id", "tmdb:tv:42"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.list[0].vod_name").value("测试剧"))
+                .andExpect(jsonPath("$.list[0].vod_play_from").value("追剧"))
+                .andExpect(jsonPath("$.list[0].vod_play_url")
+                        .value("📄 媒体信息$msubinfo-" + encode("tmdb:tv:42|测试剧")
+                                + "#➕ 加入追剧$msubadd-" + encode("tmdb:tv:42|测试剧")));
+    }
+
+    @Test
+    void pianDanTmdbMultiSeasonDetailExpandsPerSeason() throws Exception {
+        MovieDetail meta = new MovieDetail();
+        meta.setVod_id("tmdb:tv:42");
+        meta.setVod_name("测试剧");
+        meta.setExt(java.util.List.of(1, 5));
+        when(pianDanService.tmdbDetail("tv", 42)).thenReturn(meta);
+        when(mediaSubscriptionService.isSubscribedTitle(7, "测试剧 第1季")).thenReturn(true);
+        when(mediaSubscriptionService.isSubscribedTitle(7, "测试剧 第5季")).thenReturn(false);
+        when(mediaSubscriptionService.absoluteClientCover(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        mockMvc.perform(get("/media/token-a").param("id", "tmdb:tv:42"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.list[0].vod_play_url")
+                        .value("📄 媒体信息$msubinfo-" + encode("tmdb:tv:42|测试剧")
+                                + "#➖ 取消·第1季$msubdel-" + encode("tmdb:tv:42|测试剧|1")
+                                + "#➕ 追剧·第5季$msubadd-" + encode("tmdb:tv:42|测试剧|5")))
+                .andExpect(jsonPath("$.list[0].ext").doesNotExist());
+    }
+
+    @Test
+    void pianDanDoubanDetailMarksSubscribed() throws Exception {
+        when(mediaSubscriptionService.isSubscribedTitle(7, "showa")).thenReturn(true);
+        when(mediaSubscriptionService.absoluteClientCover(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        mockMvc.perform(get("/media/token-a").param("id", "s:showa"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.list[0].vod_name").value("showa"))
+                .andExpect(jsonPath("$.list[0].vod_remarks").value("已追 "))
+                .andExpect(jsonPath("$.list[0].vod_play_url")
+                        .value("📄 媒体信息$msubinfo-" + encode("s:showa|showa")
+                                + "#➖ 取消追剧$msubdel-" + encode("s:showa|showa")));
+    }
+
+    private static String encode(String value) {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    @Test
+    void pianDanDetailRejectsUnknownPrefix() throws Exception {
+        mockMvc.perform(get("/media/token-a").param("id", "tmdb:tv"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

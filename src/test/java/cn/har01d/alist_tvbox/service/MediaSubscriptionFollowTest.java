@@ -35,9 +35,10 @@ class MediaSubscriptionFollowTest {
     private final MediaSubscriptionRepository subscriptionRepository = Mockito.mock(MediaSubscriptionRepository.class);
     private final MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
     private final MediaSubscriptionEpisodeSourceRepository episodeSourceRepository = Mockito.mock(MediaSubscriptionEpisodeSourceRepository.class);
+    private final cn.har01d.alist_tvbox.entity.UserPreferenceRepository preferenceRepository = Mockito.mock(cn.har01d.alist_tvbox.entity.UserPreferenceRepository.class);
     private final MediaSubscriptionCheckService checkService = Mockito.mock(MediaSubscriptionCheckService.class);
     private final MediaSubscriptionService service = new MediaSubscriptionService(
-            subscriptionRepository, resourceRepository, null, null, episodeSourceRepository, null, null, null, null, null, null,
+            subscriptionRepository, resourceRepository, null, null, episodeSourceRepository, preferenceRepository, null, null, null, null, null,
             checkService, null, null, new AppProperties(), new ObjectMapper(), null, null);
 
     private MediaSubscription subscription() {
@@ -158,5 +159,42 @@ class MediaSubscriptionFollowTest {
 
         verify(resourceRepository, never()).deleteBySubscriptionId(anyInt());
         verify(checkService, never()).checkAsync(anyInt(), anyInt());
+    }
+
+    // ---------- 片单一键追更的语义去重(2026-08-30):web TMDB 订「末日地堡」S3 与豆瓣片单
+    // 「末日地堡 第三季」裸名同为「末日地堡」且季号一致,精确名匹配会开出第二条重复订阅
+
+    @Test
+    void createReusesSeasonSuffixedSameShowSubscription() {
+        MediaSubscription existing = subscription();
+        existing.setName("末日地堡");
+        existing.setSeason(3);
+        when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(existing));
+
+        MediaSubscriptionRequest request = new MediaSubscriptionRequest();
+        request.setName("末日地堡 第三季");
+        var dto = service.create(1, request);
+
+        assertEquals(3, dto.getId());
+        verify(subscriptionRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createKeepsDifferentSeasonOfSameShowSeparate() {
+        MediaSubscription existing = subscription();
+        existing.setName("末日地堡");
+        existing.setSeason(3);
+        when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(existing));
+        when(subscriptionRepository.saveAndFlush(any(MediaSubscription.class))).thenAnswer(invocation -> {
+            MediaSubscription saved = invocation.getArgument(0);
+            saved.setId(99);
+            return saved;
+        });
+
+        MediaSubscriptionRequest request = new MediaSubscriptionRequest();
+        request.setName("末日地堡 第一季");
+        var dto = service.create(1, request);
+
+        assertEquals(99, dto.getId()); // S1 不复用 S3 行
     }
 }

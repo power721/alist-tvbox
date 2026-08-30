@@ -1,13 +1,18 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest;
+import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
 import cn.har01d.alist_tvbox.entity.PlayUrl;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.AccountAccessGuard;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
+import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
+import cn.har01d.alist_tvbox.service.PianDanService;
 import cn.har01d.alist_tvbox.service.ProxyService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -32,6 +38,8 @@ public class PlayController {
     private final SubscriptionService subscriptionService;
     private final ProxyService proxyService;
     private final MediaSubscriptionService mediaSubscriptionService;
+    private final MediaSubscriptionCheckService checkService;
+    private final PianDanService pianDanService;
     private final AccountAccessGuard accountAccessGuard;
 
     public PlayController(TvBoxService tvBoxService,
@@ -39,12 +47,16 @@ public class PlayController {
                           SubscriptionService subscriptionService,
                           ProxyService proxyService,
                           MediaSubscriptionService mediaSubscriptionService,
+                          MediaSubscriptionCheckService checkService,
+                          PianDanService pianDanService,
                           AccountAccessGuard accountAccessGuard) {
         this.tvBoxService = tvBoxService;
         this.biliBiliService = biliBiliService;
         this.subscriptionService = subscriptionService;
         this.proxyService = proxyService;
         this.mediaSubscriptionService = mediaSubscriptionService;
+        this.checkService = checkService;
+        this.pianDanService = pianDanService;
         this.accountAccessGuard = accountAccessGuard;
     }
 
@@ -89,6 +101,24 @@ public class PlayController {
 
         if (StringUtils.isNotBlank(bvid)) {
             return biliBiliService.getPlayUrl(bvid, dash, client);
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith("msubadd-")) {
+            // 片单条目「加入追剧」(msubadd-{vodId}):按片单条目建订阅,msg 通道回执(播放器把 msg 显示为提示)
+            int uid = mediaSubscriptionService.resolveUid(token);
+            return subscribePianDan(uid, id.substring(MediaSubscriptionService.SUBSCRIBE_PLAY_PREFIX.length()));
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith("msubdel-")) {
+            // 片单条目「取消追剧」(msubdel-{vodId}):撤销同名订阅(含多季),msg 通道回执
+            int uid = mediaSubscriptionService.resolveUid(token);
+            return unsubscribePianDan(uid, id.substring(MediaSubscriptionService.UNSUBSCRIBE_PLAY_PREFIX.length()));
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith("msubinfo-")) {
+            // 片单条目「媒体信息」:msg 通道返回条目元数据,无副作用(TMDB 现拉详情,豆瓣条目只有标题)
+            int uid = mediaSubscriptionService.resolveUid(token);
+            return infoPianDan(uid, id.substring(MediaSubscriptionService.INFO_PLAY_PREFIX.length()));
         }
 
         if (StringUtils.isNotBlank(id) && id.startsWith("msubep-")) {
@@ -159,6 +189,141 @@ public class PlayController {
 //        }
 
         return result;
+    }
+
+    /** 片单条目「媒体信息」:纯占位条目(防播放器内核进详情自动触发第一集误订阅),静态响应——
+     *  元数据详情页已展示,这里零网络零 DB,什么都不做。 */
+    private Map<String, Object> infoPianDan(int uid, String payload) {
+        return Map.of("msg", "媒体信息见详情页");
+    }
+
+    /** 片单条目载荷 → (vodId, 剧名, 季号?):详情页装配 play id 时已内嵌剧名与季号({vodId}|{名}|{季}),
+     *  订阅/取消零网络;多季剧的季号让订阅精确到季(create 对显式 >1 的季号不覆盖)。
+     *  无内嵌名的 TMDB 条目现拉一次 zh-CN 标题兜底,豆瓣条目(s:{标题})标题本就在 id 里。 */
+    private record PianDanEntry(String vodId, String name, Integer season) {
+    }
+
+    private PianDanEntry pianDanEntry(String payload) {
+        String[] parts = payload.split("\\|", -1);
+        String vodId = parts[0];
+        String name = parts.length > 1 ? parts[1].trim() : "";
+        Integer season = null;
+        if (parts.length > 2) {
+            try {
+                season = Integer.valueOf(parts[2].trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (StringUtils.isBlank(name) && vodId.startsWith("tmdb:")) {
+            name = tmdbMeta(vodId).getVod_name();
+        }
+        if (StringUtils.isBlank(name)) {
+            if (vodId.startsWith("s:")) {
+                name = vodId.substring(2);
+            } else {
+                throw new BadRequestException("无效的片单条目: " + vodId);
+            }
+        }
+        return new PianDanEntry(vodId, name, season);
+    }
+
+    /** TMDB vodId(tmdb:tv:42 / tmdb:movie:42)→ 详情;格式非法 400。 */
+    private MovieDetail tmdbMeta(String vodId) {
+        String[] parts = vodId.split(":");
+        if (parts.length < 3) {
+            throw new BadRequestException("无效的片单条目: " + vodId);
+        }
+        int tmdbId;
+        try {
+            tmdbId = Integer.parseInt(parts[2]);
+        } catch (NumberFormatException e) {
+            throw new BadRequestException("无效的片单条目: " + vodId, e);
+        }
+        MovieDetail meta = pianDanService.tmdbDetail(parts[1], tmdbId);
+        if (meta == null || StringUtils.isBlank(meta.getVod_name())) {
+            throw new BadRequestException("片单条目信息获取失败: " + vodId);
+        }
+        return meta;
+    }
+
+    /** 片单条目一键订阅:TMDB 条目绑定元数据(官方集数/播出日程驱动追更);豆瓣条目按标题严格匹配
+     *  suggest 条目(名称相等+数字 id)自动绑豆瓣元数据,匹配不上回落纯标题订阅(名称桥接补元数据);
+     *  create 对同剧幂等(裸名+季号语义匹配),已存在时不重复触发首轮巡检。 */
+    private Map<String, Object> subscribePianDan(int uid, String payload) {
+        PianDanEntry entry = pianDanEntry(payload);
+        String name = entry.name();
+        MediaSubscriptionRequest request = new MediaSubscriptionRequest();
+        if (entry.vodId().startsWith("tmdb:")) {
+            request.setMetaProvider("tmdb");
+            request.setMetaId(entry.vodId().split(":")[2]);
+        } else {
+            bindDoubanMeta(request, name);
+        }
+        if (entry.season() != null) {
+            request.setSeason(entry.season()); // 多季剧条目显式落季,create 的 resolveSeason 对显式 >1 不覆盖
+        }
+        boolean existed = mediaSubscriptionService.isSubscribedTitle(uid,
+                entry.season() != null ? name + " 第" + entry.season() + "季" : name);
+        request.setName(name);
+        request.setKeyword(name);
+        var dto = mediaSubscriptionService.create(uid, request);
+        if (!existed) {
+            checkService.checkAsync(uid, dto.getId());
+        }
+        return Map.of("msg", (entry.season() != null ? "第" + entry.season() + "季" : "")
+                + (existed ? "《" + name + "》已在追剧中" : "已加入追剧《" + name + "》,稍后在我的追剧查看"));
+    }
+
+    /** 豆瓣片单条目自动绑元数据:优先本地豆瓣库精确名匹配(零网络);回落 suggest 名称精确匹配。
+     *  两级的同名消歧口径一致:名称相等的结果**恰好一个**才绑 —— 同名翻拍多条时 suggest 也无法消歧
+     *  (片单条目无年份),取首条必赌错一半,不如不绑回落纯标题订阅,交给巡检名称桥接(有季号/年份上下文)消歧。 */
+    private void bindDoubanMeta(MediaSubscriptionRequest request, String name) {
+        Integer localId = mediaSubscriptionService.localDoubanId(name);
+        if (localId != null) {
+            request.setDoubanId(localId);
+            request.setMetaProvider("douban");
+            request.setMetaId(String.valueOf(localId));
+            return;
+        }
+        try {
+            Object items = mediaSubscriptionService.metaSearch("douban", name).get("items");
+            if (!(items instanceof List<?> list)) {
+                return;
+            }
+            java.util.Set<String> matchedIds = new java.util.HashSet<>();
+            for (Object entry : list) {
+                if (entry instanceof MetadataSearchItem item
+                        && "douban".equals(item.getProvider()) && name.equals(item.getName())
+                        && item.getId() != null && item.getId().matches("\\d+")) {
+                    matchedIds.add(item.getId());
+                }
+            }
+            if (matchedIds.size() == 1) {
+                String id = matchedIds.iterator().next();
+                request.setDoubanId(Integer.valueOf(id));
+                request.setMetaProvider("douban");
+                request.setMetaId(id);
+            }
+        } catch (Exception e) {
+            log.debug("douban meta bind for pian-dan entry {} failed: {}", name, e.getMessage());
+        }
+    }
+
+    /** 片单条目取消追剧:按标题语义匹配撤销;载荷带季号只撤该季(多季条目「取消·第N季」),不带则
+     *  条目名解析季、仍未标季的同名各季一并撤,删除走服务级联。 */
+    private Map<String, Object> unsubscribePianDan(int uid, String payload) {
+        PianDanEntry entry = pianDanEntry(payload);
+        String name = entry.name();
+        List<Integer> ids = mediaSubscriptionService.subscriptionIdsByTitle(uid, name, entry.season());
+        if (ids.isEmpty()) {
+            return Map.of("msg", (entry.season() != null ? "第" + entry.season() + "季" : "")
+                    + "《" + name + "》未在追剧中");
+        }
+        for (Integer id : ids) {
+            mediaSubscriptionService.delete(uid, id);
+        }
+        return Map.of("msg", "已取消追剧" + (entry.season() != null ? "第" + entry.season() + "季" : "")
+                + "《" + name + "》" + (ids.size() > 1 ? "(" + ids.size() + " 部)" : ""));
     }
 
     private int parseInt(String value, String message) {

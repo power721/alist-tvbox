@@ -37,8 +37,8 @@ import static cn.har01d.alist_tvbox.util.Constants.TMDB_API_KEY;
 @Slf4j
 @Service
 public class PianDanService {
-    static final String DOUBAN_PREFIX = "douban:";
-    static final String TMDB_PREFIX = "tmdb:";
+    public static final String DOUBAN_PREFIX = "douban:";
+    public static final String TMDB_PREFIX = "tmdb:";
     private static final String TMDB_API = "https://api.themoviedb.org/3";
     private static final String TMDB_IMAGE = "https://image.tmdb.org/t/p/w500";
     private static final Set<String> TRENDING_MEDIA = Set.of("all", "movie", "tv");
@@ -79,6 +79,11 @@ public class PianDanService {
     private final ObjectMapper objectMapper;
     private final Cache<String, MovieList> listCache = Caffeine.newBuilder()
             .maximumSize(256)
+            .expireAfterWrite(Duration.ofMinutes(5))
+            .build();
+    /** 条目详情短缓存:详情页与「媒体信息」条目(msubinfo)间隔仅数秒,第二次直接命中,不重打 TMDB。 */
+    private final Cache<String, MovieDetail> detailCache = Caffeine.newBuilder()
+            .maximumSize(128)
             .expireAfterWrite(Duration.ofMinutes(5))
             .build();
     private final Cache<String, MovieList> staleListCache = Caffeine.newBuilder()
@@ -356,6 +361,92 @@ public class PianDanService {
         } catch (RestClientException | JsonProcessingException e) {
             log.warn("pian-dan search failed: {}", wd, e);
             return emptyList(safePage, size);
+        }
+    }
+
+    /** TMDB 条目详情(tmdb:tv:{id} / tmdb:movie:{id}):zh-CN 标题/年份/类型/评分/简介,供「我的追剧」片单详情与一键订阅取名。
+     *  剧集的季号清单(seasons[].season_number,滤掉 0=特典)放 ext 字段带回,调用方取出后应置 null 再出响应。 */
+    public MovieDetail tmdbDetail(String mediaType, int tmdbId) {
+        boolean movie = "movie".equals(mediaType);
+        String cacheKey = mediaType + ':' + tmdbId;
+        MovieDetail cached = detailCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        String url = UriComponentsBuilder.fromUriString(TMDB_API + (movie ? "/movie/" : "/tv/") + tmdbId)
+                .queryParam("api_key", apiKey())
+                .queryParam("language", "zh-CN")
+                .queryParam("append_to_response", "credits") // 同一次请求带回演员,详情页 vod_actor 渲染的是"演员"
+                .build()
+                .encode()
+                .toUriString();
+        try {
+            JsonNode item = objectMapper.readTree(fetchTmdb(url));
+            String title = firstNotBlank(item.path("title").asText(""), item.path("name").asText(""));
+            if (StringUtils.isBlank(title)) {
+                return null;
+            }
+            MovieDetail detail = new MovieDetail();
+            detail.setVod_id(TMDB_PREFIX + mediaType + ":" + tmdbId);
+            detail.setVod_name(title);
+            String poster = firstNotBlank(item.path("poster_path").asText(""), item.path("backdrop_path").asText(""));
+            if (StringUtils.isNotBlank(poster)) {
+                detail.setVod_pic(TMDB_IMAGE + poster);
+            }
+            String date = firstNotBlank(item.path("release_date").asText(""), item.path("first_air_date").asText(""));
+            detail.setVod_year(date.length() >= 4 ? date.substring(0, 4) : "");
+            // 类型归 type_name(空回落 电影/剧集),演员走 credits.cast(空回落剧集创作者)——塞错字段会被详情页按错误标签渲染
+            List<String> genres = new ArrayList<>();
+            for (JsonNode genre : item.path("genres")) {
+                String name = genre.path("name").asText("");
+                if (StringUtils.isNotBlank(name)) {
+                    genres.add(name);
+                }
+            }
+            detail.setType_name(genres.isEmpty() ? (movie ? "电影" : "剧集") : String.join(" / ", genres));
+            List<String> cast = new ArrayList<>();
+            for (JsonNode member : item.path("credits").path("cast")) {
+                String name = member.path("name").asText("");
+                if (StringUtils.isNotBlank(name)) {
+                    cast.add(name);
+                }
+                if (cast.size() >= 5) {
+                    break;
+                }
+            }
+            if (cast.isEmpty()) {
+                for (JsonNode creator : item.path("created_by")) {
+                    String name = creator.path("name").asText("");
+                    if (StringUtils.isNotBlank(name)) {
+                        cast.add(name);
+                    }
+                    if (cast.size() >= 3) {
+                        break;
+                    }
+                }
+            }
+            if (!cast.isEmpty()) {
+                detail.setVod_actor(String.join(" / ", cast));
+            }
+            detail.setVod_content(item.path("overview").asText(""));
+            detail.setVod_remarks(remarks(detail.getVod_year(), item.path("vote_average").asDouble(0)));
+            if (!movie && item.path("seasons").isArray()) {
+                List<Integer> seasonNumbers = new ArrayList<>();
+                for (JsonNode season : item.path("seasons")) {
+                    int number = season.path("season_number").asInt(-1);
+                    if (number >= 1) {
+                        seasonNumbers.add(number);
+                    }
+                }
+                if (!seasonNumbers.isEmpty()) {
+                    detail.setExt(seasonNumbers);
+                }
+            }
+            detailCache.put(cacheKey, detail);
+            return detail;
+        } catch (RestClientException | JsonProcessingException e) {
+            log.warn("load TMDB detail failed: {} {}", mediaType, tmdbId, e);
+            return null;
         }
     }
 

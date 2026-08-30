@@ -60,6 +60,14 @@ import java.util.stream.Collectors;
 public class MediaSubscriptionService {
     public static final String CATEGORY_ID = "msub";
     public static final String VOD_ID_PREFIX = "msub:";
+    /** 片单条目「加入追剧」伪播放 id 前缀:msubadd-{vodId}(vodId 为片单形态 tmdb:tv:123 / s:{标题}),
+     *  PlayController 截前缀后按片单条目建订阅,播放器经 msg 通道收到回执。 */
+    public static final String SUBSCRIBE_PLAY_PREFIX = "msubadd-";
+    /** 片单条目「取消追剧」伪播放 id 前缀:msubdel-{vodId},取消与该条目同名的全部订阅(含多季)。 */
+    public static final String UNSUBSCRIBE_PLAY_PREFIX = "msubdel-";
+    /** 片单条目「媒体信息」伪播放 id 前缀:msubinfo-{vodId},msg 通道返回条目元数据,无任何副作用。
+     *  排在选集第一位:部分播放器内核进详情会自动触发第一集播放,第一条目不能是订阅动作。 */
+    public static final String INFO_PLAY_PREFIX = "msubinfo-";
     /** TVBox 分集标题美化开关(Setting,默认关):剧集列表显示「集数. 分集标题(大小)」替代文件名 */
     public static final String SETTING_EPISODE_TITLES = "msub_episode_titles";
     /** 资源侧"可播集"状态口径:列目录见过(LISTED)或取链成功过(VERIFIED)的集源行 —— 详情装配与角标同源。 */
@@ -178,11 +186,13 @@ public class MediaSubscriptionService {
         // 季号兜底:片单/链接直订等入口不解析季号(片单曾硬编码 season=1),而条目名常写着"第四季"。
         // 季号错会同时击穿候选季过滤、SxxEyy 集号识别、播放列表集号解析三条链路,且都表现为"什么都没搜到"。
         subscription.setSeason(TextUtils.resolveSeason(request.getSeason(), subscription.getName()));
-        // 同名同季幂等:搜索/播放页「追更」按钮可连点、下一季订阅可重复提交,重复订阅会产生
-        // 两条 score=1000 候选抢主源 —— 已存在则直接复用(删除后重订不受影响)
+        // 同剧幂等(语义匹配,非精确名):剥季号后裸名相等且季号相容(任一方未标季即视为相容)——
+        // web TMDB 搜「末日地堡」订的 S3 与豆瓣片单「末日地堡 第三季」是同一部订阅,
+        // 精确名匹配会开出第二条重复条目;已存在则直接复用(删除后重订不受影响)
         Integer season = subscription.getSeason();
+        String bareName = TextUtils.stripSeasonSuffix(subscription.getName());
         MediaSubscription existing = subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid).stream()
-                .filter(s -> subscription.getName().equals(s.getName()) && Objects.equals(season, s.getSeason()))
+                .filter(s -> matchesTitle(s, bareName, season))
                 .findFirst().orElse(null);
         if (existing != null) {
             log.info("media subscription already exists: uid={} {} season={}, reuse id {}", uid,
@@ -503,6 +513,51 @@ public class MediaSubscriptionService {
         result.setLimit(list.size());
         log.debug("list: {}", result);
         return result;
+    }
+
+    /** 片单/订阅标题语义匹配:裸名(剥季号)相等 + 季号相容(任一方未标季即相容,双方都标则须相等)。 */
+    private static boolean matchesTitle(MediaSubscription subscription, String bareName, Integer season) {
+        if (!TextUtils.stripSeasonSuffix(subscription.getName()).equals(bareName)) {
+            return false;
+        }
+        return season == null || subscription.getSeason() == null || season.equals(subscription.getSeason());
+    }
+
+    /** 豆瓣片单条目绑 id 优先路:本地豆瓣库精确名匹配(Movie.id 即豆瓣 subject id,零网络)。
+     *  同名多部(翻拍)本地无年份无法消歧,返回 null 由调用方回落 suggest 严格匹配。 */
+    public Integer localDoubanId(String name) {
+        if (StringUtils.isBlank(name)) {
+            return null;
+        }
+        var ids = movieRepository.getByName(name.trim()).stream()
+                .map(Movie::getId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        return ids.size() == 1 ? ids.get(0) : null;
+    }
+
+    /** 片单条目是否已在追:标题语义匹配(「末日地堡 第三季」命中 web 订的「末日地堡」S3)。 */
+    public boolean isSubscribedTitle(int uid, String title) {
+        String bareName = TextUtils.stripSeasonSuffix(title);
+        return subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid).stream()
+                .anyMatch(s -> matchesTitle(s, bareName, TextUtils.parseTitleSeason(title)));
+    }
+
+    /** 与片单条目同剧的订阅 id 列表:裸名相等;季号(显式或条目名解析)已知则只取该季,
+     *  完全未标季则同名各季一并撤销(回执报部数)。 */
+    public List<Integer> subscriptionIdsByTitle(int uid, String title, Integer explicitSeason) {
+        String bareName = TextUtils.stripSeasonSuffix(title);
+        Integer season = explicitSeason != null ? explicitSeason : TextUtils.parseTitleSeason(title);
+        return subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid).stream()
+                .filter(s -> matchesTitle(s, bareName, season))
+                .map(MediaSubscription::getId)
+                .toList();
+    }
+
+    /** 片单条目封面 → 客户端可用地址:直链图床包 /images 代理(防盗链/被墙),再按当前请求 host 重建绝对地址。 */
+    public String absoluteClientCover(String cover) {
+        return absoluteCover(cover);
     }
 
     private boolean filterByStatus(MediaSubscription subscription, String status) {
