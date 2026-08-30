@@ -65,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MediaSubscriptionCheckServiceTest {
 
     private final MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
             new AppProperties(), new ObjectMapper(), (MediaSubscriptionNotificationService) null);
 
     @Test
@@ -132,7 +132,7 @@ class MediaSubscriptionCheckServiceTest {
 
     private MediaSubscriptionCheckService watchService(HistoryRepository historyRepository) {
         return new MediaSubscriptionCheckService(
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 historyRepository, new AppProperties(), new ObjectMapper(), (MediaSubscriptionNotificationService) null);
     }
 
@@ -3676,7 +3676,7 @@ class MediaSubscriptionCheckServiceTest {
                     episodeRepository, episodeSourceRepository, deadLinkRepository,
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),
                     Mockito.mock(IndexTemplateRepository.class), settingRepository,
-                    shareService, aListService, telegramService, null, null, null, null,
+                    shareService, aListService, telegramService, null, null, null, null, null,
                     metadataService, Mockito.mock(AutoUpdateExecutor.class),
                     historyRepository,
                     appProperties, new ObjectMapper(), transferService, null);

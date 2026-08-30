@@ -28,7 +28,7 @@ class MediaSubscriptionPlaylistParseTest {
 
     private final MediaSubscriptionCheckService checkService = new MediaSubscriptionCheckService(
             null, null, null, null, null, null, null, null, null, null, emptySettings(),
-            null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper(),
+            null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper(),
             (MediaSubscriptionNotificationService) null);
 
     /** 全局 Setting 空 stub:未配置 msub_main_drives */
@@ -237,7 +237,7 @@ class MediaSubscriptionPlaylistParseTest {
                 .thenReturn(java.util.Optional.of(global));
         MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
                 null, null, null, null, null, null, null, null, null, null, settingRepository,
-                null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper(),
+                null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper(),
                 (MediaSubscriptionNotificationService) null);
 
         MediaSubscription subscription = new MediaSubscription();
@@ -286,7 +286,7 @@ class MediaSubscriptionPlaylistParseTest {
                 .thenReturn(List.of());
         MediaSubscriptionCheckService probed = new MediaSubscriptionCheckService(
                 null, null, null, null, rows, null, null, null, null, null, emptySettings(),
-                null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper(),
+                null, null, null, null, null, null, null, null, null, null, null, new AppProperties(), new ObjectMapper(),
                 (MediaSubscriptionNotificationService) null);
         MediaSubscriptionResource single = new MediaSubscriptionResource();
         single.setId(4);

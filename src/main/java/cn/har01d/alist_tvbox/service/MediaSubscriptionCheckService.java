@@ -35,6 +35,7 @@ import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
 import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.PanjuSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
 import cn.har01d.alist_tvbox.util.Constants;
@@ -184,6 +185,7 @@ public class MediaSubscriptionCheckService {
     private final PanLianSearchService panLianSearchService;
     private final GuanYingSearchService guanYingSearchService;
     private final WoniuSearchService woniuSearchService;
+    private final PanjuSearchService panjuSearchService;
     private final MetadataService metadataService;
     private final AutoUpdateExecutor autoUpdateExecutor;
     /** 观看进度只读来源:追更系统不自行存储进度,多端合并由播放记录同步负责 */
@@ -233,8 +235,8 @@ public class MediaSubscriptionCheckService {
      * 源侧压力不随并发订阅数放大 —— 搜索五路池(searchExecutor)与玩偶/TG 内部池全局共享,天然限流。
      */
     private final ExecutorService executor;
-    /** 多源搜索并发池(TG 聚合 + 玩偶/盘链/观影/蜗牛 各一路):串行排队时总时长=各源之和(线上 37s),并发后=最慢一路 */
-    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(5, r -> {
+    /** 多源搜索并发池(TG 聚合 + 玩偶/盘链/观影/蜗牛/盘聚 各一路):串行排队时总时长=各源之和(线上 37s),并发后=最慢一路 */
+    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(6, r -> {
         Thread thread = new Thread(r, "msub-search-" + SEARCH_SEQ.incrementAndGet());
         thread.setDaemon(true);
         return thread;
@@ -259,6 +261,7 @@ public class MediaSubscriptionCheckService {
                                          PanLianSearchService panLianSearchService,
                                          GuanYingSearchService guanYingSearchService,
                                          WoniuSearchService woniuSearchService,
+                                         PanjuSearchService panjuSearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          HistoryRepository historyRepository,
@@ -286,6 +289,7 @@ public class MediaSubscriptionCheckService {
         this.panLianSearchService = panLianSearchService;
         this.guanYingSearchService = guanYingSearchService;
         this.woniuSearchService = woniuSearchService;
+        this.panjuSearchService = panjuSearchService;
         this.metadataService = metadataService;
         this.autoUpdateExecutor = autoUpdateExecutor;
         this.historyRepository = historyRepository;
@@ -319,6 +323,7 @@ public class MediaSubscriptionCheckService {
                                          PanLianSearchService panLianSearchService,
                                          GuanYingSearchService guanYingSearchService,
                                          WoniuSearchService woniuSearchService,
+                                         PanjuSearchService panjuSearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          HistoryRepository historyRepository,
@@ -330,7 +335,7 @@ public class MediaSubscriptionCheckService {
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
-                guanYingSearchService, woniuSearchService, metadataService, autoUpdateExecutor,
+                guanYingSearchService, woniuSearchService, panjuSearchService, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper,
                 fixedProvider(transferService), notificationService);
     }
@@ -367,6 +372,7 @@ public class MediaSubscriptionCheckService {
                                          PanLianSearchService panLianSearchService,
                                          GuanYingSearchService guanYingSearchService,
                                          WoniuSearchService woniuSearchService,
+                                         PanjuSearchService panjuSearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          HistoryRepository historyRepository,
@@ -377,7 +383,7 @@ public class MediaSubscriptionCheckService {
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
-                guanYingSearchService, woniuSearchService, metadataService, autoUpdateExecutor,
+                guanYingSearchService, woniuSearchService, panjuSearchService, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper, (MediaSubscriptionTransferService) null,
                 notificationService);
     }
@@ -4123,10 +4129,11 @@ public class MediaSubscriptionCheckService {
     // ---------- 候选池与打分 ----------
 
     /**
-     * 多源聚合搜索(五路并发):TG 聚合(PanSou/TG-Search/网页,内部再并行 —— 追更一律走聚合,
+     * 多源聚合搜索(六路并发):TG 聚合(PanSou/TG-Search/网页,内部再并行 —— 追更一律走聚合,
      * 回退链"够用即停"会让配了盘搜的部署永远调不到另外两个源)之上,并入玩偶聚合站源
-     * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接)与盘链/观影/蜗牛源(需用户自配
-     * 账号/Cookie,未配置时静默关闭)。<b>五路同时发起</b> —— 原先站点源在 TG 全部返回后逐个
+     * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接)、盘链/观影/蜗牛源(需用户自配
+     * 账号/Cookie,未配置时静默关闭)与盘聚源(seedhub 系聚合站,免登录,Cloudflare 被拦时
+     * 静默降级)。<b>六路同时发起</b> —— 原先站点源在 TG 全部返回后逐个
      * 串行排队,总时长 = 各源之和(线上 37s 级),并发后 = 最慢一路;各源内部自带超时/退避,
      * 外层 90s 硬顶兜底;任一源失败静默为空,按 link 天然去重,TG 结果在前(先见先得)。
      */
@@ -4143,6 +4150,8 @@ public class MediaSubscriptionCheckService {
                 ? searchAsync("guanying", keyword, () -> guanYingSearchService.search(keyword)) : null;
         CompletableFuture<List<Message>> woniu = woniuSearchService != null
                 ? searchAsync("woniu", keyword, () -> woniuSearchService.search(keyword)) : null;
+        CompletableFuture<List<Message>> panju = panjuSearchService != null && appProperties.getSubscription().isPanjuEnabled()
+                ? searchAsync("panju", keyword, () -> panjuSearchService.search(keyword)) : null;
 
         List<Message> messages = new ArrayList<>(joinSearch("telegram", telegram));
         Set<String> links = new java.util.HashSet<>();
@@ -4160,6 +4169,9 @@ public class MediaSubscriptionCheckService {
         }
         if (woniu != null) {
             mergeSource(messages, links, joinSearch("woniu", woniu), "woniu", keyword);
+        }
+        if (panju != null) {
+            mergeSource(messages, links, joinSearch("panju", panju), "panju", keyword);
         }
         return messages;
     }
@@ -4664,7 +4676,7 @@ public class MediaSubscriptionCheckService {
             result += w;
             reasons.add("百度分享免会员+" + w);
         }
-        // 站点源(玩偶/盘链/观影/蜗牛)的标题来自结构化卡片/详情页,剧名、季集、清晰度字段规整;
+        // 站点源(玩偶/盘链/观影/蜗牛/盘聚)的标题来自结构化卡片/详情页,剧名、季集、清晰度字段规整;
         // TG 频道消息是自由文本,防审查变形、装饰前缀、夹带广告都多,归属匹配与集数解析的误判率更高。
         if (StringUtils.isNotBlank(message.getSourceKind())) {
             result += appProperties.getSubscription().getSiteSourceBonus();

@@ -161,6 +161,14 @@ public class AppProperties {
         private int wanouMaxDetailPages = 3;
         /** 玩偶聚合:整源搜索总超时(秒) */
         private int wanouTimeoutSeconds = 45;
+        /** 盘聚搜索源(seedhub 系聚合站,免登录;Cloudflare 指纹门禁由 JDK TLS 天然通过,被拦时静默降级):追剧候选池补充来源 */
+        private boolean panjuEnabled = true;
+        /** 盘聚:每次搜索最多抓取的详情页数 */
+        private int panjuMaxDetailPages = 2;
+        /** 盘聚:每个详情页最多解析的站内中转链数(真实分享链要逐条请求中转页才拿到) */
+        private int panjuMaxResolves = 8;
+        /** 盘聚:整源搜索总超时(秒) */
+        private int panjuTimeoutSeconds = 45;
         /** 订阅巡检并发度:到期订阅并发检查,多个订阅的搜索不再互相排队(源侧压力不放大,见 searchExecutor) */
         private int checkConcurrency = 4;
     }
