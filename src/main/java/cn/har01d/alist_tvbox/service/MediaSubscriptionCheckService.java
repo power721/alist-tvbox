@@ -103,8 +103,12 @@ public class MediaSubscriptionCheckService {
     /** 全局资源筛选 Setting key(单行 JSON → {@link MediaSubscriptionPoolFilter}):包含/排除词、
      * 清晰度门槛、单集体积上下限,入池/候选复筛/集文件体积策略三处消费,订阅级显式配置优先 */
     public static final String MSUB_POOL_FILTER = "msub_pool_filter";
-    /** 预告/花絮等非正片 */
-    private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost)");
+    /** 预告/花絮等非正片(片头/片尾:年番分享常带「片头尾/」目录装 OP/ED 片段,线上被当成第 2、3 集) */
+    private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost|片头|片尾)");
+    /** 衍生篇目目录词(番外/前传/外传):自成条目、集号并入全剧连续计数,主季订阅整棵跳过 */
+    private static final Pattern SPIN_OFF_DIR = Pattern.compile("番外|前传|外传");
+    /** 季目录声明的本季起始集号(全剧连续编号形态):「067-更新中 4K 第三季」「070-092」的行首区间起点 */
+    private static final Pattern DIR_RANGE_START = Pattern.compile("(?:^|\\D)0*(\\d{1,4})\\s*[-~—–至]");
     /** 完结资源包形态:追更中的订阅不会持续更新 */
     private static final Pattern COMPLETE_PACK = Pattern.compile("全\\s*\\d{1,4}\\s*集|全集|完整版|已?完结");
     /** 手动播出时刻("H:mm" 或 "HH:mm") */
@@ -1930,11 +1934,22 @@ public class MediaSubscriptionCheckService {
         }
     }
 
+    /** 巡检口径的集文件清洗:先做年番全剧连续编号重映射(救回超界真集),再剔不相干噪声。
+     * 重映射必须在噪声剔除之前 —— 连续编号的正片集号天然超出官方总集数,先剔会把好集全删光。 */
+    void sanitizeEpisodeFiles(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files, String contextTitle) {
+        remapAbsoluteNumbering(subscription, files, contextTitle);
+        stripForeignEpisodeNoise(subscription, files, metaGenres(subscription));
+    }
+
     /**
      * 标题宣称集数门禁:「全37集」等宣称(TITLE_PROGRESS 各形态最大值)显著超出官方总集数
      * (与探测集号同判据:已播完超出即拒/未播完按登记体量放大容差)—— 在入池/候选层就拦,不必等挂载探测。
      * 标题带季标记/合集词时跳过:多季合一包宣称的是<b>跨季总数</b>(「鬼灭之刃 全52集 合集」装
      * 全部季),与同名异剧在标题层无法区分,交给探测层季过滤/集号门禁。
+     * <p>
+     * 多季订阅(season&gt;1)同样跳过:年番文化下标题宣称的常是<b>全剧连续进度</b>(线上:
+     * 「沧元图3 (2026)【更至81集】」= 全剧 81 而本季官方总 50),不是异剧信号 —— 放行给
+     * 探测层,由季目录重映射后的集号门禁分辨。
      */
     static boolean titleProgressForeign(MediaSubscription subscription, String title) {
         Integer total = subscription.getOfficialTotal();
@@ -1942,6 +1957,9 @@ public class MediaSubscriptionCheckService {
             return false;
         }
         if (SEASON_RANGE.matcher(title).find() || title.contains("合集") || parseTitleSeason(title) != null) {
+            return false;
+        }
+        if (subscription.getSeason() != null && subscription.getSeason() > 1) {
             return false;
         }
         Integer claimed = parseTitleProgress(title);
@@ -2104,7 +2122,7 @@ public class MediaSubscriptionCheckService {
                 retireResource(subscription, resource, e.getMessage(), false);
                 continue;
             }
-            stripForeignEpisodeNoise(subscription, files, metaGenres(subscription));
+            sanitizeEpisodeFiles(subscription, files, resource.getTitle());
             if (files.isEmpty()) {
                 retireResource(subscription, resource, "挂载目录已无任何剧集文件", false);
                 continue;
@@ -3158,7 +3176,7 @@ public class MediaSubscriptionCheckService {
             TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
             collectEpisodeFiles(site(), subscription.getSeason(), share.getPath(), 1, files,
                     episodeSizePolicy(subscription), true, metaYear(subscription));
-            stripForeignEpisodeNoise(subscription, files, genres);
+            sanitizeEpisodeFiles(subscription, files, resource.getTitle());
             if (files.isEmpty()) {
                 throw new IllegalStateException("资源无可识别的剧集文件:" + resource.getTitle());
             }
@@ -3373,7 +3391,7 @@ public class MediaSubscriptionCheckService {
             log.debug("adopt existing mount {} failed to list: {}", subscription.getMountPath(), e.getMessage());
             return false;
         }
-        stripForeignEpisodeNoise(subscription, files, metaGenres(subscription));
+        sanitizeEpisodeFiles(subscription, files, null);
         if (files.isEmpty()
                 || episodeNumbersForeign(subscription, files.keySet(), metaGenres(subscription))
                 || episodeDurationForeign(metaRuntimeMinutes(subscription), files.values())) {
@@ -3625,7 +3643,7 @@ public class MediaSubscriptionCheckService {
             deleteJustMountedShareQuietly(share, "list after activate failed");
             throw e instanceof RuntimeException runtimeException ? runtimeException : new IllegalStateException(e);
         }
-        stripForeignEpisodeNoise(subscription, files, metaGenres(subscription));
+        sanitizeEpisodeFiles(subscription, files, resource.getTitle());
         if (files.isEmpty()) {
             deleteJustMountedShareQuietly(share, "no recognizable episode files");
             // 带 FOREIGN_SHOW_MARK:换季后旧季资源挂上即空(季目录/集号全被 season 口径拒收),
@@ -3742,7 +3760,8 @@ public class MediaSubscriptionCheckService {
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         collectEpisodeFiles(site(), subscription.getSeason(), subscription.getMountPath(), 1, result,
                 episodeSizePolicy(subscription), true, metaYear(subscription));
-        stripForeignEpisodeNoise(subscription, result, metaGenres(subscription));
+        MediaSubscriptionResource primary = primaryResource(subscription);
+        sanitizeEpisodeFiles(subscription, result, primary == null ? null : primary.getTitle());
         return result;
     }
 
@@ -3847,10 +3866,14 @@ public class MediaSubscriptionCheckService {
         }
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, policy, true, metaYear(subscription));
+        remapAbsoluteNumbering(subscription, result, null);
         if (includeAux) {
             for (MediaSubscriptionResource resource : auxMounts(subscription)) {
                 try {
-                    collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, result, policy, true, metaYear(subscription));
+                    TreeMap<Integer, EpisodeFile> aux = new TreeMap<>();
+                    collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, aux, policy, true, metaYear(subscription));
+                    remapAbsoluteNumbering(subscription, aux, resource.getTitle());
+                    aux.values().forEach(file -> preferPut(result, file, policy));
                 } catch (Exception e) {
                     log.warn("walk aux files failed: {} {}", resource.getMountPath(), e.getMessage());
                 }
@@ -3875,18 +3898,19 @@ public class MediaSubscriptionCheckService {
         try {
             collectEpisodeFiles(site(), subscription.getSeason(), path, 1, result,
                     episodeSizePolicy(subscription), false, metaYear(subscription));
+            remapAbsoluteNumbering(subscription, result, null);
         } catch (Exception e) {
             log.debug("episodeFilesAt {} failed: {}", path, e.getMessage());
         }
         return result;
     }
 
-    private void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
+    void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
                                      EpisodeSizePolicy policy, boolean refresh) {
         collectEpisodeFiles(site, season, path, depth, result, policy, refresh, null);
     }
 
-    private void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
+    void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
                                      EpisodeSizePolicy policy, boolean refresh, Integer firstAirYear) {
         if (depth > appProperties.getSubscription().getMaxListDepth()) {
             return;
@@ -3908,25 +3932,14 @@ public class MediaSubscriptionCheckService {
             }
             int episode = parseEpisode(file.getName(), season);
             if (episode > 0) {
-                EpisodeFile current = result.get(episode);
-                // 同集多版本两层择优:体积门槛层优先(用户配的最小体积是质量偏好 —— 该集存在
-                // 达标文件时不达标版本不得顶上,该集只有不达标文件时照收,"实在找不到才忽略限制"),
-                // 同层内再按画质惩罚(HQ.DV/SDR 双压包两个季文件夹):列举顺序未定义,先到先得会
-                // 选中 DV 版整屏泛绿;惩罚带目录上下文(标记常在季文件夹名上),兼容性差的版本被后来者替换
-                boolean candidatePreferred = policy.preferredHit(file.getSize());
-                if (current == null
-                        || (candidatePreferred && !policy.preferredHit(current.size()))
-                        || (candidatePreferred == policy.preferredHit(current.size())
-                            && TextUtils.picturePenalty(path + "/" + file.getName())
-                               < TextUtils.picturePenalty(current.dir() + "/" + current.name()))) {
-                    result.put(episode, new EpisodeFile(episode, path, file.getName(), file.getSize(), file.getDuration()));
-                }
+                preferPut(result, new EpisodeFile(episode, path, file.getName(), file.getSize(), file.getDuration()), policy);
             }
         }
         for (FsInfo file : files) {
             if (file.getType() == 1 && depth < appProperties.getSubscription().getMaxListDepth()
                     && !EXTRA.matcher(file.getName()).find()
-                    && !otherSeasonDir(file.getName(), season, firstAirYear)) {
+                    && !otherSeasonDir(file.getName(), season, firstAirYear)
+                    && !spinOffDir(file.getName(), season)) {
                 collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, policy, refresh, firstAirYear);
             }
         }
@@ -3934,6 +3947,22 @@ public class MediaSubscriptionCheckService {
 
     /** @param duration 单集时长(秒,AList FsInfo;盘驱动不给时为 0,时长门禁跳过) */
     public record EpisodeFile(int episode, String dir, String name, long size, long duration) {
+    }
+
+    /** 同集多版本两层择优:体积门槛层优先(用户配的最小体积是质量偏好 —— 该集存在
+     * 达标文件时不达标版本不得顶上,该集只有不达标文件时照收,"实在找不到才忽略限制"),
+     * 同层内再按画质惩罚(HQ.DV/SDR 双压包两个季文件夹):列举顺序未定义,先到先得会
+     * 选中 DV 版整屏泛绿;惩罚带目录上下文(标记常在季文件夹名上),兼容性差的版本被后来者替换。 */
+    private static void preferPut(TreeMap<Integer, EpisodeFile> result, EpisodeFile file, EpisodeSizePolicy policy) {
+        EpisodeFile current = result.get(file.episode());
+        boolean candidatePreferred = policy.preferredHit(file.size());
+        if (current == null
+                || (candidatePreferred && !policy.preferredHit(current.size()))
+                || (candidatePreferred == policy.preferredHit(current.size())
+                    && TextUtils.picturePenalty(file.dir() + "/" + file.name())
+                       < TextUtils.picturePenalty(current.dir() + "/" + current.name()))) {
+            result.put(file.episode(), file);
+        }
     }
 
     private void walk(Site site, Integer season, String path, int depth, Set<Integer> episodes, EpisodeSizePolicy policy) {
@@ -3963,7 +3992,8 @@ public class MediaSubscriptionCheckService {
         for (FsInfo file : files) {
             if (file.getType() == 1 && depth < appProperties.getSubscription().getMaxListDepth()
                     && !EXTRA.matcher(file.getName()).find()
-                    && !otherSeasonDir(file.getName(), season)) {
+                    && !otherSeasonDir(file.getName(), season)
+                    && !spinOffDir(file.getName(), season)) {
                 walk(site, season, path + "/" + file.getName(), depth + 1, episodes, policy);
             }
         }
@@ -3998,6 +4028,154 @@ public class MediaSubscriptionCheckService {
             return !declared.equals(season); // 显式季标记优先:声明目标季的目录不进年份门禁
         }
         return firstSeasonYearDir(name, season, firstAirYear);
+    }
+
+    /**
+     * 衍生篇目目录(番外/前传/外传)对主季订阅整棵跳过:它们自成元数据条目、文件按全剧连续计数
+     * (线上:沧元图 S3 订阅把「027-030 4K 东宁府番外篇」「060-066 元初山番外篇」的文件记成本季
+     * 第 27-30 集),与正片在标题层无法区分。声明了季标记的目录不跳(「第2季&元初山番外篇」
+     * 对 S2 订阅就是正片本体);season&lt;=1 的订阅自身可能就是衍生篇目条目,不跳。
+     */
+    static boolean spinOffDir(String name, Integer season) {
+        if (season == null || season <= 1 || StringUtils.isBlank(name)) {
+            return false;
+        }
+        if (TextUtils.parseTitleSeason(name) != null) {
+            return false; // 显式季标记优先:声明目标季的目录即使带番外字样也是正片
+        }
+        return SPIN_OFF_DIR.matcher(name).find();
+    }
+
+    /**
+     * 年番全剧连续编号 → 季内编号重映射。国产年番资源普遍按<b>全剧</b>连续集号组织
+     * (线上:沧元图 S3 = 全剧 67-87,分享目录「067-更新中 4K 第三季」),而订阅按季内编号
+     * (1..officialTotal)对齐 —— 原始集号全部超出官方总集数,会被 {@link #stripForeignEpisodeNoise}
+     * 当噪声整段剔除,再新的资源也永远匹配不上。
+     * <p>
+     * 基准(全剧起点-1)只认两类锚,均要求 season&gt;1、官方总集数/已播数已知:
+     * <ul>
+     * <li>目录锚:文件路径中声明目标季的目录段自带起始集号文本(T1a,如「067-更新中」),显式声明
+     * 最稳;声明季但无区间文本的目录(T1b,如「5）第3季 (2026)」)用段内最小集号起步,但要求
+     * 集号连续、全部超出官方总集数、集数与已播数容差内吻合(防分享者删头几集后整体错位)。</li>
+     * <li>标题锚:无季目录锚的散文件(T2),要求集号连续、终点与资源标题宣称进度一致
+     * (「更至92集」= 92)、块长与已播数容差内吻合 —— 部分残缺分享(松散 85-92)块长远小于
+     * 已播数,不满足即不重映射,宁缺毋错位。</li>
+     * </ul>
+     * 未重映射的文件维持原语义(相对编号/超界剔除)。不同分享的基准可以不同(有的从 67 起有的从
+     * 70 起),各自映射回同一套季内编号后天然对齐 —— 所以基准必须按资源各自推断,不能全局统一。
+     */
+    static void remapAbsoluteNumbering(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files, String contextTitle) {
+        Integer season = subscription.getSeason();
+        Integer total = subscription.getOfficialTotal();
+        Integer aired = subscription.getOfficialEpisodes();
+        if (season == null || season <= 1 || total == null || total <= 0
+                || aired == null || aired <= 0 || files.isEmpty()) {
+            return;
+        }
+        int tolerance = registrationLagTolerance(aired);
+        Map<Integer, Integer> remapped = new TreeMap<>(); // 原集号 → 季内集号
+        Map<String, TreeSet<Integer>> anchoredSegments = new LinkedHashMap<>();
+        for (Map.Entry<Integer, EpisodeFile> entry : files.entrySet()) {
+            // 取最深一个声明目标季的目录段定锚:挂载路径名本身常带季字样(「/追剧/沧元图-第三季 S03」),
+            // 浅段会遮蔽更深的显式区间目录(「067-更新中 4K 第三季」)
+            String anchored = null;
+            for (String segment : StringUtils.split(entry.getValue().dir(), "/")) {
+                if (season.equals(TextUtils.parseTitleSeason(segment))) {
+                    anchored = segment;
+                }
+            }
+            if (anchored == null) {
+                continue;
+            }
+            Matcher range = DIR_RANGE_START.matcher(anchored);
+            if (range.find() && plausibleEpisodeNumber(Integer.parseInt(range.group(1)))) {
+                int base = Integer.parseInt(range.group(1)) - 1; // T1a:「067-更新中」显式起点
+                if (base > 0) {
+                    remapped.put(entry.getKey(), entry.getKey() - base);
+                    continue;
+                }
+            }
+            anchoredSegments.computeIfAbsent(anchored, s -> new TreeSet<>()).add(entry.getKey()); // T1b 候选
+        }
+        // T1b:声明季但无区间文本的目录段,段内集号连续、全超出总集数、块长与已播容差吻合 → 最小集号起步
+        for (TreeSet<Integer> numbers : anchoredSegments.values()) {
+            Integer base = contiguousBlockBase(numbers, total);
+            if (base != null && Math.abs(aired - numbers.size()) <= tolerance) {
+                for (int number : numbers) {
+                    remapped.put(number, number - base);
+                }
+            }
+        }
+        // T2:无季目录锚、超出总集数的散文件,连续块终点 == 标题宣称进度、块长与已播容差吻合 → 块尾倒推
+        Integer claimed = parseTitleProgress(contextTitle);
+        if (claimed != null) {
+            int start = -1;
+            int prev = -2;
+            for (Map.Entry<Integer, EpisodeFile> entry : files.entrySet()) {
+                int number = entry.getKey();
+                if (remapped.containsKey(number) || number <= total || seasonAnchored(entry.getValue().dir(), season)) {
+                    start = -1;
+                    prev = -2;
+                    continue;
+                }
+                if (number != prev + 1) {
+                    start = number;
+                }
+                prev = number;
+                if (number == claimed) {
+                    int length = number - start + 1;
+                    if (length >= 2 && Math.abs(aired - length) <= tolerance) {
+                        for (int raw = start; raw <= number; raw++) {
+                            remapped.put(raw, raw - start + 1);
+                        }
+                    }
+                }
+            }
+        }
+        if (remapped.isEmpty()) {
+            return;
+        }
+        int limit = total + tolerance;
+        TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
+        for (Map.Entry<Integer, Integer> mapping : remapped.entrySet()) {
+            int episode = mapping.getValue();
+            if (episode >= 1 && episode <= limit) {
+                EpisodeFile file = files.get(mapping.getKey());
+                result.put(episode, new EpisodeFile(episode, file.dir(), file.name(), file.size(), file.duration()));
+            }
+        }
+        for (Map.Entry<Integer, EpisodeFile> entry : files.entrySet()) {
+            if (!remapped.containsKey(entry.getKey())) {
+                result.putIfAbsent(entry.getKey(), entry.getValue()); // 锚定文件优先,散件不抢占集位
+            }
+        }
+        files.clear();
+        files.putAll(result);
+    }
+
+    /** 路径上是否存在声明目标季的目录段(T2 散文件判定用)。 */
+    private static boolean seasonAnchored(String dir, Integer season) {
+        for (String segment : StringUtils.split(dir, "/")) {
+            if (season.equals(TextUtils.parseTitleSeason(segment))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 集号集合是否构成「全部超出总集数的连续块」;成立返回基准(最小集号-1),否则 null。 */
+    private static Integer contiguousBlockBase(TreeSet<Integer> numbers, int total) {
+        if (numbers.isEmpty() || numbers.first() <= total) {
+            return null;
+        }
+        int prev = -2;
+        for (int number : numbers) {
+            if (prev >= 0 && number != prev + 1) {
+                return null;
+            }
+            prev = number;
+        }
+        return numbers.first() - 1;
     }
 
     /**

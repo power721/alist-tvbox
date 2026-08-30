@@ -1110,7 +1110,14 @@ public class TvBoxService {
             return result;
         }
 
-        FsResponse fsResponse = aListService.listFiles(site, path, page, size);
+        FsResponse fsResponse;
+        try {
+            fsResponse = aListService.listFiles(site, path, page, size);
+        } catch (Exception e) {
+            // 目录级失效(订阅主源分享被取消等)不应炸整个浏览接口:降级空列表,巡检下轮自会换源
+            log.warn("list {} failed, degrade to empty: {}", path, e.getMessage());
+            return result;
+        }
         int total = fsResponse.getTotal();
 
         for (FsInfo fsInfo : fsResponse.getFiles()) {

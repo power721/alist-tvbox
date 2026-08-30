@@ -421,4 +421,22 @@ class TvBoxServiceTest {
                 "天才，女友",
                 "T 忝財钕伖");
     }
+
+    @Test
+    void getMovieListDegradesToEmptyWhenDirectoryListingFails() {
+        // 订阅主源分享被取消(UC errno -21)一类的目录级失效:浏览接口降级为空列表,
+        // 不把上游错误原文炸成 400 Bad Request(TVBox 端整页报错)
+        org.mockito.Mockito.when(siteService.getById(1)).thenReturn(new cn.har01d.alist_tvbox.entity.Site());
+        org.mockito.Mockito.when(tenantService.valid(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        org.mockito.Mockito.when(aListService.listFiles(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt(),
+                        org.mockito.ArgumentMatchers.anyInt()))
+                .thenThrow(new RuntimeException("{\"errno\":-21,\"show_msg\":\"来晚啦，该分享已被取消\"}"));
+
+        cn.har01d.alist_tvbox.tvbox.MovieList result =
+                tvBoxService.getMovieList(null, "web", "1$/追剧/沧元图-第三季 [bgmid-575244] S03$1", null, null, 1, 50);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(result);
+        org.junit.jupiter.api.Assertions.assertTrue(result.getList().isEmpty());
+    }
 }

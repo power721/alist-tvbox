@@ -3659,6 +3659,17 @@ class MediaSubscriptionCheckServiceTest {
                     String.format("第%02d集.mkv", number));
             rows.put(row.getId(), row);
         }
+
+        List<Integer> episodeNumbers(int resourceId) {
+            return rows.values().stream()
+                    .filter(r -> r.getResourceId() == resourceId)
+                    .map(r -> episodes.values().stream()
+                            .filter(e -> e.getId().equals(r.getEpisodeId()))
+                            .findFirst().map(MediaSubscriptionEpisode::getNumber).orElse(null))
+                    .filter(Objects::nonNull)
+                    .sorted()
+                    .toList();
+        }
     }
 
     // ---------- 删除与巡检并发(线上 #40):创建即触发首轮巡检,删除后必须中止 ----------
@@ -3840,6 +3851,211 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals("1,2", MediaSubscriptionCheckService.joinNumbers(List.of(1, 2)));
         assertEquals("5", MediaSubscriptionCheckService.joinNumbers(List.of(5)));
         assertEquals("", MediaSubscriptionCheckService.joinNumbers(List.of()));
+    }
+
+    // ---------- 年番全剧连续编号(线上:沧元图 S3 订阅,分享按全剧 67-87 组织而订阅按季内 1-23 找,
+    // 正片集号全被超界剔除,番外篇 27-30 反倒冒充正片入库;主源还被「片头尾」目录的 OP/ED 片段冒领) ----------
+
+    private MediaSubscription cangYuanTu() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setId(1);
+        subscription.setName("沧元图 第三季");
+        subscription.setKeyword("沧元图 第三季");
+        subscription.setSeason(3);
+        subscription.setOfficialEpisodes(23);
+        subscription.setOfficialTotal(50);
+        return subscription;
+    }
+
+    private static TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> absoluteFiles(String dir, int from, int to) {
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
+        for (int i = from; i <= to; i++) {
+            files.put(i, new MediaSubscriptionCheckService.EpisodeFile(i, dir, i + ".mp4", 2_500L * 1024 * 1024, 0L));
+        }
+        return files;
+    }
+
+    @Test
+    void remapAbsoluteNumberingUsesSeasonFolderRangeStart() {
+        // 「067-更新中 4K 第三季」目录自带全剧起点 067:基准 66,67-87 → 1-21
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files =
+                absoluteFiles("/temp/quark@cy3/067-更新中 4K 第三季", 67, 87);
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(cangYuanTu(), files, "沧元图 第三季 / 沧元图年番 (2026) 更新87集");
+        assertEquals(numbers(1, 21), new ArrayList<>(files.keySet()));
+        assertEquals("67.mp4", files.get(1).name(), "第 1 集应指向全剧 67 号文件");
+    }
+
+    @Test
+    void remapAbsoluteNumberingUsesSeasonFolderWithoutRange() {
+        // 季目录无区间文本(「5）第3季 (2026)」):段内连续且块长≈已播 → 最小集号起步
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files =
+                absoluteFiles("/temp/quark@cy3/【C】沧元图/4K [防失效]/5）第3季 (2026)", 70, 92);
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(cangYuanTu(), files, "沧元图 第三季 妖圣降临番外篇 更至 EP92集");
+        assertEquals(numbers(1, 23), new ArrayList<>(files.keySet()));
+    }
+
+    @Test
+    void remapAbsoluteNumberingUsesTitleClaimForFlatFiles() {
+        // 无季目录的散文件:连续块终点 == 标题宣称进度 且块长≈已播 → 块尾倒推基准
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = absoluteFiles("/temp/quark@cy3", 70, 92);
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(cangYuanTu(), files, "沧元图3 (2026) 更至92集 4K");
+        assertEquals(numbers(1, 23), new ArrayList<>(files.keySet()));
+    }
+
+    @Test
+    void remapAbsoluteNumberingSkipsPartialFlatBlock() {
+        // 残缺散文件(松散 75-92,块长 8 远小于已播 23):错位风险大,宁可不重映射
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
+        files.putAll(absoluteFiles("/temp/quark@cy3", 75, 76));
+        files.putAll(absoluteFiles("/temp/quark@cy3", 85, 92));
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(cangYuanTu(), files, "沧元图3 更至 EP92集");
+        assertEquals(List.of(75, 76, 85, 86, 87, 88, 89, 90, 91, 92), new ArrayList<>(files.keySet()), "维持原集号语义");
+    }
+
+    @Test
+    void remapAbsoluteNumberingKeepsRelativeNumberingAndLagTail() {
+        // 相对编号的正片(1-23)与登记滞后尾巴(51-55 连续衔接)都不受影响
+        MediaSubscription subscription = cangYuanTu();
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = absoluteFiles("/追剧/沧元图-第三季 S03", 1, 23);
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(subscription, files, null);
+        assertEquals(numbers(1, 23), new ArrayList<>(files.keySet()));
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> tail = absoluteFiles("/追剧/柯南 S01", 1173, 1216);
+        subscription.setSeason(1); // 柯南形态:单季订阅 + 千集级登记滞后,重映射不参与
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(subscription, tail, null);
+        assertEquals(numbers(1173, 1216), new ArrayList<>(tail.keySet()));
+    }
+
+    @Test
+    void remapAbsoluteNumberingRequiresMultiSeasonAndOfficialData() {
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = absoluteFiles("/temp/quark@cy3", 70, 92);
+        MediaSubscription firstSeason = cangYuanTu();
+        firstSeason.setSeason(1);
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(firstSeason, files, "更至92集");
+        assertEquals(numbers(70, 92), new ArrayList<>(files.keySet()), "season=1 无重映射需求(绝对==相对)");
+        MediaSubscription noTotal = cangYuanTu();
+        noTotal.setOfficialTotal(null);
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(noTotal, files, "更至92集");
+        assertEquals(numbers(70, 92), new ArrayList<>(files.keySet()), "官方总集数未知:无从判界,不动");
+    }
+
+    @Test
+    void remapAbsoluteNumberingPrefersAnchoredOverStrays() {
+        // 季目录锚定的正片优先占位,目录外散件不抢占同集位
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files =
+                absoluteFiles("/temp/quark@cy3/067-更新中 4K 第三季", 67, 87);
+        files.put(1, new MediaSubscriptionCheckService.EpisodeFile(1, "/temp/quark@cy3", "第01集.mkv", 500L, 0L));
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(cangYuanTu(), files, null);
+        assertEquals("67.mp4", files.get(1).name(), "季目录锚定文件优先");
+    }
+
+    @Test
+    void remapAbsoluteNumberingUsesDeepestSeasonSegmentAnchor() {
+        // 挂载路径名自带季字样(「/追剧/沧元图-第三季 S03」),不得遮蔽更深的显式区间目录;
+        // 且滞后分享(块长 21 vs 已播 30)在显式区间下依然可用(T1b 容差本会放弃)
+        MediaSubscription subscription = cangYuanTu();
+        subscription.setOfficialEpisodes(30);
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files =
+                absoluteFiles("/追剧/沧元图-第三季 [bgmid-575244] S03/xxx蒼xx缘xxTUxxx/067-更新中 4K 第三季", 67, 87);
+        MediaSubscriptionCheckService.remapAbsoluteNumbering(subscription, files, null);
+        assertEquals(numbers(1, 21), new ArrayList<>(files.keySet()));
+    }
+
+    @Test
+    void spinOffDirSkipsDerivativeFoldersForMultiSeasonSubscription() {
+        assertTrue(MediaSubscriptionCheckService.spinOffDir("027-030 4K 东宁府番外篇", 3));
+        assertTrue(MediaSubscriptionCheckService.spinOffDir("060-066 4K 元初山番外篇", 3));
+        assertTrue(MediaSubscriptionCheckService.spinOffDir("4）前传 东宁府的夏天 (2026)", 3));
+        assertFalse(MediaSubscriptionCheckService.spinOffDir("第2季&元初山番外篇 (2024-2025)", 2), "声明目标季的目录是正片本体");
+        assertFalse(MediaSubscriptionCheckService.spinOffDir("番外篇", 1), "season=1 的订阅自身可能就是衍生篇目条目");
+        assertFalse(MediaSubscriptionCheckService.spinOffDir("4K 高码率", 3), "无篇目标记不误伤");
+        assertFalse(MediaSubscriptionCheckService.spinOffDir("067-更新中 4K 第三季", 3), "季标记目录走季门禁,不归篇目门禁管");
+    }
+
+    @Test
+    void titleProgressForeignRelaxedForMultiSeasonSubscription() {
+        // 年番文化:多季订阅的标题宣称是全剧进度(更至81集 = 全剧,本季官方总 50),放行给探测层
+        MediaSubscription subscription = cangYuanTu();
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "沧元图3 (2026)【更至81集】4K/HDR"));
+        // 单季订阅维持原门禁:真人版全集包 81 > 50+容差 → 拒
+        MediaSubscription firstSeason = cangYuanTu();
+        firstSeason.setSeason(1);
+        assertTrue(MediaSubscriptionCheckService.titleProgressForeign(firstSeason, "沧元图 (2026)【更至81集】4K/HDR"));
+    }
+
+    private static FsResponse folders(String... names) {
+        FsResponse response = new FsResponse();
+        List<FsInfo> list = new ArrayList<>();
+        for (String name : names) {
+            FsInfo info = new FsInfo();
+            info.setName(name);
+            info.setType(1);
+            info.setSize(0L);
+            list.add(info);
+        }
+        response.setFiles(list);
+        return response;
+    }
+
+    @Test
+    void probeShareRemapsContinuousNumberingAndSkipsSpinOffs() {
+        // 线上沧元图分享实貌:根下五个目录(两季+两番外+第三季),第三季按全剧 67-87 编号
+        Fixture fixture = new Fixture();
+        fixture.subscription.setSeason(3);
+        fixture.subscription.setOfficialEpisodes(23);
+        fixture.subscription.setOfficialTotal(50);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setId(9);
+        resource.setSubscriptionId(1);
+        resource.setLink("https://pan.quark.cn/s/cy3");
+        resource.setTitle("沧元图 第三季 / 沧元图年番 (2026) 更新87集");
+        resource.setType(5);
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Share temp = new Share();
+        temp.setId(77);
+        temp.setPath("/temp/quark@cy3");
+        Share probe = new Share();
+        probe.setType(5);
+        probe.setShareId("cy3");
+        Mockito.when(fixture.shareService.parseShareLink("https://pan.quark.cn/s/cy3")).thenReturn(probe);
+        Mockito.when(fixture.shareRepository.findByTypeAndShareIdAndTempTrue(5, "cy3")).thenReturn(List.of(temp));
+        Mockito.when(fixture.shareRepository.findByPath("/temp/quark@cy3")).thenReturn(temp);
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/temp/quark@cy3"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(folders("001-026 4K 第一季", "027-030 4K 东宁府番外篇", "031-059 4K 第二季",
+                        "060-066 4K 元初山番外篇", "067-更新中 4K 第三季"));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/temp/quark@cy3/067-更新中 4K 第三季"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files(IntStream.rangeClosed(67, 87).mapToObj(i -> i + ".mp4").toArray(String[]::new)));
+        Mockito.when(fixture.episodeSourceRepository.findByResourceId(9)).thenReturn(List.of());
+        RowStore store = new RowStore();
+        store.install(fixture);
+
+        fixture.service.probeShare(fixture.subscription, resource);
+
+        assertEquals(numbers(1, 21), store.episodeNumbers(9), "全剧 67-87 应重映射为季内 1-21");
+        Mockito.verify(fixture.aListService, Mockito.never()).listFiles(Mockito.any(),
+                Mockito.eq("/temp/quark@cy3/027-030 4K 东宁府番外篇"),
+                Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean());
+    }
+
+    @Test
+    void collectEpisodeFilesSkipsOpeningEndingClips() {
+        // 「片头尾/」目录装 OP/ED 片段:线上 UC 主源把 片尾2/片尾3 当成第 2、3 集
+        Fixture fixture = new Fixture();
+        fixture.subscription.setSeason(3);
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/temp/uc@cy"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(folders("【C】沧元图", "片头尾"));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/temp/uc@cy/【C】沧元图"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files("70.mp4", "71.mp4"));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/temp/uc@cy/片头尾"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(files("片头.mp4", "片尾.mp4", "片尾2.mp4"));
+        fixture.service.collectEpisodeFiles(new Site(), 3, "/temp/uc@cy", 1, files,
+                new MediaSubscriptionCheckService.EpisodeSizePolicy(0, 0, 0), true, null);
+        assertEquals(List.of(70, 71), new ArrayList<>(files.keySet()), "OP/ED 片段不得冒充剧集");
     }
 
     private static class Fixture {
