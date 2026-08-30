@@ -115,7 +115,7 @@ class MediaLibraryControllerTest {
         mockMvc.perform(get("/media/token-a").param("id", "tmdb:tv:42"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.list[0].vod_name").value("测试剧"))
-                .andExpect(jsonPath("$.list[0].vod_play_from").value("追剧"))
+                .andExpect(jsonPath("$.list[0].vod_play_from").value("片单"))
                 .andExpect(jsonPath("$.list[0].vod_play_url")
                         .value("📄 媒体信息$msubinfo-" + encode("tmdb:tv:42|测试剧")
                                 + "#➕ 加入追剧$msubadd-" + encode("tmdb:tv:42|测试剧")));
