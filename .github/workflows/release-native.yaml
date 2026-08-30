@@ -264,3 +264,10 @@ jobs:
             docker tag "$SOURCE_IMAGE" "$TARGET_IMAGE"
             docker push "$TARGET_IMAGE"
           done
+
+      - name: Send general notification
+        env:
+          api: ${{ secrets.NOTIFY_API }}
+        if: ${{ env.api != '' }}
+        run: |
+          curl -s "${{ env.api }}?type=app&version=${{ github.ref_name }}"

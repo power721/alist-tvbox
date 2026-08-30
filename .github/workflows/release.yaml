@@ -323,13 +323,6 @@ jobs:
         run: |
           curl -s "${{ env.api }}?type=app&version=${{ github.ref_name }}"
 
-      - name: Send general notification
-        env:
-          api: ${{ secrets.NOTIFY_API }}
-        if: ${{ env.api != '' }}
-        run: |
-          curl -s "${{ env.api }}?type=app&version=${{ github.ref_name }}"
-
       - name: Send telegram message
         uses: appleboy/telegram-action@master
         with:
