@@ -2026,7 +2026,7 @@ public class MediaSubscriptionCheckService {
             TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
             try {
                 collectEpisodeFiles(site(), subscription.getSeason(), resource.getMountPath(), 1, files,
-                        episodeSizePolicy(subscription), true);
+                        episodeSizePolicy(subscription), true, metaYear(subscription));
             } catch (Exception e) {
                 log.info("aux mount refresh failed, retire: {} {}", resource.getMountPath(), e.getMessage());
                 retireResource(subscription, resource, e.getMessage(), false);
@@ -3085,7 +3085,7 @@ public class MediaSubscriptionCheckService {
         try {
             TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
             collectEpisodeFiles(site(), subscription.getSeason(), share.getPath(), 1, files,
-                    episodeSizePolicy(subscription), true);
+                    episodeSizePolicy(subscription), true, metaYear(subscription));
             stripForeignEpisodeNoise(subscription, files, genres);
             if (files.isEmpty()) {
                 throw new IllegalStateException("资源无可识别的剧集文件:" + resource.getTitle());
@@ -3296,7 +3296,7 @@ public class MediaSubscriptionCheckService {
         TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
         try {
             collectEpisodeFiles(site(), subscription.getSeason(), subscription.getMountPath(), 1, files,
-                    episodeSizePolicy(subscription), true);
+                    episodeSizePolicy(subscription), true, metaYear(subscription));
         } catch (Exception e) {
             log.debug("adopt existing mount {} failed to list: {}", subscription.getMountPath(), e.getMessage());
             return false;
@@ -3546,7 +3546,7 @@ public class MediaSubscriptionCheckService {
         }
         TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
         try {
-            collectEpisodeFiles(site(), subscription.getSeason(), mountPath, 1, files, episodeSizePolicy(subscription), true);
+            collectEpisodeFiles(site(), subscription.getSeason(), mountPath, 1, files, episodeSizePolicy(subscription), true, metaYear(subscription));
         } catch (Exception e) {
             // 列目录失败同样要卸刚挂分享:固定路径不能残留孤儿挂载(追剧索引会收录它),
             // 且此时 resource.shareId 还没指向新 share,调用方退役删的是旧 share,孤儿没人清
@@ -3669,7 +3669,7 @@ public class MediaSubscriptionCheckService {
     TreeMap<Integer, EpisodeFile> listEpisodeFiles(MediaSubscription subscription) {
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         collectEpisodeFiles(site(), subscription.getSeason(), subscription.getMountPath(), 1, result,
-                episodeSizePolicy(subscription), true);
+                episodeSizePolicy(subscription), true, metaYear(subscription));
         stripForeignEpisodeNoise(subscription, result, metaGenres(subscription));
         return result;
     }
@@ -3774,11 +3774,11 @@ public class MediaSubscriptionCheckService {
             }
         }
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
-        collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, policy, true);
+        collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, policy, true, metaYear(subscription));
         if (includeAux) {
             for (MediaSubscriptionResource resource : auxMounts(subscription)) {
                 try {
-                    collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, result, policy, true);
+                    collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, result, policy, true, metaYear(subscription));
                 } catch (Exception e) {
                     log.warn("walk aux files failed: {} {}", resource.getMountPath(), e.getMessage());
                 }
@@ -3802,7 +3802,7 @@ public class MediaSubscriptionCheckService {
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
         try {
             collectEpisodeFiles(site(), subscription.getSeason(), path, 1, result,
-                    episodeSizePolicy(subscription), false);
+                    episodeSizePolicy(subscription), false, metaYear(subscription));
         } catch (Exception e) {
             log.debug("episodeFilesAt {} failed: {}", path, e.getMessage());
         }
@@ -3811,6 +3811,11 @@ public class MediaSubscriptionCheckService {
 
     private void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
                                      EpisodeSizePolicy policy, boolean refresh) {
+        collectEpisodeFiles(site, season, path, depth, result, policy, refresh, null);
+    }
+
+    private void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
+                                     EpisodeSizePolicy policy, boolean refresh, Integer firstAirYear) {
         if (depth > appProperties.getSubscription().getMaxListDepth()) {
             return;
         }
@@ -3849,8 +3854,8 @@ public class MediaSubscriptionCheckService {
         for (FsInfo file : files) {
             if (file.getType() == 1 && depth < appProperties.getSubscription().getMaxListDepth()
                     && !EXTRA.matcher(file.getName()).find()
-                    && !otherSeasonDir(file.getName(), season)) {
-                collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, policy, refresh);
+                    && !otherSeasonDir(file.getName(), season, firstAirYear)) {
+                collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, policy, refresh, firstAirYear);
             }
         }
     }
@@ -3903,6 +3908,10 @@ public class MediaSubscriptionCheckService {
      * 无季标记的目录一律进入(常见的"剧名/4K/"这类结构不能误伤)。
      */
     static boolean otherSeasonDir(String name, Integer season) {
+        return otherSeasonDir(name, season, null);
+    }
+
+    static boolean otherSeasonDir(String name, Integer season, Integer firstAirYear) {
         if (season == null || season <= 0 || StringUtils.isBlank(name)) {
             return false;
         }
@@ -3913,7 +3922,37 @@ public class MediaSubscriptionCheckService {
             return season < Math.min(from, to) || season > Math.max(from, to);
         }
         Integer declared = TextUtils.parseTitleSeason(name);
-        return declared != null && !declared.equals(season);
+        if (declared != null) {
+            return !declared.equals(season); // 显式季标记优先:声明目标季的目录不进年份门禁
+        }
+        return firstSeasonYearDir(name, season, firstAirYear);
+    }
+
+    /**
+     * 首播年份目录门禁:目录名无季标记但标注了<b>剧集首播年份</b>,对 season&gt;1 的订阅整棵子树跳过。
+     * <p>
+     * 文件名只写裸集号的第 1 季打包资源(线上:末日地堡 S3 订阅挂载根下的
+     * {@code M 末日地堡4K英语中英字幕2023/01-10.mp4},10 个文件全部顺着挂载语境冒领 S3 集号,
+     * 未播的 S3E10 被假的 S1E10 顶上,观测集数冲到 10/10)靠 {@link #parseEpisode} 的文件级
+     * 季过滤和目录季标记都挡不住 —— 目录名里的首播年份是唯一可靠信号。
+     * <p>
+     * 带<b>合集/全集</b>字样的目录豁免:全系列包常标第一季年代且确实装着当前季(「鬼灭之刃 (2019)
+     * 全集」),误跳会丢当前季内容;当前季资源实际都标当前季年份(末日地堡 S3 资源标 2026)。
+     */
+    static boolean firstSeasonYearDir(String name, Integer season, Integer firstAirYear) {
+        if (season == null || season <= 1 || firstAirYear == null || StringUtils.isBlank(name)) {
+            return false;
+        }
+        if (name.contains("合集") || name.contains("全集")) {
+            return false;
+        }
+        Matcher matcher = YEAR_MARK.matcher(name);
+        while (matcher.find()) {
+            if (Integer.parseInt(matcher.group(1)) == firstAirYear) {
+                return true;
+            }
+        }
+        return false;
     }
 
     int parseEpisode(String name, Integer season) {

@@ -579,6 +579,28 @@ class MediaSubscriptionCheckServiceTest {
         assertFalse(MediaSubscriptionCheckService.otherSeasonDir("第一季", null));    // 未指定季不过滤
     }
 
+    // ---------- 首播年份目录门禁:裸数字命名的 S1 打包资源不得冒领后续季集号 ----------
+    // 线上:末日地堡 S3 订阅挂载根下的「M 末日地堡4K英语中英字幕2023/01-10.mp4」(S1 全 10 集),
+    // 无季标记文件顺着挂载语境记成 S3 集源行,未播的 S3E10 被假 S1E10 顶上、观测集数冲到 10/10。
+
+    @Test
+    void firstSeasonYearDirectoryIsSkippedForLaterSeasons() {
+        assertTrue(MediaSubscriptionCheckService.otherSeasonDir("M 末日地堡4K英语中英字幕2023", 3, 2023));
+        assertTrue(MediaSubscriptionCheckService.firstSeasonYearDir("剧名 (2019)", 5, 2019));
+    }
+
+    @Test
+    void firstSeasonYearGateKeepsLegitimateDirectories() {
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("M 末日地堡4K英语中英字幕2023", 1, 2023)); // S1 订阅照收
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("末日地堡 (2026) 更新中", 3, 2023));       // 当前季年份
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("鬼灭之刃 (2019) 全集", 5, 2019));         // 全系列包豁免
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("鬼灭之刃 (2019) 合集", 5, 2019));
+        assertFalse(MediaSubscriptionCheckService.otherSeasonDir("S03 4K 2023", 3, 2023));               // 显式季标记优先:声明目标季不进年份门禁
+        assertTrue(MediaSubscriptionCheckService.otherSeasonDir("S01 4K 2023", 3, 2023));                // 声明其它季照拒
+        assertFalse(MediaSubscriptionCheckService.firstSeasonYearDir("末日地堡 4K", 3, 2023));             // 无年份不判
+        assertFalse(MediaSubscriptionCheckService.firstSeasonYearDir("剧名 (2023)", null, 2023));
+    }
+
     // ---------- 调度:播出短轮窗口与退避封顶 ----------
 
     @Test
