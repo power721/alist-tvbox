@@ -638,7 +638,7 @@ public final class TelegramRenderer {
         if (MediaSubscription.STATUS_ERROR.equals(status)) {
             return "⚠️ 异常";
         }
-        return "🔄 追更中";
+        return "🔄 连载中";
     }
 
     private static String eventEmoji(String type) {
