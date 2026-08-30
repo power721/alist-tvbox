@@ -210,9 +210,10 @@ public class MediaLibraryController {
     private CategoryList categories() {
         CategoryList result = new CategoryList();
         List<Category> categories = new ArrayList<>();
-        categories.add(category("all", "全部"));
+        categories.add(category("recent", "最近更新"));
         categories.add(category("active", "追更中"));
         categories.add(category("ended", "已完结"));
+        categories.add(category("all", "全部"));
         // 片单追更分类(豆瓣/TMDB 榜单+筛选,排除电影类目):type_id 带 douban:/tmdb: 前缀,与上方短 id 不撞车
         CategoryList pianDan = pianDanService.subscriptionCategory();
         categories.addAll(pianDan.getCategories());

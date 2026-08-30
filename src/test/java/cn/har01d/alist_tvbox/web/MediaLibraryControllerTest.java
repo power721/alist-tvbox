@@ -62,10 +62,12 @@ class MediaLibraryControllerTest {
         when(pianDanService.subscriptionCategory()).thenReturn(new CategoryList());
         mockMvc.perform(get("/media/token-a"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.class[0].type_id").value("all"))
-                .andExpect(jsonPath("$.class[0].type_name").value("全部"))
+                .andExpect(jsonPath("$.class[0].type_id").value("recent"))
+                .andExpect(jsonPath("$.class[0].type_name").value("最近更新"))
                 .andExpect(jsonPath("$.class[1].type_id").value("active"))
-                .andExpect(jsonPath("$.class[2].type_id").value("ended"));
+                .andExpect(jsonPath("$.class[2].type_id").value("ended"))
+                .andExpect(jsonPath("$.class[3].type_id").value("all"))
+                .andExpect(jsonPath("$.class[3].type_name").value("全部"));
     }
 
     @Test
@@ -79,8 +81,8 @@ class MediaLibraryControllerTest {
 
         mockMvc.perform(get("/media/token-a"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.class[3].type_id").value("tmdb:tv_popular"))
-                .andExpect(jsonPath("$.class[3].type_name").value("TMDB热门剧集"));
+                .andExpect(jsonPath("$.class[4].type_id").value("tmdb:tv_popular"))
+                .andExpect(jsonPath("$.class[4].type_name").value("TMDB热门剧集"));
     }
 
     @Test

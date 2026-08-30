@@ -563,11 +563,16 @@ public class MediaSubscriptionService {
         return absoluteCover(cover);
     }
 
+    /** 「最近更新」口径:updatedTime(集数变化/编辑时刷新)近 7 天。 */
+    private static final long RECENT_WINDOW_MS = 7L * 24 * 3600 * 1000;
+
     private boolean filterByStatus(MediaSubscription subscription, String status) {
         if (StringUtils.isBlank(status) || "all".equals(status)) {
             return true;
         }
         return switch (status) {
+            case "recent" -> subscription.getUpdatedTime() != null
+                    && System.currentTimeMillis() - subscription.getUpdatedTime() <= RECENT_WINDOW_MS;
             case "active" -> !MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
                     && !MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus());
             case "ended" -> MediaSubscription.STATUS_ENDED.equals(subscription.getStatus());
