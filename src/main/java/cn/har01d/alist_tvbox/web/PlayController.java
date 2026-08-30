@@ -130,6 +130,13 @@ public class PlayController {
                     parseSubId(id, MediaSubscriptionService.CHECK_PLAY_PREFIX)));
         }
 
+        if (StringUtils.isNotBlank(id) && id.startsWith("msubinspect-")) {
+            // 订阅详情「操作」线路「巡检」:异步完整巡检(搜索/挂载/缺集补全,分钟级),msg 只回执已开始
+            int uid = mediaSubscriptionService.resolveUid(token);
+            mediaSubscriptionService.inspectAsync(uid, parseSubId(id, MediaSubscriptionService.INSPECT_PLAY_PREFIX));
+            return Map.of("msg", "已开始巡检:搜索挂载完成后即可播放,稍后点「订阅信息」查看进度");
+        }
+
         if (StringUtils.isNotBlank(id) && id.startsWith("msubep-")) {
             // 追剧逻辑集 msubep-{subId}-{集}:实时选源(转存>主源>补缺)并自动回退,用户无感知
             String[] parts = id.split("-");
@@ -206,7 +213,7 @@ public class PlayController {
         return Map.of("msg", "媒体信息见详情页");
     }
 
-    /** msubstat-/msubcheck- 载荷 {subId} 解析;格式非法 400。 */
+    /** msubstat-/msubcheck-/msubinspect- 载荷 {subId} 解析;格式非法 400。 */
     private static int parseSubId(String id, String prefix) {
         try {
             return Integer.parseInt(id.substring(prefix.length()));
