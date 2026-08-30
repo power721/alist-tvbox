@@ -65,6 +65,9 @@ public class MediaSubscriptionService {
     public static final String SUBSCRIBE_PLAY_PREFIX = "msubadd-";
     /** 片单条目「取消追剧」伪播放 id 前缀:msubdel-{vodId},取消与该条目同名的全部订阅(含多季)。 */
     public static final String UNSUBSCRIBE_PLAY_PREFIX = "msubdel-";
+    /** 订阅操作线路伪播放 id 前缀:msubstat-{subId}(订阅信息)/ msubcheck-{subId}(轻量检查更新),均 msg 回执。 */
+    public static final String STAT_PLAY_PREFIX = "msubstat-";
+    public static final String CHECK_PLAY_PREFIX = "msubcheck-";
     /** 片单条目「媒体信息」伪播放 id 前缀:msubinfo-{vodId},msg 通道返回条目元数据,无任何副作用。
      *  排在选集第一位:部分播放器内核进详情会自动触发第一集播放,第一条目不能是订阅动作。 */
     public static final String INFO_PLAY_PREFIX = "msubinfo-";
@@ -704,6 +707,7 @@ public class MediaSubscriptionService {
         }
         rewriteEpisodeTitles(subscription, merged, driveLines);
         String[] lines = buildTvBoxPlayLines(id, merged, driveLines, Set.copyOf(checkService.mainDrives(subscription)));
+        appendActionLine(lines, id);
         MovieDetail detail = new MovieDetail();
         applySubscriptionMetadata(detail, subscription);
         detail.setVod_play_from(lines[0]);
@@ -1529,6 +1533,7 @@ public class MediaSubscriptionService {
             rewriteEpisodeTitles(subscription, merged, driveLines);
             String[] lines = buildTvBoxPlayLines(subscription.getId(), merged, driveLines,
                     Set.copyOf(checkService.mainDrives(subscription)));
+            appendActionLine(lines, subscription.getId());
             detail.setVod_play_from(lines[0]);
             detail.setVod_play_url(lines[1]);
             kickDriveLines(subscription, driveLines.keySet());
@@ -1598,6 +1603,26 @@ public class MediaSubscriptionService {
             urls.add(String.join("#", line.getValue().values()));
         }
         return new String[]{String.join("$$$", from), String.join("$$$", urls)};
+    }
+
+    /** 详情末尾追加「操作」线路:首条「订阅信息」纯占位零副作用 —— 部分内核切线路会自动触发第 1 条,
+     * 动作必须让位(与片单首条「媒体信息」同款防御);「检查更新」居次,点按同步轻量检查后 msg 回执。 */
+    private static void appendActionLine(String[] lines, int subscriptionId) {
+        lines[0] = lines[0] + "$$$操作";
+        lines[1] = lines[1] + "$$$订阅信息$msubstat-" + subscriptionId
+                + "#检查更新$msubcheck-" + subscriptionId;
+    }
+
+    /** TVBox 操作线路「订阅信息」:当前状态/进度文本,零网络纯读库。 */
+    public String subscriptionStatusText(int uid, int subId) {
+        MediaSubscription subscription = getOwned(uid, subId);
+        return displayName(subscription) + " · " + buildRemarks(subscription);
+    }
+
+    /** TVBox 操作线路「检查更新」:同步轻量检查(刷新元数据→官方已播 vs 本地已有),返回结论文本。 */
+    public String checkUpdateText(int uid, int subId) {
+        getOwned(uid, subId);
+        return checkService.checkUpdateNow(uid, subId);
     }
 
     /** TVBox 分集标题美化(Setting {@link #SETTING_EPISODE_TITLES},默认关):`NN. 分集标题(大小)` 替换文件名。

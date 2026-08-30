@@ -121,6 +121,20 @@ public class PlayController {
             return infoPianDan(uid, id.substring(MediaSubscriptionService.INFO_PLAY_PREFIX.length()));
         }
 
+        if (StringUtils.isNotBlank(id) && id.startsWith("msubstat-")) {
+            // 订阅详情「操作」线路首条:纯占位零副作用(防内核切线路自动触发第 1 条),msg 返回状态摘要
+            int uid = mediaSubscriptionService.resolveUid(token);
+            return Map.of("msg", mediaSubscriptionService.subscriptionStatusText(uid,
+                    parseSubId(id, MediaSubscriptionService.STAT_PLAY_PREFIX)));
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith("msubcheck-")) {
+            // 订阅详情「操作」线路「检查更新」:同步轻量检查(刷新元数据→官方已播 vs 本地已有),msg 回执结论
+            int uid = mediaSubscriptionService.resolveUid(token);
+            return Map.of("msg", mediaSubscriptionService.checkUpdateText(uid,
+                    parseSubId(id, MediaSubscriptionService.CHECK_PLAY_PREFIX)));
+        }
+
         if (StringUtils.isNotBlank(id) && id.startsWith("msubep-")) {
             // 追剧逻辑集 msubep-{subId}-{集}:实时选源(转存>主源>补缺)并自动回退,用户无感知
             String[] parts = id.split("-");
@@ -195,6 +209,15 @@ public class PlayController {
      *  元数据详情页已展示,这里零网络零 DB,什么都不做。 */
     private Map<String, Object> infoPianDan(int uid, String payload) {
         return Map.of("msg", "媒体信息见详情页");
+    }
+
+    /** msubstat-/msubcheck- 载荷 {subId} 解析;格式非法 400。 */
+    private static int parseSubId(String id, String prefix) {
+        try {
+            return Integer.parseInt(id.substring(prefix.length()));
+        } catch (NumberFormatException e) {
+            throw new BadRequestException("播放参数格式不正确", e);
+        }
     }
 
     /** 片单条目载荷 → (vodId, 剧名, 季号?):详情页装配 play id 时已内嵌剧名与季号({vodId}|{名}|{季}),

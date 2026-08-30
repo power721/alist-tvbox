@@ -128,15 +128,18 @@ class MediaSubscriptionFastDetailTest {
         assertEquals("msub:7", detail.getVod_id());
         String[] from = detail.getVod_play_from().split("\\$\\$\\$");
         String[] groups = detail.getVod_play_url().split("\\$\\$\\$");
-        assertEquals(3, from.length);
+        assertEquals(4, from.length);
         assertEquals("我的追剧", from[0]);
         assertEquals("夸克网盘", from[1]);
         assertEquals("百度网盘", from[2]);
+        assertEquals("操作", from[3]);
         // 逻辑线路:资源行并集(1-3),FAILED 集 4 与退役资源集 5 不入;标题元数据缺失兜底"第N集",大小取该集最大文件
         assertEquals("01. 第1集(1.46 GB)$msubep-7-1#02. 第2集(1.46 GB)$msubep-7-2#03. 第3集(800 MB)$msubep-7-3", groups[0]);
         // 盘线路:条目为 `文件名(大小)$1@pid` 物理地址,同盘只装该盘的行
         assertEquals("第01集.mkv(1.46 GB)$1@101#第02集.mkv(1.46 GB)$1@102", groups[1]);
         assertEquals("EP02.mp4(800 MB)$1@103#EP03.mp4(800 MB)$1@104", groups[2]);
+        // 操作线路:首条纯占位(防内核自动触发),「检查更新」居次
+        assertEquals("订阅信息$msubstat-7#检查更新$msubcheck-7", groups[3]);
         assertFalse(detail.getVod_play_url().contains("msubep-7-4"));
         assertFalse(detail.getVod_play_url().contains("第05集"));
         assertEquals(1, result.getTotal());
@@ -205,7 +208,7 @@ class MediaSubscriptionFastDetailTest {
         MovieList result = service.contentDetail(1, 7, null, null);
 
         String[] groups = result.getList().getFirst().getVod_play_url().split("\\$\\$\\$");
-        assertEquals("我的追剧$$$夸克网盘", result.getList().getFirst().getVod_play_from());
+        assertEquals("我的追剧$$$夸克网盘$$$操作", result.getList().getFirst().getVod_play_from());
         // 同盘同集先到先得,主源(装配序在前)胜出,补缺副本不重复出条目
         assertEquals("第01集.mkv(1.46 GB)$1@101#第02集.mkv(1.46 GB)$1@102", groups[1]);
     }
