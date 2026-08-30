@@ -20,6 +20,7 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResourceRepository;
+import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.entity.UserPreference;
 import cn.har01d.alist_tvbox.entity.UserPreferenceRepository;
@@ -705,7 +706,8 @@ public class MediaSubscriptionService {
     }
 
     /** 订阅元数据覆写(vod_id/名称/封面/状态 + 快照详情字段)。快照读 media_metadata 持久层零网络,
-     * 无快照时仅基础字段 —— 替代旧版按挂载路径名匹配豆瓣/TMDB(路径名带资源后缀既慢又易错)。 */
+     * 快照缺失的字段再用 douban_id 查本地豆瓣库(Movie 行)补空;无快照无豆瓣行时仅基础字段 ——
+     * 替代旧版按挂载路径名匹配豆瓣/TMDB(路径名带资源后缀既慢又易错)。 */
     private void applySubscriptionMetadata(MovieDetail detail, MediaSubscription subscription) {
         detail.setVod_id(VOD_ID_PREFIX + subscription.getId());
         detail.setVod_name(displayName(subscription));
@@ -715,6 +717,8 @@ public class MediaSubscriptionService {
         }
         String remarks = buildRemarks(subscription);
         MetadataDetails meta = null;
+        Movie douban = subscription.getDoubanId() == null ? null
+                : movieRepository.findById(subscription.getDoubanId()).orElse(null);
         if (StringUtils.isNotBlank(subscription.getMetaProvider()) && StringUtils.isNotBlank(subscription.getMetaId())) {
             try {
                 meta = metadataService.cachedDetails(
@@ -754,6 +758,37 @@ public class MediaSubscriptionService {
         }
         // 简介整体替换为快照 overview(无快照则清空)—— getPlaylist 对非 web 请求预填的"站点:挂载路径"不外泄
         detail.setVod_content(meta == null ? null : meta.getOverview());
+        // 本地豆瓣库兜底:快照缺失的字段用 douban_id 对应的 Movie 行补齐(只补空,不覆盖快照值)
+        if (douban != null) {
+            if (detail.getVod_year() == null && douban.getYear() != null) {
+                detail.setVod_year(String.valueOf(douban.getYear()));
+            }
+            if (StringUtils.isBlank(detail.getType_name()) && StringUtils.isNotBlank(douban.getGenre())) {
+                detail.setType_name(douban.getGenre());
+            }
+            if (StringUtils.isBlank(detail.getVod_area()) && StringUtils.isNotBlank(douban.getCountry())) {
+                detail.setVod_area(douban.getCountry());
+            }
+            if (StringUtils.isBlank(detail.getVod_lang()) && StringUtils.isNotBlank(douban.getLanguage())) {
+                detail.setVod_lang(douban.getLanguage());
+            }
+            if (StringUtils.isBlank(detail.getVod_director()) && StringUtils.isNotBlank(douban.getDirectors())) {
+                detail.setVod_director(douban.getDirectors());
+            }
+            if (StringUtils.isBlank(detail.getVod_actor()) && StringUtils.isNotBlank(douban.getActors())) {
+                detail.setVod_actor(douban.getActors());
+            }
+            if (StringUtils.isBlank(detail.getVod_pic()) && StringUtils.isNotBlank(douban.getCover())) {
+                detail.setVod_pic(absoluteCover(douban.getCover()));
+            }
+            if (StringUtils.isBlank(detail.getVod_content()) && StringUtils.isNotBlank(douban.getDescription())) {
+                detail.setVod_content(douban.getDescription());
+            }
+            if (StringUtils.isNotBlank(douban.getDbScore())
+                    && !remarks.contains("评分" + douban.getDbScore())) {
+                remarks += " · 评分" + douban.getDbScore();
+            }
+        }
         detail.setVod_remarks(remarks);
     }
 
