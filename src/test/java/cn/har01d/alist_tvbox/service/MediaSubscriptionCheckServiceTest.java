@@ -2740,6 +2740,54 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void gapProbesPreferCandidatesCoveringMissingRange() {
+        // 线上形态:缺 107-165(第三季),池里高分完结季包(166 起)压着低分第三季包 —— 探测
+        // 预算每轮 3 个,按分数序永远轮不到能补缺的第三季;区间可推断且不沾缺口的直接跳过
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.service.setTencentSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner(null) {
+            @Override
+            public com.fasterxml.jackson.databind.JsonNode search(String keyword) {
+                return null; // seasonStarts 走不了网络,直接覆写起点表所在的调用链以下
+            }
+
+            @Override
+            public java.util.Map<Integer, Integer> seasonStarts(String seriesName, Integer firstYear) {
+                return java.util.Map.of(1, 1, 2, 53, 3, 107, 4, 166);
+            }
+
+            @Override
+            public Integer finaleSeason(String seriesName, Integer firstYear, Integer officialAired) {
+                return 4;
+            }
+        });
+        MediaSubscriptionResource finale = new MediaSubscriptionResource();
+        finale.setId(71);
+        finale.setSubscriptionId(1);
+        finale.setTitle("一念永恒 完结季(2026) 【更08集】");
+        finale.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        finale.setScore(100);
+        MediaSubscriptionResource s3 = new MediaSubscriptionResource();
+        s3.setId(72);
+        s3.setSubscriptionId(1);
+        s3.setTitle("一念永恒 第三季");
+        s3.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        s3.setScore(25);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(finale, s3));
+
+        Set<Integer> missing = new java.util.TreeSet<>(numbers(107, 165));
+        assertEquals(Boolean.FALSE, fixture.service.likelyCoversMissing(fixture.subscription, finale, missing),
+                "完结季包 166 起:区间可推断且与缺口 107-165 无交集");
+        assertEquals(Boolean.TRUE, fixture.service.likelyCoversMissing(fixture.subscription, s3, missing),
+                "第三季包 107 起:正中缺口");
+
+        List<MediaSubscriptionResource> ordered = fixture.service.orderForGapProbes(fixture.subscription, missing);
+        assertEquals(72, ordered.get(0).getId(), "低分第三季包压过高分完结季包:补缺优先能补缺的");
+        assertEquals(71, ordered.get(1).getId());
+    }
+
+    @Test
     void sanitizeKeepsAlreadyMappedFilesUnshifted() {
         Fixture fixture = new Fixture();
         stubAbsoluteSeries(fixture, "一念永恒");

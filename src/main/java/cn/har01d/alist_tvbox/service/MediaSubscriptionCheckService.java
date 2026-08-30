@@ -2265,6 +2265,19 @@ public class MediaSubscriptionCheckService {
      * 非季包形态/手动声明了偏移/豆瓣无分季数据 → null(列举走原 season 口径,防冒领交给弃收门禁)。
      * 实时累推成功即持久化到资源行并记事件(后续轮次不再依赖外网)。
      */
+    /** 季包资源的包季:标题声明季&gt;1 优先;完结季类标记按分季表归位(最大季/最大季+1);裸标题 null。 */
+    Integer seasonPackTarget(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        String title = StringUtils.defaultString(resource.getTitle());
+        Integer declared = TextUtils.parseTitleSeason(title);
+        if (declared != null && declared > 1) {
+            return declared;
+        }
+        if (DoubanSeasonAligner.finaleMarked(title)) {
+            return alignFinaleSeason(subscription);
+        }
+        return null;
+    }
+
     SeasonPackMap seasonPackMap(MediaSubscription subscription, MediaSubscriptionResource resource) {
         if (resource == null || (seasonAligner == null && tencentSeasonAligner == null)
                 || !seasonPackWidened(subscription, resource)
@@ -2277,15 +2290,10 @@ public class MediaSubscriptionCheckService {
         }
         String title = StringUtils.defaultString(resource.getTitle());
         boolean multi = MULTI_SEASON_PACK.matcher(title).find();
-        Integer declared = TextUtils.parseTitleSeason(title);
-        Integer target = declared != null && declared > 1 ? declared : null;
-        if (target == null && DoubanSeasonAligner.finaleMarked(title)) {
-            target = alignFinaleSeason(subscription);
-        }
-        if (!multi && target == null) {
+        Integer finalTarget = seasonPackTarget(subscription, resource);
+        if (!multi && finalTarget == null) {
             return null; // SINGLE 包无季锚点(裸标题),交给旧链路(对齐器按标题推断,无则弃收)
         }
-        Integer finalTarget = target;
         SeasonPackMap cached = SeasonPackMap.parse(resource.getSeasonStarts(), finalTarget, multi);
         if (cached != null) {
             return cached;
@@ -3102,7 +3110,7 @@ public class MediaSubscriptionCheckService {
         int probed = 0;
         int maxProbes = appProperties.getSubscription().getMaxGapProbesPerRound();
         Set<String> throttledDrives = new java.util.HashSet<>(); // 本轮已撞风控的盘,后续候选直接跳过
-        for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
+        for (MediaSubscriptionResource resource : orderForGapProbes(subscription, missingStill)) {
             if (probed >= maxProbes || missingStill.isEmpty() || auxMounted >= maxMounts) {
                 break;
             }
@@ -3113,6 +3121,10 @@ public class MediaSubscriptionCheckService {
             if (episodeSourceRepository.countByResourceId(resource.getId()) > 0
                     && intersection(coverageOf(resource), missingStill).isEmpty()) {
                 continue;
+            }
+            if (Boolean.FALSE.equals(likelyCoversMissing(subscription, resource, missingStill))) {
+                continue; // 季包区间可推断且与缺口无交集(线上:缺 107-165 时完结季包 166 起):
+                          // 探了也补不了缺,预算留给能补缺的候选(每轮 maxGapProbesPerRound=3,烧不起)
             }
             ProbeOutcome outcome = probeCandidateSafely(subscription, resource);
             if (outcome != ProbeOutcome.PROBED) {
@@ -3146,6 +3158,59 @@ public class MediaSubscriptionCheckService {
                 fillPool(subscription, true, keyword);
             }
         }
+    }
+
+    /**
+     * 补缺探测序:候选默认按分数排(换源口径),但补缺要的是<b>能覆盖缺口</b> —— 线上(一念永恒
+     * id=64):缺 107-165 时池里 ~20 个高分完结季包(166 起)把探测预算(每轮 3 个)全烧光,
+     * 分数垫底的「第三季」候选永远轮不到。季包区间可推断的候选按「区间起点是否落在缺口内」
+     * 稳定分区,可能补缺的排前;推断不可用的维持分数序(不劣化)。
+     */
+    List<MediaSubscriptionResource> orderForGapProbes(MediaSubscription subscription, Set<Integer> missing) {
+        List<MediaSubscriptionResource> candidates = candidatesOrdered(subscription);
+        if (missing == null || missing.isEmpty()) {
+            return candidates;
+        }
+        List<MediaSubscriptionResource> likely = new ArrayList<>();
+        List<MediaSubscriptionResource> rest = new ArrayList<>();
+        for (MediaSubscriptionResource resource : candidates) {
+            (Boolean.TRUE.equals(likelyCoversMissing(subscription, resource, missing)) ? likely : rest).add(resource);
+        }
+        likely.addAll(rest);
+        return likely;
+    }
+
+    /**
+     * 季包候选是否可能覆盖缺口(标题+分季起点表推断,不挂盘零成本):
+     * <ul>
+     * <li>true:区间起点落在缺口内(第三季包 107 起对缺口 107-165);</li>
+     * <li>false:区间可推断且与缺口无交集(完结季包 166 起 → 全在缺口外);</li>
+     * <li>null:推断不可用(非季包形态/无分季数据/季号解析不出),维持原行为不判。</li>
+     * </ul>
+     * 区间上界用官方总集数(不低估:完结季更新中,实际集数每轮在涨)。
+     */
+    Boolean likelyCoversMissing(MediaSubscription subscription, MediaSubscriptionResource resource, Set<Integer> missing) {
+        if (!seasonPackWidened(subscription, resource) || missing.isEmpty()) {
+            return null;
+        }
+        if (MULTI_SEASON_PACK.matcher(StringUtils.defaultString(resource.getTitle())).find()) {
+            return true; // 多季合一包:全剧范围,必与缺口相交
+        }
+        Integer target = seasonPackTarget(subscription, resource);
+        if (target == null) {
+            return null;
+        }
+        Map<Integer, Integer> starts = alignSeasonStarts(subscription,
+                StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()), metaYear(subscription));
+        Integer start = starts.get(target);
+        if (start == null) {
+            return null;
+        }
+        // 区间上界:下一季起点-1;末季(表里无下一季)用官方总集数兜底(完结季更新中,逐轮在涨)
+        Integer next = starts.get(target + 1);
+        Integer total = subscription.getOfficialTotal();
+        int end = next != null ? next - 1 : (total != null && total >= start ? total : start);
+        return start <= java.util.Collections.max(missing) && end >= java.util.Collections.min(missing);
     }
 
     /** 补搜关键词决策:播出窗口内且缺口只含官方已播最新一集 = 资源大概率未上线,

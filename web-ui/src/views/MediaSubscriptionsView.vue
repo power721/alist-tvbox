@@ -2108,9 +2108,24 @@ const eventDetail = (event: EventDto) => {
   return eventTypeName(event.type) + ':' + (event.detail || '')
 }
 
+/** 连续集号压成区间:107-131,135-140;区间过多时截断并附总数 */
 const compactNumbers = (numbers: number[]) => {
-  if (numbers.length <= 6) return numbers.join(',')
-  return numbers.slice(0, 6).join(',') + ` 等${numbers.length}集`
+  if (numbers.length === 0) return ''
+  const sorted = [...numbers].sort((a, b) => a - b)
+  const ranges: string[] = []
+  let start = sorted[0]
+  let prev = sorted[0]
+  for (let i = 1; i <= sorted.length; i++) {
+    if (sorted[i] === prev + 1) {
+      prev = sorted[i]
+      continue
+    }
+    ranges.push(start === prev ? `${start}` : `${start}-${prev}`)
+    start = prev = sorted[i]
+  }
+  const display = ranges.slice(0, 6)
+  if (ranges.length > 6) return display.join(',') + ` 等${numbers.length}集`
+  return ranges.join(',')
 }
 
 /** 进度分母:官方总集数滞后于资源现实时(长番官方 1212/本地已到 1270)以观测最大集号兜底,避免 1243/1212 倒挂 */
