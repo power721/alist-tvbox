@@ -4,11 +4,15 @@ import cn.har01d.alist_tvbox.dto.MediaSubscriptionDto;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest;
 import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
 import cn.har01d.alist_tvbox.dto.telegram.BotCallbackQuery;
+import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.service.DoubanService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.PianDanService;
 import cn.har01d.alist_tvbox.service.PianDanSubscriptionService;
+import cn.har01d.alist_tvbox.service.metadata.BangumiMetadataProvider;
+import cn.har01d.alist_tvbox.service.metadata.DoubanMetadataProvider;
 import cn.har01d.alist_tvbox.service.metadata.TmdbMetadataProvider;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -23,9 +27,11 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Telegram 交互的业务编排:菜单/订阅列表/详情/搜索/片单/追加/退订/巡检。
@@ -40,6 +46,9 @@ import java.util.Set;
 public class TelegramSubscriptionBot {
     private static final Logger log = LoggerFactory.getLogger(TelegramSubscriptionBot.class);
     static final int MAX_KEYWORD_LENGTH = 100;
+    /** 搜索源与优先级:TMDB(官方分集日程)→ 豆瓣(中文剧)→ Bangumi(番剧)。 */
+    private static final List<String> SEARCH_PROVIDERS = List.of(
+            TmdbMetadataProvider.NAME, DoubanMetadataProvider.NAME, BangumiMetadataProvider.NAME);
     /** 片单每屏条数;上游一页取 {@link #PIAN_DAN_FETCH_SIZE} 条 → 每上游页两屏,翻页不跳过条目。 */
     static final int PIAN_DAN_PAGE_SIZE = 10;
     private static final int PIAN_DAN_FETCH_SIZE = PIAN_DAN_PAGE_SIZE * 2;
@@ -56,6 +65,7 @@ public class TelegramSubscriptionBot {
     private final MediaSubscriptionCheckService checkService;
     private final PianDanService pianDanService;
     private final PianDanSubscriptionService pianDanSubscriptionService;
+    private final DoubanService doubanService;
     private final TelegramBotClient client;
     private final Cache<String, SearchState> searchStates = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofMinutes(10))
@@ -70,11 +80,13 @@ public class TelegramSubscriptionBot {
                                     MediaSubscriptionCheckService checkService,
                                     PianDanService pianDanService,
                                     PianDanSubscriptionService pianDanSubscriptionService,
+                                    DoubanService doubanService,
                                     TelegramBotClient client) {
         this.subscriptionService = subscriptionService;
         this.checkService = checkService;
         this.pianDanService = pianDanService;
         this.pianDanSubscriptionService = pianDanSubscriptionService;
+        this.doubanService = doubanService;
         this.client = client;
     }
 
@@ -105,14 +117,19 @@ public class TelegramSubscriptionBot {
         return client.sendMessage(token, chatId, prompt.text(), prompt.keyboard());
     }
 
+    /** /search 带参:发「正在搜索」占位消息,返回 message_id 供结果就地编辑。 */
+    public long sendSearching(String token, String chatId, String keyword) {
+        TelegramRenderer.Rendered rendered = TelegramRenderer.searching(keyword);
+        return client.sendMessage(token, chatId, rendered.text(), rendered.keyboard());
+    }
+
     /**
-     * 用户输入关键词:TMDB 元数据搜索 → 暂存 → 编辑提示消息为结果列表。
+     * 用户输入关键词:TMDB → 豆瓣 → Bangumi 依序搜索合并 → 暂存 → 编辑提示消息为结果列表。
      * <p>
-     * 只用 TMDB 而非全源:searchReport 是按源整块拼接(每源上限 10 条)而非交错或按相关度排,
-     * bot 一页 8 条,第一页必然被排在最前那一源吃满 —— 与其在窗口里做混排,不如收敛到追更最需要的源
-     * (TMDB 有官方集数与分集播出日期,直接喂给巡检排程)。单源意味着它挂了就没结果,故失败原因要报出来。
+     * TMDB 优先(官方集数与分集播出日期,直接喂给巡检排程),豆瓣/Bangumi 补足中文剧与番剧的覆盖;
+     * 同名同年跨源去重保前源。三源按序串行、单源失败不影响其余;全部无果且带失败原因时报原因 ——
+     * 源不可用(未配 API Key / 被熔断 / 网络不通)与「真没搜到」是两回事,免得用户白换关键词。
      */
-    @SuppressWarnings("unchecked")
     public void runSearch(String token, String chatId, int uid, String keyword, long promptMessageId) {
         String trimmed = StringUtils.trimToEmpty(keyword);
         if (trimmed.isEmpty()) {
@@ -124,27 +141,46 @@ public class TelegramSubscriptionBot {
                     TelegramRenderer.message("⚠️ 关键词过长(限 " + MAX_KEYWORD_LENGTH + " 字),请缩短后重试。"));
             return;
         }
-        List<MetadataSearchItem> items;
-        Map<String, String> errors;
-        try {
-            Map<String, Object> report = subscriptionService.metaSearch(TmdbMetadataProvider.NAME, trimmed);
-            items = (List<MetadataSearchItem>) report.get("items");
-            errors = report.get("errors") instanceof Map<?, ?> map ? (Map<String, String>) map : Map.of();
-        } catch (Exception e) {
-            log.warn("telegram meta search failed: uid={} keyword={}", uid, trimmed, e);
-            editOrSend(token, chatId, promptMessageId, TelegramRenderer.message("❌ 搜索失败,请稍后重试。"));
-            return;
-        }
-        if ((items == null || items.isEmpty()) && !errors.isEmpty()) {
-            // 源不可用(未配 API Key / 被熔断 / 网络不通)与「真没搜到」是两回事,报原因免得用户白换关键词
+        Map<String, String> errors = new LinkedHashMap<>();
+        List<MetadataSearchItem> items = searchProviders(uid, trimmed, errors);
+        if (items.isEmpty() && !errors.isEmpty()) {
             log.info("telegram meta search unavailable: uid={} keyword={} errors={}", uid, trimmed, errors);
-            editOrSend(token, chatId, promptMessageId,
-                    TelegramRenderer.searchUnavailable(String.join(";", errors.values())));
+            String joined = errors.entrySet().stream()
+                    .map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(";"));
+            editOrSend(token, chatId, promptMessageId, TelegramRenderer.searchUnavailable(joined));
             return;
         }
-        searchStates.put(chatId, new SearchState(trimmed, items == null ? List.of() : items, 0));
-        editOrSend(token, chatId, promptMessageId, TelegramRenderer.searchResults(trimmed,
-                items == null ? List.of() : items, 0));
+        searchStates.put(chatId, new SearchState(trimmed, items, 0));
+        editOrSend(token, chatId, promptMessageId, TelegramRenderer.searchResults(trimmed, items, 0));
+    }
+
+    /** 三源依序搜索合并:同名+同年去重保前源(TMDB 条目带分集日程);单源失败只记原因,不炸整体。 */
+    @SuppressWarnings("unchecked")
+    private List<MetadataSearchItem> searchProviders(int uid, String keyword, Map<String, String> errors) {
+        List<MetadataSearchItem> merged = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (String provider : SEARCH_PROVIDERS) {
+            List<MetadataSearchItem> items;
+            try {
+                Map<String, Object> report = subscriptionService.metaSearch(provider, keyword);
+                items = (List<MetadataSearchItem>) report.get("items");
+                if (report.get("errors") instanceof Map<?, ?> map) {
+                    errors.putAll((Map<String, String>) map);
+                }
+            } catch (Exception e) {
+                log.warn("telegram meta search failed: uid={} provider={} keyword={}", uid, provider, keyword, e);
+                errors.put(provider, "调用失败");
+                continue;
+            }
+            for (MetadataSearchItem item : items == null ? List.<MetadataSearchItem>of() : items) {
+                String key = StringUtils.normalizeSpace(item.getName()).toLowerCase()
+                        + "/" + StringUtils.defaultString(item.getYear());
+                if (seen.add(key)) {
+                    merged.add(item);
+                }
+            }
+        }
+        return merged;
     }
 
     // ---------- 回调 ----------
@@ -193,11 +229,14 @@ public class TelegramSubscriptionBot {
                     return "搜索结果已过期,请重新搜索";
                 }
                 MetadataSearchItem item = state.items().get(cb.arg());
+                MovieDetail detail = searchItemDetail(item);
+                List<Integer> seasons = seasonsOf(detail);
                 edit(token, chatId, messageId, TelegramRenderer.searchDetail(item, cb.arg(), state.page(),
-                        subscriptionService.isSubscribedTitle(uid, item.getName()), searchItemDetail(item)));
+                        subscriptionService.isSubscribedTitle(uid, item.getName()), detail,
+                        seasons, subscribedSeasons(uid, item.getName(), seasons)));
             }
             case TelegramCallbackData.ADD -> {
-                return addSubscription(token, uid, chatId, messageId, cb.arg());
+                return addSubscription(token, uid, chatId, messageId, cb.arg(), cb.arg2());
             }
             case TelegramCallbackData.RESULT_PAGE, TelegramCallbackData.RESULT_BACK -> {
                 SearchState state = searchStates.getIfPresent(chatId);
@@ -248,31 +287,65 @@ public class TelegramSubscriptionBot {
 
     /**
      * 搜索结果详情补全:provider.search 只回 名称/年份/评分/封面,简介一律没有(TMDB 连字段都不填),
-     * 光靠搜索条目渲染出来就两行像没加载完 —— 按 TMDB id 补拉一次剧集详情(命中 PianDanService 5min 短缓存,
-     * 与片单详情共用同一份)。搜索走 /3/search/tv,故 mediaType 恒为 tv;拿不到就回落薄版本。
+     * 光靠搜索条目渲染出来就两行像没加载完。TMDB 条目按 id 补拉一次剧集详情(命中 PianDanService 5min
+     * 短缓存,与片单详情共用同一份;搜索走 /3/search/tv,故 mediaType 恒为 tv);
+     * 豆瓣/Bangumi 条目(与 TMDB 拉取失败时)回落「名称+年份」查本地豆瓣库拼装,都拿不到才是薄版本。
      */
     private MovieDetail searchItemDetail(MetadataSearchItem item) {
-        if (!TmdbMetadataProvider.NAME.equals(item.getProvider()) || !StringUtils.isNumeric(item.getId())) {
-            return null;
+        MovieDetail detail = null;
+        if (TmdbMetadataProvider.NAME.equals(item.getProvider()) && StringUtils.isNumeric(item.getId())) {
+            try {
+                detail = pianDanService.tmdbDetail("tv", Integer.parseInt(item.getId()));
+            } catch (RuntimeException e) {
+                log.debug("load search item detail failed: {}", item.getId());
+            }
         }
+        return detail != null ? detail : localDoubanDetail(item);
+    }
+
+    /**
+     * 本地豆瓣库详情(DoubanService 同步数据,零网络):名称+年份消歧,命中即得 简介/类型/演职员/封面。
+     * Bangumi 条目的中文番剧名大多有豆瓣条目;查不到返回 null 回落薄版本。只用于展示 ——
+     * 订阅绑定仍走条目自带的 provider+id,不被本地命中改写。
+     */
+    private MovieDetail localDoubanDetail(MetadataSearchItem item) {
         try {
-            return pianDanService.tmdbDetail("tv", Integer.parseInt(item.getId()));
+            Movie movie = doubanService.getByName(item.getName(), parseYear(item.getYear()));
+            if (movie == null) {
+                return null;
+            }
+            MovieDetail detail = new MovieDetail();
+            detail.setType_name(movie.getGenre());
+            detail.setVod_actor(movie.getActors());
+            detail.setVod_content(movie.getDescription());
+            detail.setVod_pic(movie.getCover());
+            return detail;
         } catch (RuntimeException e) {
-            log.debug("load search item detail failed: {}", item.getId());
+            log.debug("local douban detail lookup failed: {} {}", item.getName(), item.getYear());
             return null;
         }
     }
 
-    /** 追加订阅:幂等(语义匹配已订 → 提示;新建 → 元数据直绑零搜索零网络 + 首轮巡检)。 */
-    private String addSubscription(String token, int uid, String chatId, long messageId, int index) {
+    private static Integer parseYear(String year) {
+        return StringUtils.isNumeric(year) ? Integer.valueOf(year) : null;
+    }
+
+    /**
+     * 追加订阅:幂等(语义匹配已订 → 提示;新建 → 元数据直绑零搜索零网络 + 首轮巡检)。
+     * <p>
+     * season 非空即多季剧的「➕ 第N季」:订阅落到具体季(create 的 resolveSeason 对显式 &gt;1 不覆盖),
+     * 名字仍存裸名 —— 与片单按季订阅同一口径,同剧不同季各一条订阅、互不吞并。
+     */
+    private String addSubscription(String token, int uid, String chatId, long messageId, int index, Integer season) {
         SearchState state = searchStates.getIfPresent(chatId);
         if (state == null || index >= state.items().size()) {
             edit(token, chatId, messageId, TelegramRenderer.searchPrompt());
             return "搜索结果已过期,请重新搜索";
         }
         MetadataSearchItem item = state.items().get(index);
-        if (subscriptionService.isSubscribedTitle(uid, item.getName())) {
-            edit(token, chatId, messageId, TelegramRenderer.alreadySubscribed(item.getName()));
+        String title = seasonTitle(item.getName(), season);
+        if (subscriptionService.isSubscribedTitle(uid, title)) {
+            edit(token, chatId, messageId, TelegramRenderer.alreadySubscribed(title));
             return null;
         }
         MediaSubscriptionRequest request = new MediaSubscriptionRequest();
@@ -280,11 +353,31 @@ public class TelegramSubscriptionBot {
         request.setKeyword(item.getName());
         request.setMetaProvider(item.getProvider());
         request.setMetaId(item.getId());
+        if (season != null) {
+            request.setSeason(season);
+        }
         MediaSubscriptionDto dto = subscriptionService.create(uid, request);
         checkService.checkAsync(uid, dto.getId());
-        log.info("telegram subscribe: uid={} {} provider={} id={}", uid, dto.getId(), item.getProvider(), item.getId());
+        log.info("telegram subscribe: uid={} {} provider={} id={} season={}", uid, dto.getId(),
+                item.getProvider(), item.getId(), season);
         edit(token, chatId, messageId, TelegramRenderer.subscribed(dto));
         return null;
+    }
+
+    /** 标题的季号形态:与 isSubscribedTitle / 电视端片单条目同一口径(裸名 + 「 第N季」)。 */
+    private static String seasonTitle(String name, Integer season) {
+        return season == null ? name : name + " 第" + season + "季";
+    }
+
+    /** 逐季已订状态:多季剧每季一条独立订阅,按季标题分别判定。 */
+    private Set<Integer> subscribedSeasons(int uid, String name, List<Integer> seasons) {
+        Set<Integer> subscribed = new HashSet<>();
+        for (Integer season : seasons) {
+            if (subscriptionService.isSubscribedTitle(uid, seasonTitle(name, season))) {
+                subscribed.add(season);
+            }
+        }
+        return subscribed;
     }
 
     // ---------- 片单追更 ----------
@@ -336,14 +429,9 @@ public class TelegramSubscriptionBot {
         }
         MovieDetail detail = pianDanDetail(state.items().get(index));
         List<Integer> seasons = seasonsOf(detail);
-        Set<Integer> subscribedSeasons = new HashSet<>();
-        for (Integer season : seasons) {
-            if (subscriptionService.isSubscribedTitle(uid, detail.getVod_name() + " 第" + season + "季")) {
-                subscribedSeasons.add(season);
-            }
-        }
         edit(token, chatId, messageId, TelegramRenderer.pianDanEntry(detail, index, state.page(),
-                subscriptionService.isSubscribedTitle(uid, detail.getVod_name()), seasons, subscribedSeasons));
+                subscriptionService.isSubscribedTitle(uid, detail.getVod_name()), seasons,
+                subscribedSeasons(uid, detail.getVod_name(), seasons)));
         return null;
     }
 
@@ -364,7 +452,7 @@ public class TelegramSubscriptionBot {
             log.info("telegram pian-dan subscribe rejected: uid={} {}", uid, payload);
             return "❌ 条目信息获取失败,请稍后重试";
         }
-        String title = season == null ? name : name + " 第" + season + "季";
+        String title = seasonTitle(name, season);
         if (result.existed() || result.dto() == null) {
             edit(token, chatId, messageId, TelegramRenderer.alreadySubscribed(title));
             return null;
@@ -399,9 +487,9 @@ public class TelegramSubscriptionBot {
         }
     }
 
-    /** 剧集季号清单(tmdbDetail 放在 ext 里,已滤掉特典与未开播占位季);电影/豆瓣条目为空。 */
+    /** 剧集季号清单(tmdbDetail 放在 ext 里,已滤掉特典与未开播占位季);电影/豆瓣条目与详情缺失都为空。 */
     private static List<Integer> seasonsOf(MovieDetail detail) {
-        if (!(detail.getExt() instanceof List<?> values)) {
+        if (detail == null || !(detail.getExt() instanceof List<?> values)) {
             return List.of();
         }
         List<Integer> seasons = new ArrayList<>();

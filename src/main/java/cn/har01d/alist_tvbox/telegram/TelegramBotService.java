@@ -22,8 +22,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * <ul>
  * <li><b>启用条件</b>:Setting {@code msub_telegram_bot_enabled}(默认 true)且全局
  *     {@code msub_telegram_bot_token} 非空;未配置时线程空转轮询配置(30s 一查),配好即自动启用;</li>
- * <li><b>积压跳过</b>:启动/换 token 后首批 update 只推进 offset 不执行 —— Bot 离线期间的旧命令
- *     (可能是几小时前的 /start)重放只会制造困惑,交互语义下丢弃是正确行为;</li>
+ * <li><b>积压丢弃</b>:启动/换 token 先做队尾快照(offset=-1、timeout=0),offset 直推队尾 ——
+ *     离线期间的旧命令(可能是几小时前的 /start)按确认语义原子丢弃,重放只会制造困惑;
+ *     快照之后到达的命令(包括重启后用户发的第一条)在下轮长轮询照常执行;</li>
  * <li><b>409 退避</b>:同 token 双实例轮询会 409(单实例部署下偶发于误配),指数退避到 60s 上限并告警;</li>
  * <li><b>处理池</b>:2 线程守护 executor 串并有限地处理 update(搜索等秒级网络调用不阻塞拉取)。</li>
  * </ul>
@@ -82,7 +83,7 @@ public class TelegramBotService {
     private void pollLoop() {
         String token = null;
         long offset = 0;
-        boolean skipBacklog = true;
+        boolean primed = false;
         long backoff = ERROR_BACKOFF_FLOOR_MS;
         while (running.get()) {
             String current = currentToken();
@@ -91,35 +92,44 @@ public class TelegramBotService {
                     log.info("telegram bot disabled or token removed, polling paused");
                     token = null;
                 }
+                primed = false;
                 if (!sleepQuietly(IDLE_SLEEP_MS)) {
                     return;
                 }
                 continue;
             }
             if (!current.equals(token)) {
-                // 首启或 token 变更:offset 归零且跳过积压
+                // 首启或 token 变更:offset 归零,重新做积压确认
                 if (token != null) {
                     log.info("telegram bot token changed, restarting stream");
                 }
                 token = current;
                 offset = 0;
-                skipBacklog = true;
+                primed = false;
                 client.setMyCommands(token);
+            }
+            if (!primed) {
+                try {
+                    offset = primeOffset(token);
+                    primed = true;
+                    backoff = ERROR_BACKOFF_FLOOR_MS;
+                    log.info("telegram bot stream primed, live updates from offset {}", offset);
+                } catch (Exception e) {
+                    log.warn("telegram bot backlog prime failed: {}", e.getMessage());
+                    if (!sleepQuietly(backoff)) {
+                        return;
+                    }
+                    backoff = Math.min(backoff * 2, ERROR_BACKOFF_CAP_MS);
+                }
+                continue;
             }
             try {
                 List<BotUpdate> updates = client.getUpdates(token, offset);
                 backoff = ERROR_BACKOFF_FLOOR_MS;
                 for (BotUpdate update : updates) {
                     offset = Math.max(offset, update.getUpdateId() + 1);
-                    if (skipBacklog) {
-                        continue;
-                    }
                     final String activeToken = token;
                     executor.submit(() -> router.dispatch(activeToken, update));
-                }
-                if (!updates.isEmpty() && skipBacklog) {
-                    skipBacklog = false;
-                    log.info("telegram bot backlog skipped, live updates from offset {}", offset);
                 }
             } catch (Exception e) {
                 log.warn("telegram getUpdates failed: {}", e.getMessage());
@@ -129,6 +139,18 @@ public class TelegramBotService {
                 backoff = Math.min(backoff * 2, ERROR_BACKOFF_CAP_MS);
             }
         }
+    }
+
+    /**
+     * 积压确认:队尾快照(offset=-1、timeout=0,只回最后一条待处理 update)把 offset 直推队尾+1,
+     * Telegram 的确认语义一次丢弃<b>全部</b>离线 update(不受每批 100 条上限约束),快照之后到达的都是活命令。
+     * <p>
+     * 旧实现「首批整批跳过」会把重启后用户发的第一条命令吞掉 —— 首轮 getUpdates 是 25s 长轮询,
+     * 期间到达的命令恰好落在被跳过的首批里,表现为「重启后第一次命令没有响应」。
+     */
+    private long primeOffset(String token) {
+        List<BotUpdate> tail = client.tailUpdates(token);
+        return tail.isEmpty() ? 0 : tail.get(tail.size() - 1).getUpdateId() + 1;
     }
 
     /** 全局 token + 开关判定;禁用或未配置返回 null(内部线程无认证上下文,密钥读取放行)。 */

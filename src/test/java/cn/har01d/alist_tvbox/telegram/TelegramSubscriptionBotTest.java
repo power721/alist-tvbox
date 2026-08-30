@@ -5,6 +5,8 @@ import cn.har01d.alist_tvbox.dto.MetadataSearchItem;
 import cn.har01d.alist_tvbox.dto.telegram.BotCallbackQuery;
 import cn.har01d.alist_tvbox.dto.telegram.BotChat;
 import cn.har01d.alist_tvbox.dto.telegram.BotMessage;
+import cn.har01d.alist_tvbox.entity.Movie;
+import cn.har01d.alist_tvbox.service.DoubanService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.PianDanService;
@@ -45,13 +47,14 @@ class TelegramSubscriptionBotTest {
     private final MediaSubscriptionCheckService checkService = mock(MediaSubscriptionCheckService.class);
     private final PianDanService pianDanService = mock(PianDanService.class);
     private final PianDanSubscriptionService pianDanSubscriptionService = mock(PianDanSubscriptionService.class);
+    private final DoubanService doubanService = mock(DoubanService.class);
     private final TelegramBotClient client = mock(TelegramBotClient.class);
     private TelegramSubscriptionBot bot;
 
     @BeforeEach
     void setUp() {
         bot = new TelegramSubscriptionBot(subscriptionService, checkService, pianDanService,
-                pianDanSubscriptionService, client);
+                pianDanSubscriptionService, doubanService, client);
     }
 
     private MetadataSearchItem item(String provider, String id, String name) {
@@ -80,31 +83,61 @@ class TelegramSubscriptionBotTest {
         when(subscriptionService.metaSearch("tmdb", keyword)).thenReturn(Map.of(
                 "items", List.of(item("tmdb", "42", "斗破苍穹"), item("douban", "99", "斗破苍穹 特别篇")),
                 "errors", Map.of()));
+        when(subscriptionService.metaSearch("douban", keyword))
+                .thenReturn(Map.of("items", List.of(), "errors", Map.of()));
+        when(subscriptionService.metaSearch("bangumi", keyword))
+                .thenReturn(Map.of("items", List.of(), "errors", Map.of()));
         bot.runSearch("TOKEN", "100", 5, keyword, 55L);
     }
 
     @Test
-    void searchUsesTmdbOnly() {
-        // 全源 searchReport 按源整块拼接(每源 10 条),一页 8 条会被最前那源吃满 —— 收敛到 TMDB
-        runSearch("斗破苍穹");
-        verify(subscriptionService).metaSearch("tmdb", "斗破苍穹");
-        verify(subscriptionService, never()).metaSearch(eq(""), anyString());
+    void searchMergesProvidersTmdbFirstWithDedup() {
+        // TMDB 优先,豆瓣/Bangumi 补足;同名+同年跨源去重保前源(5 条去 1 条剩 4 条)
+        when(subscriptionService.metaSearch("tmdb", "庆余年")).thenReturn(Map.of(
+                "items", List.of(item("tmdb", "1", "庆余年"), item("tmdb", "2", "剑来")), "errors", Map.of()));
+        when(subscriptionService.metaSearch("douban", "庆余年")).thenReturn(Map.of(
+                "items", List.of(item("douban", "3", "庆余年"), item("douban", "4", "某国漫")), "errors", Map.of()));
+        when(subscriptionService.metaSearch("bangumi", "庆余年")).thenReturn(Map.of(
+                "items", List.of(item("bangumi", "5", "葬送的芙莉莲")), "errors", Map.of()));
+        bot.runSearch("TOKEN", "100", 5, "庆余年", 55L);
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("共 4 条"), any(), any());
     }
 
     @Test
     void searchSurfacesProviderFailureInsteadOfEmptyResult() {
         when(subscriptionService.metaSearch("tmdb", "庆余年")).thenReturn(Map.of(
                 "items", List.of(), "errors", Map.of("tmdb", "401 Unauthorized")));
+        when(subscriptionService.metaSearch("douban", "庆余年")).thenReturn(Map.of(
+                "items", List.of(), "errors", Map.of("douban", "network timeout")));
+        when(subscriptionService.metaSearch("bangumi", "庆余年")).thenReturn(Map.of(
+                "items", List.of(), "errors", Map.of()));
         bot.runSearch("TOKEN", "100", 5, "庆余年", 55L);
-        // 单源意味着它挂了就没结果:报原因而不是「换个关键词试试」
+        // 三源全空且带失败原因:报原因而不是「换个关键词试试」
         verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
-                argThat(text -> text.contains("搜索源暂时不可用") && text.contains("401 Unauthorized")), any(), any());
+                argThat(text -> text.contains("搜索源暂时不可用") && text.contains("401 Unauthorized")
+                        && text.contains("douban:network timeout")), any(), any());
+    }
+
+    @Test
+    void partialProviderFailureStillShowsResults() {
+        // TMDB 挂了但豆瓣有结果:照常出结果,不整单判死
+        when(subscriptionService.metaSearch("tmdb", "庆余年")).thenReturn(Map.of(
+                "items", List.of(), "errors", Map.of("tmdb", "401 Unauthorized")));
+        when(subscriptionService.metaSearch("douban", "庆余年")).thenReturn(Map.of(
+                "items", List.of(item("douban", "3", "庆余年")), "errors", Map.of()));
+        when(subscriptionService.metaSearch("bangumi", "庆余年")).thenReturn(Map.of(
+                "items", List.of(), "errors", Map.of()));
+        bot.runSearch("TOKEN", "100", 5, "庆余年", 55L);
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
+                argThat(text -> text.contains("共 1 条") && !text.contains("不可用")), any(), any());
     }
 
     @Test
     void emptyResultWithoutErrorStaysAsNoMatch() {
-        when(subscriptionService.metaSearch("tmdb", "不存在的剧")).thenReturn(Map.of(
-                "items", List.of(), "errors", Map.of()));
+        for (String provider : List.of("tmdb", "douban", "bangumi")) {
+            when(subscriptionService.metaSearch(provider, "不存在的剧"))
+                    .thenReturn(Map.of("items", List.of(), "errors", Map.of()));
+        }
         bot.runSearch("TOKEN", "100", 5, "不存在的剧", 55L);
         verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("没有找到"), any(), any());
     }
@@ -117,10 +150,13 @@ class TelegramSubscriptionBotTest {
 
     @Test
     void runSearchFailureEditsPromptIntoNotice() {
-        when(subscriptionService.metaSearch("tmdb", "坏词")).thenThrow(new RuntimeException("provider down"));
+        for (String provider : List.of("tmdb", "douban", "bangumi")) {
+            when(subscriptionService.metaSearch(provider, "坏词")).thenThrow(new RuntimeException("provider down"));
+        }
         bot.runSearch("TOKEN", "100", 5, "坏词", 55L);
-        // 提示消息仍有锚点:就地编辑成错误提示,不发新消息
-        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("搜索失败"), any(), any());
+        // 提示消息仍有锚点:三源调用全炸,就地编辑成不可用提示(带调用失败原因),不发新消息
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
+                argThat(text -> text.contains("搜索源暂时不可用") && text.contains("调用失败")), any(), any());
     }
 
     @Test
@@ -241,8 +277,86 @@ class TelegramSubscriptionBotTest {
         runSearch("斗破苍穹");
         when(pianDanService.tmdbDetail("tv", 42)).thenThrow(new RuntimeException("tmdb down"));
         bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pick:0"), TelegramCallbackData.parse("pick:0"));
-        // 详情拉不到不炸,退化成薄版本
+        // 详情拉不到且本地库也查不到:不炸,退化成薄版本
         verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("来源:"), any(), any());
+    }
+
+    @Test
+    void pickDoubanItemEnrichesFromLocalDoubanDb() {
+        // 豆瓣条目:名称+年份查本地豆瓣库补 简介/类型/演职员/封面(item() 造的年份是 2026)
+        runSearch("斗破苍穹");
+        Movie movie = new Movie();
+        movie.setName("斗破苍穹 特别篇");
+        movie.setGenre("动画 / 奇幻");
+        movie.setActors("配音甲 / 配音乙");
+        movie.setDescription("三年之约后的新篇章");
+        movie.setCover("https://img.doubanio.com/x.jpg");
+        when(doubanService.getByName("斗破苍穹 特别篇", 2026)).thenReturn(movie);
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pick:1"), TelegramCallbackData.parse("pick:1"));
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
+                argThat(text -> text.contains("三年之约后的新篇章") && text.contains("配音甲") && text.contains("动画")),
+                any(), eq("https://img.doubanio.com/x.jpg"));
+    }
+
+    @Test
+    void tmdbDetailFailureFallsBackToLocalDouban() {
+        // TMDB 详情拉挂也走本地豆瓣库兜底,而非直接薄版本
+        runSearch("斗破苍穹");
+        when(pianDanService.tmdbDetail("tv", 42)).thenThrow(new RuntimeException("tmdb down"));
+        Movie movie = new Movie();
+        movie.setDescription("萧炎三年之约");
+        when(doubanService.getByName("斗破苍穹", 2026)).thenReturn(movie);
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pick:0"), TelegramCallbackData.parse("pick:0"));
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("萧炎三年之约"), any(), any());
+    }
+
+    @Test
+    void pickExpandsSeasonsFromDetail() {
+        runSearch("斗破苍穹");
+        MovieDetail detail = entry("tmdb:tv:42", "斗破苍穹");
+        detail.setExt(List.of(1, 2, 3));
+        when(pianDanService.tmdbDetail("tv", 42)).thenReturn(detail);
+        when(subscriptionService.isSubscribedTitle(5, "斗破苍穹 第2季")).thenReturn(true);
+
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "pick:0"), TelegramCallbackData.parse("pick:0"));
+
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), anyString(),
+                argThat(kb -> kb != null
+                        && kb.get(0).stream().anyMatch(b -> b.callbackData().equals("add:0:1"))
+                        && kb.get(0).stream().anyMatch(b -> b.text().equals("✅ 第2季"))
+                        && kb.get(0).stream().anyMatch(b -> b.callbackData().equals("add:0:3"))), any());
+    }
+
+    @Test
+    void addWithSeasonBindsSeasonAndChecksSeasonTitle() {
+        runSearch("斗破苍穹");
+        when(subscriptionService.isSubscribedTitle(5, "斗破苍穹 第3季")).thenReturn(false);
+        MediaSubscriptionDto created = new MediaSubscriptionDto();
+        created.setId(90);
+        created.setName("斗破苍穹");
+        created.setSeason(3);
+        when(subscriptionService.create(eq(5), any())).thenReturn(created);
+
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "add:0:3"), TelegramCallbackData.parse("add:0:3"));
+
+        ArgumentCaptor<cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest> captor = ArgumentCaptor.forClass(
+                cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest.class);
+        verify(subscriptionService).create(eq(5), captor.capture());
+        assertEquals("斗破苍穹", captor.getValue().getName()); // 名字存裸名,季号单列
+        assertEquals(3, captor.getValue().getSeason());
+        verify(checkService).checkAsync(5, 90);
+    }
+
+    @Test
+    void addWithSeasonIdempotentPerSeason() {
+        runSearch("斗破苍穹");
+        // 整剧未订、第 3 季已订:按季标题判定,不能被裸名判定吞掉
+        when(subscriptionService.isSubscribedTitle(5, "斗破苍穹")).thenReturn(false);
+        when(subscriptionService.isSubscribedTitle(5, "斗破苍穹 第3季")).thenReturn(true);
+        bot.handleCallback("TOKEN", 5, callback(100L, 55L, "add:0:3"), TelegramCallbackData.parse("add:0:3"));
+        verify(subscriptionService, never()).create(anyInt(), any());
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L),
+                argThat(text -> text.contains("斗破苍穹 第3季")), any(), any());
     }
 
     // ---------- 片单追更 ----------

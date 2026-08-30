@@ -30,7 +30,7 @@ public final class TelegramRenderer {
     /** 订阅列表每页条数 */
     static final int SUBS_PAGE_SIZE = 10;
     /** 搜索结果每页条数 */
-    static final int RESULTS_PAGE_SIZE = 8;
+    static final int RESULTS_PAGE_SIZE = 10;
     private static final int MAX_TEXT_LENGTH = 3800;
     /** 服务层封面代理前缀({@code MediaSubscriptionService.proxiedCover});海报要还原成上游直链才抓得到。 */
     private static final String COVER_PROXY_PREFIX = "/images?url=";
@@ -176,10 +176,15 @@ public final class TelegramRenderer {
                 List.of(row(new TelegramButton("❌ 取消", TelegramCallbackData.CANCEL))));
     }
 
+    /** /search 带参的过渡锚点:发出后立刻被编辑成结果/错误文案,无需键盘。 */
+    public static Rendered searching(String keyword) {
+        return new Rendered("🔍 正在搜索「" + esc(abbrev(keyword, 40)) + "」…", null);
+    }
+
     /** 搜索源不可用(未配 API Key / 熔断 / 网络不通):与「真没搜到」分开报,免得用户白换关键词。 */
     public static Rendered searchUnavailable(String reason) {
-        return new Rendered("⚠️ <b>搜索源暂时不可用</b>\n\nTMDB:" + esc(abbrev(reason, 200))
-                        + "\n\n请到网页端「追剧设置 → 元数据」检查 TMDB API Key 与线路,或稍后重试。\n"
+        return new Rendered("⚠️ <b>搜索源暂时不可用</b>\n\n" + esc(abbrev(reason, 200))
+                        + "\n\n请到网页端「追剧设置 → 元数据」检查 TMDB API Key 与搜索源配置,或稍后重试。\n"
                         + "也可以先用「🎞 片单追更」从榜单里挑剧,那条路不依赖搜索。",
                 List.of(row(new TelegramButton("🔄 重试搜索", TelegramCallbackData.SEARCH),
                                 new TelegramButton("🎞 片单追更", TelegramCallbackData.PIAN_DAN)),
@@ -225,16 +230,19 @@ public final class TelegramRenderer {
     }
 
     public static Rendered searchDetail(MetadataSearchItem item, int index, int resultPage, boolean subscribed) {
-        return searchDetail(item, index, resultPage, subscribed, null);
+        return searchDetail(item, index, resultPage, subscribed, null, null, null);
     }
 
     /**
      * 搜索结果详情。{@code detail} 为可选的元数据详情补全 —— provider.search 只回 名称/年份/评分/封面,
      * 简介一律没有(豆瓣的 description 是「剧集」这类类型标签,TMDB/Bangumi 连这个都没有),
      * 只靠搜索条目渲染出来就两行,像没加载完。拉不到详情时退化成原来的薄版本。
+     * <p>
+     * {@code seasons} 非空即多季剧,按季展开订阅(与片单条目详情同一口径),已追季显示 ✅ 并跳订阅列表 ——
+     * 否则多季剧从搜索进只能订到默认季,想按季订还得绕去片单。
      */
     public static Rendered searchDetail(MetadataSearchItem item, int index, int resultPage, boolean subscribed,
-                                        MovieDetail detail) {
+                                        MovieDetail detail, List<Integer> seasons, Set<Integer> subscribedSeasons) {
         StringBuilder text = new StringBuilder("🎬 <b>").append(esc(abbrev(item.getName(), 60))).append("</b>");
         if (StringUtils.isNotBlank(item.getYear())) {
             text.append("(").append(esc(item.getYear())).append(")");
@@ -255,7 +263,9 @@ public final class TelegramRenderer {
             text.append("\n\n").append(esc(StringUtils.abbreviate(overview, 400)));
         }
         List<List<TelegramButton>> keyboard = new ArrayList<>();
-        if (subscribed) {
+        if (seasons != null && !seasons.isEmpty()) {
+            appendSeasonButtons(keyboard, seasons, subscribedSeasons, TelegramCallbackData.ADD, index);
+        } else if (subscribed) {
             keyboard.add(row(new TelegramButton("✅ 已在追剧列表 · 查看", TelegramCallbackData.of(TelegramCallbackData.SUBS, 0))));
         } else {
             keyboard.add(row(new TelegramButton("➕ 加入追剧", TelegramCallbackData.of(TelegramCallbackData.ADD, index))));
@@ -266,6 +276,30 @@ public final class TelegramRenderer {
         String poster = detail != null && StringUtils.isNotBlank(detail.getVod_pic())
                 ? detail.getVod_pic() : item.getCover();
         return new Rendered(truncate(text), keyboard, posterUrl(poster));
+    }
+
+    /**
+     * 多季剧的按季订阅钮:三列一排,已追季显示 ✅ 并跳订阅列表(不给重复订阅入口)。
+     * 搜索详情与片单条目详情共用,只有 action 不同({@code add} / {@code pdadd}),季号都走第二参数。
+     */
+    private static void appendSeasonButtons(List<List<TelegramButton>> keyboard, List<Integer> seasons,
+                                            Set<Integer> subscribedSeasons, String addAction, int index) {
+        List<TelegramButton> group = new ArrayList<>();
+        for (Integer season : seasons) {
+            boolean followed = subscribedSeasons != null && subscribedSeasons.contains(season);
+            group.add(followed
+                    ? new TelegramButton("✅ 第" + season + "季",
+                            TelegramCallbackData.of(TelegramCallbackData.SUBS, 0))
+                    : new TelegramButton("➕ 第" + season + "季",
+                            TelegramCallbackData.of(addAction, index, season)));
+            if (group.size() == 3) {
+                keyboard.add(List.copyOf(group));
+                group.clear();
+            }
+        }
+        if (!group.isEmpty()) {
+            keyboard.add(List.copyOf(group));
+        }
     }
 
     public static Rendered confirmDelete(MediaSubscriptionDto dto) {
@@ -397,22 +431,7 @@ public final class TelegramRenderer {
         }
         List<List<TelegramButton>> keyboard = new ArrayList<>();
         if (seasons != null && !seasons.isEmpty()) {
-            List<TelegramButton> group = new ArrayList<>();
-            for (Integer season : seasons) {
-                boolean followed = subscribedSeasons != null && subscribedSeasons.contains(season);
-                group.add(followed
-                        ? new TelegramButton("✅ 第" + season + "季",
-                                TelegramCallbackData.of(TelegramCallbackData.SUBS, 0))
-                        : new TelegramButton("➕ 第" + season + "季",
-                                TelegramCallbackData.of(TelegramCallbackData.PIAN_DAN_ADD, index, season)));
-                if (group.size() == 3) {
-                    keyboard.add(List.copyOf(group));
-                    group.clear();
-                }
-            }
-            if (!group.isEmpty()) {
-                keyboard.add(List.copyOf(group));
-            }
+            appendSeasonButtons(keyboard, seasons, subscribedSeasons, TelegramCallbackData.PIAN_DAN_ADD, index);
         } else if (subscribed) {
             keyboard.add(row(new TelegramButton("✅ 已在追剧列表 · 查看",
                     TelegramCallbackData.of(TelegramCallbackData.SUBS, 0))));

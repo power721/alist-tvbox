@@ -66,9 +66,9 @@ class TelegramRendererTest {
     }
 
     @Test
-    void searchResultsPaginateByEight() {
+    void searchResultsPaginateByTen() {
         List<MetadataSearchItem> items = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 11; i++) {
             MetadataSearchItem item = new MetadataSearchItem();
             item.setProvider("douban");
             item.setId(String.valueOf(100 + i));
@@ -76,13 +76,20 @@ class TelegramRendererTest {
             items.add(item);
         }
         TelegramRenderer.Rendered page1 = TelegramRenderer.searchResults("关键词", items, 0);
-        assertTrue(page1.text().contains("共 10 条"));
-        // 第 9/10 条在第 2 页,首页只出现前 8 条的绝对索引按钮
-        assertTrue(page1.keyboard().stream().anyMatch(r -> r.stream().anyMatch(b -> b.callbackData().equals("pick:7"))));
-        assertFalse(page1.keyboard().stream().anyMatch(r -> r.stream().anyMatch(b -> b.callbackData().equals("pick:8"))));
+        assertTrue(page1.text().contains("共 11 条"));
+        // 第 11 条在第 2 页,首页只出现前 10 条的绝对索引按钮
+        assertTrue(page1.keyboard().stream().anyMatch(r -> r.stream().anyMatch(b -> b.callbackData().equals("pick:9"))));
+        assertFalse(page1.keyboard().stream().anyMatch(r -> r.stream().anyMatch(b -> b.callbackData().equals("pick:10"))));
 
         TelegramRenderer.Rendered page2 = TelegramRenderer.searchResults("关键词", items, 1);
-        assertTrue(page2.keyboard().stream().anyMatch(r -> r.stream().anyMatch(b -> b.callbackData().equals("pick:8"))));
+        assertTrue(page2.keyboard().stream().anyMatch(r -> r.stream().anyMatch(b -> b.callbackData().equals("pick:10"))));
+    }
+
+    @Test
+    void searchingPlaceholderEscapesKeywordWithoutKeyboard() {
+        TelegramRenderer.Rendered rendered = TelegramRenderer.searching("庆余年 & <b>");
+        assertTrue(rendered.text().contains("正在搜索「庆余年 &amp; &lt;b&gt;」"));
+        assertNull(rendered.keyboard()); // 过渡消息立刻被编辑成结果,不带键盘
     }
 
     @Test

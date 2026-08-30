@@ -55,6 +55,19 @@ public class TelegramBotClient {
         var body = objectMapper.createObjectNode();
         body.put("offset", offset);
         body.put("timeout", POLL_TIMEOUT_SECONDS);
+        return fetchUpdates(token, body);
+    }
+
+    /** 队尾快照:offset=-1 只回最后一条待处理 update、timeout=0 立即返回(不挂起等新命令),
+     *  供会话启动时把 offset 直推队尾 —— 确认语义一次性丢弃全部离线积压,快照之后到达的照常下发。 */
+    public List<BotUpdate> tailUpdates(String token) {
+        var body = objectMapper.createObjectNode();
+        body.put("offset", -1);
+        body.put("timeout", 0);
+        return fetchUpdates(token, body);
+    }
+
+    private List<BotUpdate> fetchUpdates(String token, com.fasterxml.jackson.databind.node.ObjectNode body) {
         body.putArray("allowed_updates").add("message").add("callback_query");
         String response = exchange(token, "getUpdates", body);
         try {
@@ -141,7 +154,7 @@ public class TelegramBotClient {
         var commands = body.putArray("commands");
         commands.addObject().put("command", "start").put("description", "主菜单");
         commands.addObject().put("command", "subs").put("description", "我的追剧订阅");
-        commands.addObject().put("command", "search").put("description", "搜索并加入追剧");
+        commands.addObject().put("command", "search").put("description", "搜索追剧,可带剧名:/search 庆余年");
         commands.addObject().put("command", "piandan").put("description", "片单追更(榜单挑剧)");
         commands.addObject().put("command", "calendar").put("description", "追更日历(今晚更新什么)");
         try {

@@ -141,6 +141,30 @@ class TelegramUpdateRouterTest {
     }
 
     @Test
+    void searchCommandWithArgsRunsSearchDirectly() {
+        when(bot.sendSearching("TOKEN", "100", "庆余年")).thenReturn(66L);
+        router.dispatch("TOKEN", message(100L, "/search 庆余年"));
+        verify(bot, never()).sendSearchPrompt(anyString(), anyString()); // 不进输入会话
+        verify(bot).runSearch("TOKEN", "100", 5, "庆余年", 66L);
+    }
+
+    @Test
+    void searchCommandArgsSurviveBotMentionAndExtraSpaces() {
+        when(bot.sendSearching(anyString(), anyString(), anyString())).thenReturn(66L);
+        router.dispatch("TOKEN", message(100L, "/search@my_bot   庆余年 "));
+        verify(bot).runSearch("TOKEN", "100", 5, "庆余年", 66L);
+    }
+
+    @Test
+    void searchCommandWithArgsRateLimitedWithinCooldown() {
+        when(bot.sendSearching(anyString(), anyString(), anyString())).thenReturn(66L);
+        router.dispatch("TOKEN", message(100L, "/search 庆余年"));
+        router.dispatch("TOKEN", message(100L, "/search 斗破苍穹"));
+        verify(bot, org.mockito.Mockito.times(1)).runSearch(anyString(), anyString(), anyInt(), anyString(), anyLong());
+        verify(client).sendMessage(eq("TOKEN"), eq("100"), contains("操作太快"), any());
+    }
+
+    @Test
     void callbackFromUnboundChatAnsweredWithoutBusiness() {
         router.dispatch("TOKEN", callback(999L, 10, "subs:0"));
         verify(client).answerCallbackQuery("TOKEN", "q1", "未绑定账号");
