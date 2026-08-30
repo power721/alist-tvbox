@@ -1623,7 +1623,36 @@ public class MediaSubscriptionService {
     /** TVBox 操作线路「订阅信息」:当前状态/进度文本,零网络纯读库。 */
     public String subscriptionStatusText(int uid, int subId) {
         MediaSubscription subscription = getOwned(uid, subId);
-        return displayName(subscription) + " · " + buildRemarks(subscription);
+        String text = displayName(subscription) + " · " + buildRemarks(subscription);
+        String missing = missingEpisodesSummary(subscription);
+        if (missing != null) {
+            text += "\n" + missing;
+        }
+        return text;
+    }
+
+    /** 订阅信息缺集行(纯读库,不刷元数据):官方已播快照 vs 本地可播集(LISTED/VERIFIED)。
+     *  官方快照缺失返回 null(不臆测);全部同步返回「已全部同步」;缺集列号,超 8 个收敛为区间。 */
+    private String missingEpisodesSummary(MediaSubscription subscription) {
+        int official = subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes();
+        if (official <= 0) {
+            return null;
+        }
+        Set<Integer> local = new java.util.HashSet<>(episodeSourceRepository
+                .findNumbersBySubscriptionAndStatesIn(subscription.getId(), LIVE_EPISODE_STATES));
+        List<Integer> missing = new ArrayList<>();
+        for (int i = 1; i <= Math.min(official, MAX_EPISODE_ROWS); i++) {
+            if (!local.contains(i)) {
+                missing.add(i);
+            }
+        }
+        if (missing.isEmpty()) {
+            return "官方已播至第 " + official + " 集,本地已全部同步";
+        }
+        String summary = missing.size() <= 8
+                ? missing.stream().map(String::valueOf).reduce((a, b) -> a + "," + b).orElse("")
+                : missing.get(0) + "-" + missing.get(missing.size() - 1) + " 等 " + missing.size() + " 集";
+        return "官方已播至第 " + official + " 集,缺第 " + summary + " 集";
     }
 
     /** TVBox 操作线路「检查更新」:同步轻量检查(刷新元数据→官方已播 vs 本地已有),返回结论文本。 */

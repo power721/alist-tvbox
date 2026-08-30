@@ -80,6 +80,39 @@ class MediaSubscriptionRemarksTest {
         assertEquals(1, service.contentList(1, "recent", null).getList().size());
     }
 
+    // ---------- 操作线路「订阅信息」缺集行 ----------
+
+    @Test
+    void statusTextIncludesMissingEpisodes() {
+        subscription.setOfficialEpisodes(20);
+        Mockito.when(subscriptionRepository.findById(7)).thenReturn(Optional.of(subscription));
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(java.util.stream.IntStream.rangeClosed(1, 19).boxed().toList());
+
+        String text = service.subscriptionStatusText(1, 7);
+        assertTrue(text.contains("官方已播至第 20 集,缺第 20 集"), text);
+    }
+
+    @Test
+    void statusTextAllSyncedWhenNoGap() {
+        subscription.setOfficialEpisodes(5);
+        Mockito.when(subscriptionRepository.findById(7)).thenReturn(Optional.of(subscription));
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(java.util.stream.IntStream.rangeClosed(1, 5).boxed().toList());
+
+        String text = service.subscriptionStatusText(1, 7);
+        assertTrue(text.contains("本地已全部同步"), text);
+    }
+
+    @Test
+    void statusTextSkipsMissingLineWithoutOfficialSnapshot() {
+        subscription.setOfficialEpisodes(null);
+        Mockito.when(subscriptionRepository.findById(7)).thenReturn(Optional.of(subscription));
+
+        String text = service.subscriptionStatusText(1, 7);
+        assertFalse(text.contains("官方已播"), "官方快照缺失不臆测: " + text);
+    }
+
     @Test
     void badgeCountsNewEpisodesAiredAfterCaughtUp() {
         // 用户故事:追平(看到第18集=当时最新)→ 第19集新播出 → 🆕1
