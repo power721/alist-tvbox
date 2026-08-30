@@ -86,14 +86,19 @@ public class TelegramUpdateRouter {
             return;
         }
         if (text.startsWith("/")) {
-            String command = text.split("[@\\s]", 2)[0];
+            // 命令与参数分开取:@bot 名只属于命令token,不能混进参数(/search@bot 庆余年)
+            String[] parts = text.split("\\s+", 2);
+            String command = parts[0].split("@", 2)[0];
+            String args = parts.length > 1 ? parts[1].trim() : "";
             switch (command) {
                 case "/start", "/help" -> {
                     sessions.invalidate(chatId);
                     bot.sendMenu(token, String.valueOf(chatId));
                 }
                 case "/subs", "/subscriptions" -> bot.sendSubscriptions(token, String.valueOf(chatId), uid);
-                case "/search" -> enterSearch(token, chatId);
+                case "/piandan", "/pd" -> bot.sendPianDan(token, String.valueOf(chatId));
+                case "/calendar", "/cal" -> bot.sendCalendar(token, String.valueOf(chatId), uid);
+                case "/search" -> searchCommand(token, chatId, uid, args);
                 default -> bot.sendMenu(token, String.valueOf(chatId));
             }
             return;
@@ -161,6 +166,21 @@ public class TelegramUpdateRouter {
     private void enterSearch(String token, long chatId) {
         long messageId = bot.sendSearchPrompt(token, String.valueOf(chatId));
         sessions.put(chatId, new SearchSession(messageId));
+    }
+
+    /** /search 带参:占位消息即编辑锚点,立刻执行搜索;无参进入输入会话等下一条文本。 */
+    private void searchCommand(String token, long chatId, int uid, String args) {
+        if (args.isEmpty()) {
+            enterSearch(token, chatId);
+            return;
+        }
+        if (searchCooldown.getIfPresent(chatId) != null) {
+            client.sendMessage(token, String.valueOf(chatId), "⏳ 操作太快了,请稍候几秒再试。", null);
+            return;
+        }
+        searchCooldown.put(chatId, Boolean.TRUE);
+        long messageId = bot.sendSearching(token, String.valueOf(chatId), args);
+        bot.runSearch(token, String.valueOf(chatId), uid, args, messageId);
     }
 
     /** 回调入口:就地编辑既有消息为提示,该消息即锚点。 */

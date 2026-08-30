@@ -55,6 +55,19 @@ public class TelegramBotClient {
         var body = objectMapper.createObjectNode();
         body.put("offset", offset);
         body.put("timeout", POLL_TIMEOUT_SECONDS);
+        return fetchUpdates(token, body);
+    }
+
+    /** 队尾快照:offset=-1 只回最后一条待处理 update、timeout=0 立即返回(不挂起等新命令),
+     *  供会话启动时把 offset 直推队尾 —— 确认语义一次性丢弃全部离线积压,快照之后到达的照常下发。 */
+    public List<BotUpdate> tailUpdates(String token) {
+        var body = objectMapper.createObjectNode();
+        body.put("offset", -1);
+        body.put("timeout", 0);
+        return fetchUpdates(token, body);
+    }
+
+    private List<BotUpdate> fetchUpdates(String token, com.fasterxml.jackson.databind.node.ObjectNode body) {
         body.putArray("allowed_updates").add("message").add("callback_query");
         String response = exchange(token, "getUpdates", body);
         try {
@@ -70,10 +83,17 @@ public class TelegramBotClient {
 
     /** 发送新消息(HTML),返回 message_id 供后续编辑锚定。 */
     public long sendMessage(String token, String chatId, String text, List<List<TelegramButton>> keyboard) {
+        return sendMessage(token, chatId, text, keyboard, null);
+    }
+
+    /** poster 非空时挂 link preview 出海报(详情页),否则显式关预览防正文里的链接被抢镜。 */
+    public long sendMessage(String token, String chatId, String text, List<List<TelegramButton>> keyboard,
+                            String poster) {
         var body = objectMapper.createObjectNode();
         body.put("chat_id", chatId);
         body.put("text", text);
         body.put("parse_mode", "HTML");
+        linkPreview(body, poster);
         keyboard(keyboard, body);
         String response = exchange(token, "sendMessage", body);
         try {
@@ -86,13 +106,35 @@ public class TelegramBotClient {
     /** 编辑已有消息(翻页/进出详情复用同一条消息,防刷屏)。"message is not modified" 视为成功。 */
     public void editMessageText(String token, String chatId, long messageId, String text,
                                 List<List<TelegramButton>> keyboard) {
+        editMessageText(token, chatId, messageId, text, keyboard, null);
+    }
+
+    public void editMessageText(String token, String chatId, long messageId, String text,
+                                List<List<TelegramButton>> keyboard, String poster) {
         var body = objectMapper.createObjectNode();
         body.put("chat_id", chatId);
         body.put("message_id", messageId);
         body.put("text", text);
         body.put("parse_mode", "HTML");
+        linkPreview(body, poster);
         keyboard(keyboard, body);
         exchange(token, "editMessageText", body);
+    }
+
+    /**
+     * 海报走 link preview 而非 sendPhoto:文本消息不能被编辑成媒体消息,而本 Bot 全程单锚点编辑。
+     * {@code link_preview_options.url} 让图不必出现在正文里(Bot API 7.0+);抓不到图 TG 只是不渲染,不报错。
+     * 无海报的页面显式 {@code is_disabled},免得剧名/简介里的链接被 TG 抓来当预览。
+     */
+    private void linkPreview(com.fasterxml.jackson.databind.node.ObjectNode body, String poster) {
+        var options = body.putObject("link_preview_options");
+        if (poster == null || !poster.startsWith("http")) {
+            options.put("is_disabled", true);
+            return;
+        }
+        options.put("url", poster);
+        options.put("prefer_large_media", true);
+        options.put("show_above_text", true);
     }
 
     /** 应答回调(TG 客户端的转圈止于此);text 为弹出提示,可空。 */
@@ -112,7 +154,9 @@ public class TelegramBotClient {
         var commands = body.putArray("commands");
         commands.addObject().put("command", "start").put("description", "主菜单");
         commands.addObject().put("command", "subs").put("description", "我的追剧订阅");
-        commands.addObject().put("command", "search").put("description", "搜索并加入追剧");
+        commands.addObject().put("command", "search").put("description", "搜索追剧,可带剧名:/search 庆余年");
+        commands.addObject().put("command", "piandan").put("description", "片单追更(榜单挑剧)");
+        commands.addObject().put("command", "calendar").put("description", "追更日历(今晚更新什么)");
         try {
             exchange(token, "setMyCommands", body);
         } catch (Exception e) {

@@ -51,8 +51,12 @@ class PlayControllerTest {
 
     @BeforeEach
     void setUp() {
+        // 片单订阅编排已下沉为 service:包真实例透传三个既有 mock,既有打桩/断言原样生效
+        cn.har01d.alist_tvbox.service.PianDanSubscriptionService pianDanSubscriptionService =
+                new cn.har01d.alist_tvbox.service.PianDanSubscriptionService(
+                        mediaSubscriptionService, checkService, pianDanService);
         PlayController controller = new PlayController(tvBoxService, biliBiliService, subscriptionService, proxyService,
-                mediaSubscriptionService, checkService, pianDanService, accountAccessGuard);
+                mediaSubscriptionService, pianDanSubscriptionService, accountAccessGuard);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new RestErrorHandler())
                 .build();
