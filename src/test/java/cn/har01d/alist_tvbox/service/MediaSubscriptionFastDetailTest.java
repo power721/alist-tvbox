@@ -138,8 +138,9 @@ class MediaSubscriptionFastDetailTest {
         // 盘线路:条目为 `文件名(大小)$1@pid` 物理地址,同盘只装该盘的行
         assertEquals("第01集.mkv(1.46 GB)$1@101#第02集.mkv(1.46 GB)$1@102", groups[1]);
         assertEquals("EP02.mp4(800 MB)$1@103#EP03.mp4(800 MB)$1@104", groups[2]);
-        // 操作线路:首条纯占位(防内核自动触发),「检查更新」居次,「巡检」(异步完整巡检)居末
-        assertEquals("订阅信息$msubstat-7#检查更新$msubcheck-7#巡检$msubinspect-7", groups[3]);
+        // 操作线路:首条纯占位(防内核自动触发),「检查更新」次之,「立即巡检」(异步完整巡检)与
+        // 「取消追剧」(播放器端弹窗确认后删除)居后
+        assertEquals("订阅信息$msubstat-7#检查更新$msubcheck-7#立即巡检$msubinspect-7#取消追剧$msubunsub-7", groups[3]);
         assertFalse(detail.getVod_play_url().contains("msubep-7-4"));
         assertFalse(detail.getVod_play_url().contains("第05集"));
         assertEquals(1, result.getTotal());

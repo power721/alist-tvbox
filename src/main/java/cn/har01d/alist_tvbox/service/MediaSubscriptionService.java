@@ -66,10 +66,11 @@ public class MediaSubscriptionService {
     /** 片单条目「取消追剧」伪播放 id 前缀:msubdel-{vodId},取消与该条目同名的全部订阅(含多季)。 */
     public static final String UNSUBSCRIBE_PLAY_PREFIX = "msubdel-";
     /** 订阅操作线路伪播放 id 前缀:msubstat-{subId}(订阅信息)/ msubcheck-{subId}(轻量检查更新)/
-     *  msubinspect-{subId}(完整巡检,异步),均 msg 回执。 */
+     *  msubinspect-{subId}(完整巡检,异步)/ msubunsub-{subId}(取消追剧),均 msg 回执。 */
     public static final String STAT_PLAY_PREFIX = "msubstat-";
     public static final String CHECK_PLAY_PREFIX = "msubcheck-";
     public static final String INSPECT_PLAY_PREFIX = "msubinspect-";
+    public static final String UNSUBSCRIBE_SUB_PLAY_PREFIX = "msubunsub-";
     /** 片单条目「媒体信息」伪播放 id 前缀:msubinfo-{vodId},msg 通道返回条目元数据,无任何副作用。
      *  排在选集第一位:部分播放器内核进详情会自动触发第一集播放,第一条目不能是订阅动作。 */
     public static final String INFO_PLAY_PREFIX = "msubinfo-";
@@ -1624,12 +1625,14 @@ public class MediaSubscriptionService {
 
     /** 详情末尾追加「操作」线路:首条「订阅信息」纯占位零副作用 —— 部分内核切线路会自动触发第 1 条,
      * 动作必须让位(与片单首条「媒体信息」同款防御);「检查更新」居次,点按同步轻量检查后 msg 回执;
-     * 「巡检」居末,点按异步触发完整巡检(搜索/挂载/缺集补全,分钟级),msg 只回执已开始。 */
+     * 「立即巡检」居三,点按异步触发完整巡检(搜索/挂载/缺集补全,分钟级),msg 只回执已开始;
+     * 「取消追剧」居末,删除订阅与全部挂载记录 —— 播放器端先弹窗确认,确认后才发请求。 */
     private static void appendActionLine(String[] lines, int subscriptionId) {
         lines[0] = lines[0] + "$$$操作";
         lines[1] = lines[1] + "$$$订阅信息$msubstat-" + subscriptionId
                 + "#检查更新$msubcheck-" + subscriptionId
-                + "#立即巡检$msubinspect-" + subscriptionId;
+                + "#立即巡检$msubinspect-" + subscriptionId
+                + "#取消追剧$msubunsub-" + subscriptionId;
     }
 
     /** TVBox 操作线路「订阅信息」:当前状态/进度文本,零网络纯读库。 */
@@ -1673,10 +1676,18 @@ public class MediaSubscriptionService {
         return checkService.checkUpdateNow(uid, subId);
     }
 
-    /** TVBox 操作线路「巡检」:异步触发完整巡检(搜索/挂载/缺集补全,分钟级),回执只报已开始。 */
+    /** TVBox 操作线路「立即巡检」:异步触发完整巡检(搜索/挂载/缺集补全,分钟级),回执只报已开始。 */
     public void inspectAsync(int uid, int subId) {
         getOwned(uid, subId);
         checkService.checkAsync(uid, subId);
+    }
+
+    /** TVBox 操作线路「取消追剧」:删除订阅及全部挂载(与网页删除同链路),返回回执文本。 */
+    public String unsubscribeText(int uid, int subId) {
+        MediaSubscription subscription = getOwned(uid, subId);
+        String name = displayName(subscription);
+        delete(uid, subId);
+        return "已取消追剧:" + name;
     }
 
     /** TVBox 分集标题美化(Setting {@link #SETTING_EPISODE_TITLES},默认关):`NN. 分集标题(大小)` 替换文件名。
