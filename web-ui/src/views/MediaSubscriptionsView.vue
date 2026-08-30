@@ -285,7 +285,15 @@
 
     <el-drawer v-model="resourcesVisible" :title="'候选资源 - ' + (current?.name || '')" size="62%">
       <el-table :data="resources" border v-loading="resourcesLoading">
-        <el-table-column prop="title" label="资源" min-width="240" show-overflow-tooltip/>
+        <el-table-column prop="title" label="资源" min-width="240" show-overflow-tooltip>
+          <template #default="scope">
+            <!-- 名称即分享链接入口:TG/站点入池的 link 均为可直达的分享地址 -->
+            <a v-if="scope.row.link?.startsWith('http')" :href="scope.row.link" target="_blank" rel="noopener"
+               class="resource-link">{{ scope.row.title || scope.row.link }}</a>
+            <span v-else>{{ scope.row.title || scope.row.link }}</span>
+            <span v-if="scope.row.password" class="resource-passcode">提取码 {{ scope.row.password }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="driveName" label="盘" width="90"/>
         <el-table-column prop="score" label="评分" width="70" sortable/>
         <el-table-column label="状态" width="90">
@@ -829,6 +837,8 @@ interface Filter {
 interface ResourceDto {
   id: number
   link: string
+  /** 分享提取码(有提取码的网盘分享打开时需要) */
+  password: string | null
   type: number | null
   driveName: string | null
   title: string | null
@@ -2401,6 +2411,21 @@ const formatClock = (time: number) => {
 
 .sub-text.danger {
   color: var(--el-color-danger);
+}
+
+.resource-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+.resource-link:hover {
+  text-decoration: underline;
+}
+
+.resource-passcode {
+  margin-left: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 .meta-search {

@@ -460,6 +460,7 @@ public class MediaSubscriptionService {
             MediaSubscriptionResourceDto dto = new MediaSubscriptionResourceDto();
             dto.setId(r.getId());
             dto.setLink(r.getLink());
+            dto.setPassword(r.getPassword());
             dto.setType(r.getType());
             dto.setDriveName(r.getType() == null ? null : DriveId.toDrive(r.getType()));
             dto.setSource(r.getSource());

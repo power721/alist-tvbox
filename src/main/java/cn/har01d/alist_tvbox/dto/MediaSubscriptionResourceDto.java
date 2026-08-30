@@ -7,6 +7,8 @@ import lombok.Data;
 public class MediaSubscriptionResourceDto {
     private Integer id;
     private String link;
+    /** 分享提取码(网盘分享页需要时随名称一并展示) */
+    private String password;
     private Integer type;
     private String driveName;
     private String source;
