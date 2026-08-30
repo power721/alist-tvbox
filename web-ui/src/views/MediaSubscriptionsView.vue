@@ -81,7 +81,7 @@
                 </el-image>
                 <div>
                   <div>
-                    <a class="name-link" @click="showDetail(scope.row)">{{ scope.row.name }}</a>
+                    <a class="name-link" @click="showDetail(scope.row)">{{ displayName(scope.row) }}</a>
                   </div>
                   <div class="sub-text">
                     {{ scope.row.activeResourceTitle || scope.row.keyword }}
@@ -1874,6 +1874,12 @@ const saveNotify = () => {
     notifySaving.value = false
   })
 }
+
+// 同名不同季的订阅(如末日地堡 S3/S4)在列表剧名后补季号区分,只影响展示;
+// 名称本身已带季标记(如"龙之家族 第三季")则不再重复追加
+const NAME_SEASON_MARK = /(第\s*[0-9一二三四五六七八九十]{1,3}\s*季|season\s*\d{1,2}|[Ss]\d{1,2})/i
+const displayName = (row: any) =>
+  row?.season > 1 && !NAME_SEASON_MARK.test(row.name) ? `${row.name} 第${row.season}季` : row?.name
 
 const statusText = (status: string) => {
   switch (status) {
