@@ -703,7 +703,8 @@ class PianDanServiceTest {
         String body = "{\"name\":\"外滩探秘\",\"overview\":\"简介\",\"first_air_date\":\"2024-01-01\","
                 + "\"vote_average\":7.5,\"genres\":[{\"name\":\"纪录\"}],"
                 + "\"credits\":{\"cast\":[{\"name\":\"甲\"},{\"name\":\"乙\"}]},"
-                + "\"seasons\":[{\"season_number\":0},{\"season_number\":1}]}";
+                + "\"seasons\":[{\"season_number\":0},{\"season_number\":1,\"air_date\":\"2024-01-01\",\"episode_count\":8},"
+                + "{\"season_number\":2,\"air_date\":null,\"episode_count\":0}]}"; // S2=已续订未开播占位季
         server.expect(once(), request -> assertThat(request.getURI().getPath()).isEqualTo("/3/tv/100757"))
                 .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
@@ -716,6 +717,6 @@ class PianDanServiceTest {
         assertThat(second.getType_name()).isEqualTo("纪录"); // 类型归 type_name,不再冒充演员
         assertThat(second.getVod_actor()).isEqualTo("甲 / 乙");
         assertThat(first).isSameAs(second);
-        assertThat((List<?>) second.getExt()).singleElement().isEqualTo(1); // season 0(特典)被滤掉
+        assertThat((List<?>) second.getExt()).singleElement().isEqualTo(1); // season 0(特典)与未开播占位季被滤掉
     }
 }

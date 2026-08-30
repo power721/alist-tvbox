@@ -434,7 +434,9 @@ public class PianDanService {
                 List<Integer> seasonNumbers = new ArrayList<>();
                 for (JsonNode season : item.path("seasons")) {
                     int number = season.path("season_number").asInt(-1);
-                    if (number >= 1) {
+                    // 已续订未开播的占位季(air_date 空、episode_count=0,如末日地堡 S4)不展开:追了必挂错季资源
+                    if (number >= 1 && season.path("episode_count").asInt(0) > 0
+                            && StringUtils.isNotBlank(season.path("air_date").asText(""))) {
                         seasonNumbers.add(number);
                     }
                 }
