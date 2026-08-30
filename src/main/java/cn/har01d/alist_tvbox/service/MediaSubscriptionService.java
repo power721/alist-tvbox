@@ -508,7 +508,9 @@ public class MediaSubscriptionService {
             detail.setVod_id(VOD_ID_PREFIX + subscription.getId());
             detail.setVod_name(displayName(subscription));
             detail.setVod_pic(absoluteCover(coverOf(subscription)));
-            detail.setVod_remarks(buildRemarks(subscription) + compactRatingSuffix(subscription));
+            String rating = compactRatingSuffix(subscription);
+            detail.setVod_remarks(buildRemarks(subscription)
+                    + (rating.isEmpty() ? "" : " · " + rating));
             list.add(detail);
         }
         result.setList(list);
@@ -779,7 +781,7 @@ public class MediaSubscriptionService {
         if (subscription.getDoubanId() != null) {
             detail.setDbid(subscription.getDoubanId());
         }
-        String remarks = buildRemarks(subscription);
+        String remarks = "";
         MetadataDetails meta = null;
         Movie douban = subscription.getDoubanId() == null ? null
                 : movieRepository.findById(subscription.getDoubanId()).orElse(null);
@@ -849,7 +851,7 @@ public class MediaSubscriptionService {
             }
         }
         remarks += compactRatingSuffix(subscription);
-        // 全量多源评分行置顶正文(remarks 只放紧凑单评分,部分播放器详情 remarks 会截断)
+        // 详情 remarks 只放评分(集数进度列表页已有,详情页正文顶部还有全量多源评分行)
         if (meta != null && meta.getRatings() != null && !meta.getRatings().isEmpty()) {
             StringBuilder line = new StringBuilder("评分:");
             for (String source : List.of("douban", "tmdb", "bangumi")) {
@@ -884,7 +886,7 @@ public class MediaSubscriptionService {
         }
     }
 
-    /** 列表/详情 remarks 共用的紧凑单评分后缀(卡片一行即截,只放一个分):
+    /** 紧凑单评分(裸文本,无分隔符;列表拼在进度后,详情单独作 remarks):
      * 豆瓣(快照 Map → 本地豆瓣库)优先,回落 TMDB → Bangumi → 旧快照单值 rating。 */
     private String compactRatingSuffix(MediaSubscription subscription) {
         MetadataDetails meta = loadSubscriptionSnapshot(subscription);
@@ -895,18 +897,18 @@ public class MediaSubscriptionService {
             doubanScore = douban == null ? null : douban.getDbScore();
         }
         if (StringUtils.isNotBlank(doubanScore)) {
-            return " · 豆瓣" + doubanScore;
+            return "豆瓣" + doubanScore;
         }
         if (ratings != null) {
             for (String source : List.of("tmdb", "bangumi")) {
                 String score = ratings.get(source);
                 if (StringUtils.isNotBlank(score)) {
-                    return " · " + ratingSourceLabel(source) + score;
+                    return ratingSourceLabel(source) + score;
                 }
             }
         }
         if (meta != null && StringUtils.isNotBlank(meta.getRating())) {
-            return " · " + ratingSourceLabel(subscription.getMetaProvider()) + meta.getRating();
+            return ratingSourceLabel(subscription.getMetaProvider()) + meta.getRating();
         }
         return "";
     }
