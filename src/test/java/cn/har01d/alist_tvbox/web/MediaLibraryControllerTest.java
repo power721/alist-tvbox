@@ -67,7 +67,7 @@ class MediaLibraryControllerTest {
                 .andExpect(jsonPath("$.class[1].type_id").value("active"))
                 .andExpect(jsonPath("$.class[2].type_id").value("ended"))
                 .andExpect(jsonPath("$.class[3].type_id").value("all"))
-                .andExpect(jsonPath("$.class[3].type_name").value("全部"));
+                .andExpect(jsonPath("$.class[3].type_name").value("全部订阅"));
     }
 
     @Test
