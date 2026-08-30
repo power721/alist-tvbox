@@ -203,4 +203,32 @@ class FileNameComparatorTest {
 
     }
 
+    @Test
+    void sort13() {
+        List<String> list = new ArrayList<>(List.of("20260708.特别加更第2期.mp4", "2026.07.02-特别加更第1期.mp4", "2026.07.19-第4期下.mp4", "2026.07.02-地球团集结前.mp4", "2026.07.17-第4期超前彩蛋.mp4"));
+        list.sort(Comparator.comparing(FileNameInfo::new));
+        List<String> expected = List.of("2026.07.02-地球团集结前.mp4", "2026.07.02-特别加更第1期.mp4", "20260708.特别加更第2期.mp4", "2026.07.17-第4期超前彩蛋.mp4", "2026.07.19-第4期下.mp4");
+        Assertions.assertEquals(expected, list);
+        System.out.println(list);
+    }
+
+    @Test
+    void sort14() {
+        List<String> list = new ArrayList<>(List.of("2026年7月2日-第1期.mp4", "2026-07-02-花絮.mp4", "2026/07/03 第2期.mp4", "2026_07_02_加更.mp4", "2026年07月05日 第3期.mp4"));
+        list.sort(Comparator.comparing(FileNameInfo::new));
+        List<String> expected = List.of("2026_07_02_加更.mp4", "2026-07-02-花絮.mp4", "2026年7月2日-第1期.mp4", "2026/07/03 第2期.mp4", "2026年07月05日 第3期.mp4");
+        Assertions.assertEquals(expected, list);
+        System.out.println(list);
+    }
+
+    @Test
+    void sort15() {
+        // out-of-range month/day and resolution-like digit runs must not be treated as dates
+        Assertions.assertNull(new FileNameInfo("2026.99.99.mp4").getDate());
+        Assertions.assertNull(new FileNameInfo("20260230-第1期.mp4").getDate());
+        Assertions.assertNull(new FileNameInfo("2160p-第20261301期.mp4").getDate());
+        Assertions.assertEquals(20260708L, new FileNameInfo("20260708.特别加更第2期.mp4").getDate());
+        Assertions.assertEquals(20260702L, new FileNameInfo("2026.7.2-第1期.mp4").getDate());
+    }
+
 }
