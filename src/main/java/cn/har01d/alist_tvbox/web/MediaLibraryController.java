@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import com.qq.tars.common.util.JSON;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -167,7 +168,7 @@ public class MediaLibraryController {
         if (subscribed) {
             detail.setVod_remarks("已追 " + StringUtils.defaultString(detail.getVod_remarks()));
         }
-        detail.setVod_play_from("追剧");
+        detail.setVod_play_from("片单");
         // 爬虫端拼 GET 参数不编码,标题里的空格/&/# 会截断请求 —— vodId 先按 form 编码;
         // OkHttp/服务端各解一次百分号序列后,PlayController 收到的即是原始 vodId。
         // play id 载荷 {vodId}|{剧名}|{季?}:剧名让订阅/取消零网络,季号让多季剧精确到「追剧·第N季」。
