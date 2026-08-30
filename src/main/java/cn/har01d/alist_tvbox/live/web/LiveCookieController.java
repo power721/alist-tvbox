@@ -25,7 +25,7 @@ public class LiveCookieController {
     private static final Map<String, String[]> PLATFORM_META = Map.of(
             "douyin", new String[]{"抖音", "风控自愈:浏览器 F12 复制 ttwid 等整串 cookie"},
             "bili", new String[]{"B站", "登录态可提高接口配额,弹幕以登录身份进房"},
-            "soop", new String[]{"SOOP", "登录后可观看受限(成人/会员)直播间"});
+            "soop", new String[]{"SOOP", "登录后可观看受限直播间"});
 
     private final LivePlatformCookieService cookieService;
 

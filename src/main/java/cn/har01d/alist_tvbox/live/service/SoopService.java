@@ -48,7 +48,7 @@ public class SoopService implements LivePlatform {
     private final LiveProxyService liveProxyService;
     private final SettingRepository settingRepository;
 
-    /** web 管理端配置的用户 cookie 存储键:部分房间(成人/会员)必须登录态才能取流。 */
+    /** web 管理端配置的用户 cookie 存储键:部分房间必须登录态才能取流。 */
     public static final String COOKIE_SETTING = "soop_cookie";
 
     public SoopService(RestTemplateBuilder builder, ObjectMapper objectMapper, LiveProxyService liveProxyService,
