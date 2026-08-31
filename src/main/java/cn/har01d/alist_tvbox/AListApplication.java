@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.config.NativeCaffeineFactoryFix;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
 public class AListApplication {
 
     public static void main(String[] args) {
+        NativeCaffeineFactoryFix.apply();
         allowStaticRsaCipherSuites();
         SpringApplication.run(AListApplication.class, args);
     }
