@@ -71,6 +71,10 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 @Service
 public class DoubanService {
     private static final int BATCH_SIZE = 1000;
+    /** diff 文件失败重试上限(整个文件重放,DELETE+INSERT 幂等)。 */
+    private static final int MAX_DIFF_ATTEMPTS = 3;
+    private static final String DIFF_SUCCESS = "SUCCESS";
+    private static final String DIFF_FAILED = "FAILED";
     private static final Pattern NUMBER = Pattern.compile("Season (\\d{1,2})");
     private static final Pattern NUMBER2 = Pattern.compile("SE(\\d{1,2})");
     private static final Pattern NUMBER3 = Pattern.compile("^S(\\d{1,2})$");
@@ -168,6 +172,11 @@ public class DoubanService {
 
         fixMetaId();
         runCmd();
+        // 开机自检:补放 movie_diff 无记录(历史缺口/新文件)或 FAILED 未达重试上限的 diff 文件。
+        // 表启用前放过的文件也没有记录 → 首次开机会整体重放一遍(DELETE+INSERT 幂等),顺带修复历史缺口。
+        if (Files.exists(Utils.getDataPath("atv", "sql"))) {
+            executor.execute(this::applyPendingSqlFiles);
+        }
     }
 
     private void runCmd() {
@@ -267,7 +276,7 @@ public class DoubanService {
             Task task = fileDownloader.runTask("movie", remote);
             if (taskService.waitTaskFinish(task.getId(), 60)) {
                 log.info("movie data downloaded");
-                getSqlFiles(local).forEach(this::upgradeSqlFile);
+                applyPendingSqlFiles();
             } else {
                 log.warn("download movie data failed");
             }
@@ -278,11 +287,53 @@ public class DoubanService {
         }
     }
 
-    private Stream<Path> getSqlFiles(String version) throws IOException {
-        double local = Double.parseDouble(version);
-        return Files.list(Utils.getDataPath("atv", "sql"))
-                .filter(e -> Double.compare(getVersionNumber(e), local) > 0)
-                .sorted((a, b) -> Double.compare(getVersionNumber(a), getVersionNumber(b)));
+    /** 应用待执行的 diff 文件:movie_diff 表为「已应用」事实来源 —— 无记录(新文件或历史缺口)、
+     *  或 FAILED 且尝试不足 {@link #MAX_DIFF_ATTEMPTS} 才执行,SUCCESS 跳过。按版本升序,成功推进版本号。 */
+    private void applyPendingSqlFiles() {
+        try (Stream<Path> files = Files.list(Utils.getDataPath("atv", "sql"))) {
+            files.filter(Files::isRegularFile)
+                    .filter(e -> e.getFileName().toString().endsWith(".sql"))
+                    .filter(this::needsApply)
+                    .sorted((a, b) -> Double.compare(getVersionNumber(a), getVersionNumber(b)))
+                    .forEach(this::upgradeSqlFile);
+        } catch (Exception e) {
+            log.warn("apply pending sql files failed", e);
+        }
+    }
+
+    /** 无记录 → 执行(新文件 + 表启用前已放过的历史文件,自动补放缺口);FAILED 且尝试<上限 → 重试;SUCCESS → 跳过。 */
+    private boolean needsApply(Path file) {
+        String version = getVersion(file);
+        try {
+            Integer attempts = diffAttempts(version);
+            if (attempts == null) {
+                return true;
+            }
+            String status = jdbcTemplate.queryForObject(
+                    "SELECT status FROM movie_diff WHERE version = ?", String.class, version);
+            return !DIFF_SUCCESS.equals(status) && attempts < MAX_DIFF_ATTEMPTS;
+        } catch (Exception e) {
+            log.debug("query movie_diff for {} failed, treat as pending: {}", version, e.getMessage());
+            return true;
+        }
+    }
+
+    /** 文件当前已尝试次数;无记录返回 null。 */
+    private Integer diffAttempts(String version) {
+        List<Integer> attempts = jdbcTemplate.queryForList(
+                "SELECT attempts FROM movie_diff WHERE version = ?", Integer.class, version);
+        return attempts.isEmpty() ? null : attempts.get(0);
+    }
+
+    private void recordDiff(String version, boolean success, int statements, int failed, int attempts) {
+        try {
+            jdbcTemplate.update("DELETE FROM movie_diff WHERE version = ?", version);
+            jdbcTemplate.update("INSERT INTO movie_diff (version, status, statements, failed, attempts, updated_time) "
+                    + "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)", version,
+                    success ? DIFF_SUCCESS : DIFF_FAILED, statements, failed, attempts);
+        } catch (Exception e) {
+            log.warn("record movie_diff {} failed", version, e);
+        }
     }
 
     private double getVersionNumber(Path path) {
@@ -296,12 +347,41 @@ public class DoubanService {
     }
 
     private void upgradeSqlFile(Path file) {
+        String version = getVersion(file);
+        Integer previous = diffAttempts(version);
+        int attempts = previous == null ? 0 : previous;
+        int applied = 0;
+        int failed = 0;
+        // 失败重试:整个文件重放(DELETE+INSERT 幂等),累计尝试不超过上限
+        while (attempts < MAX_DIFF_ATTEMPTS) {
+            attempts++;
+            int[] result = executeSqlFile(file);
+            applied = result[0];
+            failed = result[1];
+            if (failed == 0) {
+                break;
+            }
+            log.warn("movie data attempt {}/{} for {} failed: {} statements failed, {} ok",
+                    attempts, MAX_DIFF_ATTEMPTS, version, failed, applied);
+        }
+        boolean success = failed == 0;
+        recordDiff(version, success, applied, failed, attempts);
+        if (success) {
+            settingRepository.save(new Setting(MOVIE_VERSION, version));
+            log.info("movie data upgraded: {} ({} statements, {} attempts)", version, applied, attempts);
+        } else {
+            log.warn("movie data {} still failed after {} attempts ({} ok, {} failed), version not stamped",
+                    version, attempts, applied, failed);
+        }
+    }
+
+    /** 执行单个 diff 文件,返回 [ok, failed];逐条失败降级记录,不中断其它语句。 */
+    private int[] executeSqlFile(Path file) {
+        int applied = 0;
+        int failed = 0;
         try {
             H2SqlConverter.Dialect dialect = H2SqlConverter.detect(environment);
             List<String> lines = Files.readAllLines(file);
-            int applied = 0;
-            int failed = 0;
-            //jdbcTemplate.execute("RUNSCRIPT FROM '" + file.toString() + "'");
             if (dialect == H2SqlConverter.Dialect.H2) {
                 for (String line : lines) {
                     try {
@@ -335,18 +415,10 @@ public class DoubanService {
                 applied += size - batchFailed;
                 failed += batchFailed;
             }
-            String version = getVersion(file);
-            if (failed > 0) {
-                // 有失败不推进版本号:下次检查重放整个文件(DELETE+INSERT 幂等),防止半应用被永久跳过
-                log.warn("movie data partially applied: {} statements failed, {} ok, version {} not stamped (will retry)",
-                        failed, applied, version);
-                return;
-            }
-            settingRepository.save(new Setting(MOVIE_VERSION, version));
-            log.info("movie data upgraded: {} ({} statements)", version, applied);
         } catch (Exception e) {
-            log.warn("upgrade SQL file failed: {}", file, e);
+            log.warn("execute sql file failed: {}", file, e);
         }
+        return new int[]{applied, failed};
     }
 
     /** 批量执行,失败降级逐条;返回失败条数。 */
