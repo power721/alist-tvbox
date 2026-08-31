@@ -209,7 +209,7 @@ public class MediaSubscriptionCheckService {
     private final AListService aListService;
     private final TelegramService telegramService;
     /** 盘检服务(站点源统一过链检):setter 注入 —— 主构造器参数已 20+,裸实例测试占位 null 满天飞,不再加位 */
-    private RemoteSearchService remoteSearchService;
+    private PanLinkCheckService panLinkCheckService;
     private final WanouSearchService wanouSearchService;
     private final PanLianSearchService panLianSearchService;
     private final GuanYingSearchService guanYingSearchService;
@@ -272,8 +272,8 @@ public class MediaSubscriptionCheckService {
     }
 
     @Autowired
-    void setRemoteSearchService(RemoteSearchService remoteSearchService) {
-        this.remoteSearchService = remoteSearchService;
+    void setPanLinkCheckService(PanLinkCheckService panLinkCheckService) {
+        this.panLinkCheckService = panLinkCheckService;
     }
     /**
      * 订阅巡检执行池:并发度可配(checkConcurrency,默认 3),到期订阅并发检查、手动触发的
@@ -5149,8 +5149,8 @@ public class MediaSubscriptionCheckService {
         if (panju != null) {
             mergeSource(siteMessages, siteLinks, joinSearch("panju", panju), "panju", keyword);
         }
-        if (!siteMessages.isEmpty() && remoteSearchService != null) {
-            siteMessages = new ArrayList<>(remoteSearchService.filterInvalidPanSouLinks(siteMessages));
+        if (!siteMessages.isEmpty() && panLinkCheckService != null) {
+            siteMessages = new ArrayList<>(panLinkCheckService.filterInvalidPanSouLinks(siteMessages));
         }
         for (Message message : siteMessages) {
             if (StringUtils.isNotBlank(message.getLink()) && links.add(message.getLink())) {

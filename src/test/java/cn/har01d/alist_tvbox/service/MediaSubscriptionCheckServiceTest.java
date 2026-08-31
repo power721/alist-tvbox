@@ -2711,7 +2711,7 @@ class MediaSubscriptionCheckServiceTest {
         Fixture fixture = new Fixture();
         fixture.subscription.setName("悬案");
         WanouSearchService wanou = Mockito.mock(WanouSearchService.class);
-        RemoteSearchService remote = Mockito.mock(RemoteSearchService.class);
+        PanLinkCheckService remote = Mockito.mock(PanLinkCheckService.class);
         AppProperties appProperties = new AppProperties();
         appProperties.setFormats(Set.of("mkv", "mp4"));
         appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of());
@@ -2724,7 +2724,7 @@ class MediaSubscriptionCheckServiceTest {
                 fixture.telegramService, wanou, null, null, null, null,
                 fixture.metadataService, Mockito.mock(AutoUpdateExecutor.class), fixture.historyRepository,
                 appProperties, new ObjectMapper(), fixture.transferService, null);
-        service.setRemoteSearchService(remote);
+        service.setPanLinkCheckService(remote);
         Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
                 .thenReturn(List.of(message("https://pan.quark.cn/s/tg1", "悬案 (2026) 4K [全8集]")));
         Mockito.when(wanou.search("悬案")).thenReturn(List.of(

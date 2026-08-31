@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
+import cn.har01d.alist_tvbox.service.PanLinkCheckService;
 import cn.har01d.alist_tvbox.service.RemoteSearchService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 
@@ -24,11 +25,14 @@ import java.util.Base64;
 public class RemoteSearchController {
     private final SubscriptionService subscriptionService;
     private final RemoteSearchService remoteSearchService;
+    private final PanLinkCheckService panLinkCheckService;
     private final ObjectMapper objectMapper;
 
-    public RemoteSearchController(SubscriptionService subscriptionService, RemoteSearchService remoteSearchService, ObjectMapper objectMapper) {
+    public RemoteSearchController(SubscriptionService subscriptionService, RemoteSearchService remoteSearchService,
+                                  PanLinkCheckService panLinkCheckService, ObjectMapper objectMapper) {
         this.subscriptionService = subscriptionService;
         this.remoteSearchService = remoteSearchService;
+        this.panLinkCheckService = panLinkCheckService;
         this.objectMapper = objectMapper;
     }
 
@@ -39,7 +43,7 @@ public class RemoteSearchController {
 
     @PostMapping("/api/pansou/check/links")
     public ObjectNode checkPanSouLinks(@RequestBody ObjectNode request) {
-        return remoteSearchService.checkPanSouLinks(request);
+        return panLinkCheckService.checkPanSouLinks(request);
     }
 
     // Plugin-facing, token-gated variant. Plugins (spider/filter) run inside the TVBox client
@@ -53,7 +57,7 @@ public class RemoteSearchController {
     @PostMapping("/check-links/{token}")
     public ObjectNode checkLinks(@PathVariable String token, @RequestBody ObjectNode request) {
         subscriptionService.checkToken(token);
-        return remoteSearchService.checkLinks(request);
+        return panLinkCheckService.checkLinks(request);
     }
 
     @GetMapping("/pansou")
