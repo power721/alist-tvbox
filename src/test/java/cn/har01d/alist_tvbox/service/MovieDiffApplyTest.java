@@ -61,6 +61,7 @@ class MovieDiffApplyTest {
     void setUp() throws Exception {
         System.setProperty("atv.data.dir", dataDir.toString());
         Files.createDirectories(dataDir.resolve("atv").resolve("sql"));
+        Files.createDirectories(dataDir.resolve("atv").resolve("json"));
         RestTemplateBuilder chained = mock(RestTemplateBuilder.class);
         when(builder.defaultHeader(anyString(), anyString())).thenReturn(chained);
         when(chained.defaultHeader(anyString(), anyString())).thenReturn(chained);
@@ -88,7 +89,7 @@ class MovieDiffApplyTest {
         writeSql("1000.1.sql", "DELETE FROM x;\nINSERT INTO x VALUES(1);\n");
         writeSql("1001.2.sql", "DELETE FROM y;\n");
 
-        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingSqlFiles");
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
         method.setAccessible(true);
         method.invoke(service);
 
@@ -111,7 +112,7 @@ class MovieDiffApplyTest {
         writeSql("1002.3.sql", "BAD STATEMENT;\n");
         org.mockito.Mockito.doThrow(new RuntimeException("syntax")).when(jdbcTemplate).execute(anyString());
 
-        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingSqlFiles");
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
         method.setAccessible(true);
         method.invoke(service);
 
@@ -131,11 +132,44 @@ class MovieDiffApplyTest {
         when(jdbcTemplate.queryForObject(anyString(), eq(String.class), anyString()))
                 .thenReturn("SUCCESS");                        // 已成功 → 跳过
 
-        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingSqlFiles");
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
         method.setAccessible(true);
         method.invoke(service);
 
         verify(jdbcTemplate, never()).execute(anyString());
         verify(settingRepository, never()).save(org.mockito.ArgumentMatchers.any(Setting.class));
+    }
+
+    @Test
+    void prefersJsonAndAppliesViaRepositories() throws Exception {
+        writeJson("1004.5.json", """
+                {"movieUpserts":[{"id":36406417,"name":"师兄太稳健","year":2026,"actors":"敖瑞鹏","dbScore":""}],
+                 "movieDeletes":[111],"metaUpserts":[{"id":9,"path":"/p","name":"n","movieId":36406417}],
+                 "metaDeletes":[8]}
+                """);
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        // 同版本无 sql,JSON 直接走 JPA repo:saveAll + deleteAllById,MOVIE 行完整落字段
+        verify(jdbcTemplate, never()).execute(anyString());
+        org.mockito.ArgumentCaptor<cn.har01d.alist_tvbox.entity.Movie> movie =
+                org.mockito.ArgumentCaptor.forClass(cn.har01d.alist_tvbox.entity.Movie.class);
+        verify(movieRepository, org.mockito.Mockito.times(1)).saveAll(
+                org.mockito.ArgumentMatchers.<java.util.List<cn.har01d.alist_tvbox.entity.Movie>>argThat(
+                        list -> list.size() == 1 && list.get(0).getId() == 36406417
+                                && "师兄太稳健".equals(list.get(0).getName()) && Integer.valueOf(2026).equals(list.get(0).getYear())));
+        verify(movieRepository).deleteAllById(List.of(111));
+        verify(metaRepository).deleteAllById(List.of(8));
+        verify(settingRepository).save(org.mockito.ArgumentMatchers.argThat(s2 ->
+                "movie_version".equals(s2.getName()) && "1004.5".equals(s2.getValue())));
+        verify(jdbcTemplate).update(eq("INSERT INTO movie_diff (version, status, statements, failed, attempts, updated_time) "
+                + "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"),
+                eq("1004.5"), eq("SUCCESS"), eq(4), eq(0), eq(1));
+    }
+
+    private void writeJson(String name, String content) throws Exception {
+        Files.writeString(dataDir.resolve("atv").resolve("json").resolve(name), content);
     }
 }

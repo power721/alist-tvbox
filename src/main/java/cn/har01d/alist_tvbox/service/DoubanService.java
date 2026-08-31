@@ -5,7 +5,9 @@ import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
 import cn.har01d.alist_tvbox.dto.MetaDto;
 import cn.har01d.alist_tvbox.dto.Versions;
+import cn.har01d.alist_tvbox.dto.MovieDiffPayload;
 import cn.har01d.alist_tvbox.entity.Alias;
+import cn.har01d.alist_tvbox.entity.TmdbRepository;
 import cn.har01d.alist_tvbox.entity.AliasRepository;
 import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
@@ -23,6 +25,7 @@ import cn.har01d.alist_tvbox.util.H2SqlConverter;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +59,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.time.Instant;
+import java.io.IOException;
+import java.util.TreeSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -95,6 +101,8 @@ public class DoubanService {
     private final SiteService siteService;
     private final TaskService taskService;
     private final FileDownloader fileDownloader;
+    private final TmdbRepository tmdbRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     private final RestTemplate restTemplate;
     private final JdbcTemplate jdbcTemplate;
@@ -115,6 +123,22 @@ public class DoubanService {
                          RestTemplateBuilder builder,
                          JdbcTemplate jdbcTemplate,
                          Environment environment) {
+        this(appProperties, metaRepository, movieRepository, aliasRepository, settingRepository,
+                siteService, taskService, fileDownloader, null, builder, jdbcTemplate, environment);
+    }
+
+    public DoubanService(AppProperties appProperties,
+                         MetaRepository metaRepository,
+                         MovieRepository movieRepository,
+                         AliasRepository aliasRepository,
+                         SettingRepository settingRepository,
+                         SiteService siteService,
+                         TaskService taskService,
+                         FileDownloader fileDownloader,
+                         TmdbRepository tmdbRepository,
+                         RestTemplateBuilder builder,
+                         JdbcTemplate jdbcTemplate,
+                         Environment environment) {
         this.appProperties = appProperties;
         this.metaRepository = metaRepository;
         this.movieRepository = movieRepository;
@@ -123,6 +147,7 @@ public class DoubanService {
         this.siteService = siteService;
         this.taskService = taskService;
         this.fileDownloader = fileDownloader;
+        this.tmdbRepository = tmdbRepository;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
@@ -175,7 +200,7 @@ public class DoubanService {
         // 开机自检:补放 movie_diff 无记录(历史缺口/新文件)或 FAILED 未达重试上限的 diff 文件。
         // 表启用前放过的文件也没有记录 → 首次开机会整体重放一遍(DELETE+INSERT 幂等),顺带修复历史缺口。
         if (Files.exists(Utils.getDataPath("atv", "sql"))) {
-            executor.execute(this::applyPendingSqlFiles);
+            executor.execute(this::applyPendingDiffFiles);
         }
     }
 
@@ -276,7 +301,7 @@ public class DoubanService {
             Task task = fileDownloader.runTask("movie", remote);
             if (taskService.waitTaskFinish(task.getId(), 60)) {
                 log.info("movie data downloaded");
-                applyPendingSqlFiles();
+                applyPendingDiffFiles();
             } else {
                 log.warn("download movie data failed");
             }
@@ -288,22 +313,43 @@ public class DoubanService {
     }
 
     /** 应用待执行的 diff 文件:movie_diff 表为「已应用」事实来源 —— 无记录(新文件或历史缺口)、
-     *  或 FAILED 且尝试不足 {@link #MAX_DIFF_ATTEMPTS} 才执行,SUCCESS 跳过。按版本升序,成功推进版本号。 */
-    private void applyPendingSqlFiles() {
-        try (Stream<Path> files = Files.list(Utils.getDataPath("atv", "sql"))) {
-            files.filter(Files::isRegularFile)
-                    .filter(e -> e.getFileName().toString().endsWith(".sql"))
-                    .filter(this::needsApply)
-                    .sorted((a, b) -> Double.compare(getVersionNumber(a), getVersionNumber(b)))
-                    .forEach(this::upgradeSqlFile);
-        } catch (Exception e) {
-            log.warn("apply pending sql files failed", e);
+     *  或 FAILED 且尝试不足 {@link #MAX_DIFF_ATTEMPTS} 才执行,SUCCESS 跳过。同一版本 json/sql 并存时
+     *  JSON 优先(方言无关、JPA 落库);按版本升序,成功推进版本号。 */
+    private void applyPendingDiffFiles() {
+        Map<Double, Path> jsonFiles = diffFiles("json", ".json");
+        Map<Double, Path> sqlFiles = diffFiles("sql", ".sql");
+        TreeSet<Double> versions = new TreeSet<>(jsonFiles.keySet());
+        versions.addAll(sqlFiles.keySet());
+        for (Double version : versions) {
+            String name = String.valueOf(version);
+            if (!needsApply(name)) {
+                continue;
+            }
+            applyDiff(name, jsonFiles.get(version), sqlFiles.get(version));
         }
     }
 
+    /** atv/{dir} 下 {version}{suffix} 文件 → 版本号映射;目录缺失返回空。 */
+    private Map<Double, Path> diffFiles(String dir, String suffix) {
+        Map<Double, Path> result = new HashMap<>();
+        try (Stream<Path> files = Files.list(Utils.getDataPath("atv", dir))) {
+            files.filter(Files::isRegularFile)
+                    .filter(e -> e.getFileName().toString().endsWith(suffix))
+                    .forEach(e -> {
+                        try {
+                            result.put(getVersionNumber(e), e);
+                        } catch (NumberFormatException ignored) {
+                            log.debug("ignore non-versioned diff file: {}", e);
+                        }
+                    });
+        } catch (Exception e) {
+            log.debug("list atv/{} failed: {}", dir, e.getMessage());
+        }
+        return result;
+    }
+
     /** 无记录 → 执行(新文件 + 表启用前已放过的历史文件,自动补放缺口);FAILED 且尝试<上限 → 重试;SUCCESS → 跳过。 */
-    private boolean needsApply(Path file) {
-        String version = getVersion(file);
+    private boolean needsApply(String version) {
         try {
             Integer attempts = diffAttempts(version);
             if (attempts == null) {
@@ -346,18 +392,23 @@ public class DoubanService {
         return name.substring(0, index);
     }
 
-    private void upgradeSqlFile(Path file) {
-        String version = getVersion(file);
+    private void applyDiff(String version, Path json, Path sql) {
         Integer previous = diffAttempts(version);
         int attempts = previous == null ? 0 : previous;
         int applied = 0;
         int failed = 0;
-        // 失败重试:整个文件重放(DELETE+INSERT 幂等),累计尝试不超过上限
+        // 失败重试:整个文件重放(upsert 幂等),累计尝试不超过上限
         while (attempts < MAX_DIFF_ATTEMPTS) {
             attempts++;
-            int[] result = executeSqlFile(file);
-            applied = result[0];
-            failed = result[1];
+            try {
+                int[] result = json != null ? applyJsonDiff(json) : executeSqlFile(sql);
+                applied = result[0];
+                failed = result[1];
+            } catch (Exception e) {
+                applied = 0;
+                failed = 1;
+                log.warn("apply diff {} (attempt {}/{}) failed", version, attempts, MAX_DIFF_ATTEMPTS, e);
+            }
             if (failed == 0) {
                 break;
             }
@@ -368,14 +419,60 @@ public class DoubanService {
         recordDiff(version, success, applied, failed, attempts);
         if (success) {
             settingRepository.save(new Setting(MOVIE_VERSION, version));
-            log.info("movie data upgraded: {} ({} statements, {} attempts)", version, applied, attempts);
+            log.info("movie data upgraded: {} ({} rows, {} attempts, {})", version, applied, attempts,
+                    json != null ? "json" : "sql");
         } else {
             log.warn("movie data {} still failed after {} attempts ({} ok, {} failed), version not stamped",
                     version, attempts, applied, failed);
         }
     }
 
-    /** 执行单个 diff 文件,返回 [ok, failed];逐条失败降级记录,不中断其它语句。 */
+    /** JSON diff(json/{version}.json)应用:MOVIE/META 行经 JPA upsert(saveAll)+ 按 id 删除,
+     *  方言无关;任何异常上抛由重试循环按整文件重放。返回 [行数, 0]。 */
+    private int[] applyJsonDiff(Path file) throws IOException {
+        MovieDiffPayload payload =
+                objectMapper.readValue(file.toFile(), cn.har01d.alist_tvbox.dto.MovieDiffPayload.class);
+        int rows = 0;
+        if (payload.movieDeletes() != null && !payload.movieDeletes().isEmpty()) {
+            movieRepository.deleteAllById(payload.movieDeletes());
+            rows += payload.movieDeletes().size();
+        }
+        if (payload.metaDeletes() != null && !payload.metaDeletes().isEmpty()) {
+            metaRepository.deleteAllById(payload.metaDeletes());
+            rows += payload.metaDeletes().size();
+        }
+        if (payload.movieUpserts() != null && !payload.movieUpserts().isEmpty()) {
+            movieRepository.saveAll(payload.movieUpserts());
+            rows += payload.movieUpserts().size();
+        }
+        if (payload.metaUpserts() != null && !payload.metaUpserts().isEmpty()) {
+            metaRepository.saveAll(payload.metaUpserts().stream().map(this::toMeta).toList());
+            rows += payload.metaUpserts().size();
+        }
+        return new int[]{rows, 0};
+    }
+
+    /** META DTO → 实体:movieId/tmdbId 换实体引用(getReferenceById 不发 SQL,关联缺失时落库报错走重试)。 */
+    private Meta toMeta(MovieDiffPayload.MetaPayload row) {
+        Meta meta = new Meta();
+        meta.setId(row.id());
+        meta.setPath(row.path());
+        meta.setName(row.name());
+        meta.setYear(row.year());
+        meta.setScore(row.score());
+        meta.setMovie(row.movieId() == null ? null : movieRepository.getReferenceById(row.movieId()));
+        meta.setType(row.type());
+        meta.setTid(row.tid());
+        meta.setTmId(row.tmId());
+        meta.setTmdb(row.tmdbId() == null || tmdbRepository == null ? null
+                : tmdbRepository.getReferenceById(row.tmdbId()));
+        meta.setSiteId(row.siteId());
+        meta.setDisabled(Boolean.TRUE.equals(row.disabled()));
+        meta.setTime(row.time() == null ? Instant.now() : Instant.ofEpochMilli(row.time()));
+        return meta;
+    }
+
+    /** 执行单个 SQL diff 文件(旧格式回落),返回 [ok, failed];逐条失败降级记录,不中断其它语句。 */
     private int[] executeSqlFile(Path file) {
         int applied = 0;
         int failed = 0;
