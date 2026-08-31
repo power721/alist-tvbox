@@ -180,12 +180,43 @@ public class DoubanService {
             }
         }
 
+        neutralizeBaseDataScript();
+
         fixMetaId();
         runCmd();
         // 开机自检:补放 movie_diff 无记录(历史缺口/新文件)或 FAILED 未达重试上限的 diff 文件。
         // 表启用前放过的文件也没有记录 → 首次开机会整体重放一遍(DELETE+INSERT 幂等),顺带修复历史缺口。
         if (Files.exists(Utils.getDataPath("atv", "sql"))) {
             executor.execute(this::applyPendingDiffFiles);
+        }
+    }
+
+    /**
+     * 中和 xiaoya 基础数据脚本:spring.sql.init 每次启动都执行 data.sql,而它是
+     * DROP+CREATE 全量还原 —— 每次重启把 MOVIE/META 打回基线,diff 行全灭
+     * (线上「diff 应用成功后行消失」「重启后元数据丢失」两个形态的共同根因)。
+     * 基线已载入(库里有数据)就把 data.sql 改写为空操作,后续重启不再破坏;
+     * 本次已被抹掉的行,由清空 movie_diff 让全部 diff 重放来恢复(它们本就是基线之上的增量)。
+     * 要重新灌基线:放回全量 data.sql 并清空 movie_diff。
+     */
+    private void neutralizeBaseDataScript() {
+        try {
+            Path dataSql = Utils.getDataPath("atv", "data.sql");
+            if (!Files.exists(dataSql) || movieRepository.count() < 10000) {
+                return;
+            }
+            String firstLine;
+            try (var reader = Files.newBufferedReader(dataSql)) {
+                firstLine = reader.readLine();
+            }
+            if (firstLine == null || !firstLine.startsWith("DROP TABLE")) {
+                return;
+            }
+            writeText("data.sql", "SELECT 1;");
+            jdbcTemplate.update("DELETE FROM movie_diff");
+            log.info("neutralized base data.sql (was a destructive full restore) and cleared movie_diff for full replay");
+        } catch (Exception e) {
+            log.warn("neutralize base data.sql failed", e);
         }
     }
 

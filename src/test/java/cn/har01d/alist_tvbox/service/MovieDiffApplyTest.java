@@ -173,4 +173,35 @@ class MovieDiffApplyTest {
     private void writeJson(String name, String content) throws Exception {
         Files.writeString(dataDir.resolve("atv").resolve("json").resolve(name), content);
     }
+
+    @Test
+    void neutralizesDestructiveBaseDataScriptAndClearsDiffLog() throws Exception {
+        Files.createDirectories(dataDir.resolve("atv"));
+        Files.writeString(dataDir.resolve("atv").resolve("data.sql"),
+                "DROP TABLE IF EXISTS META;\nDROP TABLE IF EXISTS MOVIE;\nCREATE TABLE ...");
+        when(movieRepository.count()).thenReturn(59008L);
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("neutralizeBaseDataScript");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        org.junit.jupiter.api.Assertions.assertEquals("SELECT 1;",
+                Files.readString(dataDir.resolve("atv").resolve("data.sql")));
+        verify(jdbcTemplate).update("DELETE FROM movie_diff");
+    }
+
+    @Test
+    void keepsNeutralizedBaseDataScriptUntouched() throws Exception {
+        Files.createDirectories(dataDir.resolve("atv"));
+        Files.writeString(dataDir.resolve("atv").resolve("data.sql"), "SELECT 1;");
+        when(movieRepository.count()).thenReturn(59008L);
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("neutralizeBaseDataScript");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        org.junit.jupiter.api.Assertions.assertEquals("SELECT 1;",
+                Files.readString(dataDir.resolve("atv").resolve("data.sql")));
+        verify(jdbcTemplate, never()).update("DELETE FROM movie_diff");
+    }
 }
