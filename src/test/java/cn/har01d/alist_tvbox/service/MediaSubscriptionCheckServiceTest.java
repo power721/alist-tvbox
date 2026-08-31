@@ -2740,6 +2740,83 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void fillGapsProbesDespiteFullMountSlotsAndEvictsWeakest() {
+        // 线上形态(id=64):6 个补缺挂载各有独占集顶满 maxGapMounts=6,旧逻辑槽满即 break,
+        // 连探测都不做。现在:照常探测(LISTED 行可供播),有用候选挂载时挤掉独占覆盖最小的弱挂载
+        Fixture fixture = new Fixture();
+        List<MediaSubscriptionResource> resources = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            MediaSubscriptionResource aux = new MediaSubscriptionResource();
+            aux.setId(300 + i);
+            aux.setSubscriptionId(1);
+            aux.setTitle("补缺挂载" + i);
+            aux.setState(MediaSubscriptionResource.STATE_MOUNTED);
+            aux.setMountPath("/追剧/.sources/1-测试剧-补" + i);
+            aux.setShareId(900 + i);
+            resources.add(aux);
+        }
+        MediaSubscriptionResource s3 = new MediaSubscriptionResource();
+        s3.setId(90);
+        s3.setSubscriptionId(1);
+        s3.setTitle("一念永恒 第三季");
+        s3.setType(5); // 夸克:无盘类型的资源 driveThrottledThisRound 一律跳过(真实资源必有类型)
+        s3.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        s3.setScore(25);
+        resources.add(s3);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(resources);
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.anyInt(), Mockito.anyCollection()))
+                .thenReturn(List.of());
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(90), Mockito.anyCollection()))
+                .thenReturn(numbers(107, 165));
+        Mockito.when(fixture.subscriptionRepository.existsByShareIdAndIdNot(Mockito.anyInt(), Mockito.anyInt())).thenReturn(false);
+        Mockito.when(fixture.resourceRepository.existsByShareIdAndSubscriptionIdNot(Mockito.anyInt(), Mockito.anyInt())).thenReturn(false);
+        Mockito.when(fixture.shareRepository.existsByPath(Mockito.anyString())).thenReturn(false);
+        Share mount = new Share();
+        mount.setId(66);
+        Mockito.when(fixture.shareRepository.findByPath(Mockito.anyString())).thenReturn(mount);
+        MediaSubscriptionCheckService spy = Mockito.spy(fixture.service);
+        Mockito.doReturn(MediaSubscriptionCheckService.ProbeOutcome.PROBED)
+                .when(spy).probeCandidateSafely(Mockito.any(), Mockito.any());
+
+        spy.fillGaps(fixture.subscription, new java.util.TreeSet<>(numbers(107, 165)));
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, s3.getState(), "第三季候选照常探测并挂载(挤掉独占覆盖 0 的弱挂载)");
+        Mockito.verify(fixture.shareService, Mockito.atLeastOnce()).deleteShare(Mockito.intThat(id -> id >= 900 && id < 906));
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository, Mockito.atLeastOnce()).save(events.capture());
+        assertTrue(events.getAllValues().stream().anyMatch(e ->
+                        MediaSubscriptionEvent.TYPE_GAP_FILLED.equals(e.getType()) && e.getDetail().contains("107")),
+                "LISTED 行已补上缺口:GAP_FILLED 记录 107 起");
+    }
+
+    @Test
+    void evictWeakestAuxMountRefusesNetLoss() {
+        // 候选可用覆盖(1 集)≤ 被挤者独占覆盖(5 集):挤了净亏,不挤 —— 候选退化行级供流
+        Fixture fixture = new Fixture();
+        fixture.subscription.setMountPath("/追剧/1-测试剧");
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(400);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        MediaSubscriptionResource aux = new MediaSubscriptionResource();
+        aux.setId(401);
+        aux.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        aux.setMountPath("/追剧/.sources/1-测试剧-补1");
+        aux.setShareId(901);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(primary, aux));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(400), Mockito.anyCollection()))
+                .thenReturn(List.of());
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(401), Mockito.anyCollection()))
+                .thenReturn(numbers(1, 5));
+
+        assertNull(fixture.service.evictWeakestAuxMount(fixture.subscription, new java.util.TreeSet<>(List.of(107))));
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, aux.getState());
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
+    }
+
+    @Test
     void gapProbesPreferCandidatesCoveringMissingRange() {
         // 线上形态:缺 107-165(第三季),池里高分完结季包(166 起)压着低分第三季包 —— 探测
         // 预算每轮 3 个,按分数序永远轮不到能补缺的第三季;区间可推断且不沾缺口的直接跳过
@@ -2771,6 +2848,7 @@ class MediaSubscriptionCheckServiceTest {
         s3.setId(72);
         s3.setSubscriptionId(1);
         s3.setTitle("一念永恒 第三季");
+        s3.setType(5); // 夸克:无盘类型的资源 driveThrottledThisRound 一律跳过(真实资源必有类型)
         s3.setState(MediaSubscriptionResource.STATE_CANDIDATE);
         s3.setScore(25);
         Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))

@@ -3105,13 +3105,16 @@ public class MediaSubscriptionCheckService {
      */
     void fillGaps(MediaSubscription subscription, Set<Integer> missingStill) {
         int maxMounts = appProperties.getSubscription().getMaxGapMounts();
+        // 挂载槽满不再中断探测:probeShare 落的 LISTED 集源行本就可供播(可用性聚合含 LISTED,
+        // 盘线路按行走),挂载只是稳定供流 —— 线上(一念永恒 id=64)6 个补缺挂载各有独占集,
+        // 槽满即 break 连探测都不做,缺 107-165 永远补不上。有用候选挂载时挤掉最弱挂载换血。
         int auxMounted = auxMounts(subscription).size();
 
         int probed = 0;
         int maxProbes = appProperties.getSubscription().getMaxGapProbesPerRound();
         Set<String> throttledDrives = new java.util.HashSet<>(); // 本轮已撞风控的盘,后续候选直接跳过
         for (MediaSubscriptionResource resource : orderForGapProbes(subscription, missingStill)) {
-            if (probed >= maxProbes || missingStill.isEmpty() || auxMounted >= maxMounts) {
+            if (probed >= maxProbes || missingStill.isEmpty()) {
                 break;
             }
             if (driveThrottledThisRound(resource.getType() == null ? null : DriveId.toDrive(resource.getType()), throttledDrives)) {
@@ -3137,13 +3140,16 @@ public class MediaSubscriptionCheckService {
             Set<Integer> useful = intersection(coverageOf(resource), missingStill);
             if (!useful.isEmpty()) {
                 try {
-                    if (mountAux(subscription, resource)) {
-                        auxMounted++;
-                        missingStill.removeAll(useful);
-                        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
-                                "补缺 第" + joinNumbers(new ArrayList<>(useful)) + " 集(来自 " + StringUtils.defaultIfBlank(resource.getTitle(), "候选源") + ")");
-                        gapSearchRounds.remove(subscription.getId());
+                    if (auxMounted < maxMounts || evictWeakestAuxMount(subscription, useful) != null) {
+                        if (mountAux(subscription, resource)) {
+                            auxMounted = auxMounts(subscription).size();
+                        }
                     }
+                    // LISTED 行已让缺集可播,挂载与否都算补上;挂载槽满且弱挂载不值得挤时不挂
+                    missingStill.removeAll(useful);
+                    addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
+                            "补缺 第" + joinNumbers(new ArrayList<>(useful)) + " 集(来自 " + StringUtils.defaultIfBlank(resource.getTitle(), "候选源") + ")");
+                    gapSearchRounds.remove(subscription.getId());
                 } catch (Exception e) {
                     log.warn("mount gap source failed: {}", e.getMessage());
                     addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "补缺挂载失败:" + e.getMessage());
@@ -3202,6 +3208,9 @@ public class MediaSubscriptionCheckService {
         }
         Map<Integer, Integer> starts = alignSeasonStarts(subscription,
                 StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()), metaYear(subscription));
+        if (starts == null) {
+            return null; // 两个源都无分季数据:推断不可用,维持原行为
+        }
         Integer start = starts.get(target);
         if (start == null) {
             return null;
@@ -3211,6 +3220,62 @@ public class MediaSubscriptionCheckService {
         Integer total = subscription.getOfficialTotal();
         int end = next != null ? next - 1 : (total != null && total >= start ? total : start);
         return start <= java.util.Collections.max(missing) && end >= java.util.Collections.min(missing);
+    }
+
+    /**
+     * 挂载槽满时的换血:挤掉「独占覆盖最小」的补缺挂载给更有用的候选腾位。独占覆盖 =
+     * 该挂载的 LIVE 行集号 减 主源与<b>其它</b>补缺挂载的并集(减候选的覆盖没有意义 ——
+     * 挤位发生在挂载之前,候选行刚落库)。候选可用覆盖不大于被挤者的独占覆盖时不挤
+     * (挤了净亏),候选退化为行级供流(LISTED 可播)。返回被挤掉的挂载;null = 没挤。
+     */
+    MediaSubscriptionResource evictWeakestAuxMount(MediaSubscription subscription, Set<Integer> incomingUseful) {
+        MediaSubscriptionResource primary = primaryResource(subscription);
+        Set<Integer> others = primary == null ? new TreeSet<>() : coverageOf(primary);
+        List<MediaSubscriptionResource> auxes = auxMounts(subscription);
+        Map<Integer, Set<Integer>> coverageByAux = new LinkedHashMap<>();
+        for (MediaSubscriptionResource aux : auxes) {
+            coverageByAux.put(aux.getId(), coverageOf(aux));
+        }
+        MediaSubscriptionResource weakest = null;
+        int weakestUnique = Integer.MAX_VALUE;
+        for (MediaSubscriptionResource aux : auxes) {
+            Set<Integer> unique = new TreeSet<>(coverageByAux.get(aux.getId()));
+            for (MediaSubscriptionResource other : auxes) {
+                if (other.getId() != aux.getId()) {
+                    unique.removeAll(coverageByAux.get(other.getId()));
+                }
+            }
+            unique.removeAll(others);
+            if (unique.size() < weakestUnique) {
+                weakest = aux;
+                weakestUnique = unique.size();
+            }
+        }
+        if (weakest == null || incomingUseful == null || incomingUseful.size() <= weakestUnique) {
+            return null; // 没有可挤的,或挤了净亏(被挤者独占覆盖 ≥ 候选可用覆盖)
+        }
+        try {
+            if (!unmountShareIfUnused(weakest.getShareId(), subscription.getId())) {
+                return null; // 卸载失败(AList 不可用):不动,待下轮重试
+            }
+        } catch (Exception e) {
+            log.warn("evict weakest aux mount failed: {}", e.getMessage());
+            return null;
+        }
+        weakest.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        weakest.setMountPath(null);
+        weakest.setShareId(null);
+        resourceRepository.save(weakest);
+        for (MediaSubscriptionEpisodeSource row : episodeSourceRepository.findByResourceId(weakest.getId())) {
+            if (LIVE_STATES.contains(row.getState())) {
+                row.setState(MediaSubscriptionEpisodeSource.STATE_MISSING); // 行随挂载退场,防继续冒领供流
+                episodeSourceRepository.save(row);
+            }
+        }
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                "补缺挂载槽满换血:挤掉独占覆盖 " + weakestUnique + " 集的「"
+                        + StringUtils.abbreviate(StringUtils.defaultString(weakest.getTitle()), 40) + "」");
+        return weakest;
     }
 
     /** 补搜关键词决策:播出窗口内且缺口只含官方已播最新一集 = 资源大概率未上线,
