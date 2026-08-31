@@ -38,7 +38,7 @@
   "log": {
     "enable": true,
     "name": "data/log/log.log",
-    "max_size": 50,
+    "max_size": 10,
     "max_backups": 30,
     "max_age": 28,
     "compress": false,
