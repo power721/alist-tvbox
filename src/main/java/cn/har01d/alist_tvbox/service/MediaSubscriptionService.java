@@ -910,8 +910,7 @@ public class MediaSubscriptionService {
                 : movieRepository.findById(subscription.getDoubanId()).orElse(null);
         if (StringUtils.isNotBlank(subscription.getMetaProvider()) && StringUtils.isNotBlank(subscription.getMetaId())) {
             try {
-                meta = metadataService.cachedDetails(
-                        subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+                meta = subscriptionMetadata(subscription);
                 if (meta != null) {
                     String year = meta.getYear();
                     if (StringUtils.isBlank(year) && StringUtils.length(meta.getFirstAirDate()) >= 4) {
@@ -996,12 +995,31 @@ public class MediaSubscriptionService {
 
     /** 订阅元数据快照(持久层零网络);无 provider/metaId 或读取失败返回 null。 */
     private MetadataDetails loadSubscriptionSnapshot(MediaSubscription subscription) {
+        return subscriptionMetadata(subscription);
+    }
+
+    /**
+     * 订阅元数据读取(持久层零网络,视图/快照统一口径):TMDB 单季装全剧(totalSeasons==1)
+     * 的剧订阅第 N&gt;1 季时回落读第 1 季行 —— 第 N 季行只有剧集级字段,分集标题/播出日程
+     * 只在全剧口径的第 1 季行(绝对集号空间)。形态未知(快照缺失/多季)原样返回,与巡检侧
+     * effectiveMetaSeason 同语义但不打外网:第 1 季快照由巡检 refreshMetadata 落库。
+     */
+    private MetadataDetails subscriptionMetadata(MediaSubscription subscription) {
         if (StringUtils.isBlank(subscription.getMetaProvider()) || StringUtils.isBlank(subscription.getMetaId())) {
             return null;
         }
         try {
-            return metadataService.cachedDetails(
+            MetadataDetails details = metadataService.cachedDetails(
                     subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+            if (details != null && details.getTotalSeasons() != null && details.getTotalSeasons() == 1
+                    && (subscription.getSeason() == null || subscription.getSeason() > 1)) {
+                MetadataDetails whole = metadataService.cachedDetails(
+                        subscription.getMetaProvider(), subscription.getMetaId(), 1);
+                if (whole != null) {
+                    return whole;
+                }
+            }
+            return details;
         } catch (Exception e) {
             log.debug("load metadata snapshot for subscription {} failed: {}",
                     subscription.getId(), e.getMessage());
@@ -1586,8 +1604,7 @@ public class MediaSubscriptionService {
             return false;
         }
         try {
-            MetadataDetails details = metadataService.cachedDetails(
-                    subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+            MetadataDetails details = subscriptionMetadata(subscription);
             List<String> countries = details == null ? null : details.getCountries();
             if (countries == null || countries.isEmpty()) {
                 return false;
@@ -1772,7 +1789,10 @@ public class MediaSubscriptionService {
         Set<Integer> local = new java.util.HashSet<>(episodeSourceRepository
                 .findNumbersBySubscriptionAndStatesIn(subscription.getId(), LIVE_EPISODE_STATES));
         List<Integer> missing = new ArrayList<>();
-        for (int i = 1; i <= Math.min(official, MAX_EPISODE_ROWS); i++) {
+        // 季起始集号下界:分季订阅对齐后季前旧集不在缺口口径(与 computeMissing 同规)
+        int lower = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
+                ? subscription.getSeasonStartEpisode() : 1;
+        for (int i = lower; i <= Math.min(official, MAX_EPISODE_ROWS); i++) {
             if (!local.contains(i)) {
                 missing.add(i);
             }
@@ -1833,8 +1853,7 @@ public class MediaSubscriptionService {
             return Map.of();
         }
         try {
-            MetadataDetails details = metadataService.cachedDetails(
-                    subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+            MetadataDetails details = subscriptionMetadata(subscription);
             if (details == null || details.getEpisodes() == null) {
                 return Map.of();
             }
@@ -2062,7 +2081,10 @@ public class MediaSubscriptionService {
             base = Math.max(base, subscription.getExpectedEpisodes());
         }
         List<Map<String, Object>> result = new ArrayList<>();
-        for (int i = 1; i <= Math.min(base, MAX_EPISODE_ROWS); i++) {
+        // 季起始集号下界:分季订阅对齐后本季从全剧第 N 集开始,季前旧集不属于本订阅(与 computeMissing 同规)
+        int lower = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
+                ? subscription.getSeasonStartEpisode() : 1;
+        for (int i = lower; i <= Math.min(base, MAX_EPISODE_ROWS); i++) {
             String source = sources.get(i);
             boolean present = source != null; // 可用性只认 LIVE 行;"源损坏"是展示文案,不是已有
             if (source == null && deadByEpisode.containsKey(i)) {
@@ -2090,7 +2112,7 @@ public class MediaSubscriptionService {
 
         MetadataDetails details = null;
         if (StringUtils.isNotBlank(subscription.getMetaProvider()) && StringUtils.isNotBlank(subscription.getMetaId())) {
-            details = metadataService.cachedDetails(subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+            details = subscriptionMetadata(subscription);
             if (details == null) {
                 checkService.prewarmCoverAsync(subscription); // 后台拉首轮元数据落库,不打断本次响应
             }
@@ -2185,7 +2207,10 @@ public class MediaSubscriptionService {
                                 subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes())));
         long now = System.currentTimeMillis();
         List<Map<String, Object>> episodeItems = new ArrayList<>();
-        for (int i = 1; i <= Math.min(base, MAX_EPISODE_ROWS); i++) {
+        // 季起始集号下界:分季订阅对齐后本季从全剧第 N 集开始,季前旧集不属于本订阅(与 computeMissing 同规)
+        int lower = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
+                ? subscription.getSeasonStartEpisode() : 1;
+        for (int i = lower; i <= Math.min(base, MAX_EPISODE_ROWS); i++) {
             Map<String, Object> local = localByEpisode.get(i);
             cn.har01d.alist_tvbox.dto.EpisodeInfo info = metaEpisodes.get(i);
             MediaSubscriptionEpisode row = rows.get(i);

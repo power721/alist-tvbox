@@ -843,7 +843,7 @@ public class MediaSubscriptionCheckService {
                         return;
                     }
                     MetadataDetails details = metadataService.details(
-                            current.getMetaProvider(), current.getMetaId(), current.getSeason());
+                            current.getMetaProvider(), current.getMetaId(), effectiveMetaSeason(current));
                     if (details != null && StringUtils.isNotBlank(details.getCover())) {
                         subscriptionRepository.updateCoverUrl(id,
                                 StringUtils.abbreviate(details.getCover(), 500)); // cover_url 列 VARCHAR(512)
@@ -1470,7 +1470,7 @@ public class MediaSubscriptionCheckService {
                     return;
                 }
                 MetadataDetails details = metadataService.refreshDetails(
-                        current.getMetaProvider(), current.getMetaId(), current.getSeason());
+                        current.getMetaProvider(), current.getMetaId(), effectiveMetaSeason(current));
                 if (details == null) {
                     return;
                 }
@@ -1519,7 +1519,7 @@ public class MediaSubscriptionCheckService {
                 return event(id, "未绑定元数据条目,无法检查官方更新");
             }
             MetadataDetails details = metadataService.refreshDetails(
-                    current.getMetaProvider(), current.getMetaId(), current.getSeason());
+                    current.getMetaProvider(), current.getMetaId(), effectiveMetaSeason(current));
             if (details == null) {
                 return event(id, "检查更新失败:元数据源不可用,稍后重试");
             }
@@ -1536,7 +1536,10 @@ public class MediaSubscriptionCheckService {
             }
             Set<Integer> local = liveEpisodeNumbers(current);
             List<Integer> missing = new ArrayList<>();
-            for (int i = 1; i <= Math.min(official, 500); i++) {
+            // 季起始集号下界:分季订阅对齐后季前旧集不在缺口口径(与 computeMissing 同规)
+            int lower = current.getSeasonStartEpisode() != null && current.getSeasonStartEpisode() > 1
+                    ? current.getSeasonStartEpisode() : 1;
+            for (int i = lower; i <= Math.min(official, 500); i++) {
                 if (!local.contains(i)) {
                     missing.add(i);
                 }
