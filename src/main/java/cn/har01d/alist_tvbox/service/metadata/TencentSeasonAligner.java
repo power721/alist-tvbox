@@ -99,8 +99,9 @@ public class TencentSeasonAligner {
         return counts == null || counts.isEmpty() ? null : java.util.Collections.max(counts.keySet());
     }
 
-    /** 裸剧名 → {季号 → 集数}。搜索候选剥季缀后须与裸剧名归一化相等。 */
-    Map<Integer, Integer> seasonCounts(String seriesName, Integer firstYear) {
+    /** 裸剧名 → {季号 → 集数}(腾讯官方分季集数,CheckService 覆盖 TMDB 已播/总数用)。
+     * 搜索候选剥季缀后须与裸剧名归一化相等。 */
+    public Map<Integer, Integer> seasonCounts(String seriesName, Integer firstYear) {
         if (StringUtils.isBlank(seriesName)) {
             return null; // restTemplate null(单测桩)不拦:search 已被覆写,异常路径自带兜底
         }

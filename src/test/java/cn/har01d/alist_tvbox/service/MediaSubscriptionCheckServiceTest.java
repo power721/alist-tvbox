@@ -2866,6 +2866,65 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void tencentOfficialNumbersOverrideTmdbLag() {
+        // TMDB 滞后(已播 173/总 200,腾讯完结季实更 16 = 实播 181):分季表求和覆盖已播,
+        // 总数取 max 防倒退(腾讯完结季逐集增长,完结前之和 < 真实总数);只升不降
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.subscription.setOfficialEpisodes(173);
+        fixture.subscription.setOfficialTotal(200);
+        fixture.service.setTencentSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner(null) {
+            @Override
+            public java.util.Map<Integer, Integer> seasonCounts(String seriesName, Integer firstYear) {
+                return java.util.Map.of(1, 52, 2, 54, 3, 59, 4, 16);
+            }
+        });
+
+        fixture.service.applyTencentOfficialNumbers(fixture.subscription);
+        assertEquals(181, fixture.subscription.getOfficialEpisodes(), "52+54+59+16 = 181 覆盖 TMDB 的 173");
+        assertEquals(200, fixture.subscription.getOfficialTotal(), "max(200,181) = 200 不倒退");
+
+        // TMDB 偶尔回填超前(已播 185 > 腾讯 181):不降
+        fixture.subscription.setOfficialEpisodes(185);
+        fixture.service.applyTencentOfficialNumbers(fixture.subscription);
+        assertEquals(185, fixture.subscription.getOfficialEpisodes(), "只升不降");
+
+        // 腾讯之和超总数(完结季更到 47 集 = 212):总数跟着抬
+        fixture.service.setTencentSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner(null) {
+            @Override
+            public java.util.Map<Integer, Integer> seasonCounts(String seriesName, Integer firstYear) {
+                return java.util.Map.of(1, 52, 2, 54, 3, 59, 4, 47);
+            }
+        });
+        fixture.subscription.setOfficialEpisodes(0);
+        fixture.service.applyTencentOfficialNumbers(fixture.subscription);
+        assertEquals(212, fixture.subscription.getOfficialEpisodes());
+        assertEquals(212, fixture.subscription.getOfficialTotal());
+    }
+
+    @Test
+    void computeMissingClampsToSeasonWindowEnd() {
+        // 第 3 季订阅(起点 107,下一季起点 166):缺集窗口夹到 165 —— 不夹会把 S4 的
+        // 166-181 算成本订阅缺口,补缺永远填不上、空转攒 stallCount
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.subscription.setSeason(3);
+        fixture.subscription.setSeasonStartEpisode(107);
+        fixture.subscription.setOfficialEpisodes(181);
+        fixture.subscription.setOfficialTotal(200);
+        fixture.service.setTencentSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner(null) {
+            @Override
+            public java.util.Map<Integer, Integer> seasonStarts(String seriesName, Integer firstYear) {
+                return java.util.Map.of(1, 1, 2, 53, 3, 107, 4, 166);
+            }
+        });
+
+        Set<Integer> missing = fixture.service.computeMissing(fixture.subscription, new java.util.TreeSet<>(List.of(107, 108)));
+        assertEquals(numbers(107, 165).stream().filter(e -> e > 108).toList(), new ArrayList<>(missing),
+                "缺口上界 165(S4 的 166-181 不算)");
+    }
+
+    @Test
     void perSeasonSubscriptionAlignsSeasonStartAndGates() {
         // 分季订阅一念永恒形态:TMDB 单季装全剧,订阅第 3/4 季 —— ①元数据回落第 1 季,
         // ②seasonStartEpisode 按腾讯分季表自动推导,③「完结季」归位第 4 季(第 4 季订阅收/第 2 季订阅拒)

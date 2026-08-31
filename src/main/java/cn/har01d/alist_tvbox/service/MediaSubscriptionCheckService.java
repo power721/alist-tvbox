@@ -1094,6 +1094,7 @@ public class MediaSubscriptionCheckService {
             }
         }
         refreshMetadata(subscription);
+        applyTencentOfficialNumbers(subscription); // 在快照之后:覆盖要赢过 TMDB 滞后值
         if (stopIfDeleted(subscription.getId())) {
             return;
         }
@@ -1666,6 +1667,12 @@ public class MediaSubscriptionCheckService {
         base = Math.max(base, projected);
         // base 上限保护:官方数据异常时不至于搜几千集(与网页清单 MAX_EPISODE_ROWS 同口径,
         // 旧值 500 把柯南这类 1200+ 集长番的缺集检测整轮废掉 —— 27 个真实缺口从未触发补缺)
+        // 分季订阅的窗口上界:本季在全剧连续集号空间的结束 = 下一季起点-1(分季表)——
+        // 不夹会把下一季的集算成本订阅缺口,补缺永远填不上、空转攒 stallCount
+        Integer windowEnd = seasonWindowEnd(subscription);
+        if (windowEnd != null && base > windowEnd) {
+            base = windowEnd;
+        }
         if (base <= 0 || base > MediaSubscriptionService.MAX_EPISODE_ROWS) {
             return Set.of();
         }
@@ -1892,6 +1899,50 @@ public class MediaSubscriptionCheckService {
             log.debug("series shape probe failed: {}", e.getMessage());
         }
         return season;
+    }
+
+    /**
+     * 腾讯集数覆盖 TMDB(绝对连续集号形态的追更时效补丁):TMDB 对国产年番的集数登记滞后
+     * (线上:一念永恒 TMDB 已播 173/总 200,腾讯完结季实更 16 集 = 实播 181)—— 缺集上界、
+     * 季包越界门禁 cap、追更判定全部跟着滞后几天。腾讯分季表各季集数求和覆盖<b>已播</b>;
+     * <b>总集数</b>取 max(TMDB, 腾讯之和):腾讯完结季条目逐集增长,完结前之和 &lt; 真实总数,
+     * 不能单独当总数用(会把在播剧误判已播完)。只升不降(TMDB 偶尔超前/回填时不倒退)。
+     * 仅「单季装全剧」形态且腾讯表可用时生效;豆瓣表不参与(分季集数有漏登,线上差 13 集)。
+     */
+    void applyTencentOfficialNumbers(MediaSubscription subscription) {
+        if (tencentSeasonAligner == null) {
+            return;
+        }
+        MetadataDetails details = metaDetails(subscription);
+        if (details == null || details.getTotalSeasons() == null || details.getTotalSeasons() != 1) {
+            return;
+        }
+        Map<Integer, Integer> counts = tencentSeasonAligner.seasonCounts(
+                StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()), metaYear(subscription));
+        if (counts == null || counts.isEmpty()) {
+            return;
+        }
+        int sum = counts.values().stream().mapToInt(Integer::intValue).filter(c -> c > 0).sum();
+        if (sum <= 0) {
+            return;
+        }
+        Integer aired = subscription.getOfficialEpisodes();
+        Integer total = subscription.getOfficialTotal();
+        boolean changed = false;
+        if (sum > (aired == null ? 0 : aired)) {
+            subscription.setOfficialEpisodes(sum);
+            changed = true;
+        }
+        int tMax = Math.max(total == null ? 0 : total, sum);
+        if (tMax > (total == null ? 0 : total)) {
+            subscription.setOfficialTotal(tMax);
+            changed = true;
+        }
+        if (changed) {
+            subscriptionRepository.save(subscription);
+            addEvent(subscription.getId(), "ALIGN", "官方集数按腾讯口径补正:已播 " + sum + " 集(TMDB 登记 "
+                    + (aired == null ? "未知" : aired) + "),总集数 " + tMax);
+        }
     }
 
     /**
@@ -2293,6 +2344,19 @@ public class MediaSubscriptionCheckService {
      * 非季包形态/手动声明了偏移/豆瓣无分季数据 → null(列举走原 season 口径,防冒领交给弃收门禁)。
      * 实时累推成功即持久化到资源行并记事件(后续轮次不再依赖外网)。
      */
+    /** 分季订阅的季窗口上界(全剧连续集号空间):下一季起点-1;末季/表不可用返回 null(不夹)。 */
+    Integer seasonWindowEnd(MediaSubscription subscription) {
+        Integer start = subscription.getSeasonStartEpisode();
+        Integer season = subscription.getSeason();
+        if (start == null || start <= 1 || season == null) {
+            return null;
+        }
+        Map<Integer, Integer> starts = alignSeasonStarts(subscription,
+                StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()), metaYear(subscription));
+        Integer next = starts == null ? null : starts.get(season + 1);
+        return next == null ? null : next - 1;
+    }
+
     /** 季包资源的包季:标题声明季&gt;1 优先;完结季类标记按分季表归位(最大季/最大季+1);裸标题 null。 */
     Integer seasonPackTarget(MediaSubscription subscription, MediaSubscriptionResource resource) {
         String title = StringUtils.defaultString(resource.getTitle());
