@@ -50,9 +50,17 @@ public class DoubanSeasonAligner {
     /** 完结季/最终季类无季号标记:目标季 = 豆瓣分季条目里的最后一季。 */
     private static final Pattern FINALE_MARK = Pattern.compile("完结季|最终季|完结篇|大结局");
 
+    /** 剧级完结标记(完结季/最终季):季包整体就是最终季,区别于篇/弧级的完结篇/大结局。 */
+    private static final Pattern SERIES_FINALE_MARK = Pattern.compile("完结季|最终季");
+
     /** 标题是否带完结季类标记(无季号,季归属靠豆瓣分季条目推断)。 */
     public static boolean finaleMarked(String title) {
         return title != null && FINALE_MARK.matcher(title).find();
+    }
+
+    /** 标题是否带剧级完结标记 —— 季包整体就是最终季,包内 S01Exx 只是季内编号,可安全归位。 */
+    public static boolean seriesFinaleMarked(String title) {
+        return title != null && SERIES_FINALE_MARK.matcher(title).find();
     }
 
     private final RestTemplate restTemplate;

@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 盘聚搜索源:搜索卡片/详情网盘行解析、盘型判定(域名+文本兜底)、中转页真实分享链提取、
  * 候选池价值排序、Cloudflare 挑战判定与端到端搜索(打桩 fetch)。
  * HTML 样本取自 2026-08-30 实测页面结构的精简版(.cover 卡片、.pan-links 隐藏容器、var panLink 脚本)。
+ * 盘检过滤在聚合层(MediaSubscriptionCheckService.searchAllSources)统一接线,不在本源内。
  */
 class PanjuSearchServiceTest {
 

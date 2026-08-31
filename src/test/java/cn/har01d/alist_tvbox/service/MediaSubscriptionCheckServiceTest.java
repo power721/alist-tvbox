@@ -25,6 +25,7 @@ import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
+import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.util.TextUtils;
@@ -2604,6 +2605,152 @@ class MediaSubscriptionCheckServiceTest {
         fixture.service.fillPool(fixture.subscription, true, null);
 
         Mockito.verify(fixture.resourceRepository, Mockito.never()).save(Mockito.any(MediaSubscriptionResource.class));
+    }
+
+    /** 腾讯分季表桩:一念永恒 S1=52/S2=54/S3=59/完结季=16(起点 166),与线上实测一致。 */
+    private static void stubTencentSeasons(Fixture fixture) {
+        fixture.service.setTencentSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner(null) {
+            @Override
+            public com.fasterxml.jackson.databind.JsonNode search(String keyword) {
+                try {
+                    return new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                            "{\"normalList\":{\"itemList\":[{\"doc\":{\"dataType\":2},\"videoInfo\":{\"title\":\"一念永恒 第1季\",\"year\":2020,"
+                                    + "\"playSites\":[{\"totalEpisode\":52,\"episodeInfoList\":[{\"url\":\"https://v.qq.com/x/cover/a/e.html\"}]}]}},"
+                                    + "{\"doc\":{\"dataType\":2},\"videoInfo\":{\"title\":\"一念永恒 第2季\",\"year\":2022,"
+                                    + "\"playSites\":[{\"totalEpisode\":54,\"episodeInfoList\":[{\"url\":\"https://v.qq.com/x/cover/b/e.html\"}]}]}},"
+                                    + "{\"doc\":{\"dataType\":2},\"videoInfo\":{\"title\":\"一念永恒 第3季\",\"year\":2024,"
+                                    + "\"playSites\":[{\"totalEpisode\":59,\"episodeInfoList\":[{\"url\":\"https://v.qq.com/x/cover/c/e.html\"}]}]}},"
+                                    + "{\"doc\":{\"dataType\":2},\"videoInfo\":{\"title\":\"一念永恒 完结季\",\"year\":2026,"
+                                    + "\"playSites\":[{\"totalEpisode\":16,\"episodeInfoList\":[{\"url\":\"https://v.qq.com/x/cover/d/e.html\"}]}]}}]}}");
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+        });
+    }
+
+    @Test
+    void candidatesOrderedKeepsFinalePacksForSeasonSplit() {
+        // 线上(2026-08-31,订阅 66 一念永恒 第 4 季):9 条完结季(2026)候选全部入池后,
+        // 激活侧 candidatesOrdered 的季包豁免只认 absolute 形态(分季订阅恒 false),季包被
+        // 年份门禁(2026≠首播 2020,且汉字空格塌缩令整词救援失效)静默过滤 —— POOL_FILLED
+        // 后紧跟「未找到可用资源」,全程零探测记录。激活侧豁免必须与入池同口径。
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.subscription.setSeason(4);
+        fixture.subscription.setOfficialEpisodes(173);
+        stubTencentSeasons(fixture);
+        MediaSubscriptionResource finale = new MediaSubscriptionResource();
+        finale.setId(71);
+        finale.setSubscriptionId(1);
+        finale.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        finale.setTitle("一念永恒 完结季 2026 4K 更新至08集");
+        MediaSubscriptionResource declared = new MediaSubscriptionResource();
+        declared.setId(72);
+        declared.setSubscriptionId(1);
+        declared.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        declared.setTitle("一念永恒 完结季 第四季(2026) 4K 第8集/国漫");
+        MediaSubscriptionResource otherSeason = new MediaSubscriptionResource();
+        otherSeason.setId(73);
+        otherSeason.setSubscriptionId(1);
+        otherSeason.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        otherSeason.setTitle("一念永恒 第三季 (2024) 更新EP59 4K 国漫");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(finale, declared, otherSeason));
+
+        List<MediaSubscriptionResource> candidates = fixture.service.candidatesOrdered(fixture.subscription);
+
+        assertEquals(Set.of(71, 72),
+                candidates.stream().map(MediaSubscriptionResource::getId).collect(java.util.stream.Collectors.toSet()),
+                "完结季季包(纯完结季标记/显式第四季)不受年份门禁误杀,第三季仍被排除");
+    }
+
+    @Test
+    void fillPoolAdmitsFinalePackInternalNumberingForSeasonSplit() {
+        // 线上同年同订阅:完结季包内 S01E01-E08 是季内编号(S01=包内第 1 集),旧逻辑
+        // declared=1 短路完结归位 → 年份门禁误杀。剧级完结标记(完结季/最终季)下归位优先。
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.subscription.setSeason(4);
+        fixture.subscription.setOfficialEpisodes(173);
+        stubTencentSeasons(fixture);
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/s9", "一念永恒 完结季（2026） 4K 臻彩 S01E01 - E08 HIF")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.anyInt(), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+
+        Mockito.verify(fixture.resourceRepository).save(Mockito.any(MediaSubscriptionResource.class));
+    }
+
+    @Test
+    void effectiveTitleSeasonPrefersFinaleAlignmentOverInternalNumbering() {
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.subscription.setSeason(4);
+        fixture.subscription.setOfficialEpisodes(173);
+        stubTencentSeasons(fixture);
+
+        assertEquals(4, fixture.service.effectiveTitleSeason(fixture.subscription,
+                "一念永恒 完结季（2026） 4K 臻彩 S01E01 - E08 HIF"), "S01Exx=完结季包内季内编号,归位优先");
+        assertEquals(4, fixture.service.effectiveTitleSeason(fixture.subscription, "一念永恒 完结季(2026) 【更08集】"),
+                "无季号完结季标记:照旧走归位");
+        assertEquals(2, fixture.service.effectiveTitleSeason(fixture.subscription, "剧名 第二季 完结篇"),
+                "完结篇是弧级标记:声明季号不被归位覆盖");
+        assertEquals(3, fixture.service.effectiveTitleSeason(fixture.subscription, "剧名 第三季 (2024)"),
+                "非完结季标题照旧返回声明季号");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void fillPoolRunsSiteSourcesThroughLinkCheck() {
+        // 站点源(玩偶/盘链/观影/蜗牛/盘聚)是聚合站抓取,链接新鲜度未知 —— 聚合层单点统一过盘检:
+        // telegram 聚合内部已过检不重复送检;bad/uncertain 剔除、ok/locked 盖 validityState 供入池消费
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("悬案");
+        WanouSearchService wanou = Mockito.mock(WanouSearchService.class);
+        RemoteSearchService remote = Mockito.mock(RemoteSearchService.class);
+        AppProperties appProperties = new AppProperties();
+        appProperties.setFormats(Set.of("mkv", "mp4"));
+        appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of());
+        MediaSubscriptionCheckService service = new MediaSubscriptionCheckService(
+                fixture.subscriptionRepository, fixture.resourceRepository, fixture.eventRepository,
+                fixture.episodeRepository, fixture.episodeSourceRepository, fixture.deadLinkRepository,
+                fixture.shareRepository, fixture.siteRepository,
+                Mockito.mock(DriverAccountRepository.class), Mockito.mock(IndexTemplateRepository.class),
+                fixture.settingRepository, fixture.shareService, fixture.aListService,
+                fixture.telegramService, wanou, null, null, null, null,
+                fixture.metadataService, Mockito.mock(AutoUpdateExecutor.class), fixture.historyRepository,
+                appProperties, new ObjectMapper(), fixture.transferService, null);
+        service.setRemoteSearchService(remote);
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/tg1", "悬案 (2026) 4K [全8集]")));
+        Mockito.when(wanou.search("悬案")).thenReturn(List.of(
+                message("https://pan.quark.cn/s/w1", "悬案 (2026) 4K 更新至08集"),
+                message("https://pan.baidu.com/s/w2?pwd=xx", "悬案 (2026) 1080P 全8集", "10")));
+        Mockito.when(remote.filterInvalidPanSouLinks(Mockito.anyList())).thenAnswer(invocation -> {
+            List<Message> messages = invocation.getArgument(0);
+            return messages.stream()
+                    .filter(message -> !"10".equals(message.getType())) // 百度判 bad:剔除
+                    .peek(message -> message.setValidityState("ok"))
+                    .toList();
+        });
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.anyInt(), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        service.fillPool(fixture.subscription, true, null);
+
+        ArgumentCaptor<List<Message>> checked = ArgumentCaptor.forClass((Class<List<Message>>) (Class<?>) List.class);
+        Mockito.verify(remote).filterInvalidPanSouLinks(checked.capture());
+        assertEquals(2, checked.getValue().size(), "只送检站点源结果,telegram 已过检不重复送检");
+        ArgumentCaptor<MediaSubscriptionResource> saved = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        Mockito.verify(fixture.resourceRepository, Mockito.times(2)).save(saved.capture());
+        assertEquals(Set.of("https://pan.quark.cn/s/tg1", "https://pan.quark.cn/s/w1"),
+                saved.getAllValues().stream().map(MediaSubscriptionResource::getLink).collect(java.util.stream.Collectors.toSet()),
+                "百度 bad 不入池,telegram/玩偶存活结果各 1 条入池");
     }
 
     @Test

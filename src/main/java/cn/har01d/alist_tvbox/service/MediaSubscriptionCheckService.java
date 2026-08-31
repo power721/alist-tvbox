@@ -208,6 +208,8 @@ public class MediaSubscriptionCheckService {
     private final ShareService shareService;
     private final AListService aListService;
     private final TelegramService telegramService;
+    /** 盘检服务(站点源统一过链检):setter 注入 —— 主构造器参数已 20+,裸实例测试占位 null 满天飞,不再加位 */
+    private RemoteSearchService remoteSearchService;
     private final WanouSearchService wanouSearchService;
     private final PanLianSearchService panLianSearchService;
     private final GuanYingSearchService guanYingSearchService;
@@ -267,6 +269,11 @@ public class MediaSubscriptionCheckService {
 
     void setTencentSeasonAligner(TencentSeasonAligner tencentSeasonAligner) {
         this.tencentSeasonAligner = tencentSeasonAligner;
+    }
+
+    @Autowired
+    void setRemoteSearchService(RemoteSearchService remoteSearchService) {
+        this.remoteSearchService = remoteSearchService;
     }
     /**
      * 订阅巡检执行池:并发度可配(checkConcurrency,默认 3),到期订阅并发检查、手动触发的
@@ -1825,12 +1832,13 @@ public class MediaSubscriptionCheckService {
         Integer metaYear = metaYear(subscription);
         List<String> names = matchNames(subscription);
         List<String> genres = metaGenres(subscription);
+        boolean ownPackSeries = absoluteNumberedSeries(subscription);
         Set<String> allowedDrives = allowedCandidateDrives(subscription);
         MediaSubscriptionPoolFilter global = poolFilterFor(subscription);
         return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
                 .filter(r -> !MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState()))
                 .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()) || isBadCooled(r, now))
-                .filter(r -> ownSeasonPackTitle(subscription, r.getTitle())
+                .filter(r -> ownPackExempt(ownPackSeries, subscription, r.getTitle())
                         || titleYearMatches(metaYear, names, r.getTitle()))
                 .filter(r -> !titleProgressForeign(subscription, r.getTitle(), genres) && !liveActionForeign(genres, r.getTitle()))
                 .filter(r -> driveAllowed(allowedDrives, r.getType() == null ? null : DriveId.toDrive(r.getType())))
@@ -2164,10 +2172,20 @@ public class MediaSubscriptionCheckService {
      * 分季表不可用返回 null(裸标题语义,门禁照旧放行给探测层)。仅 season&gt;1 订阅调用。 */
     Integer effectiveTitleSeason(MediaSubscription subscription, String title) {
         Integer declared = TextUtils.parseTitleSeason(title);
-        if (declared != null || !DoubanSeasonAligner.finaleMarked(StringUtils.defaultString(title))) {
-            return declared;
+        String text = StringUtils.defaultString(title);
+        if (declared == null) {
+            return DoubanSeasonAligner.finaleMarked(text) ? alignFinaleSeason(subscription) : null;
         }
-        return alignFinaleSeason(subscription);
+        // 完结季/最终季包内的 S01Exx 是季内编号(S01=包内第 1 集),冒充「第 1 季」会压过完结归位
+        // (线上:一念永恒 完结季(2026) S01E01-E08 被 declared=1 短路,入池即遭年份门禁误杀)。
+        // 显式第 N 季(N>1)与篇/弧级标记(完结篇/大结局)不动声明季号 —— 归位只在剧级完结标记下优先。
+        if (declared == 1 && DoubanSeasonAligner.seriesFinaleMarked(text)) {
+            Integer finale = alignFinaleSeason(subscription);
+            if (finale != null) {
+                return finale;
+            }
+        }
+        return declared;
     }
 
     /** 分季对齐统一入口:腾讯优先(分季集数与绝对集号严格对齐,线上实测一念永恒 52/54/59/
@@ -2236,6 +2254,16 @@ public class MediaSubscriptionCheckService {
 
     boolean ownSeasonPackTitle(MediaSubscription subscription, String title) {
         return ownSeasonPackTitle(absoluteNumberedSeries(subscription), title);
+    }
+
+    /** 季包门禁豁免(入池 fillPool 与激活 candidatesOrdered 必须同口径):absolute 形态的自身
+     * 季包,或分季订阅(季&gt;1)标题声明的本季季包(含完结季归位)。激活侧若缺第二支,季包候选
+     * 入池后会被年份门禁静默过滤 —— 池明明新增了资源却报「未找到可用资源」,且全程零探测记录
+     * (线上:一念永恒 第 4 季,9 条完结季(2026)候选全灭)。 */
+    boolean ownPackExempt(boolean absoluteSeries, MediaSubscription subscription, String title) {
+        return ownSeasonPackTitle(absoluteSeries, title)
+                || (subscription.getSeason() != null && subscription.getSeason() > 1
+                    && subscription.getSeason().equals(effectiveTitleSeason(subscription, title)));
     }
 
     /**
@@ -5101,20 +5129,33 @@ public class MediaSubscriptionCheckService {
         for (Message message : messages) {
             links.add(message.getLink());
         }
+        // 站点源(玩偶/盘链/观影/蜗牛/盘聚)是聚合站抓取,链接新鲜度未知 —— 统一过盘检再入列
+        // (telegram 聚合在其内部已过检,不重复送检):合并去重后送检一次,好链接盖 validityState
+        // 供入池准入/审计消费,bad/uncertain 在此剔除;盘检未配置时原样返回。
+        List<Message> siteMessages = new ArrayList<>();
+        Set<String> siteLinks = new java.util.HashSet<>();
         if (wanou != null) {
-            mergeSource(messages, links, joinSearch("wanou", wanou), "wanou", keyword);
+            mergeSource(siteMessages, siteLinks, joinSearch("wanou", wanou), "wanou", keyword);
         }
         if (panlian != null) {
-            mergeSource(messages, links, joinSearch("panlian", panlian), "panlian", keyword);
+            mergeSource(siteMessages, siteLinks, joinSearch("panlian", panlian), "panlian", keyword);
         }
         if (guanying != null) {
-            mergeSource(messages, links, joinSearch("guanying", guanying), "guanying", keyword);
+            mergeSource(siteMessages, siteLinks, joinSearch("guanying", guanying), "guanying", keyword);
         }
         if (woniu != null) {
-            mergeSource(messages, links, joinSearch("woniu", woniu), "woniu", keyword);
+            mergeSource(siteMessages, siteLinks, joinSearch("woniu", woniu), "woniu", keyword);
         }
         if (panju != null) {
-            mergeSource(messages, links, joinSearch("panju", panju), "panju", keyword);
+            mergeSource(siteMessages, siteLinks, joinSearch("panju", panju), "panju", keyword);
+        }
+        if (!siteMessages.isEmpty() && remoteSearchService != null) {
+            siteMessages = new ArrayList<>(remoteSearchService.filterInvalidPanSouLinks(siteMessages));
+        }
+        for (Message message : siteMessages) {
+            if (StringUtils.isNotBlank(message.getLink()) && links.add(message.getLink())) {
+                messages.add(message);
+            }
         }
         return messages;
     }
@@ -5234,9 +5275,7 @@ public class MediaSubscriptionCheckService {
                 audit.drop(PoolDrop.TITLE, title); // 标题与剧名/别名均不沾边,大概率是同名召回噪声,挡在池外省去挂载试错
                 continue;
             }
-            boolean ownPack = ownSeasonPackTitle(ownPackSeries, title)
-                    || (subscription.getSeason() != null && subscription.getSeason() > 1
-                        && subscription.getSeason().equals(effectiveTitleSeason(subscription, title)));
+            boolean ownPack = ownPackExempt(ownPackSeries, subscription, title);
             if (!ownPack && !titleYearMatches(metaYear, names, title)) {
                 audit.drop(PoolDrop.YEAR, title); // 标题标注年份与元数据年份全不符,且剧名仅子串嵌入(前缀异剧);
                 continue; // 本季季包(含完结季归位)例外:季包年份是该季年份,不是首播年
