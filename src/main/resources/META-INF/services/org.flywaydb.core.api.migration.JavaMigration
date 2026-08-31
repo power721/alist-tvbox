@@ -33,3 +33,7 @@ db.migration.current.V38__SubscriptionOwnership
 db.migration.current.V39__UserVodSecret
 db.migration.current.V40__PlayUrlOwnership
 db.migration.current.V41__MediaSubscriptionAirClock
+db.migration.current.V42__MediaSubscriptionSeasonStart
+db.migration.current.V43__MediaSubscriptionResourceStart
+db.migration.current.V44__MediaSubscriptionResourceSeasonStarts
+db.migration.current.V45__MovieDiffLog

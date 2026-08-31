@@ -121,7 +121,7 @@ public class MediaLibraryController {
         return result;
     }
 
-    /** 片单条目详情:元数据直取(TMDB)/仅标题(豆瓣榜单无 subject id),带「加入追剧」伪播放线路。 */
+    /** 片单条目详情:元数据直取(TMDB)/豆瓣条目本地库唯一匹配富化(无匹配回落仅标题),带「加入追剧」伪播放线路。 */
     /** 片单详情就地改写 pic/remarks/play 字段,tmdbDetail 命中短缓存返回共享实例 —— 拷贝再装配,防缓存被污染。 */
     private static MovieDetail copyDetail(MovieDetail source) {
         if (source == null) {
@@ -156,10 +156,18 @@ public class MediaLibraryController {
                 throw new BadRequestException("片单条目信息获取失败: " + id);
             }
         } else if (id.startsWith("s:")) {
-            detail = new MovieDetail();
+            // 豆瓣片单条目无 subject id:名称(+vod_id 内嵌年份)在本地豆瓣库严格唯一匹配,命中返回富详情
+            PianDanService.NameYear entry = PianDanService.parseSubjectId(id);
+            detail = mediaSubscriptionService.localDoubanDetail(entry.name(), entry.year());
+            if (detail == null) {
+                detail = new MovieDetail();
+                detail.setVod_name(entry.name());
+                detail.setVod_content("来自豆瓣片单。点击「加入追剧」按标题订阅。");
+            }
+            if (StringUtils.isBlank(detail.getVod_content())) {
+                detail.setVod_content("来自豆瓣片单。点击「加入追剧」按标题订阅。");
+            }
             detail.setVod_id(id);
-            detail.setVod_name(id.substring(2));
-            detail.setVod_content("来自豆瓣片单。点击「加入追剧」按标题订阅。");
         } else {
             throw new BadRequestException("无效的片单条目: " + id);
         }
@@ -205,6 +213,7 @@ public class MediaLibraryController {
         result.getList().add(detail);
         result.setTotal(1);
         result.setLimit(1);
+        log.debug("detail: {} {}", id, detail);
         return result;
     }
 

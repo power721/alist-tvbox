@@ -214,6 +214,8 @@ public class MediaSubscriptionService {
             subscription.setMetaId(String.valueOf(subscription.getDoubanId()));
         }
         subscription.setExpectedEpisodes(request.getExpectedEpisodes());
+        subscription.setSeasonStartEpisode(request.getSeasonStartEpisode() != null && request.getSeasonStartEpisode() > 1
+                ? request.getSeasonStartEpisode() : null);
         subscription.setMode(StringUtils.isBlank(request.getMode()) ? MediaSubscription.MODE_FOLLOW : request.getMode());
         subscription.setAccountId(request.getAccountId());
         subscription.setAccountIds(serializeAccountIds(request.getAccountIds(), request.getAccountId()));
@@ -244,6 +246,7 @@ public class MediaSubscriptionService {
         }
         boolean searchRelevant = false;
         Integer previousSeason = subscription.getSeason();
+        Integer previousSeasonStart = subscription.getSeasonStartEpisode();
         String previousMode = subscription.getMode();
         String previousAccountIds = subscription.getAccountIds();
         if (StringUtils.isNotBlank(request.getName())) {
@@ -256,6 +259,20 @@ public class MediaSubscriptionService {
         if (request.getSeason() != null) {
             subscription.setSeason(request.getSeason());
             searchRelevant = true;
+        }
+        if (request.getSeasonStartEpisode() != null) {
+            // ≤0 = 清除(回归季内编号即官方编号)
+            Integer start = request.getSeasonStartEpisode() > 1 ? request.getSeasonStartEpisode() : null;
+            if (!Objects.equals(start, previousSeasonStart)) {
+                // 集号语义变化:存量集源行全按旧编号落库,偏移后整体错位 —— 清池重扫。
+                // 挂载/分享保留(同一批文件只是换编号),首轮巡检按新偏移重建集源行。
+                subscription.setSeasonStartEpisode(start);
+                checkService.resetInventoryForSeason(subscription,
+                        subscription.getSeason() == null ? 1 : subscription.getSeason());
+                searchRelevant = true;
+            } else {
+                subscription.setSeasonStartEpisode(start);
+            }
         }
         if (request.getDoubanId() != null) {
             subscription.setDoubanId(request.getDoubanId());
@@ -450,6 +467,29 @@ public class MediaSubscriptionService {
         }).toList();
     }
 
+    /**
+     * 资源级起始集号(手动):该资源第 1 集对应全剧第 N 集,≤0/null = 清除。
+     * 元数据全剧连续集号而该资源按季内/局部编号时(完结季季包)声明;改动后该资源集源行
+     * 全按旧编号落库、平移后整体错位 —— 删行重扫,其它资源与挂载不动。
+     */
+    @Transactional
+    public void setResourceEpisodeStart(int uid, int id, int resourceId, Integer startEpisode) {
+        getOwned(uid, id);
+        MediaSubscriptionResource resource = resourceRepository.findById(resourceId)
+                .filter(r -> r.getSubscriptionId() == id)
+                .orElseThrow(() -> new cn.har01d.alist_tvbox.exception.NotFoundException("资源不存在"));
+        Integer start = startEpisode != null && startEpisode > 1 ? startEpisode : null;
+        if (Objects.equals(start, resource.getStartEpisode()) && resource.getSeasonStarts() == null) {
+            return;
+        }
+        resource.setStartEpisode(start);
+        resource.setSeasonStarts(null); // 手动声明优先:清自动季包映射,列举回到裸编号+平移口径
+        resource.setEpisodesFound(null);
+        resourceRepository.save(resource);
+        episodeSourceRepository.deleteByResourceId(resourceId);
+        log.info("media subscription {} resource {} episode start set to {}: inventory reset", id, resourceId, start);
+    }
+
     public List<MediaSubscriptionResourceDto> resources(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
         Set<String> allowedDrives = checkService.allowedCandidateDrives(subscription);
@@ -474,6 +514,7 @@ public class MediaSubscriptionService {
             dto.setPrimary(MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
                     && subscription.getMountPath() != null && subscription.getMountPath().equals(r.getMountPath()));
             dto.setPinned(Boolean.TRUE.equals(r.getPinned()));
+            dto.setStartEpisode(r.getStartEpisode());
             dto.setCheckedTime(r.getCheckedTime());
             dto.setCreatedTime(r.getCreatedTime());
             return dto;
@@ -542,15 +583,78 @@ public class MediaSubscriptionService {
     /** 豆瓣片单条目绑 id 优先路:本地豆瓣库精确名匹配(Movie.id 即豆瓣 subject id,零网络)。
      *  同名多部(翻拍)本地无年份无法消歧,返回 null 由调用方回落 suggest 严格匹配。 */
     public Integer localDoubanId(String name) {
+        return localDoubanId(name, null);
+    }
+
+    /** 年份版:条目带年份(rexxar item / 本地 Movie.year)时只认年份命中的唯一候选消歧翻拍;
+     *  年份对不上即 null(不同部,不退纯名防冒领),调用方回落 suggest 严格匹配。 */
+    public Integer localDoubanId(String name, Integer year) {
+        Movie movie = uniqueLocalMovie(name, year);
+        return movie != null ? movie.getId() : null;
+    }
+
+    /** 豆瓣片单条目(s:)详情富化:本地豆瓣库精确名匹配唯一才返回,否则 null 由调用方回落仅标题详情。
+     *  匹配口径与 localDoubanId 一致(年份过滤优先、纯名唯一兜底)。 */
+    public MovieDetail localDoubanDetail(String name, Integer year) {
+        Movie movie = uniqueLocalMovie(name, year);
+        if (movie == null) {
+            return null;
+        }
+        MovieDetail detail = new MovieDetail();
+        detail.setVod_name(movie.getName());
+        detail.setVod_pic(movie.getCover());
+        if (movie.getYear() != null) {
+            detail.setVod_year(String.valueOf(movie.getYear()));
+        }
+        detail.setVod_remarks(movie.getDbScore());
+        detail.setType_name(movie.getGenre());
+        detail.setVod_area(movie.getCountry());
+        detail.setVod_lang(movie.getLanguage());
+        detail.setVod_director(movie.getDirectors());
+        detail.setVod_actor(movie.getActors());
+        if (StringUtils.isNotBlank(movie.getDescription())) {
+            detail.setVod_content(movie.getDescription());
+        }
+        return detail;
+    }
+
+    /** 同名候选严格唯一:带年份只认年份命中的唯一一条(年份对不上=不是同一部,不退纯名防冒领);
+     *  无年份才用纯名唯一。 */
+    private Movie uniqueLocalMovie(String name, Integer year) {
         if (StringUtils.isBlank(name)) {
             return null;
         }
-        var ids = movieRepository.getByName(name.trim()).stream()
-                .map(Movie::getId)
+        List<Movie> candidates = movieRepository.getByName(name.trim()).stream()
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
-        return ids.size() == 1 ? ids.get(0) : null;
+        if (candidates.isEmpty()) {
+            log.debug("local douban match: name='{}' year={} no same-name row in local db", name, year);
+            return null;
+        }
+        String candidateYears = candidates.stream()
+                .map(m -> m.getId() + ":" + m.getYear())
+                .collect(Collectors.joining(","));
+        if (year != null) {
+            List<Movie> byYear = candidates.stream()
+                    .filter(m -> year.equals(m.getYear()))
+                    .toList();
+            if (byYear.size() == 1) {
+                log.debug("local douban match: name='{}' year={} hit unique id={} (candidates {})",
+                        name, year, byYear.get(0).getId(), candidateYears);
+                return byYear.get(0);
+            }
+            log.debug("local douban match: name='{}' year={} rejected: year-filter matches={} (candidates {}) — mismatch means different title, no name-only fallback",
+                    name, year, byYear.size(), candidateYears);
+            return null;
+        }
+        if (candidates.size() == 1) {
+            log.debug("local douban match: name='{}' year=null hit unique id={}", name, candidates.get(0).getId());
+            return candidates.get(0);
+        }
+        log.debug("local douban match: name='{}' year=null rejected: {} same-name rows (candidates {}) cannot disambiguate",
+                name, candidates.size(), candidateYears);
+        return null;
     }
 
     /** 片单条目是否已在追:标题语义匹配(「末日地堡 第三季」命中 web 订的「末日地堡」S3)。 */
@@ -1507,9 +1611,12 @@ public class MediaSubscriptionService {
             return;
         }
         MovieDetail detail = result.getList().get(0);
-        // 主源条目
+        // 主源条目(编号归一口径与巡检一致:资源级起始集号 > 订阅级季起始集号)
+        MediaSubscriptionResource primaryResource = checkService.primaryResource(subscription);
         TreeMap<Integer, String> primary = new TreeMap<>();
-        if (!parsePlayEntries(detail.getVod_play_url(), subscription.getSeason(), primary)) {
+        Integer primaryStart = effectiveStartEpisode(primaryResource, subscription);
+        Integer primaryCollectSeason = checkService.collectSeason(subscription, primaryResource);
+        if (!parsePlayEntries(detail.getVod_play_url(), primaryCollectSeason, primaryStart, primary)) {
             return; // 主源列表解析失败不动原始输出
         }
         List<MediaSubscriptionResource> gaps = checkService.auxMounts(subscription);
@@ -1525,11 +1632,11 @@ public class MediaSubscriptionService {
         // 1) 转存副本(自有盘,按目标顺序):已转存的集优先从自有盘播
         if (transferMode) {
             for (var target : transferService.transferredTargets(subscription.getUid(), subscription.getId())) {
-                mergePlaylistFrom(subscription, target.path(), ac, merged, driveLine(driveLines, target.drive()));
+                mergePlaylistFrom(subscription, target.path(), ac, subscription.getSeason(),
+                        subscription.getSeasonStartEpisode(), merged, driveLine(driveLines, target.drive()));
             }
         }
         // 2) 主源
-        MediaSubscriptionResource primaryResource = checkService.primaryResource(subscription);
         String primaryDrive = primaryResource != null && primaryResource.getType() != null
                 ? DriveId.toDrive(primaryResource.getType()) : null;
         TreeMap<Integer, String> primaryLine = driveLine(driveLines, primaryDrive);
@@ -1539,7 +1646,8 @@ public class MediaSubscriptionService {
         });
         // 3) 补缺源
         for (MediaSubscriptionResource gap : gaps) {
-            mergePlaylistFrom(subscription, gap.getMountPath(), ac, merged,
+            mergePlaylistFrom(subscription, gap.getMountPath(), ac, checkService.collectSeason(subscription, gap),
+                    effectiveStartEpisode(gap, subscription), merged,
                     driveLine(driveLines, gap.getType() == null ? null : DriveId.toDrive(gap.getType())));
         }
         if (tvboxRequest) {
@@ -1785,8 +1893,14 @@ public class MediaSubscriptionService {
     /** 拉取挂载路径播放列表并按集合并进合并线路与盘线路。
      * 显式 depth=3:getPlaylist 对 detail/web 默认 depth=1,嵌套目录结构的补缺/转存挂载会列空;
      * ac 透传——TVBox 请求(空 ac)产出紧凑播放 id(备用线路可直连 /play),web 产出代理地址。 */
-    private void mergePlaylistFrom(MediaSubscription subscription, String path, String ac, TreeMap<Integer, String> merged,
-                                   TreeMap<Integer, String> driveLine) {
+    /** 编号归一的播放侧口径:资源级起始集号 &gt; 订阅级季起始集号(与巡检 applyNumbering 同序)。 */
+    private static Integer effectiveStartEpisode(MediaSubscriptionResource resource, MediaSubscription subscription) {
+        return resource != null && resource.getStartEpisode() != null
+                ? resource.getStartEpisode() : subscription.getSeasonStartEpisode();
+    }
+
+    private void mergePlaylistFrom(MediaSubscription subscription, String path, String ac, Integer collectSeason,
+                                   Integer startEpisode, TreeMap<Integer, String> merged, TreeMap<Integer, String> driveLine) {
         try {
             MovieList playlist = tvBoxService.getDetail(StringUtils.defaultString(ac), "1$" + path + Constants.PLAYLIST,
                     subscription.getName(), null, 3, true);
@@ -1794,7 +1908,8 @@ public class MediaSubscriptionService {
                 return;
             }
             TreeMap<Integer, String> entries = new TreeMap<>();
-            parsePlayEntries(playlist.getList().get(0).getVod_play_url(), subscription.getSeason(), entries);
+            parsePlayEntries(playlist.getList().get(0).getVod_play_url(), collectSeason,
+                    startEpisode, entries);
             entries.forEach((episode, entry) -> {
                 merged.putIfAbsent(episode, entry);
                 driveLine.putIfAbsent(episode, entry);
@@ -1807,9 +1922,16 @@ public class MediaSubscriptionService {
     /** 解析 vod_play_url(组$$$集#条目 title$url)为 集→条目;至少一条解析成功才算有效。
      * 注意:选集分隔符是 '#',但 URL 可能内嵌 "#storageId=..." 片段 —— 不含 '$' 的片段拼回上一条,避免截断。 */
     boolean parsePlayEntries(String playUrl, Integer season, TreeMap<Integer, String> out) {
+        return parsePlayEntries(playUrl, season, null, out);
+    }
+
+    /** 带<b>季起始集号</b>偏移的播放列表解析:资源季内编号而官方连续编号时(一念永恒形态),
+     * 解析出的季内集号 +N-1 映射到全剧连续集号,与巡检/集源行同一套编号。 */
+    boolean parsePlayEntries(String playUrl, Integer season, Integer seasonStartEpisode, TreeMap<Integer, String> out) {
         if (StringUtils.isBlank(playUrl)) {
             return false;
         }
+        int offset = seasonStartEpisode != null && seasonStartEpisode > 1 ? seasonStartEpisode - 1 : 0;
         boolean any = false;
         for (String group : playUrl.split("\\$\\$\\$")) {
             List<String> entries = new ArrayList<>();
@@ -1827,6 +1949,9 @@ public class MediaSubscriptionService {
                 }
                 String episodeTitle = entry.substring(0, index).replaceAll("\\([^)]*\\)$", ""); // 去掉体积后缀 (1.2G)
                 int episode = checkService.parseEpisodeFromTitle(episodeTitle, season);
+                if (offset > 0 && episode > 0) {
+                    episode += offset;
+                }
                 if (episode > 0) {
                     // 同集重复(平铺混排包 01.DV/01.SDR 同组并列):画质兼容性差的让位,防 DV 版绿屏
                     String existing = out.get(episode);
@@ -2698,6 +2823,7 @@ public class MediaSubscriptionService {
         dto.setName(subscription.getName());
         dto.setKeyword(subscription.getKeyword());
         dto.setSeason(subscription.getSeason());
+        dto.setSeasonStartEpisode(subscription.getSeasonStartEpisode());
         dto.setDoubanId(subscription.getDoubanId());
         dto.setMetaProvider(subscription.getMetaProvider());
         dto.setMetaId(subscription.getMetaId());
@@ -2777,7 +2903,10 @@ public class MediaSubscriptionService {
             return List.of();
         }
         List<Integer> missing = new ArrayList<>();
-        for (int i = 1; i <= base; i++) {
+        // 季起始集号下界:本季从全剧第 N 集开始,季前旧集不在本订阅缺口口径内(与巡检 computeMissing 同规)
+        int lower = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
+                ? subscription.getSeasonStartEpisode() : 1;
+        for (int i = lower; i <= base; i++) {
             if (!present.contains(i)) {
                 missing.add(i);
             }

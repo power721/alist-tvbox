@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,8 +59,8 @@ class DoubanServiceTest {
     @BeforeEach
     void setUp() {
         doubanService = new DoubanService(appProperties, metaRepository, movieRepository, aliasRepository,
-                settingRepository, siteService, taskService, fileDownloader, new RestTemplateBuilder(),
-                jdbcTemplate, environment);
+                settingRepository, siteService, taskService, fileDownloader, mock(cn.har01d.alist_tvbox.entity.TmdbRepository.class),
+                new RestTemplateBuilder(), jdbcTemplate, environment);
     }
 
     @Test

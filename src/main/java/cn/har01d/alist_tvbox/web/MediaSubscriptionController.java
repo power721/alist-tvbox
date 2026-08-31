@@ -141,6 +141,16 @@ public class MediaSubscriptionController {
         return Map.of("success", true);
     }
 
+    /** 资源级起始集号:该资源第 1 集对应全剧第 N 集(body {startEpisode},0/缺省=清除)。
+     *  季包资源(完结季裸 1-8 实为全剧 153-160)混进连续编号订阅时手动对齐;改动后该资源集源行重扫。 */
+    @PostMapping("/{id}/resources/{resourceId}/episode-start")
+    public Map<String, Object> setEpisodeStart(@PathVariable int id, @PathVariable int resourceId,
+                                               @RequestBody(required = false) Map<String, Integer> body) {
+        subscriptionService.setResourceEpisodeStart(currentUid(), id, resourceId,
+                body == null ? null : body.get("startEpisode"));
+        return Map.of("success", true);
+    }
+
     /** 手动转存增量(TRANSFER 模式)。 */
     @PostMapping("/{id}/transfer")
     public Map<String, Object> transfer(@PathVariable int id) {

@@ -42,6 +42,30 @@ public class PianDanService {
     public static final String TMDB_PREFIX = "tmdb:";
     private static final String TMDB_API_PATH = "/3";
     private static final String TMDB_IMAGE = "https://image.tmdb.org/t/p/w500";
+
+    /** 豆瓣片单条目 vod_id(s:{标题}[@{年份}]):年份内嵌让详情/订阅绑定时能消歧同名翻拍;
+     *  片单条目载荷以 | 分段,vod_id 自身不能含 |。 */
+    public static String subjectId(String name, Integer year) {
+        return year == null ? "s:" + name : "s:" + name + "@" + year;
+    }
+
+    /** s:{标题}[@{年份}] → (标题, 年份?);无年份后缀时 year 为 null。 */
+    public static NameYear parseSubjectId(String id) {
+        String value = id.substring(2);
+        int index = value.lastIndexOf('@');
+        if (index > 0) {
+            try {
+                return new NameYear(value.substring(0, index), Integer.valueOf(value.substring(index + 1)));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return new NameYear(value, null);
+    }
+
+    /** s: 条目 id 的解析结果。 */
+    public record NameYear(String name, Integer year) {
+    }
+
     private static final Set<String> TRENDING_MEDIA = Set.of("all", "movie", "tv");
     private static final Set<String> TRENDING_WINDOWS = Set.of("day", "week");
     private static final Set<String> ANIME_MEDIA = Set.of("movie", "tv");

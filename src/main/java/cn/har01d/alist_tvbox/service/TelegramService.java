@@ -12,8 +12,7 @@ import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
-import cn.har01d.alist_tvbox.tvbox.Category;
-import cn.har01d.alist_tvbox.tvbox.CategoryList;
+import cn.har01d.alist_tvbox.tvbox.Category;import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.TextUtils;
@@ -28,6 +27,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.regex.Matcher;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
@@ -848,10 +848,13 @@ public class TelegramService {
 
         for (Movie movie : res) {
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id("s:" + movie.getName());
+            movieDetail.setVod_id(PianDanService.subjectId(movie.getName(), movie.getYear()));
             movieDetail.setVod_name(movie.getName());
             movieDetail.setVod_pic(movie.getCover());
             movieDetail.setVod_remarks(movie.getDbScore());
+            if (movie.getYear() != null) {
+                movieDetail.setVod_year(String.valueOf(movie.getYear()));
+            }
             movieDetail.setVod_tag(FOLDER);
             if ("web".equals(ac)) {
                 fixCover(movieDetail);
@@ -907,10 +910,13 @@ public class TelegramService {
 
         for (Movie movie : movies.subList(0, size)) {
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id("s:" + movie.getName());
+            movieDetail.setVod_id(PianDanService.subjectId(movie.getName(), movie.getYear()));
             movieDetail.setVod_name(movie.getName());
             movieDetail.setVod_pic(movie.getCover());
             movieDetail.setVod_remarks(movie.getDbScore());
+            if (movie.getYear() != null) {
+                movieDetail.setVod_year(String.valueOf(movie.getYear()));
+            }
             movieDetail.setVod_tag(FOLDER);
             if ("web".equals(ac)) {
                 fixCover(movieDetail);
@@ -989,15 +995,28 @@ public class TelegramService {
     private static MovieDetail getMovieDetail(JsonNode item) {
         double score = item.get("rating").get("value").asDouble();
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id("s:" + item.get("title").asText());
-        movieDetail.setVod_name(item.get("title").asText());
+        String title = item.get("title").asText();
+        Integer year = parseYear(item.path("year").asText(item.path("card_subtitle").asText("")));
+        movieDetail.setVod_id(PianDanService.subjectId(title, year));
+        movieDetail.setVod_name(title);
         movieDetail.setVod_pic(item.get("pic").get("normal").asText());
         if (score > 0) {
             movieDetail.setVod_remarks(String.valueOf(score));
         }
+        if (year != null) {
+            movieDetail.setVod_year(String.valueOf(year));
+        }
         movieDetail.setVod_tag(FOLDER);
         movieDetail.setCate(new CategoryList());
         return movieDetail;
+    }
+
+    /** 年份字段可能是纯 "2023" 或 card_subtitle 形如 "2023 · 中国大陆 · ..." 的前缀,取不到返 null。 */
+    private static Integer parseYear(String text) {
+        if (StringUtils.isBlank(text)) {
+            return null;
+        }
+        Matcher matcher = java.util.regex.Pattern.compile("(\\d{4})").matcher(text);        return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
     }
 
     public MovieList searchDouban(String keyword, int size) {

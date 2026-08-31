@@ -35,8 +35,8 @@ public class PianDanSubscriptionService {
         this.pianDanService = pianDanService;
     }
 
-    /** 片单条目载荷 {vodId}|{剧名}|{季?} 的解析结果。 */
-    public record PianDanEntry(String vodId, String name, Integer season) {
+    /** 片单条目载荷 {vodId}|{剧名}|{季?} 的解析结果(年份取自 s: vodId 的 @{年} 后缀,供豆瓣绑 id 消歧)。 */
+    public record PianDanEntry(String vodId, String name, Integer season, Integer year) {
     }
 
     /** 订阅/取消结果:msg 为 TvBox msg 通道文案(两口径共用),结构化字段供 Bot 渲染。 */
@@ -53,7 +53,7 @@ public class PianDanSubscriptionService {
             request.setMetaProvider("tmdb");
             request.setMetaId(entry.vodId().split(":")[2]);
         } else {
-            bindDoubanMeta(request, name);
+            bindDoubanMeta(request, entry.name(), entry.year());
         }
         if (entry.season() != null) {
             request.setSeason(entry.season()); // 多季剧条目显式落季,create 的 resolveSeason 对显式 >1 不覆盖
@@ -89,11 +89,11 @@ public class PianDanSubscriptionService {
                         + (ids.size() > 1 ? "(" + ids.size() + " 部)" : ""));
     }
 
-    /** 豆瓣片单条目自动绑元数据:优先本地豆瓣库精确名匹配(零网络);回落 suggest 名称精确匹配。
-     *  两级的同名消歧口径一致:名称相等的结果**恰好一个**才绑 —— 同名翻拍多条时 suggest 也无法消歧
+    /** 豆瓣片单条目自动绑元数据:优先本地豆瓣库精确名匹配(零网络,年份可消歧同名翻拍);回落 suggest 名称精确匹配。
+     *  两级的同名消歧口径一致:名称相等的结果**恰好一个**才绑 —— 同名翻拍多条且无年份可用时,suggest 也无法消歧
      *  (片单条目无年份),取首条必赌错一半,不如不绑回落纯标题订阅,交给巡检名称桥接(有季号/年份上下文)消歧。 */
-    private void bindDoubanMeta(MediaSubscriptionRequest request, String name) {
-        Integer localId = mediaSubscriptionService.localDoubanId(name);
+    private void bindDoubanMeta(MediaSubscriptionRequest request, String name, Integer year) {
+        Integer localId = mediaSubscriptionService.localDoubanId(name, year);
         if (localId != null) {
             request.setDoubanId(localId);
             request.setMetaProvider("douban");
@@ -124,9 +124,9 @@ public class PianDanSubscriptionService {
         }
     }
 
-    /** 片单条目载荷 → (vodId, 剧名, 季号?):详情页装配 play id 时已内嵌剧名与季号({vodId}|{名}|{季}),
+    /** 片单条目载荷 → (vodId, 剧名, 季号?, 年份?):详情页装配 play id 时已内嵌剧名与季号({vodId}|{名}|{季}),
      *  订阅/取消零网络;多季剧的季号让订阅精确到季(create 对显式 >1 的季号不覆盖)。
-     *  无内嵌名的 TMDB 条目现拉一次 zh-CN 标题兜底,豆瓣条目(s:{标题})标题本就在 id 里。 */
+     *  无内嵌名的 TMDB 条目现拉一次 zh-CN 标题兜底;豆瓣条目(s:{标题}[@{年}])标题在 id 里、年份取后缀。 */
     public PianDanEntry pianDanEntry(String payload) {
         String[] parts = payload.split("\\|", -1);
         String vodId = parts[0];
@@ -138,17 +138,22 @@ public class PianDanSubscriptionService {
             } catch (NumberFormatException ignored) {
             }
         }
+        Integer year = null;
         if (StringUtils.isBlank(name) && vodId.startsWith("tmdb:")) {
             name = tmdbMeta(vodId).getVod_name();
         }
         if (StringUtils.isBlank(name)) {
             if (vodId.startsWith("s:")) {
-                name = vodId.substring(2);
+                PianDanService.NameYear entry = PianDanService.parseSubjectId(vodId);
+                name = entry.name();
+                year = entry.year();
             } else {
                 throw new BadRequestException("无效的片单条目: " + vodId);
             }
+        } else if (vodId.startsWith("s:")) {
+            year = PianDanService.parseSubjectId(vodId).year();
         }
-        return new PianDanEntry(vodId, name, season);
+        return new PianDanEntry(vodId, name, season, year);
     }
 
     /** TMDB vodId(tmdb:tv:42 / tmdb:movie:42)→ 详情;格式非法 400。 */

@@ -32,6 +32,8 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner;
+import cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner;
 import cn.har01d.alist_tvbox.service.metadata.MetadataService;
 import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
@@ -161,6 +163,21 @@ public class MediaSubscriptionCheckService {
             "(?:19|20)\\d{2}\\s*[.\\-/年]\\s*\\d{1,2}\\s*[.\\-/月]\\s*\\d{1,2}\\s*日?|\\b(?:19|20)\\d{6}\\b");
     /** 目录名声明的季区间 第A-B季 / 第A~B季(单季由 TextUtils.parseTitleSeason 处理) */
     private static final Pattern SEASON_RANGE = Pattern.compile("第\\s*(\\d{1,2})\\s*[-~至]\\s*(\\d{1,2})\\s*季");
+    /** 多季合一包标题:声明<b>季区间</b>(第1-4季 / S01-S04)—— 包内文件按各自 SxxEyy 分属多季,
+     *  须按文件季逐个映射(单值平移会让 S01E01/S02E01 裸号碰撞后错位冒领)。只认季区间,
+     *  不认「合集/全集」这类无季号词:单季剧的全季包也常这么标(线上:「测试剧 (2025) 4K 全集」),
+     *  放宽季口径会把正常全季包整包弃收。 */
+    private static final Pattern MULTI_SEASON_PACK = Pattern.compile(
+            "第\\s*\\d{1,2}\\s*[-~至]\\s*\\d{1,2}\\s*季|(?i)s\\s?\\d{1,2}\\s*[-~至]\\s*s?\\s?\\d{1,2}\\b");
+    /** 小说/电子书资源信号:txt/epub 等电子书扩展名 + 作者署名/校对精校/全本等网文打包术语
+     *  (线上:一念永恒的候选池混入《一念永恒》(校对版全本)作者:耳根.txt 一族,同名召回命中剧名门禁) */
+    private static final Pattern NOVEL_TITLE = Pattern.compile(
+            "(?i)\\.(txt|epub|mobi|azw3?)$|作者|校对|精校|全本|有声书?");
+    /** 同名小说/电子书资源判定(入池门禁用) */
+    static boolean isNovelTitle(String title) {
+        return StringUtils.isNotBlank(title) && NOVEL_TITLE.matcher(title).find();
+    }
+
     /** 标题宣称的集数进度:更新至N / 全N集 / 第A-B集 / 第N集 / EPn(取最大值) */
     private static final Pattern TITLE_PROGRESS = Pattern.compile(
             "(?i)更新?至\\s*(\\d{1,4})|全\\s*(\\d{1,4})\\s*集|第\\s*(\\d{1,4})\\s*[-~至]\\s*(\\d{1,4})\\s*集|第\\s*(\\d{1,4})\\s*集|(?:^|[^a-z])e(?:p)?\\s*(\\d{1,4})(?!\\d)");
@@ -239,6 +256,18 @@ public class MediaSubscriptionCheckService {
     private final Map<Integer, Long> aheadRescueTime = new ConcurrentHashMap<>();
     /** 字节级流探测客户端(默认 OkHttp 实现,单测注入桩) */
     private StreamProbeClient streamProbeClient = new StreamProbeClient.Default();
+    /** 豆瓣分季集数 → 资源级起始集号自动推断(兜底源,单测注入桩) */
+    private DoubanSeasonAligner seasonAligner;
+    /** 腾讯分季集数 → 全剧起始集号(首选源:分季集数与绝对集号严格对齐,单测注入桩) */
+    private TencentSeasonAligner tencentSeasonAligner;
+
+    void setSeasonAligner(DoubanSeasonAligner seasonAligner) {
+        this.seasonAligner = seasonAligner;
+    }
+
+    void setTencentSeasonAligner(TencentSeasonAligner tencentSeasonAligner) {
+        this.tencentSeasonAligner = tencentSeasonAligner;
+    }
     /**
      * 订阅巡检执行池:并发度可配(checkConcurrency,默认 3),到期订阅并发检查、手动触发的
      * 检查/换源/刷新不再与定时 sweep 排同一条队。同订阅重入由 {@link #inFlight} 防护;
@@ -278,8 +307,12 @@ public class MediaSubscriptionCheckService {
                                          AppProperties appProperties,
                                          ObjectMapper objectMapper,
                                          ObjectProvider<MediaSubscriptionTransferService> transferServiceProvider,
-                                         MediaSubscriptionNotificationService notificationService) {
+                                         MediaSubscriptionNotificationService notificationService,
+                                         DoubanSeasonAligner seasonAligner,
+                                         TencentSeasonAligner tencentSeasonAligner) {
         this.transferServiceProvider = transferServiceProvider;
+        this.seasonAligner = seasonAligner;
+        this.tencentSeasonAligner = tencentSeasonAligner;
         this.notificationService = notificationService;
         this.subscriptionRepository = subscriptionRepository;
         this.resourceRepository = resourceRepository;
@@ -347,7 +380,7 @@ public class MediaSubscriptionCheckService {
                 aListService, telegramService, wanouSearchService, panLianSearchService,
                 guanYingSearchService, woniuSearchService, panjuSearchService, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper,
-                fixedProvider(transferService), notificationService);
+                fixedProvider(transferService), notificationService, null, null);
     }
 
     private static ObjectProvider<MediaSubscriptionTransferService> fixedProvider(
@@ -394,8 +427,8 @@ public class MediaSubscriptionCheckService {
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
                 guanYingSearchService, woniuSearchService, panjuSearchService, metadataService, autoUpdateExecutor,
-                historyRepository, appProperties, objectMapper, (MediaSubscriptionTransferService) null,
-                notificationService);
+                historyRepository, appProperties, objectMapper, fixedProvider(null),
+                notificationService, null, null);
     }
 
     @PreDestroy
@@ -543,7 +576,12 @@ public class MediaSubscriptionCheckService {
         List<String> purgedTitles = new ArrayList<>();
         boolean primaryPurged = false;
         for (MediaSubscriptionResource resource : resources) {
-            Integer titleSeason = TextUtils.parseTitleSeason(resource.getTitle());
+            if (ownSeasonPackTitle(subscription, resource.getTitle())) {
+                continue; // 本剧季包(一念永恒形态):标题声明的季是本剧自己的,不是换季残留
+            }
+            Integer titleSeason = subscription.getSeason() != null && subscription.getSeason() > 1
+                    ? effectiveTitleSeason(subscription, resource.getTitle())
+                    : TextUtils.parseTitleSeason(resource.getTitle());
             if (titleSeason == null || titleSeason.equals(subscription.getSeason())) {
                 continue;
             }
@@ -1035,6 +1073,7 @@ public class MediaSubscriptionCheckService {
             return;
         }
         subscription.setLastCheckTime(System.currentTimeMillis());
+        ensureSeasonStartEpisode(subscription);
         purgeForeignSeasonResources(subscription);
         if (staleSeasonInventory(subscription)) {
             // 改季残留(改季发生在重置功能之前):旧季集源行冒领集号,先卸全部挂载再全量重置,
@@ -1055,6 +1094,7 @@ public class MediaSubscriptionCheckService {
             }
         }
         refreshMetadata(subscription);
+        applyTencentOfficialNumbers(subscription); // 在快照之后:覆盖要赢过 TMDB 滞后值
         if (stopIfDeleted(subscription.getId())) {
             return;
         }
@@ -1391,7 +1431,8 @@ public class MediaSubscriptionCheckService {
             return;
         }
         subscription.setMetaSyncTime(now);
-        MetadataDetails details = metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+        // metaDetails 内部按形态回落季号:TMDB 单季装全剧的分季订阅拿第 1 季全剧口径
+        MetadataDetails details = metaDetails(subscription);
         if (details == null) {
             return;
         }
@@ -1626,11 +1667,20 @@ public class MediaSubscriptionCheckService {
         base = Math.max(base, projected);
         // base 上限保护:官方数据异常时不至于搜几千集(与网页清单 MAX_EPISODE_ROWS 同口径,
         // 旧值 500 把柯南这类 1200+ 集长番的缺集检测整轮废掉 —— 27 个真实缺口从未触发补缺)
+        // 分季订阅的窗口上界:本季在全剧连续集号空间的结束 = 下一季起点-1(分季表)——
+        // 不夹会把下一季的集算成本订阅缺口,补缺永远填不上、空转攒 stallCount
+        Integer windowEnd = seasonWindowEnd(subscription);
+        if (windowEnd != null && base > windowEnd) {
+            base = windowEnd;
+        }
         if (base <= 0 || base > MediaSubscriptionService.MAX_EPISODE_ROWS) {
             return Set.of();
         }
         Set<Integer> missing = new TreeSet<>();
-        for (int i = 1; i <= base; i++) {
+        // 季起始集号下界:本季从全剧第 N 集开始,季前旧集不在本订阅补缺范围(资源侧本来就没有)
+        int lower = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
+                ? subscription.getSeasonStartEpisode() : 1;
+        for (int i = lower; i <= base; i++) {
             if (!present.contains(i)) {
                 missing.add(i);
             }
@@ -1780,7 +1830,8 @@ public class MediaSubscriptionCheckService {
         return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
                 .filter(r -> !MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState()))
                 .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()) || isBadCooled(r, now))
-                .filter(r -> titleYearMatches(metaYear, names, r.getTitle()))
+                .filter(r -> ownSeasonPackTitle(subscription, r.getTitle())
+                        || titleYearMatches(metaYear, names, r.getTitle()))
                 .filter(r -> !titleProgressForeign(subscription, r.getTitle(), genres) && !liveActionForeign(genres, r.getTitle()))
                 .filter(r -> driveAllowed(allowedDrives, r.getType() == null ? null : DriveId.toDrive(r.getType())))
                 .filter(r -> !matchesKeywords(r.getTitle(), global.getExcludeKeywords()))
@@ -1816,12 +1867,108 @@ public class MediaSubscriptionCheckService {
             return null;
         }
         try {
-            return metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(),
-                    subscription.getSeason());
+            MetadataDetails details = metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(),
+                    effectiveMetaSeason(subscription));
+            if (details != null) {
+                return details;
+            }
+            return null;
         } catch (Exception e) {
             log.debug("meta details for subscription {} unavailable: {}", subscription.getId(), e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 元数据拉取季(分季订阅一念永恒形态的关键):TMDB 单季装全剧(totalSeasons==1,集号=全剧
+     * 绝对集号)的剧,订阅第 N&gt;1 季时 provider 侧根本没有那一季 —— 拉第 1 季(全剧口径,
+     * 官方集数/排播/封面全用得上),集号平移交给订阅级 seasonStartEpisode。非该形态原样透传。
+     */
+    Integer effectiveMetaSeason(MediaSubscription subscription) {
+        Integer season = subscription.getSeason();
+        if (season == null || season <= 1) {
+            return season;
+        }
+        try {
+            MetadataDetails series = metadataService.details(subscription.getMetaProvider(),
+                    subscription.getMetaId(), 1);
+            if (series != null && series.getTotalSeasons() != null && series.getTotalSeasons() == 1) {
+                return 1;
+            }
+        } catch (Exception e) {
+            log.debug("series shape probe failed: {}", e.getMessage());
+        }
+        return season;
+    }
+
+    /**
+     * 腾讯集数覆盖 TMDB(绝对连续集号形态的追更时效补丁):TMDB 对国产年番的集数登记滞后
+     * (线上:一念永恒 TMDB 已播 173/总 200,腾讯完结季实更 16 集 = 实播 181)—— 缺集上界、
+     * 季包越界门禁 cap、追更判定全部跟着滞后几天。腾讯分季表各季集数求和覆盖<b>已播</b>;
+     * <b>总集数</b>取 max(TMDB, 腾讯之和):腾讯完结季条目逐集增长,完结前之和 &lt; 真实总数,
+     * 不能单独当总数用(会把在播剧误判已播完)。只升不降(TMDB 偶尔超前/回填时不倒退)。
+     * 仅「单季装全剧」形态且腾讯表可用时生效;豆瓣表不参与(分季集数有漏登,线上差 13 集)。
+     */
+    void applyTencentOfficialNumbers(MediaSubscription subscription) {
+        if (tencentSeasonAligner == null) {
+            return;
+        }
+        MetadataDetails details = metaDetails(subscription);
+        if (details == null || details.getTotalSeasons() == null || details.getTotalSeasons() != 1) {
+            return;
+        }
+        Map<Integer, Integer> counts = tencentSeasonAligner.seasonCounts(
+                StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()), metaYear(subscription));
+        if (counts == null || counts.isEmpty()) {
+            return;
+        }
+        int sum = counts.values().stream().mapToInt(Integer::intValue).filter(c -> c > 0).sum();
+        if (sum <= 0) {
+            return;
+        }
+        Integer aired = subscription.getOfficialEpisodes();
+        Integer total = subscription.getOfficialTotal();
+        boolean changed = false;
+        if (sum > (aired == null ? 0 : aired)) {
+            subscription.setOfficialEpisodes(sum);
+            changed = true;
+        }
+        int tMax = Math.max(total == null ? 0 : total, sum);
+        if (tMax > (total == null ? 0 : total)) {
+            subscription.setOfficialTotal(tMax);
+            changed = true;
+        }
+        if (changed) {
+            subscriptionRepository.save(subscription);
+            addEvent(subscription.getId(), "ALIGN", "官方集数按腾讯口径补正:已播 " + sum + " 集(TMDB 登记 "
+                    + (aired == null ? "未知" : aired) + "),总集数 " + tMax);
+        }
+    }
+
+    /**
+     * 分季订阅的季起始集号自动对齐(seasonStartEpisode,腾讯分季集数优先/豆瓣兜底):TMDB 单季
+     * 装全剧的剧订阅第 N 季,季内集号 1..K 平移 +start-1 才能落进官方绝对集号空间。手动声明
+     * 优先(非 null 直接跳过);推导失败静默(24h 负缓存,不反复打外网),下轮再试。
+     */
+    void ensureSeasonStartEpisode(MediaSubscription subscription) {
+        Integer season = subscription.getSeason();
+        if (season == null || season <= 1 || subscription.getSeasonStartEpisode() != null) {
+            return;
+        }
+        MetadataDetails details = metaDetails(subscription); // 内部已按形态回落第 1 季
+        if (details == null || details.getTotalSeasons() == null || details.getTotalSeasons() != 1) {
+            return; // 非「单季装全剧」形态:多季元数据本就分季,不需要平移
+        }
+        Map<Integer, Integer> starts = alignSeasonStarts(subscription,
+                StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()), metaYear(subscription));
+        Integer start = starts == null ? null : starts.get(season);
+        if (start == null || start <= 1) {
+            return;
+        }
+        subscription.setSeasonStartEpisode(start);
+        subscriptionRepository.save(subscription);
+        addEvent(subscription.getId(), "ALIGN", "分季订阅自动对齐:第 " + season + " 季第 1 集 = 全剧第 " + start
+                + " 集(分季集数累推);季内集号将平移进 TMDB 绝对集号空间");
     }
 
     /**
@@ -1934,11 +2081,390 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** 巡检口径的集文件清洗:先做年番全剧连续编号重映射(救回超界真集),再剔不相干噪声。
+    /** 巡检口径的集文件清洗:先做编号归一(手动偏移/自动重映射),再剔不相干噪声。
      * 重映射必须在噪声剔除之前 —— 连续编号的正片集号天然超出官方总集数,先剔会把好集全删光。 */
     void sanitizeEpisodeFiles(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files, String contextTitle) {
-        remapAbsoluteNumbering(subscription, files, contextTitle);
+        sanitizeEpisodeFiles(subscription, null, files, contextTitle);
+    }
+
+    /** 带<b>资源</b>的清洗:资源级起始集号优先于订阅级偏移与自动重映射(手动事实分资源声明);
+     *  带文件级季映射(season_starts,列举时已映射进全剧连续集号)的资源跳过全部平移 ——
+     *  自动对齐只在列举时发生(collectResourceEpisodeFiles → seasonPackMap),这里没有后置推断。 */
+    void sanitizeEpisodeFiles(MediaSubscription subscription, MediaSubscriptionResource resource,
+                              TreeMap<Integer, EpisodeFile> files, String contextTitle) {
+        boolean mapped = resource != null && resource.getSeasonStarts() != null;
+        if (!mapped) {
+            applyNumbering(subscription, resource, files, contextTitle);
+        }
+        if (resource != null && !mapped && seasonPackWidened(subscription, resource)
+                && resource.getStartEpisode() == null && subscription.getSeasonStartEpisode() == null) {
+            // 放宽收进来的季包(列目录按资源季收的)在编号归一后仍无偏移可用:
+            // 裸集号会冒领全剧低集号 —— 整体弃收,资源按「无可识别」退役(与放宽前的行为一致)
+            files.clear();
+            return;
+        }
+        if (mapped && mappingOverflowsOfficial(subscription, files)) {
+            // 映射后最大集号超官方口径 = 包内容不是标题声明的季(线上(订阅 65):「完结季」
+            // 包内是 S1 的 52 个裸编号文件,平移成 166-217,未播的 174-217 全被冒领)——
+            // 整体弃收(判据沿用旧后置平移门禁:最大集号 ≤ min(总集数,已播+滞后容差))
+            int overflowedMax = files.lastKey();
+            files.clear();
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                    "季包映射越界弃收:「" + StringUtils.abbreviate(StringUtils.defaultString(resource.getTitle()), 40)
+                            + "」映射后最大集号 " + overflowedMax + " 超官方口径");
+            return;
+        }
         stripForeignEpisodeNoise(subscription, files, metaGenres(subscription));
+    }
+
+    /**
+     * 季包资源的列目录季参数(一念永恒形态的关键前置):文件名是 SxxEyy 时带的是<b>资源自己的
+     * 季号</b>(完结季包 S04E01-08),而订阅季=1(元数据全剧连续集号口径)—— parseEpisode 的
+     * 季过滤会把整包文件拒成「无可识别的剧集文件」,自动对齐根本没机会跑。
+     * <p>
+     * 放宽后一律 null(接受任意 SxxEyy 与裸编号):完结季包里文件常标 <b>S01Eyy</b>(季内
+     * 编号习惯,S01=该包第 1 集而非第 1 季),按声明的资源季过滤同样整包拒收。季归属与编号
+     * 由 {@link SeasonPackMap} 在文件级映射把关(别季文件拒收/无映射表整体弃收)。
+     * <p>
+     * 门禁:多季订阅(season&gt;1,元数据本就分季、季包按各自季订阅)与元数据本身分季
+     * (totalSeasons&gt;1)或未知的剧不放宽 —— 那些形态的季过滤是防冒领的正确语义,不能越权收别季文件。
+     * 放宽收进来但编号归一后仍无偏移可用的,由 sanitizeEpisodeFiles 整体弃收(防冒领)。
+     */
+    Integer collectSeason(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        Integer season = subscription.getSeason();
+        if (resource == null || !seasonPackWidened(subscription, resource)) {
+            return season;
+        }
+        MetadataDetails details = metaDetails(subscription);
+        if (details == null || details.getTotalSeasons() == null || details.getTotalSeasons() > 1) {
+            return season; // 元数据本身分季或未知:不越权收别季文件
+        }
+        return null;
+    }
+
+    /** 资源是否属「订阅季≠资源季」的季包形态(列目录放宽的先决条件,弃收门禁复用)。 */
+    private static boolean seasonPackWidened(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        if (resource == null) {
+            return false;
+        }
+        int season = subscription.getSeason() == null ? 1 : subscription.getSeason(); // 空季视为第 1 季
+        if (season > 1) {
+            return false; // 多季订阅:季包按各自季另开订阅,不放宽
+        }
+        Integer declared = TextUtils.parseTitleSeason(resource.getTitle());
+        if (declared != null && declared > 0) {
+            return declared != season;
+        }
+        return resource.getStartEpisode() != null || DoubanSeasonAligner.finaleMarked(resource.getTitle())
+                || MULTI_SEASON_PACK.matcher(StringUtils.defaultString(resource.getTitle())).find();
+    }
+
+    /** 标题声明的季号(分季订阅口径):显式季标优先;「完结季」类无季号标记按分季表归位
+     * (腾讯优先:完结季 = 最大已登记季)—— 第 4 季订阅收完结季包、第 2/3 季订阅拒它。
+     * 分季表不可用返回 null(裸标题语义,门禁照旧放行给探测层)。仅 season&gt;1 订阅调用。 */
+    Integer effectiveTitleSeason(MediaSubscription subscription, String title) {
+        Integer declared = TextUtils.parseTitleSeason(title);
+        if (declared != null || !DoubanSeasonAligner.finaleMarked(StringUtils.defaultString(title))) {
+            return declared;
+        }
+        return alignFinaleSeason(subscription);
+    }
+
+    /** 分季对齐统一入口:腾讯优先(分季集数与绝对集号严格对齐,线上实测一念永恒 52/54/59/
+     * 完结季起点 166,与 Bangumi 一致),腾讯无数据回落豆瓣(其分季集数有漏登,完结季累推
+     * 153 与真实 166 差 13 集)。 */
+    Map<Integer, Integer> alignSeasonStarts(MediaSubscription subscription, String seriesName, Integer firstYear) {
+        if (tencentSeasonAligner != null) {
+            Map<Integer, Integer> starts = tencentSeasonAligner.seasonStarts(seriesName, firstYear);
+            if (starts != null && !starts.isEmpty()) {
+                return starts;
+            }
+        }
+        return seasonAligner == null ? null : seasonAligner.seasonStarts(seriesName, firstYear);
+    }
+
+    Integer alignSeasonStart(MediaSubscription subscription, String seriesName, Integer firstYear, String resourceTitle) {
+        if (tencentSeasonAligner != null) {
+            Integer start = tencentSeasonAligner.inferSeasonStart(seriesName, firstYear, resourceTitle,
+                    subscription.getOfficialEpisodes());
+            if (start != null) {
+                return start;
+            }
+        }
+        return seasonAligner == null ? null
+                : seasonAligner.inferSeasonStart(seriesName, firstYear, resourceTitle,
+                        subscription.getOfficialEpisodes());
+    }
+
+    Integer alignFinaleSeason(MediaSubscription subscription) {
+        String seriesName = StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName());
+        Integer firstYear = metaYear(subscription);
+        if (tencentSeasonAligner != null) {
+            Integer season = tencentSeasonAligner.finaleSeason(seriesName, firstYear,
+                    subscription.getOfficialEpisodes());
+            if (season != null) {
+                return season;
+            }
+        }
+        return seasonAligner == null ? null
+                : seasonAligner.finaleSeason(seriesName, firstYear, subscription.getOfficialEpisodes());
+    }
+
+    /** 一念永恒形态(全剧连续集号的元数据):TMDB 单季装全剧(totalSeasons==1,集号=全剧连续),
+     * 豆瓣/Bangumi 侧却分多季 —— 订阅季≤1 时网盘上的「第N季/完结季/合集」资源都是<b>本剧
+     * 自己的季包</b>,季号/年份门禁不适用(季包年份是该季年份,不是首播年)。 */
+    boolean absoluteNumberedSeries(MediaSubscription subscription) {
+        Integer season = subscription.getSeason();
+        if (season != null && season > 1) {
+            return false;
+        }
+        MetadataDetails details = metaDetails(subscription);
+        return details != null && details.getTotalSeasons() != null && details.getTotalSeasons() == 1;
+    }
+
+    /** 标题是否声明本剧自己的季包(季号>1/完结季/多季合一),门禁放行的判定口径。
+     * absoluteSeries 由调用方预算好(候选循环里逐条调本方法,元数据只查一次)。 */
+    static boolean ownSeasonPackTitle(boolean absoluteSeries, String title) {
+        if (!absoluteSeries || StringUtils.isBlank(title)) {
+            return false;
+        }
+        Integer declared = TextUtils.parseTitleSeason(title);
+        return (declared != null && declared > 1)
+                || DoubanSeasonAligner.finaleMarked(title)
+                || MULTI_SEASON_PACK.matcher(title).find();
+    }
+
+    boolean ownSeasonPackTitle(MediaSubscription subscription, String title) {
+        return ownSeasonPackTitle(absoluteNumberedSeries(subscription), title);
+    }
+
+    /**
+     * 季包资源的文件级编号映射(一念永恒形态):把包内文件直接映射进全剧连续集号空间。
+     * 必须挂在 preferPut 之前 —— 同包多季文件的季内裸号会互相碰撞(S01E01/S02E01 裸号
+     * 都是 1),先映射才能各归各位,事后平移无法找回已被同集择优丢掉的兄弟文件。
+     * <ul>
+     * <li>SINGLE(标题声明单季 K/完结季):包内文件全属 K —— 裸编号与 S01Eyy(季内编号习惯,
+     *     S01=该包第 1 集)按 K 的起点平移;SxxEyy 声明别季(&gt;1 且≠K)拒收(多季合一内容
+     *     由各自季的独立分享供给);</li>
+     * <li>MULTI(季区间/合集):SxxEyy 按各自季的起点平移(季无起点数据拒收);裸编号按所在
+     *     目录声明的季,目录不声明则按最高季(合集包的零散更新文件几乎总是最新季)。</li>
+     * </ul>
+     * 映射表持久化在资源行(season_starts)—— 豆瓣缓存过期/条目下线后映射不漂移。
+     */
+    static final class SeasonPackMap {
+        private final Map<Integer, Integer> starts;
+        private final Integer packSeason; // SINGLE 模式的包季;MULTI 为 null
+        private final boolean multi;
+
+        SeasonPackMap(Map<Integer, Integer> starts, Integer packSeason, boolean multi) {
+            this.starts = starts;
+            this.packSeason = packSeason;
+            this.multi = multi;
+        }
+
+        /**
+         * @param bareEpisode parseEpisode(name, null) 的裸集号(SxxEyy 取 Eyy,裸编号取末号)
+         * @return 映射后的全剧集号;-1 = 拒收(别季文件/无起点数据)
+         */
+        int map(String name, String dirName, int bareEpisode) {
+            if (bareEpisode <= 0) {
+                return -1;
+            }
+            int[] seasonEpisode = parseSeasonEpisode(name);
+            int fileSeason = seasonEpisode != null ? seasonEpisode[0] : 0;
+            Integer target;
+            if (multi) {
+                int dir = dirSeason(dirName);
+                target = fileSeason > 0 ? fileSeason : (dir > 0 ? dir : topSeason());
+            } else {
+                if (fileSeason > 1 && packSeason != null && fileSeason != packSeason) {
+                    return -1; // 别季文件:SINGLE 包只供声明的季
+                }
+                target = packSeason;
+            }
+            Integer start = target == null ? null : starts.get(target);
+            return start == null ? -1 : start - 1 + bareEpisode;
+        }
+
+        /** 起点表里的最高季(合集包裸编号文件的兜底归属:零散更新文件几乎总是最新季)。 */
+        private int topSeason() {
+            return starts.keySet().stream().mapToInt(Integer::intValue).max().orElse(1);
+        }
+
+        private static int dirSeason(String dirName) {
+            Integer season = TextUtils.parseTitleSeason(StringUtils.defaultString(dirName));
+            return season == null ? 0 : season;
+        }
+
+        /** 持久化编码:「季:起点」逗号串(如 1:1,2:53)。 */
+        String encode() {
+            return starts.entrySet().stream()
+                    .map(e -> e.getKey() + ":" + e.getValue())
+                    .collect(java.util.stream.Collectors.joining(","));
+        }
+
+        /** 解析持久化编码;格式不符返回 null。 */
+        static SeasonPackMap parse(String encoded, Integer packSeason, boolean multi) {
+            if (StringUtils.isBlank(encoded)) {
+                return null;
+            }
+            Map<Integer, Integer> starts = new TreeMap<>();
+            for (String token : encoded.split(",")) {
+                String[] pair = token.split(":");
+                if (pair.length != 2) {
+                    return null;
+                }
+                try {
+                    starts.put(Integer.parseInt(pair[0].trim()), Integer.parseInt(pair[1].trim()));
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            return new SeasonPackMap(starts, packSeason, multi);
+        }
+    }
+
+    /** 文件名里的 SxxEyy(剥扩展名/技术括号后),无季标返回 null。 */
+    static int[] parseSeasonEpisode(String name) {
+        String base = StringUtils.defaultString(name);
+        int index = base.lastIndexOf('.');
+        if (index > 0 && index < base.length() - 1 && base.substring(index + 1).matches("[a-zA-Z0-9]{1,5}")) {
+            base = base.substring(0, index);
+        }
+        Matcher matcher = SEASON_EPISODE.matcher(stripTechBrackets(base));
+        if (!matcher.find()) {
+            return null;
+        }
+        int ep = Integer.parseInt(matcher.group(2));
+        return ep >= 1 && ep <= 9999 ? new int[]{Integer.parseInt(matcher.group(1)), ep} : null;
+    }
+
+    /**
+     * 季包资源的编号映射表(优先级:手动声明 &gt; 资源行持久化表 &gt; 豆瓣分季集数实时累推)。
+     * 非季包形态/手动声明了偏移/豆瓣无分季数据 → null(列举走原 season 口径,防冒领交给弃收门禁)。
+     * 实时累推成功即持久化到资源行并记事件(后续轮次不再依赖外网)。
+     */
+    /** 分季订阅的季窗口上界(全剧连续集号空间):下一季起点-1;末季/表不可用返回 null(不夹)。 */
+    Integer seasonWindowEnd(MediaSubscription subscription) {
+        Integer start = subscription.getSeasonStartEpisode();
+        Integer season = subscription.getSeason();
+        if (start == null || start <= 1 || season == null) {
+            return null;
+        }
+        Map<Integer, Integer> starts = alignSeasonStarts(subscription,
+                StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()), metaYear(subscription));
+        Integer next = starts == null ? null : starts.get(season + 1);
+        return next == null ? null : next - 1;
+    }
+
+    /** 季包资源的包季:标题声明季&gt;1 优先;完结季类标记按分季表归位(最大季/最大季+1);裸标题 null。 */
+    Integer seasonPackTarget(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        String title = StringUtils.defaultString(resource.getTitle());
+        Integer declared = TextUtils.parseTitleSeason(title);
+        if (declared != null && declared > 1) {
+            return declared;
+        }
+        if (DoubanSeasonAligner.finaleMarked(title)) {
+            return alignFinaleSeason(subscription);
+        }
+        return null;
+    }
+
+    SeasonPackMap seasonPackMap(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        if (resource == null || (seasonAligner == null && tencentSeasonAligner == null)
+                || !seasonPackWidened(subscription, resource)
+                || resource.getStartEpisode() != null || subscription.getSeasonStartEpisode() != null) {
+            return null;
+        }
+        MetadataDetails details = metaDetails(subscription);
+        if (details == null || details.getTotalSeasons() == null || details.getTotalSeasons() > 1) {
+            return null; // 与 collectSeason 同门禁:元数据本身分季或未知,不越权重映射
+        }
+        String title = StringUtils.defaultString(resource.getTitle());
+        boolean multi = MULTI_SEASON_PACK.matcher(title).find();
+        Integer finalTarget = seasonPackTarget(subscription, resource);
+        if (!multi && finalTarget == null) {
+            return null; // SINGLE 包无季锚点(裸标题),交给旧链路(对齐器按标题推断,无则弃收)
+        }
+        SeasonPackMap cached = SeasonPackMap.parse(resource.getSeasonStarts(), finalTarget, multi);
+        if (cached != null) {
+            return cached;
+        }
+        String seriesName = StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName());
+        Integer firstYear = metaYear(subscription);
+        Map<Integer, Integer> table;
+        if (multi) {
+            table = alignSeasonStarts(subscription, seriesName, firstYear);
+        } else {
+            // SINGLE 起点用 inferSeasonStart:完结季常无豆瓣条目,起点=已登记各季之和+1,
+            // 起点表(seasonStarts)里没有这一行
+            Integer start = alignSeasonStart(subscription, seriesName, firstYear, title);
+            table = start == null || start <= 1 || finalTarget == null ? null : Map.of(finalTarget, start);
+        }
+        if (table == null || table.isEmpty()) {
+            return null;
+        }
+        SeasonPackMap map = new SeasonPackMap(table, finalTarget, multi);
+        resource.setSeasonStarts(map.encode());
+        resourceRepository.save(resource);
+        if (resource.getId() != null) {
+            episodeSourceRepository.deleteByResourceId(resource.getId()); // 旧裸编号行错位,清行重扫
+        }
+        addEvent(subscription.getId(), "ALIGN", "资源「" + StringUtils.abbreviate(title, 60)
+                + "」按豆瓣分季集数映射编号:" + map.encode().replaceAll("(\\d+):", "S$1="));
+        return map;
+    }
+
+    /** 资源口径的集文件列举统一入口(季包形态挂文件级映射,其余原 season 口径透传)。 */
+    void collectResourceEpisodeFiles(Site site, MediaSubscription subscription, MediaSubscriptionResource resource,
+                                     String path, TreeMap<Integer, EpisodeFile> files,
+                                     EpisodeSizePolicy policy, boolean refresh) {
+        collectEpisodeFiles(site, collectSeason(subscription, resource), path, 1, files, policy, refresh,
+                metaYear(subscription), seasonPackMap(subscription, resource));
+    }
+
+    /** 编号归一:资源级起始集号 &gt; 订阅级季起始集号 &gt; 自动重映射(remapAbsoluteNumbering);
+     *  文件级季映射(season_starts)的资源已在列举时映射进全剧连续集号空间,跳过全部平移。 */
+    static void applyNumbering(MediaSubscription subscription, MediaSubscriptionResource resource,
+                               TreeMap<Integer, EpisodeFile> files, String contextTitle) {
+        if (resource != null && resource.getSeasonStarts() != null) {
+            return;
+        }
+        Integer resourceStart = resource == null ? null : resource.getStartEpisode();
+        if (resourceStart != null) {
+            shiftEpisodeNumbers(files, resourceStart);
+        } else if (subscription.getSeasonStartEpisode() != null) {
+            applySeasonStartOffset(subscription, files);
+        } else {
+            remapAbsoluteNumbering(subscription, files, contextTitle);
+        }
+    }
+
+    /**
+     * 手动季起始集号偏移(remapAbsoluteNumbering 的反向场景):官方元数据是全剧连续集号
+     * (TMDB 单季装全剧,线上:一念永恒总集数连续),而网盘资源按季内编号组织
+     * (「第二季/第01集」)—— 季内集号 1..N 偏移 +N-1 映射到官方连续集号空间,
+     * 缺集检测/集源行/播放列表随即全部落在同一套连续编号上。
+     * 与自动重映射互斥:手动声明是用户的明确事实,自动推断(锚定条件可能不满足)不得覆盖。
+     */
+    static void applySeasonStartOffset(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files) {
+        shiftEpisodeNumbers(files, subscription.getSeasonStartEpisode());
+    }
+
+    /** 集号整体平移 +N-1:资源级起始集号与订阅级季起始集号共用(N=该批文件第 1 集对应的全剧集号)。 */
+    static void shiftEpisodeNumbers(TreeMap<Integer, EpisodeFile> files, Integer start) {
+        if (start == null || start <= 1 || files.isEmpty()) {
+            return;
+        }
+        int base = start - 1;
+        TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
+        for (Map.Entry<Integer, EpisodeFile> entry : files.entrySet()) {
+            int episode = entry.getKey() + base;
+            EpisodeFile file = entry.getValue();
+            result.put(episode, new EpisodeFile(episode, file.dir(), file.name(), file.size(), file.duration()));
+        }
+        files.clear();
+        files.putAll(result);
     }
 
     /**
@@ -2058,10 +2584,17 @@ public class MediaSubscriptionCheckService {
         if (!names.isEmpty() && !matchesTitle(names, title)) {
             return false;
         }
-        Integer titleSeason = TextUtils.parseTitleSeason(title);
+        if (ownSeasonPackTitle(subscription, title)) {
+            return true; // 本剧季包(一念永恒形态):季号/年份是季自己的口径,门禁放行,集号门禁已在上方复核
+        }
+        Integer titleSeason = subscription.getSeason() != null && subscription.getSeason() > 1
+                ? effectiveTitleSeason(subscription, title) : TextUtils.parseTitleSeason(title);
         if (subscription.getSeason() != null && subscription.getSeason() > 0
                 && titleSeason != null && !titleSeason.equals(subscription.getSeason())) {
             return false; // 标题明确标注其它季:同剧不同季,对本订阅就是"异剧"(换季后旧季资源继续挂载/顶主源)
+        }
+        if (titleSeason != null && titleSeason.equals(subscription.getSeason())) {
+            return true; // 本季季包(分季订阅,含完结季归位):年份是该季年份,年份门禁放行
         }
         return titleYearMatches(metaYear(subscription), names, title);
     }
@@ -2115,14 +2648,14 @@ public class MediaSubscriptionCheckService {
             // 主体正确的补缺挂载误判异剧白白卸载,行层面的毒数据随后面的 syncInventory 洗掉
             TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
             try {
-                collectEpisodeFiles(site(), subscription.getSeason(), resource.getMountPath(), 1, files,
-                        episodeSizePolicy(subscription), true, metaYear(subscription));
+                collectResourceEpisodeFiles(site(), subscription, resource, resource.getMountPath(), files,
+                        episodeSizePolicy(subscription), true);
             } catch (Exception e) {
                 log.info("aux mount refresh failed, retire: {} {}", resource.getMountPath(), e.getMessage());
                 retireResource(subscription, resource, e.getMessage(), false);
                 continue;
             }
-            sanitizeEpisodeFiles(subscription, files, resource.getTitle());
+            sanitizeEpisodeFiles(subscription, resource, files, resource.getTitle());
             if (files.isEmpty()) {
                 retireResource(subscription, resource, "挂载目录已无任何剧集文件", false);
                 continue;
@@ -2668,13 +3201,16 @@ public class MediaSubscriptionCheckService {
      */
     void fillGaps(MediaSubscription subscription, Set<Integer> missingStill) {
         int maxMounts = appProperties.getSubscription().getMaxGapMounts();
+        // 挂载槽满不再中断探测:probeShare 落的 LISTED 集源行本就可供播(可用性聚合含 LISTED,
+        // 盘线路按行走),挂载只是稳定供流 —— 线上(一念永恒 id=64)6 个补缺挂载各有独占集,
+        // 槽满即 break 连探测都不做,缺 107-165 永远补不上。有用候选挂载时挤掉最弱挂载换血。
         int auxMounted = auxMounts(subscription).size();
 
         int probed = 0;
         int maxProbes = appProperties.getSubscription().getMaxGapProbesPerRound();
         Set<String> throttledDrives = new java.util.HashSet<>(); // 本轮已撞风控的盘,后续候选直接跳过
-        for (MediaSubscriptionResource resource : candidatesOrdered(subscription)) {
-            if (probed >= maxProbes || missingStill.isEmpty() || auxMounted >= maxMounts) {
+        for (MediaSubscriptionResource resource : orderForGapProbes(subscription, missingStill)) {
+            if (probed >= maxProbes || missingStill.isEmpty()) {
                 break;
             }
             if (driveThrottledThisRound(resource.getType() == null ? null : DriveId.toDrive(resource.getType()), throttledDrives)) {
@@ -2684,6 +3220,10 @@ public class MediaSubscriptionCheckService {
             if (episodeSourceRepository.countByResourceId(resource.getId()) > 0
                     && intersection(coverageOf(resource), missingStill).isEmpty()) {
                 continue;
+            }
+            if (Boolean.FALSE.equals(likelyCoversMissing(subscription, resource, missingStill))) {
+                continue; // 季包区间可推断且与缺口无交集(线上:缺 107-165 时完结季包 166 起):
+                          // 探了也补不了缺,预算留给能补缺的候选(每轮 maxGapProbesPerRound=3,烧不起)
             }
             ProbeOutcome outcome = probeCandidateSafely(subscription, resource);
             if (outcome != ProbeOutcome.PROBED) {
@@ -2696,13 +3236,16 @@ public class MediaSubscriptionCheckService {
             Set<Integer> useful = intersection(coverageOf(resource), missingStill);
             if (!useful.isEmpty()) {
                 try {
-                    if (mountAux(subscription, resource)) {
-                        auxMounted++;
-                        missingStill.removeAll(useful);
-                        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
-                                "补缺 第" + joinNumbers(new ArrayList<>(useful)) + " 集(来自 " + StringUtils.defaultIfBlank(resource.getTitle(), "候选源") + ")");
-                        gapSearchRounds.remove(subscription.getId());
+                    if (auxMounted < maxMounts || evictWeakestAuxMount(subscription, useful) != null) {
+                        if (mountAux(subscription, resource)) {
+                            auxMounted = auxMounts(subscription).size();
+                        }
                     }
+                    // LISTED 行已让缺集可播,挂载与否都算补上;挂载槽满且弱挂载不值得挤时不挂
+                    missingStill.removeAll(useful);
+                    addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
+                            "补缺 第" + joinNumbers(new ArrayList<>(useful)) + " 集(来自 " + StringUtils.defaultIfBlank(resource.getTitle(), "候选源") + ")");
+                    gapSearchRounds.remove(subscription.getId());
                 } catch (Exception e) {
                     log.warn("mount gap source failed: {}", e.getMessage());
                     addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "补缺挂载失败:" + e.getMessage());
@@ -2717,6 +3260,133 @@ public class MediaSubscriptionCheckService {
                 fillPool(subscription, true, keyword);
             }
         }
+    }
+
+    /**
+     * 补缺探测序:候选默认按分数排(换源口径),但补缺要的是<b>能覆盖缺口</b> —— 线上(一念永恒
+     * id=64):缺 107-165 时池里 ~20 个高分完结季包(166 起)把探测预算(每轮 3 个)全烧光,
+     * 分数垫底的「第三季」候选永远轮不到。季包区间可推断的候选按「区间起点是否落在缺口内」
+     * 稳定分区,可能补缺的排前;推断不可用的维持分数序(不劣化)。
+     */
+    List<MediaSubscriptionResource> orderForGapProbes(MediaSubscription subscription, Set<Integer> missing) {
+        List<MediaSubscriptionResource> candidates = candidatesOrdered(subscription);
+        if (missing == null || missing.isEmpty()) {
+            return candidates;
+        }
+        List<MediaSubscriptionResource> likely = new ArrayList<>();
+        List<MediaSubscriptionResource> rest = new ArrayList<>();
+        for (MediaSubscriptionResource resource : candidates) {
+            (Boolean.TRUE.equals(likelyCoversMissing(subscription, resource, missing)) ? likely : rest).add(resource);
+        }
+        likely.addAll(rest);
+        return likely;
+    }
+
+    /**
+     * 季包候选是否可能覆盖缺口(标题+分季起点表推断,不挂盘零成本):
+     * <ul>
+     * <li>true:区间起点落在缺口内(第三季包 107 起对缺口 107-165);</li>
+     * <li>false:区间可推断且与缺口无交集(完结季包 166 起 → 全在缺口外);</li>
+     * <li>null:推断不可用(非季包形态/无分季数据/季号解析不出),维持原行为不判。</li>
+     * </ul>
+     * 区间上界用官方总集数(不低估:完结季更新中,实际集数每轮在涨)。
+     */
+    Boolean likelyCoversMissing(MediaSubscription subscription, MediaSubscriptionResource resource, Set<Integer> missing) {
+        if (!absoluteNumberedSeries(subscription) || missing.isEmpty()) {
+            return null;
+        }
+        String title = StringUtils.defaultString(resource.getTitle());
+        if (MULTI_SEASON_PACK.matcher(title).find()) {
+            return true; // 多季合一包:全剧范围,必与缺口相交
+        }
+        String seriesName = StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName());
+        Integer firstYear = metaYear(subscription);
+        Map<Integer, Integer> starts = alignSeasonStarts(subscription, seriesName, firstYear);
+        Integer target = seasonPackTarget(subscription, resource);
+        if (target == null) {
+            Integer declared = TextUtils.parseTitleSeason(title);
+            int season = subscription.getSeason() == null ? 1 : subscription.getSeason();
+            if (declared != null && declared == season) {
+                target = declared; // 「第一季」标题(declared==订阅季)不是 widened 形态,但区间起点 1 可推断
+            }
+        }
+        Integer start = null;
+        Integer next = null;
+        if (target != null && starts != null) {
+            start = starts.get(target);
+            next = starts.get(target + 1);
+        }
+        if (start == null && Integer.valueOf(1).equals(target)) {
+            start = 1; // 第 1 季包起点天然是 1,不依赖分季表
+        }
+        if (start == null) {
+            // 分季表缺该季行(豆瓣完结季常无条目)或目标季归位不可用:
+            // inferSeasonStart 能按「已登记之和+1」推出完结季起点
+            start = alignSeasonStart(subscription, seriesName, firstYear, title);
+        }
+        if (start == null) {
+            return null; // 两个源都推不出:维持原行为
+        }
+        // 区间上界:下一季起点-1;末季(表里无下一季)用官方总集数兜底(完结季更新中,逐轮在涨)
+        Integer total = subscription.getOfficialTotal();
+        int end = next != null ? next - 1 : (total != null && total >= start ? total : start);
+        return start <= java.util.Collections.max(missing) && end >= java.util.Collections.min(missing);
+    }
+
+    /**
+     * 挂载槽满时的换血:挤掉「独占覆盖最小」的补缺挂载给更有用的候选腾位。独占覆盖 =
+     * 该挂载的 LIVE 行集号 减 主源与<b>其它</b>补缺挂载的并集(减候选的覆盖没有意义 ——
+     * 挤位发生在挂载之前,候选行刚落库)。候选可用覆盖不大于被挤者的独占覆盖时不挤
+     * (挤了净亏),候选退化为行级供流(LISTED 可播)。返回被挤掉的挂载;null = 没挤。
+     */
+    MediaSubscriptionResource evictWeakestAuxMount(MediaSubscription subscription, Set<Integer> incomingUseful) {
+        MediaSubscriptionResource primary = primaryResource(subscription);
+        Set<Integer> others = primary == null ? new TreeSet<>() : coverageOf(primary);
+        List<MediaSubscriptionResource> auxes = auxMounts(subscription);
+        Map<Integer, Set<Integer>> coverageByAux = new LinkedHashMap<>();
+        for (MediaSubscriptionResource aux : auxes) {
+            coverageByAux.put(aux.getId(), coverageOf(aux));
+        }
+        MediaSubscriptionResource weakest = null;
+        int weakestUnique = Integer.MAX_VALUE;
+        for (MediaSubscriptionResource aux : auxes) {
+            Set<Integer> unique = new TreeSet<>(coverageByAux.get(aux.getId()));
+            for (MediaSubscriptionResource other : auxes) {
+                if (other.getId() != aux.getId()) {
+                    unique.removeAll(coverageByAux.get(other.getId()));
+                }
+            }
+            unique.removeAll(others);
+            if (unique.size() < weakestUnique) {
+                weakest = aux;
+                weakestUnique = unique.size();
+            }
+        }
+        if (weakest == null || incomingUseful == null || incomingUseful.size() <= weakestUnique) {
+            return null; // 没有可挤的,或挤了净亏(被挤者独占覆盖 ≥ 候选可用覆盖)
+        }
+        try {
+            if (!unmountShareIfUnused(weakest.getShareId(), subscription.getId())) {
+                return null; // 卸载失败(AList 不可用):不动,待下轮重试
+            }
+        } catch (Exception e) {
+            log.warn("evict weakest aux mount failed: {}", e.getMessage());
+            return null;
+        }
+        weakest.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        weakest.setMountPath(null);
+        weakest.setShareId(null);
+        resourceRepository.save(weakest);
+        for (MediaSubscriptionEpisodeSource row : episodeSourceRepository.findByResourceId(weakest.getId())) {
+            if (LIVE_STATES.contains(row.getState())) {
+                row.setState(MediaSubscriptionEpisodeSource.STATE_MISSING); // 行随挂载退场,防继续冒领供流
+                episodeSourceRepository.save(row);
+            }
+        }
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                "补缺挂载槽满换血:挤掉独占覆盖 " + weakestUnique + " 集的「"
+                        + StringUtils.abbreviate(StringUtils.defaultString(weakest.getTitle()), 40) + "」");
+        return weakest;
     }
 
     /** 补搜关键词决策:播出窗口内且缺口只含官方已播最新一集 = 资源大概率未上线,
@@ -3174,9 +3844,9 @@ public class MediaSubscriptionCheckService {
         List<String> genres = metaGenres(subscription);
         try {
             TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
-            collectEpisodeFiles(site(), subscription.getSeason(), share.getPath(), 1, files,
-                    episodeSizePolicy(subscription), true, metaYear(subscription));
-            sanitizeEpisodeFiles(subscription, files, resource.getTitle());
+            collectResourceEpisodeFiles(site(), subscription, resource, share.getPath(), files,
+                    episodeSizePolicy(subscription), true);
+            sanitizeEpisodeFiles(subscription, resource, files, resource.getTitle());
             if (files.isEmpty()) {
                 throw new IllegalStateException("资源无可识别的剧集文件:" + resource.getTitle());
             }
@@ -3617,6 +4287,21 @@ public class MediaSubscriptionCheckService {
         }
     }
 
+    /** 季包映射后的上界门禁(沿用旧后置平移门禁判据):最大集号超
+     * min(官方总集数, 已播+滞后容差) = 包内容不是标题声明的季。官方口径未知返回 false(门禁关闭)。 */
+    static boolean mappingOverflowsOfficial(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files) {
+        Integer total = subscription.getOfficialTotal();
+        if (total == null || total <= 0 || files == null || files.isEmpty()) {
+            return false;
+        }
+        int cap = total;
+        Integer aired = subscription.getOfficialEpisodes();
+        if (aired != null && aired > 0) {
+            cap = Math.min(total, aired + registrationLagTolerance(total));
+        }
+        return files.lastKey() > cap;
+    }
+
     /** 换源核心:删旧挂载 → 同路径挂新分享 → 重列验证并落集源行。mount_path 不变,播放历史不断链。 */
     protected void activate(MediaSubscription subscription, MediaSubscriptionResource resource) {
         String mountPath = subscription.getMountPath();
@@ -3636,14 +4321,14 @@ public class MediaSubscriptionCheckService {
         }
         TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
         try {
-            collectEpisodeFiles(site(), subscription.getSeason(), mountPath, 1, files, episodeSizePolicy(subscription), true, metaYear(subscription));
+            collectResourceEpisodeFiles(site(), subscription, resource, mountPath, files, episodeSizePolicy(subscription), true);
         } catch (Exception e) {
             // 列目录失败同样要卸刚挂分享:固定路径不能残留孤儿挂载(追剧索引会收录它),
             // 且此时 resource.shareId 还没指向新 share,调用方退役删的是旧 share,孤儿没人清
             deleteJustMountedShareQuietly(share, "list after activate failed");
             throw e instanceof RuntimeException runtimeException ? runtimeException : new IllegalStateException(e);
         }
-        sanitizeEpisodeFiles(subscription, files, resource.getTitle());
+        sanitizeEpisodeFiles(subscription, resource, files, resource.getTitle());
         if (files.isEmpty()) {
             deleteJustMountedShareQuietly(share, "no recognizable episode files");
             // 带 FOREIGN_SHOW_MARK:换季后旧季资源挂上即空(季目录/集号全被 season 口径拒收),
@@ -3758,10 +4443,10 @@ public class MediaSubscriptionCheckService {
     /** 主源挂载目录的 集→文件 映射(集源同步与失效确认共用)。目录不可访问抛异常。 */
     TreeMap<Integer, EpisodeFile> listEpisodeFiles(MediaSubscription subscription) {
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
-        collectEpisodeFiles(site(), subscription.getSeason(), subscription.getMountPath(), 1, result,
-                episodeSizePolicy(subscription), true, metaYear(subscription));
         MediaSubscriptionResource primary = primaryResource(subscription);
-        sanitizeEpisodeFiles(subscription, result, primary == null ? null : primary.getTitle());
+        collectResourceEpisodeFiles(site(), subscription, primary, subscription.getMountPath(), result,
+                episodeSizePolicy(subscription), true);
+        sanitizeEpisodeFiles(subscription, primary, result, primary == null ? null : primary.getTitle());
         return result;
     }
 
@@ -3865,14 +4550,15 @@ public class MediaSubscriptionCheckService {
             }
         }
         TreeMap<Integer, EpisodeFile> result = new TreeMap<>();
-        collectEpisodeFiles(site, subscription.getSeason(), subscription.getMountPath(), 1, result, policy, true, metaYear(subscription));
-        remapAbsoluteNumbering(subscription, result, null);
+        MediaSubscriptionResource primary = primaryResource(subscription);
+        collectResourceEpisodeFiles(site, subscription, primary, subscription.getMountPath(), result, policy, true);
+        applyNumbering(subscription, primary, result, null);
         if (includeAux) {
             for (MediaSubscriptionResource resource : auxMounts(subscription)) {
                 try {
                     TreeMap<Integer, EpisodeFile> aux = new TreeMap<>();
-                    collectEpisodeFiles(site, subscription.getSeason(), resource.getMountPath(), 1, aux, policy, true, metaYear(subscription));
-                    remapAbsoluteNumbering(subscription, aux, resource.getTitle());
+                    collectResourceEpisodeFiles(site, subscription, resource, resource.getMountPath(), aux, policy, true);
+                    applyNumbering(subscription, resource, aux, resource.getTitle());
                     aux.values().forEach(file -> preferPut(result, file, policy));
                 } catch (Exception e) {
                     log.warn("walk aux files failed: {} {}", resource.getMountPath(), e.getMessage());
@@ -3898,7 +4584,11 @@ public class MediaSubscriptionCheckService {
         try {
             collectEpisodeFiles(site(), subscription.getSeason(), path, 1, result,
                     episodeSizePolicy(subscription), false, metaYear(subscription));
-            remapAbsoluteNumbering(subscription, result, null);
+            if (subscription.getSeasonStartEpisode() != null) {
+                applySeasonStartOffset(subscription, result);
+            } else {
+                remapAbsoluteNumbering(subscription, result, null);
+            }
         } catch (Exception e) {
             log.debug("episodeFilesAt {} failed: {}", path, e.getMessage());
         }
@@ -3912,6 +4602,12 @@ public class MediaSubscriptionCheckService {
 
     void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
                                      EpisodeSizePolicy policy, boolean refresh, Integer firstAirYear) {
+        collectEpisodeFiles(site, season, path, depth, result, policy, refresh, firstAirYear, null);
+    }
+
+    /** 同上,附季包编号映射(非 null 时文件集号在 preferPut 之前按各自季映射进全剧连续集号空间)。 */
+    void collectEpisodeFiles(Site site, Integer season, String path, int depth, TreeMap<Integer, EpisodeFile> result,
+                                     EpisodeSizePolicy policy, boolean refresh, Integer firstAirYear, SeasonPackMap packMap) {
         if (depth > appProperties.getSubscription().getMaxListDepth()) {
             return;
         }
@@ -3920,6 +4616,7 @@ public class MediaSubscriptionCheckService {
         if (files == null || files.isEmpty()) {
             throw new IllegalStateException("目录为空或不可访问: " + path);
         }
+        String dirName = StringUtils.substringAfterLast(path, "/");
         for (FsInfo file : files) {
             if (file.getType() == 1) {
                 continue;
@@ -3930,7 +4627,9 @@ public class MediaSubscriptionCheckService {
             if (policy.overMax(file.getSize())) {
                 continue; // 超过单集上限:过滤捆绑大文件/异常资源
             }
-            int episode = parseEpisode(file.getName(), season);
+            int episode = packMap != null
+                    ? packMap.map(file.getName(), dirName, parseEpisode(file.getName(), null))
+                    : parseEpisode(file.getName(), season);
             if (episode > 0) {
                 preferPut(result, new EpisodeFile(episode, path, file.getName(), file.getSize(), file.getDuration()), policy);
             }
@@ -3940,7 +4639,7 @@ public class MediaSubscriptionCheckService {
                     && !EXTRA.matcher(file.getName()).find()
                     && !otherSeasonDir(file.getName(), season, firstAirYear)
                     && !spinOffDir(file.getName(), season)) {
-                collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, policy, refresh, firstAirYear);
+                collectEpisodeFiles(site, season, path + "/" + file.getName(), depth + 1, result, policy, refresh, firstAirYear, packMap);
             }
         }
     }
@@ -4487,6 +5186,9 @@ public class MediaSubscriptionCheckService {
         }
 
         MediaSubscriptionFilter filter = parseFilter(subscription);
+        // 一念永恒形态(元数据单季装全剧)预判一次:标题声明本剧季包(第N季/完结季/合集)的
+        // 候选走文件级季映射,季号/年份门禁(季包年份是该季年份,非首播年)对它们是误杀
+        boolean ownPackSeries = absoluteNumberedSeries(subscription);
         MediaSubscriptionPoolFilter global = poolFilterFor(subscription);
         List<String> names = matchNames(subscription);
         Integer metaYear = metaYear(subscription);
@@ -4513,6 +5215,10 @@ public class MediaSubscriptionCheckService {
                 audit.drop(PoolDrop.EXCLUDED, title); // 订阅级与全局排除词并集:命中任一即拒
                 continue;
             }
+            if (isNovelTitle(title)) {
+                audit.drop(PoolDrop.NOVEL, title); // 同名小说/电子书:剧名门禁挡不住同名召回,须在挂载试错前剔除
+                continue;
+            }
             if (!globallyIncluded(global, title)) {
                 audit.drop(PoolDrop.INCLUDE, title); // 全局包含词硬门禁:配置非空时标题须至少含其一
                 continue;
@@ -4528,18 +5234,23 @@ public class MediaSubscriptionCheckService {
                 audit.drop(PoolDrop.TITLE, title); // 标题与剧名/别名均不沾边,大概率是同名召回噪声,挡在池外省去挂载试错
                 continue;
             }
-            if (!titleYearMatches(metaYear, names, title)) {
-                audit.drop(PoolDrop.YEAR, title); // 标题标注年份与元数据年份全不符,且剧名仅子串嵌入(前缀异剧)
-                continue;
+            boolean ownPack = ownSeasonPackTitle(ownPackSeries, title)
+                    || (subscription.getSeason() != null && subscription.getSeason() > 1
+                        && subscription.getSeason().equals(effectiveTitleSeason(subscription, title)));
+            if (!ownPack && !titleYearMatches(metaYear, names, title)) {
+                audit.drop(PoolDrop.YEAR, title); // 标题标注年份与元数据年份全不符,且剧名仅子串嵌入(前缀异剧);
+                continue; // 本季季包(含完结季归位)例外:季包年份是该季年份,不是首播年
             }
             if (titleProgressForeign(subscription, title, genres) || liveActionForeign(genres, title)) {
                 audit.drop(PoolDrop.FOREIGN, title); // 宣称集数显著超出官方总集数(真人版全集包)/动画订阅的显式「真人版」资源
                 continue;
             }
-            Integer titleSeason = parseTitleSeason(title);
-            if (subscription.getSeason() != null && subscription.getSeason() > 0
+            Integer titleSeason = subscription.getSeason() != null && subscription.getSeason() > 1
+                    ? effectiveTitleSeason(subscription, title) : parseTitleSeason(title);
+            if (!ownPack && subscription.getSeason() != null && subscription.getSeason() > 0
                     && titleSeason != null && !titleSeason.equals(subscription.getSeason())) {
-                audit.drop(PoolDrop.SEASON, title); // 标题明确标注其它季(常见同名剧前季资源)
+                audit.drop(PoolDrop.SEASON, title); // 标题明确标注其它季(常见同名剧前季资源;分季订阅
+                // ①「完结季」按分季表归位成真实季号:第 4 季订阅收完结季包、第 2/3 季订阅拒它)
                 continue;
             }
             scored.add(score(subscription, message, title, filter));
@@ -4688,6 +5399,7 @@ public class MediaSubscriptionCheckService {
         EXCLUDED("命中排除词", true),
         INCLUDE("缺包含词", true),
         QUALITY("清晰度不足", true),
+        NOVEL("小说资源", true),
         TITLE("剧名不符", true),
         YEAR("年份不符", true),
         FOREIGN("异剧形态", true),
