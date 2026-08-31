@@ -18,10 +18,6 @@ import java.util.stream.Collectors;
 
 public class Main {
     private static final List<String> CUSTOM_REFLECTION_CLASSES = List.of(
-            "com.github.benmanes.caffeine.cache.SSMS",
-            "com.github.benmanes.caffeine.cache.SSMSA",
-            "com.github.benmanes.caffeine.cache.SSSW",
-            "com.github.benmanes.caffeine.cache.PSAMS",
             "com.zaxxer.hikari.HikariConfig",
             "org.sqlite.JDBC",
             "org.sqlite.SQLiteConfig",
@@ -67,6 +63,13 @@ public class Main {
         for (String name : CUSTOM_REFLECTION_CLASSES) {
             result.add(addCustom(name));
         }
+        // caffeine 全部 BoundedLocalCache 实现类 + LocalCacheFactory:
+        // NativeCaffeineFactoryFix 启动预填 FACTORIES 注册表依赖这些类可 forName 加载
+        // (清单与修正器共用同一来源,见 NativeCaffeineFactoryFix.IMPL_CLASSES)。
+        for (String name : cn.har01d.alist_tvbox.config.NativeCaffeineFactoryFix.IMPL_CLASSES) {
+            result.add(addCustom("com.github.benmanes.caffeine.cache." + name));
+        }
+        result.add(addCustom("com.github.benmanes.caffeine.cache.LocalCacheFactory"));
         ObjectMapper objectMapper = new ObjectMapper();
         String json = objectMapper.writeValueAsString(result);
         System.out.println("Working Directory = " + System.getProperty("user.dir"));

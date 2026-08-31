@@ -22,7 +22,7 @@ public final class NativeCaffeineFactoryFix {
     private static final String PKG = "com.github.benmanes.caffeine.cache.";
 
     /** caffeine 3.2.x jar 内全部 BoundedLocalCache 实现类(不含嵌套类);非工厂类无 FACTORY 字段,自动跳过。 */
-    private static final String[] IMPL_CLASSES = {
+    public static final String[] IMPL_CLASSES = {
             "FDA", "FDAMS", "FDAMW", "FDAR", "FDARMS", "FDARMW", "FDAW", "FDAWMS", "FDAWMW", "FDAWR",
             "FDAWRMS", "FDAWRMW", "FDMS", "FDMW", "FDR", "FDRMS", "FDRMW", "FDW", "FDWMS", "FDWMW",
             "FDWR", "FDWRMS", "FDWRMW", "FSA", "FSAMS", "FSAMW", "FSAR", "FSARMS", "FSARMW", "FSAW",
