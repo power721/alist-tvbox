@@ -1997,6 +1997,17 @@ public class MediaSubscriptionCheckService {
             files.clear();
             return;
         }
+        if (mapped && mappingOverflowsOfficial(subscription, files)) {
+            // 映射后最大集号超官方口径 = 包内容不是标题声明的季(线上(订阅 65):「完结季」
+            // 包内是 S1 的 52 个裸编号文件,平移成 166-217,未播的 174-217 全被冒领)——
+            // 整体弃收。与旧 alignResourceNumbering 的平移后上界门禁同判据,文件级映射不能豁免它
+            int overflowedMax = files.lastKey();
+            files.clear();
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                    "季包映射越界弃收:「" + StringUtils.abbreviate(StringUtils.defaultString(resource.getTitle()), 40)
+                            + "」映射后最大集号 " + overflowedMax + " 超官方口径");
+            return;
+        }
         stripForeignEpisodeNoise(subscription, files, metaGenres(subscription));
     }
 
@@ -4174,6 +4185,21 @@ public class MediaSubscriptionCheckService {
         } catch (Exception e) {
             log.warn("delete just-mounted share failed ({}): {}", reason, e.getMessage());
         }
+    }
+
+    /** 季包映射后的上界门禁(与 alignResourceNumbering 的平移后判据一致):最大集号超
+     * min(官方总集数, 已播+滞后容差) = 包内容不是标题声明的季。官方口径未知返回 false(门禁关闭)。 */
+    static boolean mappingOverflowsOfficial(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files) {
+        Integer total = subscription.getOfficialTotal();
+        if (total == null || total <= 0 || files == null || files.isEmpty()) {
+            return false;
+        }
+        int cap = total;
+        Integer aired = subscription.getOfficialEpisodes();
+        if (aired != null && aired > 0) {
+            cap = Math.min(total, aired + registrationLagTolerance(total));
+        }
+        return files.lastKey() > cap;
     }
 
     /** 换源核心:删旧挂载 → 同路径挂新分享 → 重列验证并落集源行。mount_path 不变,播放历史不断链。 */

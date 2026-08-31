@@ -2866,6 +2866,35 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void sanitizeDiscardsSeasonPackMappedBeyondOfficialRange() {
+        // 线上(订阅 65):「完结季」标题的分享内是 S1 的 52 个裸编号文件,SINGLE 映射整体平移成
+        // 166-217 —— 未播的 174-217 全被冒领成有源。映射后最大集号超 min(总集数,已播+容差)
+        // = 包内容不是标题声明的季,整体弃收(与旧 alignResourceNumbering 平移后门禁同判据)
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.subscription.setOfficialEpisodes(173);
+        fixture.subscription.setOfficialTotal(200);
+        MediaSubscriptionResource mapped = new MediaSubscriptionResource();
+        mapped.setId(81);
+        mapped.setTitle("一念永恒 完结季(2026) 【更08集】");
+        mapped.setSeasonStarts("4:166");
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> bogus = new TreeMap<>();
+        for (int ep = 166; ep <= 217; ep++) { // 52 个裸编号文件平移后的结果
+            bogus.put(ep, new MediaSubscriptionCheckService.EpisodeFile(ep, "/x", "第" + (ep - 165) + "集.mkv", 1, 0));
+        }
+        fixture.service.sanitizeEpisodeFiles(fixture.subscription, mapped, bogus, mapped.getTitle());
+        assertTrue(bogus.isEmpty(), "映射后最大 217 超 min(200, 173+20):整体弃收");
+
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> legit = new TreeMap<>();
+        for (int ep = 166; ep <= 173; ep++) { // 真 完结季 8 集在官方口径内
+            legit.put(ep, new MediaSubscriptionCheckService.EpisodeFile(ep, "/x", "第" + (ep - 165) + "集.mkv", 1, 0));
+        }
+        fixture.service.sanitizeEpisodeFiles(fixture.subscription, mapped, legit, mapped.getTitle());
+        assertEquals(166, legit.firstKey());
+        assertEquals(173, legit.lastKey(), "口径内的真季包照常保留");
+    }
+
+    @Test
     void sanitizeKeepsAlreadyMappedFilesUnshifted() {
         Fixture fixture = new Fixture();
         stubAbsoluteSeries(fixture, "一念永恒");
