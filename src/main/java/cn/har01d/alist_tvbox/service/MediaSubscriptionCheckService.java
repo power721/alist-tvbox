@@ -579,7 +579,9 @@ public class MediaSubscriptionCheckService {
             if (ownSeasonPackTitle(subscription, resource.getTitle())) {
                 continue; // 本剧季包(一念永恒形态):标题声明的季是本剧自己的,不是换季残留
             }
-            Integer titleSeason = TextUtils.parseTitleSeason(resource.getTitle());
+            Integer titleSeason = subscription.getSeason() != null && subscription.getSeason() > 1
+                    ? effectiveTitleSeason(subscription, resource.getTitle())
+                    : TextUtils.parseTitleSeason(resource.getTitle());
             if (titleSeason == null || titleSeason.equals(subscription.getSeason())) {
                 continue;
             }
@@ -1071,6 +1073,7 @@ public class MediaSubscriptionCheckService {
             return;
         }
         subscription.setLastCheckTime(System.currentTimeMillis());
+        ensureSeasonStartEpisode(subscription);
         purgeForeignSeasonResources(subscription);
         if (staleSeasonInventory(subscription)) {
             // 改季残留(改季发生在重置功能之前):旧季集源行冒领集号,先卸全部挂载再全量重置,
@@ -1427,7 +1430,8 @@ public class MediaSubscriptionCheckService {
             return;
         }
         subscription.setMetaSyncTime(now);
-        MetadataDetails details = metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(), subscription.getSeason());
+        // metaDetails 内部按形态回落季号:TMDB 单季装全剧的分季订阅拿第 1 季全剧口径
+        MetadataDetails details = metaDetails(subscription);
         if (details == null) {
             return;
         }
@@ -1856,12 +1860,64 @@ public class MediaSubscriptionCheckService {
             return null;
         }
         try {
-            return metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(),
-                    subscription.getSeason());
+            MetadataDetails details = metadataService.details(subscription.getMetaProvider(), subscription.getMetaId(),
+                    effectiveMetaSeason(subscription));
+            if (details != null) {
+                return details;
+            }
+            return null;
         } catch (Exception e) {
             log.debug("meta details for subscription {} unavailable: {}", subscription.getId(), e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 元数据拉取季(分季订阅一念永恒形态的关键):TMDB 单季装全剧(totalSeasons==1,集号=全剧
+     * 绝对集号)的剧,订阅第 N&gt;1 季时 provider 侧根本没有那一季 —— 拉第 1 季(全剧口径,
+     * 官方集数/排播/封面全用得上),集号平移交给订阅级 seasonStartEpisode。非该形态原样透传。
+     */
+    Integer effectiveMetaSeason(MediaSubscription subscription) {
+        Integer season = subscription.getSeason();
+        if (season == null || season <= 1) {
+            return season;
+        }
+        try {
+            MetadataDetails series = metadataService.details(subscription.getMetaProvider(),
+                    subscription.getMetaId(), 1);
+            if (series != null && series.getTotalSeasons() != null && series.getTotalSeasons() == 1) {
+                return 1;
+            }
+        } catch (Exception e) {
+            log.debug("series shape probe failed: {}", e.getMessage());
+        }
+        return season;
+    }
+
+    /**
+     * 分季订阅的季起始集号自动对齐(seasonStartEpisode,腾讯分季集数优先/豆瓣兜底):TMDB 单季
+     * 装全剧的剧订阅第 N 季,季内集号 1..K 平移 +start-1 才能落进官方绝对集号空间。手动声明
+     * 优先(非 null 直接跳过);推导失败静默(24h 负缓存,不反复打外网),下轮再试。
+     */
+    void ensureSeasonStartEpisode(MediaSubscription subscription) {
+        Integer season = subscription.getSeason();
+        if (season == null || season <= 1 || subscription.getSeasonStartEpisode() != null) {
+            return;
+        }
+        MetadataDetails details = metaDetails(subscription); // 内部已按形态回落第 1 季
+        if (details == null || details.getTotalSeasons() == null || details.getTotalSeasons() != 1) {
+            return; // 非「单季装全剧」形态:多季元数据本就分季,不需要平移
+        }
+        Map<Integer, Integer> starts = alignSeasonStarts(subscription,
+                StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()), metaYear(subscription));
+        Integer start = starts == null ? null : starts.get(season);
+        if (start == null || start <= 1) {
+            return;
+        }
+        subscription.setSeasonStartEpisode(start);
+        subscriptionRepository.save(subscription);
+        addEvent(subscription.getId(), "ALIGN", "分季订阅自动对齐:第 " + season + " 季第 1 集 = 全剧第 " + start
+                + " 集(分季集数累推);季内集号将平移进 TMDB 绝对集号空间");
     }
 
     /**
@@ -2140,6 +2196,17 @@ public class MediaSubscriptionCheckService {
         }
         return resource.getStartEpisode() != null || DoubanSeasonAligner.finaleMarked(resource.getTitle())
                 || MULTI_SEASON_PACK.matcher(StringUtils.defaultString(resource.getTitle())).find();
+    }
+
+    /** 标题声明的季号(分季订阅口径):显式季标优先;「完结季」类无季号标记按分季表归位
+     * (腾讯优先:完结季 = 最大已登记季)—— 第 4 季订阅收完结季包、第 2/3 季订阅拒它。
+     * 分季表不可用返回 null(裸标题语义,门禁照旧放行给探测层)。仅 season&gt;1 订阅调用。 */
+    Integer effectiveTitleSeason(MediaSubscription subscription, String title) {
+        Integer declared = TextUtils.parseTitleSeason(title);
+        if (declared != null || !DoubanSeasonAligner.finaleMarked(StringUtils.defaultString(title))) {
+            return declared;
+        }
+        return alignFinaleSeason(subscription);
     }
 
     /** 一念永恒形态(全剧连续集号的元数据):TMDB 单季装全剧(totalSeasons==1,集号=全剧连续),
@@ -2506,10 +2573,14 @@ public class MediaSubscriptionCheckService {
         if (ownSeasonPackTitle(subscription, title)) {
             return true; // 本剧季包(一念永恒形态):季号/年份是季自己的口径,门禁放行,集号门禁已在上方复核
         }
-        Integer titleSeason = TextUtils.parseTitleSeason(title);
+        Integer titleSeason = subscription.getSeason() != null && subscription.getSeason() > 1
+                ? effectiveTitleSeason(subscription, title) : TextUtils.parseTitleSeason(title);
         if (subscription.getSeason() != null && subscription.getSeason() > 0
                 && titleSeason != null && !titleSeason.equals(subscription.getSeason())) {
             return false; // 标题明确标注其它季:同剧不同季,对本订阅就是"异剧"(换季后旧季资源继续挂载/顶主源)
+        }
+        if (titleSeason != null && titleSeason.equals(subscription.getSeason())) {
+            return true; // 本季季包(分季订阅,含完结季归位):年份是该季年份,年份门禁放行
         }
         return titleYearMatches(metaYear(subscription), names, title);
     }
@@ -5134,19 +5205,23 @@ public class MediaSubscriptionCheckService {
                 audit.drop(PoolDrop.TITLE, title); // 标题与剧名/别名均不沾边,大概率是同名召回噪声,挡在池外省去挂载试错
                 continue;
             }
-            boolean ownPack = ownSeasonPackTitle(ownPackSeries, title);
+            boolean ownPack = ownSeasonPackTitle(ownPackSeries, title)
+                    || (subscription.getSeason() != null && subscription.getSeason() > 1
+                        && subscription.getSeason().equals(effectiveTitleSeason(subscription, title)));
             if (!ownPack && !titleYearMatches(metaYear, names, title)) {
-                audit.drop(PoolDrop.YEAR, title); // 标题标注年份与元数据年份全不符,且剧名仅子串嵌入(前缀异剧)
-                continue;
+                audit.drop(PoolDrop.YEAR, title); // 标题标注年份与元数据年份全不符,且剧名仅子串嵌入(前缀异剧);
+                continue; // 本季季包(含完结季归位)例外:季包年份是该季年份,不是首播年
             }
             if (titleProgressForeign(subscription, title, genres) || liveActionForeign(genres, title)) {
                 audit.drop(PoolDrop.FOREIGN, title); // 宣称集数显著超出官方总集数(真人版全集包)/动画订阅的显式「真人版」资源
                 continue;
             }
-            Integer titleSeason = parseTitleSeason(title);
+            Integer titleSeason = subscription.getSeason() != null && subscription.getSeason() > 1
+                    ? effectiveTitleSeason(subscription, title) : parseTitleSeason(title);
             if (!ownPack && subscription.getSeason() != null && subscription.getSeason() > 0
                     && titleSeason != null && !titleSeason.equals(subscription.getSeason())) {
-                audit.drop(PoolDrop.SEASON, title); // 标题明确标注其它季(常见同名剧前季资源)
+                audit.drop(PoolDrop.SEASON, title); // 标题明确标注其它季(常见同名剧前季资源;分季订阅
+                // ①「完结季」按分季表归位成真实季号:第 4 季订阅收完结季包、第 2/3 季订阅拒它)
                 continue;
             }
             scored.add(score(subscription, message, title, filter));

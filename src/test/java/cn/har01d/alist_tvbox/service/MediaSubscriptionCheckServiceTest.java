@@ -2866,6 +2866,52 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void perSeasonSubscriptionAlignsSeasonStartAndGates() {
+        // 分季订阅一念永恒形态:TMDB 单季装全剧,订阅第 3/4 季 —— ①元数据回落第 1 季,
+        // ②seasonStartEpisode 按腾讯分季表自动推导,③「完结季」归位第 4 季(第 4 季订阅收/第 2 季订阅拒)
+        Fixture fixture = new Fixture();
+        stubAbsoluteSeries(fixture, "一念永恒");
+        fixture.service.setTencentSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner(null) {
+            @Override
+            public java.util.Map<Integer, Integer> seasonStarts(String seriesName, Integer firstYear) {
+                return java.util.Map.of(1, 1, 2, 53, 3, 107, 4, 166);
+            }
+
+            @Override
+            public Integer finaleSeason(String seriesName, Integer firstYear, Integer officialAired) {
+                return 4;
+            }
+        });
+        assertEquals(1, fixture.service.effectiveMetaSeason(fixture.subscription), "totalSeasons==1:第 1 季全剧口径");
+
+        fixture.subscription.setSeason(3);
+        fixture.service.ensureSeasonStartEpisode(fixture.subscription);
+        assertEquals(107, fixture.subscription.getSeasonStartEpisode(), "第 3 季第 1 集 = 全剧第 107 集(腾讯分季表)");
+
+        fixture.subscription.setSeason(4);
+        fixture.subscription.setSeasonStartEpisode(null);
+        fixture.service.ensureSeasonStartEpisode(fixture.subscription);
+        assertEquals(166, fixture.subscription.getSeasonStartEpisode(), "完结季(第 4 季)起点 166");
+
+        assertEquals(4, fixture.service.effectiveTitleSeason(fixture.subscription, "一念永恒 完结季(2026) 【更08集】"));
+        assertEquals(2, fixture.service.effectiveTitleSeason(fixture.subscription, "一念永恒 第二季"));
+        MediaSubscriptionResource finale = new MediaSubscriptionResource();
+        finale.setTitle("一念永恒 完结季(2026) 【更08集】");
+        assertTrue(fixture.service.belongsToShow(fixture.subscription, finale), "第 4 季订阅:完结季包放行");
+        fixture.subscription.setSeason(2);
+        fixture.subscription.setSeasonStartEpisode(53);
+        assertFalse(fixture.service.belongsToShow(fixture.subscription, finale), "第 2 季订阅:完结季包(=第 4 季)拒绝");
+
+        // 多季元数据的剧不走回落:season 透传
+        MetadataDetails multi = new MetadataDetails();
+        multi.setTotalSeasons(4);
+        Mockito.when(fixture.metadataService.details(Mockito.anyString(), Mockito.anyString(), Mockito.any()))
+                .thenReturn(multi);
+        fixture.subscription.setSeason(3);
+        assertEquals(3, fixture.service.effectiveMetaSeason(fixture.subscription));
+    }
+
+    @Test
     void sanitizeDiscardsSeasonPackMappedBeyondOfficialRange() {
         // 线上(订阅 65):「完结季」标题的分享内是 S1 的 52 个裸编号文件,SINGLE 映射整体平移成
         // 166-217 —— 未播的 174-217 全被冒领成有源。映射后最大集号超 min(总集数,已播+容差)
