@@ -63,7 +63,8 @@ public class OfficialSiteMetadataProvider implements MetadataProvider {
 
     public OfficialSiteMetadataProvider(SettingRepository settingRepository, MetadataHttp metadataHttp, MetadataHealth health) {
         this.settingRepository = settingRepository;
-        this.restTemplate = metadataHttp.create();
+        // pbaccess 网关歧视 HttpURLConnection 连接层(20607),腾讯系接口必须走 JDK HttpClient(HTTP/2)
+        this.restTemplate = metadataHttp.createJdk();
         this.health = health;
     }
 

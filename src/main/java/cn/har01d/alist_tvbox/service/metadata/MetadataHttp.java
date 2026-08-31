@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service.metadata;
 
 import org.springframework.boot.restclient.RestTemplateBuilder;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -40,6 +41,25 @@ public class MetadataHttp {
         factory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
         factory.setReadTimeout((int) readTimeout.toMillis());
         template.setRequestFactory(factory);
+        return template;
+    }
+
+    /**
+     * JDK HttpClient 版(经 ALPN 协商 HTTP/2):腾讯 pbaccess 网关按<b>连接层</b>歧视 ——
+     * HttpURLConnection(Simple factory,无 ALPN 的 HTTP/1.1)发 MbSearch/GetPageData 恒回
+     * {@code {"ret":20607,"msg":"unknow error."}},curl 与 java.net.http(HTTP/2)放行;
+     * 同一个 JDK TLS 栈 h2 即过,不是 TLS 指纹问题。腾讯系(MbSearch 分季表/官方条目搜索)一律
+     * 走此客户端(2026-09-01 线上实证:一念永恒 sub 66 分季对齐静默失败的根因)。
+     */
+    public RestTemplate createJdk() {
+        java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                .build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(client);
+        factory.setReadTimeout(Duration.ofSeconds(15));
+        RestTemplate template = (builder != null ? builder : new RestTemplateBuilder()).build();
+        template.setRequestFactory(factory); // 与 create() 同规:build 后自设 factory,超时主动权在手
         return template;
     }
 }

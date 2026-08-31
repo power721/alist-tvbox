@@ -53,7 +53,8 @@ public class TencentSeasonAligner {
             .maximumSize(200).expireAfterWrite(Duration.ofHours(24)).build();
 
     public TencentSeasonAligner(MetadataHttp metadataHttp) {
-        this.restTemplate = metadataHttp == null ? null : metadataHttp.create(); // null:单测桩不打网
+        // pbaccess 网关歧视 HttpURLConnection 连接层(20607),必须走 JDK HttpClient(HTTP/2)
+        this.restTemplate = metadataHttp == null ? null : metadataHttp.createJdk(); // null:单测桩不打网
     }
 
     /**
