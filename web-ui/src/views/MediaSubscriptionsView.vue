@@ -306,6 +306,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="episodesFound" label="集数" width="70"/>
+        <el-table-column label="单集均大小" width="90">
+          <template #default="scope">{{ formatSize(scope.row.avgFileSize) }}</template>
+        </el-table-column>
         <el-table-column label="角色" width="90">
           <template #default="scope">
             <el-tag v-if="scope.row.primary" size="small" type="success">主源</el-tag>
@@ -851,6 +854,8 @@ interface ResourceDto {
   driveName: string | null
   title: string | null
   episodesFound: number | null
+  /** 单集平均文件大小(字节,未探测过为 null) */
+  avgFileSize: number | null
   score: number | null
   /** 挂载生命周期:CANDIDATE/MOUNTED/RETIRED/REJECTED(可用性由集源行聚合,不再落在资源上) */
   state: string | null
@@ -2054,6 +2059,14 @@ const matrixStateLabel = (src: { state: string }) => {
     case 'TRANSFER': return '已转存'
     default: return '未验证'
   }
+}
+
+/** 单集平均文件大小(字节)转可读文本;null = 该资源还没探测过 */
+const formatSize = (bytes: number | null) => {
+  if (!bytes) return '-'
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB'
+  if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+  return Math.round(bytes / 1024) + ' KB'
 }
 
 const stateLabel = (state: string | null) => {

@@ -14,6 +14,8 @@ public class MediaSubscriptionResourceDto {
     private String source;
     private String title;
     private Integer episodesFound;
+    /** 单集平均文件大小(字节,来自已记录的分集集源行;未探测过为 null) */
+    private Long avgFileSize;
     private Integer score;
     /** 挂载生命周期:CANDIDATE(池内)/MOUNTED(已挂载)/RETIRED(已退役)/REJECTED(盘检判死) */
     private String state;

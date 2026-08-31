@@ -43,6 +43,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -493,7 +494,13 @@ public class MediaSubscriptionService {
     public List<MediaSubscriptionResourceDto> resources(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
         Set<String> allowedDrives = checkService.allowedCandidateDrives(subscription);
-        return resourceRepository.findBySubscriptionIdOrderByScoreDesc(id).stream()
+        List<MediaSubscriptionResource> all = resourceRepository.findBySubscriptionIdOrderByScoreDesc(id);
+        Map<Integer, Long> avgSizes = new HashMap<>();
+        for (Object[] row : episodeSourceRepository.findAvgFileSizeGroupByResourceId(
+                all.stream().map(MediaSubscriptionResource::getId).toList())) {
+            avgSizes.put((Integer) row[0], ((Number) row[1]).longValue());
+        }
+        return all.stream()
                 // 已挂载的照常展示(供流中,用户需要可见/可停用);其余行按候选盘白名单收敛,
                 // 白名单外的存量候选不再被探测/换源,展示出来只会误导"有个源躺着没用"
                 .filter(r -> MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
@@ -509,6 +516,7 @@ public class MediaSubscriptionService {
             dto.setSource(r.getSource());
             dto.setTitle(r.getTitle());
             dto.setEpisodesFound(r.getEpisodesFound());
+            dto.setAvgFileSize(avgSizes.get(r.getId()));
             dto.setScore(r.getScore());
             dto.setState(r.getState());
             dto.setPrimary(MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())

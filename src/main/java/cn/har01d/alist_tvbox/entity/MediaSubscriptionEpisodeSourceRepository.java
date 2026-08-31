@@ -46,6 +46,11 @@ public interface MediaSubscriptionEpisodeSourceRepository extends JpaRepository<
             + " where e.subscriptionId = ?1 and s.state in ?2 and r.state = 'MOUNTED'")
     List<Integer> findNumbersBySubscriptionAndStatesIn(int subscriptionId, Collection<String> states);
 
+    /** 每个资源已记录的分集文件大小平均数(候选池"单集平均体积"列)。null fileSize 行不计入。 */
+    @Query("select s.resourceId, avg(s.fileSize) from MediaSubscriptionEpisodeSource s"
+            + " where s.resourceId in ?1 and s.fileSize is not null group by s.resourceId")
+    List<Object[]> findAvgFileSizeGroupByResourceId(Collection<Integer> resourceIds);
+
     /** 某资源处于指定状态的分集集号(探测覆盖快照的替代品)。 */
     @Query("select e.number from MediaSubscriptionEpisode e join MediaSubscriptionEpisodeSource s on s.episodeId = e.id"
             + " where s.resourceId = ?1 and s.state in ?2")
