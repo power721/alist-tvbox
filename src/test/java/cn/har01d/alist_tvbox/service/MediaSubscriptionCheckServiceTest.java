@@ -4352,71 +4352,7 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(List.of(166, 167, 168), new ArrayList<>(raw.keySet()));
     }
 
-    @Test
-    void sanitizeAutoAlignsSeasonPackViaDoubanSeasons() {
-        // 一念永恒形态:TMDB 单季连续编号(173/200),主源是完结季季包(裸 1-8)。
-        // 豆瓣分季集数累推 S4 起始 153 → 门禁通过自动写入 startEpisode 并平移集号
-        var resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
-        var episodeSourceRepository = Mockito.mock(cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository.class);
-        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
-                null, resourceRepository, null, null, episodeSourceRepository, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null,
-                new AppProperties(), new ObjectMapper(), null, null);
-        var aligner = Mockito.mock(cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.class);
-        svc.setSeasonAligner(aligner);
-
-        MediaSubscription subscription = new MediaSubscription();
-        subscription.setId(64);
-        subscription.setName("一念永恒");
-        subscription.setKeyword("一念永恒");
-        subscription.setSeason(1);
-        subscription.setOfficialTotal(200);
-        subscription.setOfficialEpisodes(173);
-        MediaSubscriptionResource resource = new MediaSubscriptionResource();
-        resource.setId(9);
-        resource.setSubscriptionId(64);
-        resource.setTitle("一念永恒 完结季 4K臻彩MAX [更新至08集]");
-        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = absoluteFiles("/temp/quark@nyhdt/完结季", 1, 8);
-        Mockito.when(aligner.inferSeasonStart(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(153);
-
-        svc.sanitizeEpisodeFiles(subscription, resource, files, resource.getTitle());
-        assertEquals(153, resource.getStartEpisode());
-        assertEquals(List.of(153, 154, 155, 156, 157, 158, 159, 160), new ArrayList<>(files.keySet()));
-        Mockito.verify(resourceRepository).save(resource);
-        Mockito.verify(episodeSourceRepository).deleteByResourceId(9);
-    }
-
-    @Test
-    void sanitizeSkipsAutoAlignWhenShiftOverflowsOfficialTotal() {
-        // 门禁:平移后最大集号超官方口径(总 100,平移后 160)→ 不写 startEpisode,集号维持原语义
-        var resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
-        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
-                null, resourceRepository, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null,
-                new AppProperties(), new ObjectMapper(), null, null);
-        var aligner = Mockito.mock(cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner.class);
-        svc.setSeasonAligner(aligner);
-
-        MediaSubscription subscription = new MediaSubscription();
-        subscription.setId(64);
-        subscription.setName("一念永恒");
-        subscription.setSeason(1);
-        subscription.setOfficialTotal(100);
-        subscription.setOfficialEpisodes(100);
-        MediaSubscriptionResource resource = new MediaSubscriptionResource();
-        resource.setId(9);
-        resource.setSubscriptionId(64);
-        resource.setTitle("一念永恒 完结季");
-        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = absoluteFiles("/temp/完结季", 1, 8);
-        Mockito.when(aligner.inferSeasonStart(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(153);
-
-        svc.sanitizeEpisodeFiles(subscription, resource, files, resource.getTitle());
-        assertNull(resource.getStartEpisode());
-        assertTrue(files.isEmpty(), "放宽收进来的季包无偏移可用:整体弃收防冒领(与放宽前行为一致)");
-        Mockito.verify(resourceRepository, Mockito.never()).save(Mockito.any());
-    }
-
-    @Test
+        @Test
     void collectSeasonWidensForSeasonPackOfSingleSeasonMeta() {
         // 一念永恒形态:TMDB 单季(totalSeasons=1)连续编号订阅,完结季季包文件是 S04Eyy ——
         // 列目录季按资源形态放宽,否则 parseEpisode 季过滤把整包拒成「无可识别」

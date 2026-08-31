@@ -2037,13 +2037,12 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 带<b>资源</b>的清洗:资源级起始集号优先于订阅级偏移与自动重映射(手动事实分资源声明);
-     *  未手动声明且资源是季包(标题声明季)而元数据是全剧连续集号时,先尝试豆瓣分季集数自动对齐;
-     *  已带文件级季映射(season_starts,列举时已映射进全剧连续集号)的资源跳过全部平移。 */
+     *  带文件级季映射(season_starts,列举时已映射进全剧连续集号)的资源跳过全部平移 ——
+     *  自动对齐只在列举时发生(collectResourceEpisodeFiles → seasonPackMap),这里没有后置推断。 */
     void sanitizeEpisodeFiles(MediaSubscription subscription, MediaSubscriptionResource resource,
                               TreeMap<Integer, EpisodeFile> files, String contextTitle) {
         boolean mapped = resource != null && resource.getSeasonStarts() != null;
         if (!mapped) {
-            alignResourceNumbering(subscription, resource, files, contextTitle);
             applyNumbering(subscription, resource, files, contextTitle);
         }
         if (resource != null && !mapped && seasonPackWidened(subscription, resource)
@@ -2056,7 +2055,7 @@ public class MediaSubscriptionCheckService {
         if (mapped && mappingOverflowsOfficial(subscription, files)) {
             // 映射后最大集号超官方口径 = 包内容不是标题声明的季(线上(订阅 65):「完结季」
             // 包内是 S1 的 52 个裸编号文件,平移成 166-217,未播的 174-217 全被冒领)——
-            // 整体弃收。与旧 alignResourceNumbering 的平移后上界门禁同判据,文件级映射不能豁免它
+            // 整体弃收(判据沿用旧后置平移门禁:最大集号 ≤ min(总集数,已播+滞后容差))
             int overflowedMax = files.lastKey();
             files.clear();
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
@@ -2065,95 +2064,6 @@ public class MediaSubscriptionCheckService {
             return;
         }
         stripForeignEpisodeNoise(subscription, files, metaGenres(subscription));
-    }
-
-    /**
-     * 资源级起始集号自动推断(豆瓣分季条目集数累推,一念永恒形态):季包资源的季内裸编号
-     * 会冒领全剧低集号,而手动填起始集号要用户自己查各季集数 —— 豆瓣每季独立条目带
-     * episodes_count,累加即得该季全剧起点。门禁(任一不过即不写,宁缺毋错位):
-     * <ul>
-     * <li>订阅未手动声明编号(seasonStartEpisode/startEpisode 均 null)且 season≤1
-     *     (season&gt;1 的多季订阅走 remapAbsoluteNumbering 自动重映射,语义不同不抢);</li>
-     * <li>官方总集数已知,平移后最大集号不超 min(总集数, 已播+滞后容差);</li>
-     * <li>裸最大集号 &lt; 起始集号(资源确按季内编号;连续编号资源裸号直达总集数段,平移必超界)。</li>
-     * </ul>
-     * 推断成功写入 startEpisode(优先级高于自动重映射)、清该资源集源行重扫、记事件;
-     * 失败静默(对齐器自带 24h 负缓存,不会反复打外网)。
-     */
-    private void alignResourceNumbering(MediaSubscription subscription, MediaSubscriptionResource resource,
-                                        TreeMap<Integer, EpisodeFile> files, String contextTitle) {
-        if ((seasonAligner == null && tencentSeasonAligner == null) || resource == null || files.isEmpty()
-                || resource.getStartEpisode() != null || resource.getSeasonStarts() != null
-                || subscription.getSeasonStartEpisode() != null) {
-            return;
-        }
-        Integer season = subscription.getSeason();
-        Integer total = subscription.getOfficialTotal();
-        if (season != null && season > 1 || total == null || total <= 0) {
-            return;
-        }
-        Integer start = alignSeasonStart(subscription,
-                StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()),
-                metaYear(subscription), contextTitle);
-        if (start == null || start <= 1) {
-            return;
-        }
-        int rawMax = files.lastKey();
-        int shiftedMax = start - 1 + rawMax;
-        int cap = total;
-        Integer aired = subscription.getOfficialEpisodes();
-        if (aired != null && aired > 0) {
-            cap = Math.min(total, aired + registrationLagTolerance(total));
-        }
-        if (rawMax >= start || shiftedMax > cap) {
-            return;
-        }
-        resource.setStartEpisode(start);
-        resourceRepository.save(resource);
-        episodeSourceRepository.deleteByResourceId(resource.getId()); // 旧编号行错位,清行重扫
-        addEvent(subscription.getId(), "ALIGN",
-                "资源「" + resource.getTitle() + "」按豆瓣分季集数自动对齐:第 1 集对应全剧第 " + start + " 集");
-    }
-
-    /** 分季对齐统一入口:腾讯优先(分季集数与绝对集号严格对齐,线上实测一念永恒 52/54/59/
-     * 完结季起点 166,与 Bangumi 一致),腾讯无数据回落豆瓣(其分季集数有漏登,完结季累推
-     * 153 与真实 166 差 13 集 —— 自动对齐宁可慢一拍也要准,两个源都返回才更可信时不做,
-     * 简单优先源 + 兜底)。 */
-    Map<Integer, Integer> alignSeasonStarts(MediaSubscription subscription, String seriesName, Integer firstYear) {
-        if (tencentSeasonAligner != null) {
-            Map<Integer, Integer> starts = tencentSeasonAligner.seasonStarts(seriesName, firstYear);
-            if (starts != null && !starts.isEmpty()) {
-                return starts;
-            }
-        }
-        return seasonAligner == null ? null : seasonAligner.seasonStarts(seriesName, firstYear);
-    }
-
-    Integer alignSeasonStart(MediaSubscription subscription, String seriesName, Integer firstYear, String resourceTitle) {
-        if (tencentSeasonAligner != null) {
-            Integer start = tencentSeasonAligner.inferSeasonStart(seriesName, firstYear, resourceTitle,
-                    subscription.getOfficialEpisodes());
-            if (start != null) {
-                return start;
-            }
-        }
-        return seasonAligner == null ? null
-                : seasonAligner.inferSeasonStart(seriesName, firstYear, resourceTitle,
-                        subscription.getOfficialEpisodes());
-    }
-
-    Integer alignFinaleSeason(MediaSubscription subscription) {
-        String seriesName = StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName());
-        Integer firstYear = metaYear(subscription);
-        if (tencentSeasonAligner != null) {
-            Integer season = tencentSeasonAligner.finaleSeason(seriesName, firstYear,
-                    subscription.getOfficialEpisodes());
-            if (season != null) {
-                return season;
-            }
-        }
-        return seasonAligner == null ? null
-                : seasonAligner.finaleSeason(seriesName, firstYear, subscription.getOfficialEpisodes());
     }
 
     /**
@@ -2207,6 +2117,46 @@ public class MediaSubscriptionCheckService {
             return declared;
         }
         return alignFinaleSeason(subscription);
+    }
+
+    /** 分季对齐统一入口:腾讯优先(分季集数与绝对集号严格对齐,线上实测一念永恒 52/54/59/
+     * 完结季起点 166,与 Bangumi 一致),腾讯无数据回落豆瓣(其分季集数有漏登,完结季累推
+     * 153 与真实 166 差 13 集)。 */
+    Map<Integer, Integer> alignSeasonStarts(MediaSubscription subscription, String seriesName, Integer firstYear) {
+        if (tencentSeasonAligner != null) {
+            Map<Integer, Integer> starts = tencentSeasonAligner.seasonStarts(seriesName, firstYear);
+            if (starts != null && !starts.isEmpty()) {
+                return starts;
+            }
+        }
+        return seasonAligner == null ? null : seasonAligner.seasonStarts(seriesName, firstYear);
+    }
+
+    Integer alignSeasonStart(MediaSubscription subscription, String seriesName, Integer firstYear, String resourceTitle) {
+        if (tencentSeasonAligner != null) {
+            Integer start = tencentSeasonAligner.inferSeasonStart(seriesName, firstYear, resourceTitle,
+                    subscription.getOfficialEpisodes());
+            if (start != null) {
+                return start;
+            }
+        }
+        return seasonAligner == null ? null
+                : seasonAligner.inferSeasonStart(seriesName, firstYear, resourceTitle,
+                        subscription.getOfficialEpisodes());
+    }
+
+    Integer alignFinaleSeason(MediaSubscription subscription) {
+        String seriesName = StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName());
+        Integer firstYear = metaYear(subscription);
+        if (tencentSeasonAligner != null) {
+            Integer season = tencentSeasonAligner.finaleSeason(seriesName, firstYear,
+                    subscription.getOfficialEpisodes());
+            if (season != null) {
+                return season;
+            }
+        }
+        return seasonAligner == null ? null
+                : seasonAligner.finaleSeason(seriesName, firstYear, subscription.getOfficialEpisodes());
     }
 
     /** 一念永恒形态(全剧连续集号的元数据):TMDB 单季装全剧(totalSeasons==1,集号=全剧连续),
@@ -4258,7 +4208,7 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** 季包映射后的上界门禁(与 alignResourceNumbering 的平移后判据一致):最大集号超
+    /** 季包映射后的上界门禁(沿用旧后置平移门禁判据):最大集号超
      * min(官方总集数, 已播+滞后容差) = 包内容不是标题声明的季。官方口径未知返回 false(门禁关闭)。 */
     static boolean mappingOverflowsOfficial(MediaSubscription subscription, TreeMap<Integer, EpisodeFile> files) {
         Integer total = subscription.getOfficialTotal();
