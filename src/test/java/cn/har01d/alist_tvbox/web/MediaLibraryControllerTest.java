@@ -184,9 +184,45 @@ class MediaLibraryControllerTest {
     @Test
     void searchContentMatchesKeyword() throws Exception {
         when(mediaSubscriptionService.contentList(eq(7), isNull(), eq("凡人"))).thenReturn(list("msub:3"));
+        when(pianDanService.search("凡人", 1, 24)).thenReturn(list("tmdb:tv:42"));
+        when(mediaSubscriptionService.isSubscribedTitle(eq(7), org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
+        when(mediaSubscriptionService.absoluteClientCover(any())).thenAnswer(inv -> inv.getArgument(0));
+
         mockMvc.perform(get("/media/token-a").param("wd", "凡人"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.list[0].vod_id").value("msub:3"));
+                .andExpect(jsonPath("$.list[0].vod_id").value("msub:3"))
+                .andExpect(jsonPath("$.list[1].vod_id").value("tmdb:tv:42"));
+    }
+
+    @Test
+    void searchMarksSubscribedTmdbItemWithBadge() throws Exception {
+        MovieList tmdb = new MovieList();
+        MovieDetail item = new MovieDetail();
+        item.setVod_id("tmdb:tv:42");
+        item.setVod_name("测试剧");
+        item.setVod_pic("https://image.tmdb.org/t/p/w500/x.jpg");
+        item.setVod_remarks("2024 · 8.5");
+        tmdb.getList().add(item);
+        when(pianDanService.search("测试", 1, 24)).thenReturn(tmdb);
+        when(mediaSubscriptionService.contentList(eq(7), isNull(), eq("测试"))).thenReturn(new MovieList());
+        when(mediaSubscriptionService.isSubscribedTitle(7, "测试剧")).thenReturn(true);
+        when(mediaSubscriptionService.absoluteClientCover("https://image.tmdb.org/t/p/w500/x.jpg")).thenReturn("/images?url=x.jpg");
+
+        mockMvc.perform(get("/media/token-a").param("wd", "测试"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.list[0].vod_id").value("tmdb:tv:42"))
+                .andExpect(jsonPath("$.list[0].vod_remarks").value("已追 2024 · 8.5"))
+                .andExpect(jsonPath("$.list[0].vod_pic").value("/images?url=x.jpg"));
+    }
+
+    @Test
+    void searchPageTwoOnlyCarriesTmdbResults() throws Exception {
+        when(pianDanService.search("凡人", 2, 24)).thenReturn(list("tmdb:tv:43"));
+
+        mockMvc.perform(get("/media/token-a").param("wd", "凡人").param("pg", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.list.length()").value(1))
+                .andExpect(jsonPath("$.list[0].vod_id").value("tmdb:tv:43"));
     }
 
     @Test

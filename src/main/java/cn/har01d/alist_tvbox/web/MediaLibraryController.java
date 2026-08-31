@@ -31,6 +31,9 @@ import java.util.Set;
  * 分类在 最近更新/连载中/已完结/全部 之外合并片单追更分类(豆瓣/TMDB 榜单,复用 web 片单追更的
  * {@link PianDanService#subscriptionCategory}):片单条目详情带一条「➕ 加入追剧」伪播放线路,
  * 点击经 /play 的 msubadd-{vodId} 一键建订阅(电视端闭环,无需开 web)。
+ * <p>
+ * 站内搜索(wd)同为闭环入口:已订阅命中在前,片单 TMDB 全库搜索(multi)在后 ——
+ * 未追的剧/电影也能搜到,详情同样带「加入追剧」。
  */
 @Slf4j
 @RestController
@@ -70,7 +73,7 @@ public class MediaLibraryController {
             return detail(uid, id, ac, title);
         }
         if (StringUtils.isNotBlank(wd)) {
-            return mediaSubscriptionService.contentList(uid, null, wd);
+            return searchAll(uid, wd, pg);
         }
         if (isPianDanId(t)) {
             return pianDanList(uid, t, pg, params);
@@ -101,6 +104,31 @@ public class MediaLibraryController {
             throw new BadRequestException("无效的媒体条目: " + id);
         }
         return mediaSubscriptionService.contentDetail(uid, subscriptionId, ac, title);
+    }
+
+    /** 站内搜索:已订阅命中在前 + 片单 TMDB 全库(multi)在后 —— 没追过的剧/电影也能搜到,
+     *  点进详情即片单条目(带「➕ 加入追剧」)。翻页只翻 TMDB 侧(已订阅命中固定在第一页);
+     *  TMDB 结果里已追的带「已追」角标(与片单分类列表同口径),封面统一重建客户端可用地址。 */
+    private MovieList searchAll(int uid, String wd, int pg) {
+        List<MovieDetail> merged = new ArrayList<>();
+        if (pg <= 1) {
+            merged.addAll(mediaSubscriptionService.contentList(uid, null, wd).getList());
+        }
+        MovieList tmdb = pianDanService.search(wd, pg, 24);
+        for (MovieDetail item : tmdb.getList()) {
+            item.setVod_pic(mediaSubscriptionService.absoluteClientCover(item.getVod_pic()));
+            if (mediaSubscriptionService.isSubscribedTitle(uid, item.getVod_name())) {
+                item.setVod_remarks("已追 " + StringUtils.defaultString(item.getVod_remarks()));
+            }
+            merged.add(item);
+        }
+        MovieList result = new MovieList();
+        result.setList(merged);
+        result.setPage(tmdb.getPage());
+        result.setPagecount(tmdb.getPagecount());
+        result.setTotal(tmdb.getTotal() + (pg <= 1 ? merged.size() - tmdb.getList().size() : 0));
+        result.setLimit(merged.size());
+        return result;
     }
 
     /** 片单分类条目列表:ac=web 走豆瓣封面代理,再统一重建客户端可用绝对地址;已订阅条目带「已追」角标。 */
