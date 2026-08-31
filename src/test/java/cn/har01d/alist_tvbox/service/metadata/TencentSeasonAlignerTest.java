@@ -30,14 +30,34 @@ class TencentSeasonAlignerTest {
     }
 
     private static String items() {
+        return items(true);
+    }
+
+    /** withFinale=false:腾讯缺完结季条目(已播 173 > 已登记之和 165 的形态)。 */
+    private static String items(boolean withFinale) {
+        String finale = withFinale ? ",\n" + item("w4", "一念永恒 完结季", 2026, 16) : "";
         return String.join(",",
                 item("x1", "一念永恒", 2010, 40),                 // 同名异剧:裸名年份门禁拒
                 item("x2", "一念永恒合集篇", 2024, 53),          // 衍生条目:剥季缀不等名,出局
                 item("x3", "一念永恒小剧场", 2021, 30),
                 item("w1", "<em>一念永恒</em> 第1季", 2020, 52), // 标题带 <em> 高亮,须剥
                 item("w2", "<em>一念永恒</em> 第2季", 2022, 54),
-                item("w3", "<em>一念永恒</em> 第3季", 2024, 59),
-                item("w4", "一念永恒 完结季", 2026, 16));
+                item("w3", "<em>一念永恒</em> 第3季", 2024, 59))
+                + finale;
+    }
+
+    /** 腾讯缺完结季条目时的归位 stub(离线注入)。 */
+    private static TencentSeasonAligner stubWithoutFinale() {
+        return new TencentSeasonAligner(null) {
+            @Override
+            public JsonNode search(String keyword) {
+                try {
+                    return MAPPER.readTree("{\"normalList\":{\"itemList\":[" + items(false) + "]}}");
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+        };
     }
 
     private static String item(String id, String title, int year, int total) {
@@ -65,6 +85,16 @@ class TencentSeasonAlignerTest {
         assertEquals(53, stub().inferSeasonStart("一念永恒", 2020, "一念永恒 第2季 2160P", 173));
         assertNull(stub().inferSeasonStart("一念永恒", 2020, "一念永恒 4K合集 更新至168集", 173), "标题不声明季:无锚点");
         assertNull(stub().inferSeasonStart("一念永恒", 2020, "一念永恒 第一季", 173), "S1 无偏移");
+    }
+
+    @Test
+    void finaleEntryMissingFallsBeyondRegistered() {
+        TencentSeasonAligner stub = stubWithoutFinale();
+        // 已播 173 > 已登记之和 165:完结季目标 = 最大季+1,不冒领给第 3 季
+        assertEquals(4, stub.finaleSeason("一念永恒", 2020, 173));
+        // seasonStarts 无 S4 起点 → infer 返 null,调用方回落豆瓣兜底
+        assertNull(stub.inferSeasonStart("一念永恒", 2020, "一念永恒 完结季 4K", 173));
+        assertEquals(3, stub.finaleSeason("一念永恒", 2020, 150), "已播未超登记之和:维持最大季");
     }
 
     @Test

@@ -93,10 +93,22 @@ public class TencentSeasonAligner {
         return starts;
     }
 
-    /** 完结季目标季:腾讯分季条目在线(完结季正在播,必定有条目),目标 = 已登记最大季。 */
+    /** 完结季目标季:腾讯分季条目在线(完结季正在播,通常有条目),目标 = 已登记最大季;
+     但腾讯也可能缺完结季条目 —— 已播数超出已登记各季之和时目标 = 最大季 + 1(与豆瓣兜底同口径,
+     此时 seasonStarts 无该季起点,inferSeasonStart 返 null 自然回落豆瓣)。 */
     public Integer finaleSeason(String seriesName, Integer firstYear, Integer officialAired) {
         Map<Integer, Integer> counts = seasonCounts(seriesName, firstYear);
-        return counts == null || counts.isEmpty() ? null : java.util.Collections.max(counts.keySet());
+        if (counts == null || counts.isEmpty()) {
+            return null;
+        }
+        int last = java.util.Collections.max(counts.keySet());
+        if (officialAired != null) {
+            int registered = counts.values().stream().mapToInt(Integer::intValue).sum();
+            if (officialAired > registered) {
+                return last + 1;
+            }
+        }
+        return last;
     }
 
     /** 裸剧名 → {季号 → 集数}(腾讯官方分季集数,CheckService 覆盖 TMDB 已播/总数用)。
