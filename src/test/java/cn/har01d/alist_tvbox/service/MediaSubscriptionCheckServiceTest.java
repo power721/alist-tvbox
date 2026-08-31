@@ -1509,6 +1509,32 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void fillPoolSkipsDuplicateKeywordWithinWindow() {
+        // 同轮 ensureSource/fillGaps/ensureMainDrives 连发用的都是订阅词(线上:一念永恒 id=66
+        // 一轮巡检 3 次同词全量搜索):窗口内第二次直接跳过,换词(单集降级「第N集」)放行
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("一念永恒");
+        MediaSubscriptionResource candidate = new MediaSubscriptionResource();
+        candidate.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        candidate.setLink("https://pan.quark.cn/s/pooled");
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/ok", "一念永恒 完结季 4K")));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(candidate));
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(Mockito.eq(1), Mockito.anyString()))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPool(fixture.subscription, true, null);
+        fixture.service.fillPool(fixture.subscription, true, "一念永恒");
+        Mockito.verify(fixture.telegramService, Mockito.times(1))
+                .searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean());
+
+        fixture.service.fillPool(fixture.subscription, true, "一念永恒 第9集");
+        Mockito.verify(fixture.telegramService, Mockito.times(2))
+                .searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean());
+    }
+
+    @Test
     void fillPoolAdmitsExtendedDrivesCandidates() {
         // 扩展网盘:全局配置 msub_extended_drives 后,主网盘以外的盘才进候选池
         Fixture fixture = new Fixture();

@@ -240,6 +240,15 @@ public class MediaSubscriptionCheckService {
     private final Set<Integer> coverPrewarmInFlight = ConcurrentHashMap.newKeySet();
     /** 缺集补搜关键词轮次(0=整季,1+=单集),内存态即可 */
     private final Map<Integer, Integer> gapSearchRounds = new ConcurrentHashMap<>();
+    /** 同关键词补池去重(订阅 id → 上次关键词+时间):一次巡检内 ensureSource/fillGaps/ensureMainDrives
+     *  三个机制各自判定"需要补池",用的却都是订阅词(线上:一念永恒 id=66 一轮巡检连发 3 次同词
+     *  全量搜索,结果集几乎相同,每轮还附带 ~450 条盘检)。窗口内同词直接跳过;单集降级词、
+     *  池枯竭加倍召回不受影响。 */
+    private final Map<Integer, KeywordSearch> lastPoolSearch = new ConcurrentHashMap<>();
+    private static final long POOL_SEARCH_DEDUP_MS = 10 * 60_000L;
+
+    record KeywordSearch(String keyword, long time) {
+    }
     /** 主网盘补池搜索限频(订阅 id → 上次搜索时间):池内无该盘资源时主动搜索,至多每检查周期一次 */
     private final Map<Integer, Long> mainDriveSearchTime = new ConcurrentHashMap<>();
     /** 详情触发补线的限频(订阅 id → 上次触发时间),TVBox 每次打开详情都会装配线路,不能次次起后台探测 */
@@ -735,6 +744,7 @@ public class MediaSubscriptionCheckService {
         coverPrewarmInFlight.remove(subscriptionId);
         preheatAheadInFlight.remove(subscriptionId);
         gapSearchRounds.remove(subscriptionId);
+        lastPoolSearch.remove(subscriptionId);
         mainDriveSearchTime.remove(subscriptionId);
         driveLineKickTime.remove(subscriptionId);
         preheatAheadTime.remove(subscriptionId);
@@ -5215,6 +5225,16 @@ public class MediaSubscriptionCheckService {
 
         String keyword = StringUtils.defaultIfBlank(keywordOverride,
                 StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()));
+        // 同词短窗去重(池枯竭的加倍召回除外):跳过即可,池内候选与上次搜索结果几乎一致
+        if (!exhausted) {
+            KeywordSearch last = lastPoolSearch.get(subscription.getId());
+            long now = System.currentTimeMillis();
+            if (last != null && last.keyword().equals(keyword) && now - last.time() < POOL_SEARCH_DEDUP_MS) {
+                log.info("subscription {} skip duplicate pool search for '{}' ({}s ago)",
+                        subscription.getId(), keyword, (now - last.time()) / 1000);
+                return;
+            }
+        }
         List<Message> messages;
         try {
             var config = appProperties.getSubscription();
@@ -5225,6 +5245,7 @@ public class MediaSubscriptionCheckService {
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "搜索失败:" + e.getMessage());
             return;
         }
+        lastPoolSearch.put(subscription.getId(), new KeywordSearch(keyword, System.currentTimeMillis()));
 
         MediaSubscriptionFilter filter = parseFilter(subscription);
         // 一念永恒形态(元数据单季装全剧)预判一次:标题声明本剧季包(第N季/完结季/合集)的
