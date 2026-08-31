@@ -3292,27 +3292,42 @@ public class MediaSubscriptionCheckService {
      * 区间上界用官方总集数(不低估:完结季更新中,实际集数每轮在涨)。
      */
     Boolean likelyCoversMissing(MediaSubscription subscription, MediaSubscriptionResource resource, Set<Integer> missing) {
-        if (!seasonPackWidened(subscription, resource) || missing.isEmpty()) {
+        if (!absoluteNumberedSeries(subscription) || missing.isEmpty()) {
             return null;
         }
-        if (MULTI_SEASON_PACK.matcher(StringUtils.defaultString(resource.getTitle())).find()) {
+        String title = StringUtils.defaultString(resource.getTitle());
+        if (MULTI_SEASON_PACK.matcher(title).find()) {
             return true; // 多季合一包:全剧范围,必与缺口相交
         }
+        String seriesName = StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName());
+        Integer firstYear = metaYear(subscription);
+        Map<Integer, Integer> starts = alignSeasonStarts(subscription, seriesName, firstYear);
         Integer target = seasonPackTarget(subscription, resource);
         if (target == null) {
-            return null;
+            Integer declared = TextUtils.parseTitleSeason(title);
+            int season = subscription.getSeason() == null ? 1 : subscription.getSeason();
+            if (declared != null && declared == season) {
+                target = declared; // 「第一季」标题(declared==订阅季)不是 widened 形态,但区间起点 1 可推断
+            }
         }
-        Map<Integer, Integer> starts = alignSeasonStarts(subscription,
-                StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()), metaYear(subscription));
-        if (starts == null) {
-            return null; // 两个源都无分季数据:推断不可用,维持原行为
+        Integer start = null;
+        Integer next = null;
+        if (target != null && starts != null) {
+            start = starts.get(target);
+            next = starts.get(target + 1);
         }
-        Integer start = starts.get(target);
+        if (start == null && Integer.valueOf(1).equals(target)) {
+            start = 1; // 第 1 季包起点天然是 1,不依赖分季表
+        }
         if (start == null) {
-            return null;
+            // 分季表缺该季行(豆瓣完结季常无条目)或目标季归位不可用:
+            // inferSeasonStart 能按「已登记之和+1」推出完结季起点
+            start = alignSeasonStart(subscription, seriesName, firstYear, title);
+        }
+        if (start == null) {
+            return null; // 两个源都推不出:维持原行为
         }
         // 区间上界:下一季起点-1;末季(表里无下一季)用官方总集数兜底(完结季更新中,逐轮在涨)
-        Integer next = starts.get(target + 1);
         Integer total = subscription.getOfficialTotal();
         int end = next != null ? next - 1 : (total != null && total >= start ? total : start);
         return start <= java.util.Collections.max(missing) && end >= java.util.Collections.min(missing);

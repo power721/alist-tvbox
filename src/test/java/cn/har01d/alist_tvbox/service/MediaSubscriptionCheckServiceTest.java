@@ -2863,6 +2863,39 @@ class MediaSubscriptionCheckServiceTest {
         List<MediaSubscriptionResource> ordered = fixture.service.orderForGapProbes(fixture.subscription, missing);
         assertEquals(72, ordered.get(0).getId(), "低分第三季包压过高分完结季包:补缺优先能补缺的");
         assertEquals(71, ordered.get(1).getId());
+
+        // 「第一季」标题(declared==订阅季,不是 widened 形态)区间起点 1 可推断 → 也排前;
+        // 豆瓣表缺 S4 行时完结季起点走 inferSeasonStart 兜底,照样能判 FALSE 跳过省预算
+        MediaSubscriptionResource s1 = new MediaSubscriptionResource();
+        s1.setId(73);
+        s1.setSubscriptionId(1);
+        s1.setTitle("一念永恒 第一季 4K");
+        s1.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        s1.setScore(10);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(finale, s3, s1));
+        assertEquals(Boolean.FALSE, fixture.service.likelyCoversMissing(fixture.subscription, s1, missing),
+                "缺 107-165 时第 1 季包(区间 1-52)不沾缺口:跳过省预算");
+        Set<Integer> lowMissing = new java.util.TreeSet<>(numbers(1, 165));
+        assertEquals(Boolean.TRUE, fixture.service.likelyCoversMissing(fixture.subscription, s1, lowMissing));
+        assertEquals(Boolean.FALSE, fixture.service.likelyCoversMissing(fixture.subscription, finale, lowMissing),
+                "完结季包 166 起:跳过不烧预算");
+
+        // 分季表缺 S4 行(豆瓣完结季常无条目):inferSeasonStart 兜底推 166 → FALSE
+        fixture.service.setTencentSeasonAligner(null);
+        fixture.service.setSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.DoubanSeasonAligner(null) {
+            @Override
+            public java.util.Map<Integer, Integer> seasonStarts(String seriesName, Integer firstYear) {
+                return java.util.Map.of(1, 1, 2, 53, 3, 107); // 无 S4 行
+            }
+
+            @Override
+            public Integer inferSeasonStart(String seriesName, Integer firstYear, String resourceTitle, Integer officialAired) {
+                return resourceTitle != null && resourceTitle.contains("完结季") ? 166 : null;
+            }
+        });
+        assertEquals(Boolean.FALSE, fixture.service.likelyCoversMissing(fixture.subscription, finale, lowMissing),
+                "表缺 S4 行:inferSeasonStart 推出 166,完结季包照样判 FALSE");
     }
 
     @Test
