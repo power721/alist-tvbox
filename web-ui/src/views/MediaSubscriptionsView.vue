@@ -560,7 +560,7 @@
               </el-select>
               <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
             </el-form-item>
-            <span v-if="store.admin" class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关);盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
+            <span v-if="store.admin" class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关);盘聚是项目内命名,实际站点为 SeedHub 系聚合站,免登录无需配置;盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
           </el-tab-pane>
           <el-tab-pane label="资源筛选" name="poolFilter">
             <el-form-item label="清晰度门槛">
@@ -2031,6 +2031,11 @@ const weightDefs: { key: string; label: string; value: number }[] = [
   { key: 'drive.main', label: '主网盘', value: 15 },
   { key: 'account', label: '已配账号', value: 8 },
   { key: 'account.vip', label: 'VIP账号', value: 15 },
+  { key: 'source.wanou', label: '玩偶源', value: 22 },
+  { key: 'source.woniu', label: '蜗牛源', value: 20 },
+  { key: 'source.panlian', label: '盘链源', value: 12 },
+  { key: 'source.panju', label: '盘聚源(SeedHub)', value: 12 },
+  { key: 'source.guanying', label: '观影源', value: 12 },
   { key: 'baidu.free', label: '百度免会员', value: 17 },
   { key: 'pan115', label: '115追更弱', value: -10 },
   { key: 'pack.complete', label: '完结包', value: -6 },

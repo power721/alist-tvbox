@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.MediaSubscriptionFilter;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionPoolFilter;
 import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.dto.tg.Message;
@@ -167,6 +168,24 @@ class MediaSubscriptionCheckServiceTest {
         present.removeAll(Set.of(257, 926, 1008));
 
         assertEquals(Set.of(257, 926, 1008), service.computeMissing(subscription, present));
+    }
+
+    // ---------- 站点源档位(2026-09-01):玩偶略大于蜗牛 > 盘链/盘聚/观影 > TG 系 0 基准 ----------
+    // 原先一刀切 siteSourceBonus(部署级,不按订阅调),现拆成权重表 source.* 键,可订阅级覆盖。
+
+    @Test
+    void siteSourceWeightTiers() {
+        assertEquals(22, MediaSubscriptionCheckService.weight(null, "source.wanou"));
+        assertEquals(20, MediaSubscriptionCheckService.weight(null, "source.woniu"));
+        assertEquals(12, MediaSubscriptionCheckService.weight(null, "source.panlian"));
+        assertEquals(12, MediaSubscriptionCheckService.weight(null, "source.panju"));
+        assertEquals(12, MediaSubscriptionCheckService.weight(null, "source.guanying"));
+        // TG 系(盘搜/TG-Search/电报网页)走 telegram 聚合路,无 sourceKind,基准 0
+        assertEquals(0, MediaSubscriptionCheckService.weight(null, "source.telegram"));
+        // 订阅级覆盖 > 内置默认
+        MediaSubscriptionFilter filter = new MediaSubscriptionFilter();
+        filter.setWeights(java.util.Map.of("source.wanou", 99));
+        assertEquals(99, MediaSubscriptionCheckService.weight(filter, "source.wanou"));
     }
 
     @Test

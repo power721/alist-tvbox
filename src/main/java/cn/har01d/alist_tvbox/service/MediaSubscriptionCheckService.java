@@ -5596,6 +5596,11 @@ public class MediaSubscriptionCheckService {
             Map.entry("drive.outside", -10),   // 偏好之外的盘(降权不硬过滤)
             Map.entry("account", 8),           // 已配置该盘账号
             Map.entry("account.vip", 15),      // VIP 账号
+            Map.entry("source.wanou", 22),     // 站点源档位:玩偶略大于蜗牛 > 盘链/盘聚/观影 > TG 系(0 基准,不入表)
+            Map.entry("source.woniu", 20),     // 蜗牛
+            Map.entry("source.panlian", 12),   // 盘链
+            Map.entry("source.panju", 12),     // 盘聚
+            Map.entry("source.guanying", 12),  // 观影
             Map.entry("drive.main", 15),       // 主网盘候选
             Map.entry("baidu.free", 17),       // 百度分享免会员 15 + 夸克易和谐耐删加成 2(线上「重器」:夸克滚动窗分享说删就删)
             Map.entry("pan115", -10),          // 115 分享追更弱
@@ -5609,14 +5614,15 @@ public class MediaSubscriptionCheckService {
             Map.entry("single.episode", -40)   // 单集链接只配补缺
     ));
 
-    /** 读权重:订阅/用户偏好覆盖 > 内置默认。 */
+    /** 读权重:订阅/用户偏好覆盖 > 内置默认(未知键回落 0,防新增站点源未配表拆箱 NPE)。 */
     static int weight(MediaSubscriptionFilter filter, String key) {
         Integer custom = filter == null || filter.getWeights() == null ? null : filter.getWeights().get(key);
-        return custom != null ? custom : WEIGHT_DEFAULTS.get(key);
+        return custom != null ? custom : WEIGHT_DEFAULTS.getOrDefault(key, 0);
     }
 
     /** 元数据级打分(挂载前粗排):新近度 + 清晰度 + 盘偏好 + 账号/VIP感知 + 资源形态 + 体积合理 + 包含词。
-     * 数值全部来自权重表({@link #weight});站点源加分走全局配置 siteSourceBonus(部署级开关,不按订阅调)。 */
+     * 数值全部来自权重表({@link #weight});站点源档位走权重表 source.* 键(玩偶略大于蜗牛 > 盘链/盘聚/观影
+     * > TG 系 0 基准),可按订阅 filter.weights 覆盖。 */
     private Scored score(MediaSubscription subscription, Message message, String title, MediaSubscriptionFilter filter) {
         int result = 0;
         List<String> reasons = new ArrayList<>();
@@ -5694,9 +5700,11 @@ public class MediaSubscriptionCheckService {
         }
         // 站点源(玩偶/盘链/观影/蜗牛/盘聚)的标题来自结构化卡片/详情页,剧名、季集、清晰度字段规整;
         // TG 频道消息是自由文本,防审查变形、装饰前缀、夹带广告都多,归属匹配与集数解析的误判率更高。
+        // 源间再分档(用户排序偏好):玩偶略大于蜗牛 > 盘链/盘聚/观影 > TG 系(盘搜/TG-Search/网页,0 基准)。
         if (StringUtils.isNotBlank(message.getSourceKind())) {
-            result += appProperties.getSubscription().getSiteSourceBonus();
-            reasons.add(message.getSourceKind() + "站点源+" + appProperties.getSubscription().getSiteSourceBonus());
+            int w = weight(filter, "source." + message.getSourceKind());
+            result += w;
+            reasons.add(message.getSourceKind() + "源+" + w);
         }
         if (ongoing) {
             if (type == 8 /* 115 分享码,见 DriveId */) {
