@@ -160,8 +160,11 @@ public class DoubanService {
             log.warn("", e);
         }
 
+        // init-xiaoya.sh 在基线升级时解包 data.zip 重灌基线并把镜像的 base_version 拷到 /data/atv/:
+        // 标记存在=基线刚被重灌 → 版本号回到基线、中和 data.sql、清空 movie_diff 让全部 diff 重放。
+        // (曾误读 /tmp/base_version,无人写该路径,分支从不触发 —— 存量部署的破坏性 data.sql 因此每启重放。)
         if (metaRepository.count() > 10000) {
-            Path source = Path.of("/tmp/base_version");
+            Path source = Utils.getDataPath("atv", "base_version");
             if (Files.exists(source)) {
                 try {
                     settingRepository.save(new Setting(MOVIE_VERSION, Files.readString(source).trim()));
@@ -175,8 +178,13 @@ public class DoubanService {
                     log.warn("", e);
                 }
 
-                log.debug("reset data.sql");
+                log.info("movie base restored, reset data.sql and clear movie_diff for full replay");
                 writeText("data.sql", "SELECT 1;");
+                try {
+                    jdbcTemplate.update("DELETE FROM movie_diff");
+                } catch (Exception e) {
+                    log.warn("clear movie_diff after base restore failed", e);
+                }
             }
         }
 
