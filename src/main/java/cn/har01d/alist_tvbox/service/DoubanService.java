@@ -130,11 +130,16 @@ public class DoubanService {
     @PostConstruct
     public void setup() {
         try {
-            Path path = Utils.getDataPath("atv", "movie_version");
-            if (Files.exists(path)) {
-                List<String> lines = Files.readAllLines(path);
-                if (!lines.isEmpty()) {
-                    settingRepository.save(new Setting(MOVIE_VERSION, lines.get(0).trim()));
+            // 仅首次启动(Setting 缺失)才从 movie_version 文件播种版本 —— 文件在下载 diff.zip 时
+            // 就被 zip 内的 movie_version 覆盖(先于 apply),无条件回写会把「已下载未应用」永久跳过:
+            // apply 失败/中断/库回滚后,版本号被文件顶到高位,缺的 sql 文件永不补放(线上 1317-1339 整批丢失实证)。
+            if (settingRepository.findById(MOVIE_VERSION).isEmpty()) {
+                Path path = Utils.getDataPath("atv", "movie_version");
+                if (Files.exists(path)) {
+                    List<String> lines = Files.readAllLines(path);
+                    if (!lines.isEmpty()) {
+                        settingRepository.save(new Setting(MOVIE_VERSION, lines.get(0).trim()));
+                    }
                 }
             }
         } catch (Exception e) {
@@ -228,7 +233,9 @@ public class DoubanService {
             String local = settingRepository.findById(MOVIE_VERSION).map(Setting::getValue).orElse("0.0").trim();
             String cached = getCachedVersion();
             versions.setCachedMovie(cached);
-            if (!local.equals(remote) && !remote.equals(cached) && !downloading) {
+            // 不再要求 remote != cached:cached 文件只代表「已下载」,local(Setting)才代表「已应用」。
+            // apply 失败后 local<remote 而 cached==remote,若按 cached 跳过会永久漏放(重复下载仅 48KB,可接受)。
+            if (!local.equals(remote) && !downloading) {
                 log.info("local: {} cached: {} remote: {}", local, cached, remote);
                 executor.execute(() -> upgradeMovieData(local, remote));
             } else {
@@ -290,15 +297,19 @@ public class DoubanService {
 
     private void upgradeSqlFile(Path file) {
         try {
-            //jdbcTemplate.execute("RUNSCRIPT FROM '" + file.toString() + "'");
             H2SqlConverter.Dialect dialect = H2SqlConverter.detect(environment);
             List<String> lines = Files.readAllLines(file);
+            int applied = 0;
+            int failed = 0;
+            //jdbcTemplate.execute("RUNSCRIPT FROM '" + file.toString() + "'");
             if (dialect == H2SqlConverter.Dialect.H2) {
                 for (String line : lines) {
                     try {
                         jdbcTemplate.execute(line);
+                        applied++;
                     } catch (Exception e) {
-                        log.debug("execute sql failed: {}", e);
+                        failed++;
+                        log.warn("execute sql failed: {}", line.length() > 120 ? line.substring(0, 120) + "..." : line, e);
                     }
                 }
             } else {
@@ -313,36 +324,54 @@ public class DoubanService {
                     }
                     batch.add(sql);
                     if (batch.size() >= BATCH_SIZE) {
-                        executeBatch(batch);
+                        int size = batch.size();
+                        int batchFailed = executeBatch(batch);
+                        applied += size - batchFailed;
+                        failed += batchFailed;
                     }
                 }
-                executeBatch(batch);
+                int size = batch.size();
+                int batchFailed = executeBatch(batch);
+                applied += size - batchFailed;
+                failed += batchFailed;
             }
             String version = getVersion(file);
+            if (failed > 0) {
+                // 有失败不推进版本号:下次检查重放整个文件(DELETE+INSERT 幂等),防止半应用被永久跳过
+                log.warn("movie data partially applied: {} statements failed, {} ok, version {} not stamped (will retry)",
+                        failed, applied, version);
+                return;
+            }
             settingRepository.save(new Setting(MOVIE_VERSION, version));
-            log.info("movie data upgraded: {}", version);
+            log.info("movie data upgraded: {} ({} statements)", version, applied);
         } catch (Exception e) {
             log.warn("upgrade SQL file failed: {}", file, e);
         }
     }
 
-    private void executeBatch(List<String> batch) {
+    /** 批量执行,失败降级逐条;返回失败条数。 */
+    private int executeBatch(List<String> batch) {
         if (batch.isEmpty()) {
-            return;
+            return 0;
         }
         try {
             jdbcTemplate.batchUpdate(batch.toArray(new String[0]));
+            batch.clear();
+            return 0;
         } catch (Exception e) {
             log.debug("batch update failed, falling back to per-statement execution", e);
+            int failed = 0;
             for (String sql : batch) {
                 try {
                     jdbcTemplate.execute(sql);
                 } catch (Exception ex) {
-                    log.debug("execute sql failed: {}", ex);
+                    failed++;
+                    log.warn("execute sql failed: {}", sql.length() > 120 ? sql.substring(0, 120) + "..." : sql, ex);
                 }
             }
+            batch.clear();
+            return failed;
         }
-        batch.clear();
     }
 
     public String getAppRemoteVersion() {
