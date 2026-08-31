@@ -22,6 +22,7 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -91,7 +92,7 @@ class PlayControllerTest {
     void playShouldSubscribePianDanDoubanEntry() throws Exception {
         when(mediaSubscriptionService.resolveUid("test-token")).thenReturn(7);
         when(mediaSubscriptionService.isSubscribedTitle(org.mockito.ArgumentMatchers.eq(7), org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
-        when(mediaSubscriptionService.localDoubanId("showa")).thenReturn(123);
+        when(mediaSubscriptionService.localDoubanId(eq("showa"), isNull())).thenReturn(123);
         MediaSubscriptionDto dto = new MediaSubscriptionDto();
         dto.setId(11);
         when(mediaSubscriptionService.create(eq(7), any())).thenReturn(dto);
@@ -112,7 +113,7 @@ class PlayControllerTest {
     void playShouldBindDoubanMetaViaSuggestWhenLocalAmbiguous() throws Exception {
         when(mediaSubscriptionService.resolveUid("test-token")).thenReturn(7);
         when(mediaSubscriptionService.isSubscribedTitle(org.mockito.ArgumentMatchers.eq(7), org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
-        when(mediaSubscriptionService.localDoubanId("showa")).thenReturn(null);
+        when(mediaSubscriptionService.localDoubanId(eq("showa"), isNull())).thenReturn(null);
         cn.har01d.alist_tvbox.dto.MetadataSearchItem item = new cn.har01d.alist_tvbox.dto.MetadataSearchItem();
         item.setProvider("douban");
         item.setId("456");
@@ -133,7 +134,7 @@ class PlayControllerTest {
     void playShouldSkipDoubanMetaWhenSuggestAlsoAmbiguous() throws Exception {
         when(mediaSubscriptionService.resolveUid("test-token")).thenReturn(7);
         when(mediaSubscriptionService.isSubscribedTitle(org.mockito.ArgumentMatchers.eq(7), org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
-        when(mediaSubscriptionService.localDoubanId("showa")).thenReturn(null);
+        when(mediaSubscriptionService.localDoubanId(eq("showa"), isNull())).thenReturn(null);
         cn.har01d.alist_tvbox.dto.MetadataSearchItem first = new cn.har01d.alist_tvbox.dto.MetadataSearchItem();
         first.setProvider("douban");
         first.setId("456");

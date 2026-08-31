@@ -583,15 +583,78 @@ public class MediaSubscriptionService {
     /** 豆瓣片单条目绑 id 优先路:本地豆瓣库精确名匹配(Movie.id 即豆瓣 subject id,零网络)。
      *  同名多部(翻拍)本地无年份无法消歧,返回 null 由调用方回落 suggest 严格匹配。 */
     public Integer localDoubanId(String name) {
+        return localDoubanId(name, null);
+    }
+
+    /** 年份版:条目带年份(rexxar item / 本地 Movie.year)时只认年份命中的唯一候选消歧翻拍;
+     *  年份对不上即 null(不同部,不退纯名防冒领),调用方回落 suggest 严格匹配。 */
+    public Integer localDoubanId(String name, Integer year) {
+        Movie movie = uniqueLocalMovie(name, year);
+        return movie != null ? movie.getId() : null;
+    }
+
+    /** 豆瓣片单条目(s:)详情富化:本地豆瓣库精确名匹配唯一才返回,否则 null 由调用方回落仅标题详情。
+     *  匹配口径与 localDoubanId 一致(年份过滤优先、纯名唯一兜底)。 */
+    public MovieDetail localDoubanDetail(String name, Integer year) {
+        Movie movie = uniqueLocalMovie(name, year);
+        if (movie == null) {
+            return null;
+        }
+        MovieDetail detail = new MovieDetail();
+        detail.setVod_name(movie.getName());
+        detail.setVod_pic(movie.getCover());
+        if (movie.getYear() != null) {
+            detail.setVod_year(String.valueOf(movie.getYear()));
+        }
+        detail.setVod_remarks(movie.getDbScore());
+        detail.setType_name(movie.getGenre());
+        detail.setVod_area(movie.getCountry());
+        detail.setVod_lang(movie.getLanguage());
+        detail.setVod_director(movie.getDirectors());
+        detail.setVod_actor(movie.getActors());
+        if (StringUtils.isNotBlank(movie.getDescription())) {
+            detail.setVod_content(movie.getDescription());
+        }
+        return detail;
+    }
+
+    /** 同名候选严格唯一:带年份只认年份命中的唯一一条(年份对不上=不是同一部,不退纯名防冒领);
+     *  无年份才用纯名唯一。 */
+    private Movie uniqueLocalMovie(String name, Integer year) {
         if (StringUtils.isBlank(name)) {
             return null;
         }
-        var ids = movieRepository.getByName(name.trim()).stream()
-                .map(Movie::getId)
+        List<Movie> candidates = movieRepository.getByName(name.trim()).stream()
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
-        return ids.size() == 1 ? ids.get(0) : null;
+        if (candidates.isEmpty()) {
+            log.debug("local douban match: name='{}' year={} no same-name row in local db", name, year);
+            return null;
+        }
+        String candidateYears = candidates.stream()
+                .map(m -> m.getId() + ":" + m.getYear())
+                .collect(Collectors.joining(","));
+        if (year != null) {
+            List<Movie> byYear = candidates.stream()
+                    .filter(m -> year.equals(m.getYear()))
+                    .toList();
+            if (byYear.size() == 1) {
+                log.debug("local douban match: name='{}' year={} hit unique id={} (candidates {})",
+                        name, year, byYear.get(0).getId(), candidateYears);
+                return byYear.get(0);
+            }
+            log.debug("local douban match: name='{}' year={} rejected: year-filter matches={} (candidates {}) — mismatch means different title, no name-only fallback",
+                    name, year, byYear.size(), candidateYears);
+            return null;
+        }
+        if (candidates.size() == 1) {
+            log.debug("local douban match: name='{}' year=null hit unique id={}", name, candidates.get(0).getId());
+            return candidates.get(0);
+        }
+        log.debug("local douban match: name='{}' year=null rejected: {} same-name rows (candidates {}) cannot disambiguate",
+                name, candidates.size(), candidateYears);
+        return null;
     }
 
     /** 片单条目是否已在追:标题语义匹配(「末日地堡 第三季」命中 web 订的「末日地堡」S3)。 */
