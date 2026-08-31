@@ -120,21 +120,6 @@ public class DoubanService {
                          SiteService siteService,
                          TaskService taskService,
                          FileDownloader fileDownloader,
-                         RestTemplateBuilder builder,
-                         JdbcTemplate jdbcTemplate,
-                         Environment environment) {
-        this(appProperties, metaRepository, movieRepository, aliasRepository, settingRepository,
-                siteService, taskService, fileDownloader, null, builder, jdbcTemplate, environment);
-    }
-
-    public DoubanService(AppProperties appProperties,
-                         MetaRepository metaRepository,
-                         MovieRepository movieRepository,
-                         AliasRepository aliasRepository,
-                         SettingRepository settingRepository,
-                         SiteService siteService,
-                         TaskService taskService,
-                         FileDownloader fileDownloader,
                          TmdbRepository tmdbRepository,
                          RestTemplateBuilder builder,
                          JdbcTemplate jdbcTemplate,

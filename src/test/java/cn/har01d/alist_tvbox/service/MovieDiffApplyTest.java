@@ -68,7 +68,8 @@ class MovieDiffApplyTest {
         when(chained.build()).thenReturn(null);
         service = new DoubanService(mock(cn.har01d.alist_tvbox.config.AppProperties.class), metaRepository,
                 movieRepository, aliasRepository, settingRepository, mock(SiteService.class),
-                mock(TaskService.class), mock(FileDownloader.class), builder,
+                mock(TaskService.class), mock(FileDownloader.class),
+                mock(cn.har01d.alist_tvbox.entity.TmdbRepository.class), builder,
                 jdbcTemplate, environment);
         // movie_diff 无记录 → attempts null(执行),queryForObject 不会被调用到 SUCCESS 分支
         org.mockito.Mockito.lenient().when(jdbcTemplate.queryForList(anyString(), eq(Integer.class), anyString()))
