@@ -38,6 +38,8 @@ public class MediaSubscriptionResource {
     public static final String STATE_RETIRED = "RETIRED";
     /** 搜索源盘检已判失效,从未获得挂载资格(保留行防重复入池) */
     public static final String STATE_REJECTED = "REJECTED";
+    /** 用户手动移除(终态墓碑:保留行防重复入池,不参与冷却重探/自动换源;恢复走 restore) */
+    public static final String STATE_REMOVED = "REMOVED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")

@@ -98,7 +98,7 @@
           </el-table-column>
           <el-table-column label="进度" width="170">
             <template #default="scope">
-              <span>{{ scope.row.currentEpisodes ?? 0 }}{{ progressTotal(scope.row) ? ' / ' + progressTotal(scope.row) : '' }} 集</span>
+              <span>{{ progressTotal(scope.row) ? `${scope.row.currentEpisodes ?? 0} / ${progressTotal(scope.row)} 集` : `已更新至 ${scope.row.currentEpisodes ?? 0} 集` }}</span>
               <div class="sub-text danger" v-if="scope.row.missingEpisodes && scope.row.missingEpisodes.length">
                 缺第 {{ compactNumbers(scope.row.missingEpisodes) }} 集
               </div>
@@ -2147,15 +2147,19 @@ const compactNumbers = (numbers: number[]) => {
 }
 
 /** 进度分母:官方总集数滞后于资源现实时(长番官方 1212/本地已到 1270)以观测最大集号兜底,避免 1243/1212 倒挂 */
-// 分季订阅对齐(seasonStartEpisode)后 officialTotal/maxEpisode 是全剧连续集号空间,
-// 进度分母要减掉季前集数才是本季体量(一念永恒 S4:200-165=35);currentEpisodes/expected 本就是季内计数
-const seasonOffset = (row: SubscriptionDto): number =>
-    (row.seasonStartEpisode ?? 0) > 1 ? (row.seasonStartEpisode ?? 0) - 1 : 0
+// 分季订阅对齐(seasonStartEpisode)的在播季不显示自动分母:officialTotal/maxEpisode 是全剧连续
+// 集号空间且登记滞后(TMDB 200 vs 腾讯 181 都不可信),腾讯分季登记数还会随播出继续长,推本季体量
+// 都是假精度 —— 分母只认手填期望集数;完结显示「N集完结」,与 TVBox buildRemarks 同口径
+const seasonWindowed = (row: SubscriptionDto): boolean => (row.seasonStartEpisode ?? 0) > 1
 const progressTotal = (row: SubscriptionDto): number | null => {
-    const offset = seasonOffset(row)
-    return Math.max((row.officialTotal ?? 0) - offset, row.expectedEpisodes ?? 0, (row.maxEpisode ?? 0) - offset) || null
+    if (seasonWindowed(row)) {
+        return (row.expectedEpisodes ?? 0) || null
+    }
+    return Math.max(row.officialTotal ?? 0, row.expectedEpisodes ?? 0, row.maxEpisode ?? 0) || null
 }
 // 官方已播的季内计数(与 currentEpisodes 同空间比较;绝对集号空间里的官方已播数要平移)
+const seasonOffset = (row: SubscriptionDto): number =>
+    (row.seasonStartEpisode ?? 0) > 1 ? (row.seasonStartEpisode ?? 0) - 1 : 0
 const airedInSeason = (row: SubscriptionDto): number => (row.officialEpisodes ?? 0) - seasonOffset(row)
 
 const formatTime = (time: number | null) => {

@@ -898,6 +898,67 @@ public class MediaSubscriptionCheckService {
         addEvent(id, MediaSubscriptionEvent.TYPE_PINNED, "已取消钉选,恢复自动换源", false);
     }
 
+    /**
+     * 手动移除资源:用户判定源不属于本剧(同名短剧冒领)或不想要 —— 卸载补缺挂载、清集源行、
+     * 置 REMOVED 墓碑。墓碑行保留是关键:入池按 (subscription, link) 去重,行在就永不重新入池;
+     * REMOVED 不参与冷却重探/自动换源/池枯竭释放(误移除走 restore/激活显式复活)。
+     * 主源拒绝:移除会掏空订阅主路径,换源走 activate/pin,整体下线走删除订阅。
+     */
+    public void removeResource(int uid, int id, int resourceId) {
+        MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
+        if (subscription == null || subscription.getUid() != uid) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
+        }
+        MediaSubscriptionResource resource = resourceRepository.findById(resourceId).orElse(null);
+        if (resource == null || resource.getSubscriptionId() != id) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("候选资源不存在: " + resourceId);
+        }
+        if (MediaSubscriptionResource.STATE_REMOVED.equals(resource.getState())) {
+            return; // 幂等
+        }
+        if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
+                && subscription.getMountPath() != null
+                && subscription.getMountPath().equals(resource.getMountPath())) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException(
+                    "主源不能移除:请换源(启用/钉选其它候选)或删除整个订阅");
+        }
+        // 顺序:先 AList 侧卸载成功,再动本地行 —— 失败中止可重试,不留孤儿挂载
+        if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
+                && !unmountShareIfUnused(resource.getShareId(), id)) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("卸载挂载失败(AList 不可用),请稍后重试");
+        }
+        episodeSourceRepository.deleteByResourceId(resource.getId());
+        resource.setState(MediaSubscriptionResource.STATE_REMOVED);
+        resource.setPinned(false);
+        resource.setShareId(null);
+        resource.setMountPath(null);
+        resource.setCheckedTime(System.currentTimeMillis());
+        resourceRepository.save(resource);
+        addEvent(id, MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                "已手动移除源:" + StringUtils.defaultIfBlank(resource.getTitle(), resource.getLink()), false);
+        log.info("subscription {} removed resource {} manually: {}", id, resourceId, resource.getTitle());
+    }
+
+    /** 恢复手动移除的资源:墓碑行回到候选池,下轮巡检可探测/激活。 */
+    public void restoreResource(int uid, int id, int resourceId) {
+        MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
+        if (subscription == null || subscription.getUid() != uid) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
+        }
+        MediaSubscriptionResource resource = resourceRepository.findById(resourceId).orElse(null);
+        if (resource == null || resource.getSubscriptionId() != id) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("候选资源不存在: " + resourceId);
+        }
+        if (!MediaSubscriptionResource.STATE_REMOVED.equals(resource.getState())) {
+            return; // 幂等
+        }
+        resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        resource.setCheckedTime(null);
+        resourceRepository.save(resource);
+        addEvent(id, MediaSubscriptionEvent.TYPE_POOL_FILLED,
+                "已恢复候选:" + StringUtils.defaultIfBlank(resource.getTitle(), resource.getLink()), false);
+    }
+
     /** 钉选置位(同步):目标行置 true、同订阅其余行清 false(每订阅一个钉选位)。 */
     void applyPin(int id, int resourceId) {
         for (MediaSubscriptionResource r : resourceRepository.findBySubscriptionIdOrderByScoreDesc(id)) {
@@ -5927,11 +5988,49 @@ public class MediaSubscriptionCheckService {
                 continue; // 纯假名/西里尔/阿拉伯文等别名归一化后为空:contains("") 恒真、isChinese("") 真空真,
                 // 会放行一切标题把门禁整个打穿(线上:航海王别名 ワンピース/ون بيس 让「短剧更新目录」入池成主源)
             }
-            if ((n.length() >= 2 || TextUtils.isChinese(n)) && normalized.contains(n)) {
+            if ((n.length() >= 2 || TextUtils.isChinese(n)) && normalized.contains(n)
+                    && (countCjkChars(n) > 2 || containsAsTitleWord(normalized, n))) {
                 return true;
             }
         }
         return fuzzyChineseMatch(names, normalized);
+    }
+
+    /** 短中文名(≤2 汉字)的包含命中必须「整词」:出现位置两侧的粘连为空格/串尾(整词)、
+     * 数字/字母(醒来2026/醒来4K)、≤1 个汉字(醒来版),或粘连汉字全由同剧描述词组成
+     * (醒来全集/诛仙动画/第2季)。剧名只是更长标题的前缀 = 前缀异剧:短剧「醒来就成了
+     * 千古一帝」冒领《醒来》的集位(线上:补缺挂载占了 16/18/19 集);而 fuzzy 兜底要求
+     * 名长 ≥3,短名在这里被包含匹配放行后没有任何第二道防线,必须自行收紧。 */
+    static boolean containsAsTitleWord(String normalizedTitle, String n) {
+        int from = 0;
+        for (int idx = normalizedTitle.indexOf(n, from); idx >= 0; idx = normalizedTitle.indexOf(n, from)) {
+            String before = normalizedTitle.substring(0, idx);
+            String after = normalizedTitle.substring(idx + n.length());
+            int spaceAfter = after.indexOf(' ');
+            String glued = before.substring(before.lastIndexOf(' ') + 1)
+                    + after.substring(0, spaceAfter < 0 ? after.length() : spaceAfter);
+            if (countCjkChars(glued) <= 1 || SAME_SHOW_GLUE.matcher(glued).matches()) {
+                return true;
+            }
+            from = idx + 1;
+        }
+        return false;
+    }
+
+    /** 整词判定的同剧粘连词:完结类(全集/大结局/完结)、载体(电视剧/动画片/动漫)、
+     *  音轨字幕画质(国语/粤语/中字/双语/高清/正片)、季部序数(第N季/N季/第N部)。 */
+    private static final Pattern SAME_SHOW_GLUE = Pattern.compile(
+            "(?:全集|大结局|结局|完结|电视剧|动画片?|动漫|国语|粤语|中字|中英双字|双语|高清|正片"
+                    + "|第[0-9一二三四五六七八九十百]+[季部]|[0-9一二三四五六七八九十]+季)*");
+
+    private static int countCjkChars(String s) {
+        int count = 0;
+        for (int i = 0; i < s.length(); i++) {
+            if (TextUtils.isChineseChar(s.charAt(i))) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /** 中文变形兜底:标题紧凑串中存在与某中文名编辑距离 ≤ max(1, len/4) 的滑窗即命中。 */

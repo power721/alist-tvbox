@@ -2743,13 +2743,13 @@ public class MediaSubscriptionService {
         int current = subscription.getCurrentEpisodes() == null ? 0 : subscription.getCurrentEpisodes();
         int expected = subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes();
         // 总数口径与 web 列表一致:手填期望(expected=0 表示跟随官方) > 官方总集数;均无才退「已更新至 N 集」。
-        // 分季订阅对齐后官方总集数是全剧连续空间,减去季前集数才是本季体量(线上:一念永恒 S4 200-165=35,
-        // 不减会显示「8/200集」)
+        // 分季订阅对齐(seasonStartEpisode)的在播季<b>不显示自动分母</b>:官方总集数是全剧连续空间且
+        // 登记滞后(一念永恒 TMDB 200 vs 腾讯 181 都不可信),腾讯分季登记数还会随播出继续长 ——
+        // 推出来的本季体量都是假精度(35/16 两版都被否),完结(status=ENDED)后直接「N集完结」
         Integer start = subscription.getSeasonStartEpisode();
-        int offset = start != null && start > 1 ? start - 1 : 0;
-        int total = expected > 0 ? expected
-                : (subscription.getOfficialTotal() != null && subscription.getOfficialTotal() > offset
-                ? subscription.getOfficialTotal() - offset : 0);
+        boolean windowed = start != null && start > 1;
+        int officialTotal = subscription.getOfficialTotal() == null ? 0 : subscription.getOfficialTotal();
+        int total = expected > 0 ? expected : (windowed ? 0 : officialTotal);
         boolean ended = MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
                 || (expected > 0 && current >= expected)
                 || (total > 0 && subscription.isSeasonAiredOut() && current >= total);
