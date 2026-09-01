@@ -39,6 +39,8 @@ public class MediaSubscriptionEvent {
     public static final String TYPE_UPDATE_CHECK = "UPDATE_CHECK";
     /** 用户钉选/取消钉选主源(用户自发动作,只进事件流不外发通知) */
     public static final String TYPE_PINNED = "PINNED";
+    /** 磁力兜底已提交离线下载(网盘侧任务建立,产物落地后由下轮巡检收割入库;只进事件流) */
+    public static final String TYPE_MAGNET_SUBMITTED = "MAGNET_SUBMITTED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")

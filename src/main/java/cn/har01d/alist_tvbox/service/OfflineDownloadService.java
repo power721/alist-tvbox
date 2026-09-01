@@ -13,6 +13,7 @@ import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.DownloadTarget;
+import cn.har01d.alist_tvbox.model.MagnetSubmitResult;
 import cn.har01d.alist_tvbox.model.StoredConfig;
 import cn.har01d.alist_tvbox.service.offline.OfflineDownloadHandler;
 import cn.har01d.alist_tvbox.storage.Storage;
@@ -38,6 +39,8 @@ public class OfflineDownloadService {
     static final String SETTING_NAME = "offline_download_config";
     static final String OFFLINE_DIR_NAME = "alist-tvbox-offline";
     private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_FAILED = "FAILED";
 
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
@@ -60,17 +63,18 @@ public class OfflineDownloadService {
     public OfflineDownloadConfigDto getConfig() {
         Optional<Setting> setting = settingRepository.findById(SETTING_NAME);
         if (setting.isEmpty() || StringUtils.isBlank(setting.get().getValue())) {
-            return new OfflineDownloadConfigDto(false, DriverType.PAN115.name(), null, "");
+            return new OfflineDownloadConfigDto(false, DriverType.PAN115.name(), null, null, "");
         }
 
         StoredConfig config = parseConfig(setting.get().getValue());
         String folder = "";
+        String accountName = null;
         if (config.accountId() != null) {
-            folder = driverAccountRepository.findById(config.accountId())
-                    .map(Storage::getMountPath)
-                    .orElse("");
+            Optional<DriverAccount> account = driverAccountRepository.findById(config.accountId());
+            folder = account.map(Storage::getMountPath).orElse("");
+            accountName = account.map(DriverAccount::getName).orElse(null);
         }
-        return new OfflineDownloadConfigDto(config.enabled(), normalizeDriverType(config.driverType()), config.accountId(), folder);
+        return new OfflineDownloadConfigDto(config.enabled(), normalizeDriverType(config.driverType()), config.accountId(), accountName, folder);
     }
 
     public OfflineDownloadConfigDto saveConfig(OfflineDownloadConfigRequest request) {
@@ -80,7 +84,7 @@ public class OfflineDownloadService {
         if (!normalized.enabled()) {
             settingRepository.save(new Setting(SETTING_NAME, writeConfig(normalized)));
             log.info("offline download config disabled");
-            return new OfflineDownloadConfigDto(false, driverType, normalized.accountId(), "");
+            return new OfflineDownloadConfigDto(false, driverType, normalized.accountId(), null, "");
         }
 
         DriverAccount account = getAccount(normalized.accountId(), driverType);
@@ -89,7 +93,7 @@ public class OfflineDownloadService {
         settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(), offlineFolderId))));
         log.info("offline download config saved: driverType={}, accountId={}, offlineFolderId={}",
                 driverType, account.getId(), offlineFolderId);
-        return new OfflineDownloadConfigDto(true, driverType, account.getId(), Storage.getMountPath(account));
+        return new OfflineDownloadConfigDto(true, driverType, account.getId(), account.getName(), Storage.getMountPath(account));
     }
 
     public OfflineDownloadQuotaResponse getQuota() {
@@ -121,13 +125,117 @@ public class OfflineDownloadService {
 
         OfflineDownloadHandler.TaskResult result = handler.submitAndWait(account, request.url(), pathId);
         String targetPath = buildTargetPath(account, result.taskName());
-        saveTask(account.getId(), urlHash, result, targetPath);
+        saveTask(account.getId(), urlHash, result, targetPath, null, null);
         log.info("offline download task completed: driverType={}, accountId={}, urlHash={}, targetPath={}", config.driverType(), account.getId(), urlHash, targetPath);
         return new DownloadTarget(targetPath, result.folder());
     }
 
     public void syncSelectedAccountTempDir(Integer accountId) {
         refreshOfflineFolderId(accountId);
+    }
+
+    /** 追剧磁力兜底前置:离线下载已配置并开启(布尔版,不抛)。 */
+    public boolean isConfigured() {
+        try {
+            loadEnabledConfig();
+            return true;
+        } catch (BadRequestException e) {
+            return false;
+        }
+    }
+
+    /** 离线产物根目录(配置账号挂载根/alist-tvbox-offline),巡检扫描收割用。 */
+    public String offlineRootPath() {
+        StoredConfig config = loadEnabledConfig();
+        DriverAccount account = getAccount(config.accountId(), config.driverType());
+        return buildRootPath(account);
+    }
+
+    /** 离线配置账号的盘型代码(DriveId,磁力产物资源行的 type 用);未配置返回 null。 */
+    public Integer configuredDriveType() {
+        try {
+            StoredConfig config = loadEnabledConfig();
+            return switch (config.driverType()) {
+                case "PAN115" -> 8;   // DriveId: 115
+                case "THUNDER" -> 2;  // DriveId: thunder
+                case "GUANGYA" -> 12; // DriveId: duck(广雅/光鸭)
+                default -> null;
+            };
+        } catch (BadRequestException e) {
+            return null;
+        }
+    }
+
+    /** 配置账号上未收割的磁力任务数(PENDING),配额闸门用。 */
+    public long pendingMagnetCount() {
+        StoredConfig config = loadEnabledConfig();
+        return offlineDownloadTaskRepository.countByAccountIdAndStatus(config.accountId(), STATUS_PENDING);
+    }
+
+    /** 单集离线配额已用量:该订阅该集的提交尝试次数(含 FAILED)。 */
+    public long episodeMagnetCount(Integer subscriptionId, Integer episode) {
+        return offlineDownloadTaskRepository.countBySubscriptionIdAndEpisode(subscriptionId, episode);
+    }
+
+    /** 单订阅离线配额已用量。 */
+    public long subscriptionMagnetCount(Integer subscriptionId) {
+        return offlineDownloadTaskRepository.countBySubscriptionId(subscriptionId);
+    }
+
+    /** 追剧总离线配额已用量(磁力兜底提交的行才带 subscription_id)。 */
+    public long totalMagnetCount() {
+        return offlineDownloadTaskRepository.countBySubscriptionIdNotNull();
+    }
+
+    /**
+     * 追剧磁力兜底提交(三态,见 {@link MagnetSubmitResult})。
+     * <p>
+     * 与 {@link #downloadTarget} 的差异:超时(submitAndWait 等不到完成)不当失败——网盘侧任务
+     * 已创建,记 PENDING 等巡检下轮扫描收割,重复提交会在网盘侧重复建任务烧离线配额。
+     * FAILED 也落行(带订阅/集号):试错同样消耗配额与网盘侧风控信任,且同磁力不再重试。
+     */
+    public MagnetSubmitResult submitMagnet(String url, Integer subscriptionId, Integer episode) {
+        validateUrl(url);
+        StoredConfig config = loadEnabledConfig();
+        DriverAccount account = getAccount(config.accountId(), config.driverType());
+        String urlHash = hashUrl(url);
+        Optional<OfflineDownloadTask> localTask = offlineDownloadTaskRepository
+                .findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(account.getId(), urlHash);
+        if (localTask.isPresent()) {
+            OfflineDownloadTask task = localTask.get();
+            if (STATUS_COMPLETED.equals(task.getStatus()) && StringUtils.isNotBlank(task.getTargetPath())) {
+                return MagnetSubmitResult.completed(task.getTaskName());
+            }
+            if (STATUS_PENDING.equals(task.getStatus())) {
+                return MagnetSubmitResult.submitted("任务进行中,等待网盘下载");
+            }
+            if (STATUS_FAILED.equals(task.getStatus())) {
+                return MagnetSubmitResult.failed("该磁力此前提交失败,已跳过");
+            }
+        }
+
+        OfflineDownloadHandler handler = getHandler(config.driverType());
+        String pathId = requireOfflineFolderId(config);
+        log.info("submitting magnet offline download: driverType={}, accountId={}, urlHash={}, subscription={}, episode={}",
+                config.driverType(), account.getId(), urlHash, subscriptionId, episode);
+        OfflineDownloadHandler.TaskResult result;
+        try {
+            result = handler.submitAndWait(account, url, pathId);
+        } catch (BadRequestException e) {
+            if (isTimeoutMessage(e.getMessage())) {
+                saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_PENDING, null, null, false);
+                return MagnetSubmitResult.submitted("已提交,等待网盘下载");
+            }
+            saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_FAILED, null, null, false);
+            return MagnetSubmitResult.failed(e.getMessage());
+        } catch (Exception e) {
+            saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_FAILED, null, null, false);
+            return MagnetSubmitResult.failed(StringUtils.defaultIfBlank(e.getMessage(), "离线下载提交失败"));
+        }
+        String targetPath = buildTargetPath(account, result.taskName());
+        saveTask(account.getId(), urlHash, result, targetPath, subscriptionId, episode);
+        log.info("magnet offline download completed: urlHash={}, taskName={}", urlHash, result.taskName());
+        return MagnetSubmitResult.completed(result.taskName());
     }
 
     public void syncConfiguredTempDirOnStartup() {
@@ -259,10 +367,20 @@ public class OfflineDownloadService {
     }
 
     private String buildTargetPath(DriverAccount account, String taskName) {
-        return Storage.getMountPath(account) + "/" + OFFLINE_DIR_NAME + "/" + taskName;
+        return buildRootPath(account) + "/" + taskName;
     }
 
-    private void saveTask(Integer accountId, String urlHash, OfflineDownloadHandler.TaskResult result, String targetPath) {
+    private String buildRootPath(DriverAccount account) {
+        return Storage.getMountPath(account) + "/" + OFFLINE_DIR_NAME;
+    }
+
+    /** 三 handler 的超时文案(115=10秒/迅雷=30秒/光鸭=30秒「未在…内完成」)。 */
+    private static boolean isTimeoutMessage(String message) {
+        return message != null && message.contains("未在") && message.contains("内完成");
+    }
+
+    private void saveTask(Integer accountId, String urlHash, OfflineDownloadHandler.TaskResult result, String targetPath,
+                          Integer subscriptionId, Integer episode) {
         OfflineDownloadTask entity = offlineDownloadTaskRepository
                 .findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(accountId, urlHash)
                 .orElseGet(OfflineDownloadTask::new);
@@ -277,6 +395,30 @@ public class OfflineDownloadService {
         entity.setTaskName(result.taskName());
         entity.setStatus(STATUS_COMPLETED);
         entity.setFolder(result.folder());
+        entity.setSubscriptionId(subscriptionId);
+        entity.setEpisode(episode);
+        entity.setUpdatedTime(now);
+        offlineDownloadTaskRepository.save(entity);
+    }
+
+    /** 提交尝试落行(超时 PENDING/被拒 FAILED):无 taskName/targetPath(产物名未知),扫描收割按目录对账。 */
+    private void saveAttempt(Integer accountId, String urlHash, Integer subscriptionId, Integer episode,
+                             String status, String taskName, String targetPath, boolean folder) {
+        OfflineDownloadTask entity = offlineDownloadTaskRepository
+                .findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(accountId, urlHash)
+                .orElseGet(OfflineDownloadTask::new);
+        Instant now = Instant.now();
+        if (entity.getCreatedTime() == null) {
+            entity.setCreatedTime(now);
+        }
+        entity.setAccountId(accountId);
+        entity.setUrlHash(urlHash);
+        entity.setTaskName(taskName);
+        entity.setTargetPath(targetPath);
+        entity.setStatus(status);
+        entity.setFolder(folder);
+        entity.setSubscriptionId(subscriptionId);
+        entity.setEpisode(episode);
         entity.setUpdatedTime(now);
         offlineDownloadTaskRepository.save(entity);
     }

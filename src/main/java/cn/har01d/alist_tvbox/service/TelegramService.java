@@ -1197,6 +1197,19 @@ public class TelegramService {
      * 内置来源。追更场景需要的是**最大召回**(资源不够时重复搜同一个源没有意义,结果不会变),
      * 所以三路全开。任一路失败只记日志,不影响其它路。
      */
+    /**
+     * 磁力专项搜索(追剧磁力兜底用):tg-search API 只请求 magnet 类型,
+     * 不过 filterAndSort(其 tgDrivers 过滤会按用户配置剔除磁力)。
+     */
+    public List<Message> searchMagnets(String keyword, int size) {
+        if (StringUtils.isBlank(appProperties.getTgSearch())) {
+            return List.of();
+        }
+        List<Message> messages = searchTgSearchApi(keyword, "magnet", 1, size).messages();
+        log.info("magnet search {} get {} results", keyword, messages.size());
+        return messages;
+    }
+
     public List<Message> searchAggregated(String keyword, int size, boolean cached) {
         List<TelegramChannel> channels = list().stream()
                 .filter(TelegramChannel::isValid).filter(TelegramChannel::isEnabled).toList();

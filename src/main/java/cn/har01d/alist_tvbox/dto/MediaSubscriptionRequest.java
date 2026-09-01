@@ -26,6 +26,8 @@ public class MediaSubscriptionRequest {
     private java.util.List<String> accountIds;
     /** 显式允许跨网盘转存(默认仅同盘,AList 秒传配置允许的方向除外) */
     private Boolean crossDrive;
+    /** 磁力兜底(仅转存模式生效):补缺穷尽后用磁力经离线下载补集,前置=网盘账号配置已开启离线下载 */
+    private Boolean magnetOffline;
     private Integer checkIntervalHours;
     /** 手动播出时刻校正("HH:mm",空=自动;仅日期无时刻的剧按 20:00 兜底,可按实际排播改写) */
     private String customAirClock;

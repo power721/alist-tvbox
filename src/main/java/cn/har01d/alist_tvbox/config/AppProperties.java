@@ -181,6 +181,15 @@ public class AppProperties {
         private int panjuTimeoutSeconds = 45;
         /** 订阅巡检并发度:到期订阅并发检查,多个订阅的搜索不再互相排队(源侧压力不放大,见 searchExecutor) */
         private int checkConcurrency = 4;
+        /** 磁力兜底介入的补搜轮次门槛(转存优先):round 达到该值(单集词轮)且仍缺才用磁力,
+         *  别抢在网盘源上线前烧离线配额 */
+        private int magnetFallbackMinRound = 2;
+        /** 磁力兜底:离线账号上未收割(PENDING)任务数上限,防一部剧把离线配额烧光 */
+        private int magnetMaxPending = 2;
+        /** 磁力兜底硬失败冷却(小时):候选全灭/提交被拒后的退避 */
+        private int magnetCooldownHours = 24;
+        /** 磁力兜底超时重查间隔(小时):SUBMITTED 任务网盘侧还在下载,到期前不再提交新磁力 */
+        private int magnetPendingRecheckHours = 12;
     }
 
     public static Map<String, Map<String, Object>> copyLocalProxyConfig(Map<String, Map<String, Object>> source) {

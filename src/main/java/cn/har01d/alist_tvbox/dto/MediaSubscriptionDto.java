@@ -26,6 +26,8 @@ public class MediaSubscriptionDto {
     private List<String> accountIds;
     private String mountPath;
     private boolean crossDrive;
+    /** 磁力兜底(仅转存模式生效) */
+    private boolean magnetOffline;
     private String status;
     private Integer expectedEpisodes;
     /** 手动锁定总集数(null = 跟随官方) */

@@ -42,7 +42,7 @@ class RemoteSearchServiceTest {
         appProperties.setPanSouChannels("pansou");
         appProperties.setPanSouSource("all");
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties,
@@ -87,7 +87,7 @@ class RemoteSearchServiceTest {
         appProperties.setPanSouFilterInclude(List.of("1080"));
         appProperties.setPanSouFilterExclude(List.of("枪版"));
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties, restTemplateBuilder(restTemplate), objectMapper,
@@ -127,7 +127,7 @@ class RemoteSearchServiceTest {
         when(shareService.add(any())).thenReturn("/mock");
         TvBoxService tvBoxService = mock(TvBoxService.class);
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties,
@@ -206,7 +206,7 @@ class RemoteSearchServiceTest {
         TelegramChannelRepository telegramChannelRepository = mock(TelegramChannelRepository.class);
         when(telegramChannelRepository.findByEnabledTrue(any())).thenReturn(List.of());
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties, restTemplateBuilder(restTemplate), objectMapper,
@@ -257,7 +257,7 @@ class RemoteSearchServiceTest {
         appProperties.setPanSouUrl("http://pansou.example");
         appProperties.setPanSouSource("all");
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
         SubscriptionSourceService subscriptionSourceService = mock(SubscriptionSourceService.class);
         when(subscriptionSourceService.getBuiltinExtend("csp_FishPanSou"))
                 .thenReturn("{\"source\":\"tg\",\"filter_include\":\"1080, 4K\",\"filter_exclude\":\"枪版\"}");
@@ -292,7 +292,7 @@ class RemoteSearchServiceTest {
         appProperties.setPanSouFilterInclude(List.of("1080"));
         appProperties.setPanSouFilterExclude(List.of("枪版"));
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
         SubscriptionSourceService subscriptionSourceService = mock(SubscriptionSourceService.class);
         when(subscriptionSourceService.getBuiltinExtend("csp_FishPanSou"))
                 .thenReturn("{\"source\":\"tg\"}");

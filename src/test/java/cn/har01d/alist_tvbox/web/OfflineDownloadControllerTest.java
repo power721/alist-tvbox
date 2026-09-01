@@ -38,7 +38,7 @@ class OfflineDownloadControllerTest {
 
     @Test
     void shouldGetOfflineDownloadConfig() throws Exception {
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(true, "PAN115", 12, "/115云盘/测试"));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(true, "PAN115", 12, "测试115账号", "/115云盘/测试"));
 
         mockMvc.perform(get("/api/offline_download/config"))
                 .andExpect(status().isOk())

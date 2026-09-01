@@ -158,6 +158,11 @@ public class MediaSubscription {
     @Column(name = "cross_drive")
     private boolean crossDrive;
 
+    /** 磁力兜底(仅转存模式生效):补缺穷尽后用磁力链接经全局离线下载配置账号离线补集,
+     *  产物落离线账号挂载根/alist-tvbox-offline/,资源行 shareId=null 按挂载路径直接供播 */
+    @Column(name = "magnet_offline")
+    private boolean magnetOffline;
+
     @Column(nullable = false, length = 16)
     private String status = STATUS_ACTIVE;
 

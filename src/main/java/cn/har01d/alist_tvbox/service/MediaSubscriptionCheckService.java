@@ -25,6 +25,7 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResourceRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
@@ -103,8 +104,14 @@ public class MediaSubscriptionCheckService {
     /** 全局扩展网盘 Setting key(逗号分隔分享类型码):主网盘以外允许入候选池的盘,未配置时候选仅收主网盘 */
     public static final String MSUB_EXTENDED_DRIVES = "msub_extended_drives";
     /** 全局资源筛选 Setting key(单行 JSON → {@link MediaSubscriptionPoolFilter}):包含/排除词、
-     * 清晰度门槛、单集体积上下限,入池/候选复筛/集文件体积策略三处消费,订阅级显式配置优先 */
+     *  清晰度门槛、单集体积上下限,入池/候选复筛/集文件体积策略三处消费,订阅级显式配置优先 */
     public static final String MSUB_POOL_FILTER = "msub_pool_filter";
+    /** 单集离线配额(数字,0=不限,默认 2):同一集的磁力提交尝试次数上限(含失败),防反复试错烧配额 */
+    public static final String MSUB_MAGNET_EPISODE_QUOTA = "msub_magnet_episode_quota";
+    /** 单订阅离线配额(数字,0=不限,默认 30):一个订阅的磁力提交尝试总数上限 */
+    public static final String MSUB_MAGNET_SUBSCRIPTION_QUOTA = "msub_magnet_subscription_quota";
+    /** 追剧总离线配额(数字,0=不限,默认 200):全部追剧订阅的磁力提交尝试总数上限 */
+    public static final String MSUB_MAGNET_TOTAL_QUOTA = "msub_magnet_total_quota";
     /** 预告/花絮等非正片(片头/片尾:年番分享常带「片头尾/」目录装 OP/ED 片段,线上被当成第 2、3 集) */
     private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost|片头|片尾)");
     /** 衍生篇目目录词(番外/前传/外传):自成条目、集号并入全剧连续计数,主季订阅整棵跳过 */
@@ -212,6 +219,10 @@ public class MediaSubscriptionCheckService {
     private PanLinkCheckService panLinkCheckService;
     /** 搜索源统一退避(订阅巡检侧;手动预览不走):setter 注入,同上。测试裸实例为 null(不限流)。 */
     private cn.har01d.alist_tvbox.service.sitesearch.SearchSourceThrottle searchSourceThrottle;
+    /** 磁力兜底提交(全局离线下载配置账号):setter 注入,同上。测试裸实例为 null(不磁力)。 */
+    private OfflineDownloadService offlineDownloadService;
+    /** 磁力元数据解析(.torrent 镜像 → 文件列表预筛):setter 注入,同上。测试裸实例为 null(降级 dn 名口径)。 */
+    private cn.har01d.alist_tvbox.service.magnet.MagnetResolver magnetResolver;
     private final WanouSearchService wanouSearchService;
     private final PanLianSearchService panLianSearchService;
     private final GuanYingSearchService guanYingSearchService;
@@ -242,6 +253,11 @@ public class MediaSubscriptionCheckService {
     private final Set<Integer> coverPrewarmInFlight = ConcurrentHashMap.newKeySet();
     /** 缺集补搜关键词轮次(0=整季,1+=单集),内存态即可 */
     private final Map<Integer, Integer> gapSearchRounds = new ConcurrentHashMap<>();
+    /** 磁力兜底冷却(订阅 id → 下次允许提交时间):候选全灭/提交被拒后的退避,内存态即可 */
+    private final Map<Integer, Long> magnetCooldown = new ConcurrentHashMap<>();
+    /** 搜索顺手收下的磁力候选(订阅 id → 候选,按 link 去重,上限 50):巡检搜索每轮都带磁力结果,
+     *  磁力兜底优先消费这里,专项搜索只作兜底 —— 不为磁力单独打一轮搜索 */
+    private final Map<Integer, List<cn.har01d.alist_tvbox.dto.tg.Message>> magnetCandidates = new ConcurrentHashMap<>();
     /** 同关键词补池去重(订阅 id → 上次关键词+时间):一次巡检内 ensureSource/fillGaps/ensureMainDrives
      *  三个机制各自判定"需要补池",用的却都是订阅词(线上:一念永恒 id=66 一轮巡检连发 3 次同词
      *  全量搜索,结果集几乎相同,每轮还附带 ~450 条盘检)。窗口内同词直接跳过;单集降级词、
@@ -290,6 +306,16 @@ public class MediaSubscriptionCheckService {
     @Autowired
     void setSearchSourceThrottle(cn.har01d.alist_tvbox.service.sitesearch.SearchSourceThrottle searchSourceThrottle) {
         this.searchSourceThrottle = searchSourceThrottle;
+    }
+
+    @Autowired
+    void setOfflineDownloadService(OfflineDownloadService offlineDownloadService) {
+        this.offlineDownloadService = offlineDownloadService;
+    }
+
+    @Autowired
+    void setMagnetResolver(cn.har01d.alist_tvbox.service.magnet.MagnetResolver magnetResolver) {
+        this.magnetResolver = magnetResolver;
     }
     /**
      * 订阅巡检执行池:并发度可配(checkConcurrency,默认 3),到期订阅并发检查、手动触发的
@@ -2837,6 +2863,9 @@ public class MediaSubscriptionCheckService {
      */
     void refreshAuxMounts(MediaSubscription subscription) {
         for (MediaSubscriptionResource resource : auxMounts(subscription)) {
+            if (isMagnetResource(resource)) {
+                continue; // 磁力产物不是 Share 挂载:维护由磁力收割对账承担(产物消失即退役)
+            }
             migrateLegacyGapMount(subscription, resource);
             if (!MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
                     || StringUtils.isBlank(resource.getMountPath())) {
@@ -3413,7 +3442,7 @@ public class MediaSubscriptionCheckService {
         // 挂载槽满不再中断探测:probeShare 落的 LISTED 集源行本就可供播(可用性聚合含 LISTED,
         // 盘线路按行走),挂载只是稳定供流 —— 线上(一念永恒 id=64)6 个补缺挂载各有独占集,
         // 槽满即 break 连探测都不做,缺 107-165 永远补不上。有用候选挂载时挤掉最弱挂载换血。
-        int auxMounted = auxMounts(subscription).size();
+        int auxMounted = (int) auxMounts(subscription).stream().filter(r -> !isMagnetResource(r)).count();
 
         int probed = 0;
         int maxProbes = appProperties.getSubscription().getMaxGapProbesPerRound();
@@ -3468,7 +3497,422 @@ public class MediaSubscriptionCheckService {
             if (keyword != null) {
                 fillPool(subscription, true, keyword);
             }
+            magnetFallback(subscription, missingStill, round);
         }
+    }
+
+    // ---------- 磁力兜底(转存模式专用:补缺穷尽后经全局离线下载配置账号离线补集) ----------
+
+    static boolean isMagnetResource(MediaSubscriptionResource resource) {
+        return resource != null && MediaSubscriptionResource.SOURCE_MAGNET.equals(resource.getSource());
+    }
+
+    /**
+     * 磁力兜底入口(fillGaps 尾部):转存优先 —— 网盘源池内探测+补搜穷尽(单集词轮)仍缺,
+     * 且订阅开了磁力兜底、离线下载已配置,才扫描收割离线产物(覆盖上轮超时任务)并在仍缺时提交新磁力。
+     * 磁力产物资源行(shareId=null,挂载路径直连)不走普通候选探测/挂载槽位/换血/同盘回收,
+     * 维护由 {@link #harvestOfflineProducts} 每轮对账承担(产物消失即退役,行失效集源由播放采样兜底)。
+     */
+    void magnetFallback(MediaSubscription subscription, Set<Integer> missing, int round) {
+        if (missing.isEmpty() || offlineDownloadService == null || !subscription.isMagnetOffline()
+                || !MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                || !offlineDownloadService.isConfigured()) {
+            return;
+        }
+        // 转存优先:别抢在网盘源上线前烧离线配额
+        if (round < appProperties.getSubscription().getMagnetFallbackMinRound()) {
+            return;
+        }
+        Long cooldownUntil = magnetCooldown.get(subscription.getId());
+        if (cooldownUntil != null && cooldownUntil > System.currentTimeMillis()) {
+            return;
+        }
+        try {
+            Set<Integer> stillMissing = harvestOfflineProducts(subscription, missing);
+            if (stillMissing.isEmpty()) {
+                return;
+            }
+            submitMagnetForGaps(subscription, stillMissing);
+        } catch (Exception e) {
+            log.warn("magnet fallback failed for subscription {}: {}", subscription.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * 扫描离线产物目录对账+收割:上轮超时任务/手动离线的产物按目录入账(产物路径是磁力行天然键)。
+     * 已入账磁力行的产物在目录里消失(用户手删/网盘清理) → 退役,防幽灵行永远冒领集数。
+     * @return 收割后仍缺的集号
+     */
+    private Set<Integer> harvestOfflineProducts(MediaSubscription subscription, Set<Integer> missing) {
+        String root = offlineDownloadService.offlineRootPath();
+        List<cn.har01d.alist_tvbox.model.FsInfo> entries;
+        try {
+            entries = aListService.listFiles(site(), root, 1, 0, true).getFiles();
+        } catch (Exception e) {
+            log.warn("list offline root {} failed: {}", root, e.getMessage());
+            return missing;
+        }
+        Set<Integer> remaining = new TreeSet<>(missing);
+        if (entries == null) {
+            entries = List.of();
+        }
+        List<MediaSubscriptionResource> magnetRows = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
+                .filter(MediaSubscriptionCheckService::isMagnetResource)
+                .toList();
+        Set<String> present = new java.util.HashSet<>();
+        for (var entry : entries) {
+            if (StringUtils.isBlank(entry.getName()) || entry.getName().startsWith(".")) {
+                continue;
+            }
+            present.add(entry.getName());
+        }
+        for (MediaSubscriptionResource row : magnetRows) {
+            String product = productOf(row.getLink());
+            if (product != null && !present.contains(product)) {
+                retireResource(subscription, row, "磁力产物已不在离线目录", true);
+            }
+        }
+        Set<String> known = new java.util.HashSet<>();
+        for (MediaSubscriptionResource row : magnetRows) {
+            String product = productOf(row.getLink());
+            if (product != null && StringUtils.isNotBlank(row.getMountPath())) {
+                known.add(product);
+            }
+        }
+        for (var entry : entries) {
+            if (!present.contains(entry.getName())) {
+                continue; // 收割循环里 present 已过滤过空白/隐藏名
+            }
+            if (known.contains(entry.getName())) {
+                continue; // 已入账
+            }
+            try {
+                remaining.removeAll(registerOfflineResource(subscription, entry, root));
+            } catch (Exception e) {
+                log.warn("harvest offline product {} failed: {}", entry.getName(), e.getMessage());
+            }
+        }
+        return remaining;
+    }
+
+    /** 磁力行 link(offline:{产物名}) → 产物名。 */
+    private static String productOf(String link) {
+        if (StringUtils.isBlank(link) || !link.startsWith("offline:")) {
+            return null;
+        }
+        String name = link.substring("offline:".length());
+        return StringUtils.isBlank(name) ? null : name;
+    }
+
+    /**
+     * 磁力产物入账:按产物路径建/复活资源行(shareId=null,挂载路径直连网盘实体目录),
+     * 列产物识别集文件(目录形态走统一列举;单文件形态直析文件名)后过异剧/时长门禁落集源行。
+     * @return 本产物覆盖的集号(门禁不过为空)
+     */
+    private Set<Integer> registerOfflineResource(MediaSubscription subscription,
+                                                 cn.har01d.alist_tvbox.model.FsInfo entry, String root) {
+        String taskName = entry.getName();
+        String link = "offline:" + taskName;
+        boolean dir = entry.getType() == 1;
+        String mountPath = dir ? root + "/" + taskName : root; // 单文件产物挂载点=产物根,rel_path=文件名
+        MediaSubscriptionResource resource = resourceRepository
+                .findBySubscriptionIdAndLink(subscription.getId(), link).orElse(null);
+        if (resource != null && MediaSubscriptionResource.STATE_REMOVED.equals(resource.getState())) {
+            return Set.of(); // 用户手动移除过:终态墓碑,不复活
+        }
+        if (resource == null) {
+            resource = new MediaSubscriptionResource();
+            resource.setSubscriptionId(subscription.getId());
+            resource.setLink(link);
+            resource.setSource(MediaSubscriptionResource.SOURCE_MAGNET);
+            resource.setCreatedTime(System.currentTimeMillis());
+        }
+        resource.setTitle(StringUtils.abbreviate(taskName, 250));
+        resource.setType(offlineDownloadService.configuredDriveType());
+        resource.setScore(0);
+        TreeMap<Integer, EpisodeFile> files = new TreeMap<>();
+        EpisodeSizePolicy policy = episodeSizePolicy(subscription);
+        if (dir) {
+            collectResourceEpisodeFiles(site(), subscription, resource, mountPath, files, policy, true);
+        } else if (isMediaFormat(taskName) && !policy.hardRejected(entry.getSize()) && !policy.overMax(entry.getSize())) {
+            int episode = parseEpisode(taskName, collectSeason(subscription, resource));
+            if (episode > 0) {
+                files.put(episode, new EpisodeFile(episode, mountPath, taskName, entry.getSize(), entry.getDuration()));
+            }
+        }
+        sanitizeEpisodeFiles(subscription, resource, files, taskName);
+        List<String> genres = metaGenres(subscription);
+        if (files.isEmpty()
+                || episodeNumbersForeign(subscription, files.keySet(), genres)
+                || episodeDurationForeign(metaRuntimeMinutes(subscription), files.values())) {
+            log.info("offline product {} rejected by gates ({} files)", taskName, files.size());
+            return Set.of();
+        }
+        resource.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        resource.setMountPath(mountPath);
+        resource.setShareId(null);
+        resource.setFailKind(null);
+        resource.setCheckedTime(System.currentTimeMillis());
+        resourceRepository.save(resource);
+        syncInventory(subscription, resource, mountPath, files);
+        resourceRepository.save(resource); // episodesFound 由 syncInventory 回填
+        Set<Integer> covered = new TreeSet<>(files.keySet());
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
+                "磁力离线补缺 第" + joinNumbers(new ArrayList<>(covered)) + " 集("
+                        + StringUtils.abbreviate(taskName, 40) + ")");
+        gapSearchRounds.remove(subscription.getId());
+        return covered;
+    }
+
+    /** 收割后仍缺时提交新磁力(每轮最多 1 个,转存优先语义下的最后兜底)。
+     * 三档离线配额(单集/单订阅/总,Setting 可配,0=不限)按提交尝试计数(含 FAILED,task 表跨轮持久);
+     * 缺口集按序逐集推进,某集单集配额耗尽换下一集。 */
+    private void submitMagnetForGaps(MediaSubscription subscription, Set<Integer> missing) {
+        AppProperties.Subscription config = appProperties.getSubscription();
+        int totalQuota = magnetQuota(MSUB_MAGNET_TOTAL_QUOTA, 200);
+        if (quotaReached(totalQuota, offlineDownloadService.totalMagnetCount())) {
+            log.info("skip magnet submit: total quota {} reached", totalQuota);
+            return;
+        }
+        int subscriptionQuota = magnetQuota(MSUB_MAGNET_SUBSCRIPTION_QUOTA, 30);
+        if (quotaReached(subscriptionQuota, offlineDownloadService.subscriptionMagnetCount(subscription.getId()))) {
+            log.info("subscription {} skip magnet submit: subscription quota {} reached", subscription.getId(), subscriptionQuota);
+            return;
+        }
+        if (offlineDownloadService.pendingMagnetCount() >= config.getMagnetMaxPending()) {
+            log.info("subscription {} skip magnet submit: pending tasks reach limit", subscription.getId());
+            return;
+        }
+        int episodeQuota = magnetQuota(MSUB_MAGNET_EPISODE_QUOTA, 2);
+        for (int episode : new TreeSet<>(missing)) {
+            if (quotaReached(episodeQuota, offlineDownloadService.episodeMagnetCount(subscription.getId(), episode))) {
+                continue; // 该集的磁力尝试额度耗尽:计数即跨轮记忆,换下一集
+            }
+            if (submitMagnetForEpisode(subscription, episode)) {
+                return; // 每轮最多 1 个:同步等待最长 30s,别拖垮整轮巡检
+            }
+        }
+        magnetCooldown.put(subscription.getId(),
+                System.currentTimeMillis() + config.getMagnetCooldownHours() * 3600_000L);
+    }
+
+    /** 单集磁力提交:候选优先取巡检搜索顺手收下的磁力(fillPool 收集),没有可用项才专项搜索兜底;
+     *  预筛(磁力解析文件列表优先,dn 名降级)与提交三态两路共用。@return 是否已发起提交 */
+    private boolean submitMagnetForEpisode(MediaSubscription subscription, int episode) {
+        List<cn.har01d.alist_tvbox.dto.tg.Message> fromPool = magnetCandidatesOf(subscription.getId());
+        if (submitFirstMatchedMagnet(subscription, episode, fromPool)) {
+            return true;
+        }
+        return submitFirstMatchedMagnet(subscription, episode,
+                telegramService.searchMagnets(seasonKeyword(subscription) + " " + episode, appProperties.getSubscription().getSearchSize()));
+    }
+
+    private boolean submitFirstMatchedMagnet(MediaSubscription subscription, int episode,
+                                             List<cn.har01d.alist_tvbox.dto.tg.Message> magnets) {
+        List<String> names = matchNames(subscription);
+        EpisodeSizePolicy policy = episodeSizePolicy(subscription);
+        MediaSubscriptionPoolFilter global = poolFilterFor(subscription);
+        MediaSubscriptionFilter filter = parseFilter(subscription);
+        for (cn.har01d.alist_tvbox.dto.tg.Message message : magnets) {
+            if (message == null || !isOfflineLink(message.getLink())) {
+                continue;
+            }
+            String title = magnetTitle(message);
+            // 标题级资源筛选规则(dn 名):排除词(订阅+全局并集)/全局包含词/清晰度门槛,与入池同口径
+            if (magnetExcluded(title, filter, global)) {
+                continue;
+            }
+            if (!names.isEmpty() && !matchesTitle(names, title)) {
+                continue;
+            }
+            // 磁力解析:文件列表级预筛(真实体积+集号命中+文件名排除词);失败降级 dn 名口径
+            cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetInfo info =
+                    magnetResolver == null ? null : magnetResolver.resolve(message.getLink()).orElse(null);
+            if (info != null) {
+                if (!magnetFilesAcceptable(subscription, info, episode, policy, filter, global)) {
+                    continue;
+                }
+            } else {
+                // tg-search 磁力条目 size 恒 0,体积门禁无意义跳过;靠 dn 名集号兜底
+                Integer parsed = parseMagnetEpisode(title, subscription);
+                if (parsed == null || parsed != episode) {
+                    continue;
+                }
+            }
+            cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                    offlineDownloadService.submitMagnet(message.getLink(), subscription.getId(), episode);
+            if (cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED.equals(result.status())) {
+                harvestCompletedProduct(subscription, result.taskName());
+                return true;
+            } else if (cn.har01d.alist_tvbox.model.MagnetSubmitResult.SUBMITTED.equals(result.status())) {
+                addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_MAGNET_SUBMITTED,
+                        "第" + episode + "集磁力已提交离线下载,网盘下载完成后下轮巡检自动入库");
+                magnetCooldown.put(subscription.getId(),
+                        System.currentTimeMillis() + appProperties.getSubscription().getMagnetPendingRecheckHours() * 3600_000L);
+                return true;
+            }
+            log.info("magnet submit failed for subscription {} episode {}: {}",
+                    subscription.getId(), episode, result.message());
+            // 换下一个候选(网盘拒了这条磁力;单集配额按提交尝试计数,由 task 表自然约束)
+        }
+        return false;
+    }
+
+    /** 排除词并集(订阅级+全局,fillPool 同口径)+全局包含词硬门禁+清晰度门槛。 */
+    static boolean magnetExcluded(String title, MediaSubscriptionFilter filter, MediaSubscriptionPoolFilter global) {
+        if (matchesKeywords(title, filter == null ? null : filter.getExcludeKeywords())
+                || matchesKeywords(title, global == null ? null : global.getExcludeKeywords())) {
+            return true;
+        }
+        return global != null && (!globallyIncluded(global, title) || !qualityAboveFloor(global, title));
+    }
+
+    /**
+     * 磁力文件列表预筛:与 collectEpisodeFiles 同口径识别集文件(媒体格式+EXTRA 剔除+集号解析),
+     * 资源筛选规则全量应用 —— 目标集存在体积达标的视频文件且无排除词命中才算可用。
+     * 多版本种子(该集 720p+1080p 双文件)任一达标即过。
+     */
+    boolean magnetFilesAcceptable(MediaSubscription subscription,
+                                   cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetInfo info,
+                                   int episode, EpisodeSizePolicy policy,
+                                   MediaSubscriptionFilter filter, MediaSubscriptionPoolFilter global) {
+        Integer season = subscription.getSeason();
+        for (cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetFile file : info.files()) {
+            // substringAfterLast 找不到分隔符返回空串,根级文件(无目录前缀)要保留全名
+            String filePath = file.path();
+            int slash = filePath.lastIndexOf('/');
+            String fileName = slash >= 0 ? filePath.substring(slash + 1) : filePath;
+            if (!isMediaFormat(fileName) || EXTRA.matcher(fileName).find()) {
+                continue;
+            }
+            if (magnetExcluded(fileName, filter, global)) {
+                continue; // 文件名命中排除词:该文件不可用(目录级排除词不否决整个种子,可能还有别的版本)
+            }
+            int parsed = parseEpisode(fileName, season);
+            if (parsed == episode && !policy.hardRejected(file.size()) && !policy.overMax(file.size())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** fillPool 搜索结果的磁力条目收集(按 link 去重,上限 50,新结果在前)。 */
+    void collectMagnetCandidate(int subscriptionId, cn.har01d.alist_tvbox.dto.tg.Message message) {
+        List<cn.har01d.alist_tvbox.dto.tg.Message> merged = new ArrayList<>(
+                magnetCandidates.getOrDefault(subscriptionId, List.of()));
+        merged.removeIf(m -> message.getLink().equals(m.getLink()));
+        merged.add(0, message);
+        magnetCandidates.put(subscriptionId, merged.size() > 50 ? new ArrayList<>(merged.subList(0, 50)) : merged);
+    }
+
+    List<cn.har01d.alist_tvbox.dto.tg.Message> magnetCandidatesOf(int subscriptionId) {
+        return magnetCandidates.getOrDefault(subscriptionId, List.of());
+    }
+
+    /** 数字 Setting 读取(空/坏值回落默认,0=不限)。 */
+    private int magnetQuota(String key, int defaultValue) {
+        try {
+            String value = settingRepository.findById(key).map(Setting::getValue).orElse("");
+            return StringUtils.isBlank(value) ? defaultValue : Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private static boolean quotaReached(int quota, long used) {
+        return quota > 0 && used >= quota;
+    }
+
+    /** 提交当场完成(COMPLETED)的产物立即入账:列根目录按产物名定位条目。 */
+    private void harvestCompletedProduct(MediaSubscription subscription, String taskName) {
+        String root = offlineDownloadService.offlineRootPath();
+        try {
+            List<cn.har01d.alist_tvbox.model.FsInfo> entries = aListService.listFiles(site(), root, 1, 0, true).getFiles();
+            if (entries != null) {
+                for (var entry : entries) {
+                    if (taskName.equals(entry.getName())) {
+                        registerOfflineResource(subscription, entry, root);
+                        return;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("harvest completed product {} failed: {}", taskName, e.getMessage());
+        }
+    }
+
+    /** 离线下载链接(磁力兜底消费的形态):磁力或 ed2k(115/迅雷/光鸭离线均支持)。 */
+    static boolean isOfflineLink(String link) {
+        String value = StringUtils.trimToEmpty(link);
+        return StringUtils.startsWithIgnoreCase(value, "magnet:") || StringUtils.startsWithIgnoreCase(value, "ed2k:");
+    }
+
+    /** 磁力条目标题:磁力 URI 的 dn= 参数(URL 编码的资源名)优先;ed2k 取 |file|文件名段;回落消息全文。 */
+    private static String magnetTitle(cn.har01d.alist_tvbox.dto.tg.Message message) {
+        String link = StringUtils.trimToEmpty(message.getLink());
+        if (StringUtils.startsWithIgnoreCase(link, "ed2k:")) {
+            String[] parts = link.split("\\|", 6);
+            if (parts.length >= 3 && "file".equals(parts[1]) && StringUtils.isNotBlank(parts[2])) {
+                return parts[2];
+            }
+            return StringUtils.defaultString(message.getContent());
+        }
+        int dn = link.toLowerCase().indexOf("dn=");
+        if (dn >= 0) {
+            String tail = link.substring(dn + 3);
+            int end = tail.indexOf('&');
+            try {
+                String decoded = java.net.URLDecoder.decode(end < 0 ? tail : tail.substring(0, end),
+                        java.nio.charset.StandardCharsets.UTF_8);
+                if (StringUtils.isNotBlank(decoded)) {
+                    return decoded;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // 编码畸形:回落正文
+            }
+        }
+        return StringUtils.defaultString(message.getContent());
+    }
+
+    private static final Pattern MAGNET_EPISODE_CN = Pattern.compile("第\\s*(\\d{1,4})\\s*[集话話]");
+    private static final Pattern MAGNET_EPISODE_EN =
+            Pattern.compile("(?:^|[\\s\\[\\]【\\-_.·])(?:EP|E)\\s*(\\d{1,4})(?!\\d)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MAGNET_EPISODE_SEP = Pattern.compile("(?:^|\\s)[-–—]\\s*(\\d{1,4})(?=[\\s\\[\\]【().vV]|$)");
+    private static final Pattern MAGNET_EPISODE_BRACKET = Pattern.compile("[【\\[]\\s*(\\d{1,4})\\s*[\\]】]");
+
+    /**
+     * 磁力标题集号解析(「第12集/话」「EP12/E12」「 - 12 」「【12】/[12]」按优先级):
+     * 分辨率(720/1080/2160)与年份(1990-2035)数字不当作集号;超出官方总集数+50 容差判无效。
+     */
+    static Integer parseMagnetEpisode(String title, MediaSubscription subscription) {
+        if (StringUtils.isBlank(title)) {
+            return null;
+        }
+        Integer total = subscription == null ? null : subscription.getOfficialTotal();
+        int ceiling = total != null && total > 0 ? Math.min(total + 50, 9999) : 999;
+        for (Pattern pattern : List.of(MAGNET_EPISODE_CN, MAGNET_EPISODE_EN, MAGNET_EPISODE_SEP, MAGNET_EPISODE_BRACKET)) {
+            Matcher matcher = pattern.matcher(title);
+            if (matcher.find()) {
+                Integer episode = clampMagnetEpisode(Integer.parseInt(matcher.group(1)), ceiling);
+                if (episode != null) {
+                    return episode;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Integer clampMagnetEpisode(int value, int ceiling) {
+        if (value < 1 || value > ceiling) {
+            return null;
+        }
+        if (value == 480 || value == 720 || value == 1080 || value == 2160 || value == 4320) {
+            return null; // 分辨率
+        }
+        if (value >= 1990 && value <= 2035) {
+            return null; // 年份
+        }
+        return value;
     }
 
     /**
@@ -3559,6 +4003,9 @@ public class MediaSubscriptionCheckService {
         MediaSubscriptionResource weakest = null;
         int weakestUnique = Integer.MAX_VALUE;
         for (MediaSubscriptionResource aux : auxes) {
+            if (isMagnetResource(aux)) {
+                continue; // 磁力产物不参与换血:被挤回候选池会进探测流(probeShare 分享语义),且产物文件是实打实下载的
+            }
             Set<Integer> unique = new TreeSet<>(coverageByAux.get(aux.getId()));
             for (MediaSubscriptionResource other : auxes) {
                 if (other.getId() != aux.getId()) {
@@ -4195,6 +4642,9 @@ public class MediaSubscriptionCheckService {
         String active = activeDrive(subscription);
         Map<String, List<MediaSubscriptionResource>> byDrive = new LinkedHashMap<>();
         for (MediaSubscriptionResource resource : auxMounts(subscription)) { // 仓序即分数降序
+            if (isMagnetResource(resource)) {
+                continue; // 磁力产物是网盘实体文件,回收(RETIRED)会被下轮收割复活,白震荡
+            }
             String drive = resource.getType() == null ? "" : DriveId.toDrive(resource.getType());
             byDrive.computeIfAbsent(drive, key -> new ArrayList<>()).add(resource);
         }
@@ -5206,7 +5656,7 @@ public class MediaSubscriptionCheckService {
         return chapterNumber(cleaned);
     }
 
-    private boolean isMediaFormat(String name) {
+    boolean isMediaFormat(String name) {
         int index = name.lastIndexOf('.');
         if (index > 0) {
             String suffix = name.substring(index + 1).toLowerCase();
@@ -5476,6 +5926,9 @@ public class MediaSubscriptionCheckService {
                 .map(MediaSubscriptionResource::getLink).findFirst().orElse(null);
         for (Message message : messages) {
             if (StringUtils.isBlank(message.getLink()) || !PAN_TYPES.contains(StringUtils.defaultString(message.getType()))) {
+                if (isOfflineLink(message.getLink())) {
+                    collectMagnetCandidate(subscription.getId(), message); // 磁力/ed2k 不入池但收作兜底候选
+                }
                 audit.drop(PoolDrop.NON_PAN);
                 continue;
             }

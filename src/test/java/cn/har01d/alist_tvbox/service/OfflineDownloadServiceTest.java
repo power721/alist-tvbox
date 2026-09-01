@@ -287,4 +287,118 @@ class OfflineDownloadServiceTest {
         task.setFolder(true);
         return task;
     }
+
+    // ---------- submitMagnet 三态(追剧磁力兜底) ----------
+
+    private void enableConfig(DriverAccount account) {
+        when(settingRepository.findById("offline_download_config")).thenReturn(Optional.of(new Setting(
+                "offline_download_config",
+                "{\"enabled\":true,\"driverType\":\"" + account.getType().name()
+                        + "\",\"accountId\":" + account.getId() + ",\"offlineFolderId\":\"folder-1\"}")));
+        when(driverAccountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+    }
+
+    @Test
+    void submitMagnetReusesCompletedTask() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(completedTask("/pan115/alist-tvbox-offline/完成任务", "完成任务")));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED, result.status());
+        assertEquals("完成任务", result.taskName());
+        verify(pan115Handler, never()).submitAndWait(any(), any(), any());
+    }
+
+    @Test
+    void submitMagnetTreatsTimeoutAsSubmitted() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any()))
+                .thenThrow(new BadRequestException("离线下载任务未在10秒内完成"));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.SUBMITTED, result.status());
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("PENDING", captor.getValue().getStatus());
+    }
+
+    @Test
+    void submitMagnetPendingTaskIsIdempotent() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        OfflineDownloadTask pending = new OfflineDownloadTask();
+        pending.setAccountId(12);
+        pending.setStatus("PENDING");
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(pending));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.SUBMITTED, result.status());
+        verify(pan115Handler, never()).submitAndWait(any(), any(), any()); // 网盘侧任务已在,不重复建
+    }
+
+    @Test
+    void submitMagnetReturnsFailedOnRejection() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any()))
+                .thenThrow(new BadRequestException("task failed: 链接违规"));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.FAILED, result.status());
+        assertEquals("task failed: 链接违规", result.message());
+        // FAILED 也落行(带订阅/集号):试错消耗配额,且同磁力不再重试
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("FAILED", captor.getValue().getStatus());
+        assertEquals(9, captor.getValue().getSubscriptionId());
+        assertEquals(3, captor.getValue().getEpisode());
+    }
+
+    @Test
+    void submitMagnetSkipsPreviouslyFailedMagnet() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        OfflineDownloadTask failed = new OfflineDownloadTask();
+        failed.setAccountId(12);
+        failed.setStatus("FAILED");
+        failed.setSubscriptionId(9);
+        failed.setEpisode(3);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(failed));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.FAILED, result.status());
+        verify(pan115Handler, never()).submitAndWait(any(), any(), any());
+    }
+
+    @Test
+    void isConfiguredReflectsSettingState() {
+        when(settingRepository.findById("offline_download_config")).thenReturn(Optional.empty());
+        assertFalse(service.isConfigured());
+
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        assertTrue(service.isConfigured());
+        assertTrue(service.offlineRootPath().endsWith("/alist-tvbox-offline"));
+    }
 }

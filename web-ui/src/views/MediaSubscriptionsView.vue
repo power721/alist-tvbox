@@ -141,7 +141,7 @@
       </div>
     </div>
 
-    <el-dialog v-model="formVisible" :title="form.id ? '编辑订阅' : '新建订阅'" width="700" top="3vh">
+    <el-dialog v-model="formVisible" :title="form.id ? '编辑订阅' : '新建订阅'" width="750" top="3vh">
       <el-form :model="form" label-width="120">
         <el-form-item label="剧名" required>
           <el-input v-model="form.name" placeholder="展示名称,如:边水往事"/>
@@ -218,6 +218,13 @@
         <el-form-item v-if="form.mode === 'TRANSFER'" label="跨网盘转存">
           <el-switch v-model="form.crossDrive"/>
           <span class="sub-text" style="margin-left:8px">默认仅同盘转存(快而稳);开启后跨盘也转(慢,走服务端中转);AList 跨盘秒传配置允许的方向不受此开关限制</span>
+        </el-form-item>
+        <el-form-item v-if="form.mode === 'TRANSFER'" label="磁力兜底">
+          <el-switch v-model="form.magnetOffline"/>
+          <span class="sub-text" style="margin-left:8px">缺集长期补不上时,用磁力链接经离线下载补集(转存优先,穷尽后才使用);需先在网盘账号配置中开启离线下载</span>
+          <span v-if="store.admin && form.mode === 'TRANSFER' && offlineAccountLabel" class="sub-text" style="display:block;width:100%">
+            当前离线下载: {{ offlineAccountLabel }}
+          </span>
         </el-form-item>
         <el-form-item label="巡检周期(时)">
           <el-input-number v-model="form.checkIntervalHours" :min="1" :max="168"/>
@@ -585,6 +592,18 @@
               <el-input-number v-model="notifyForm.archiveDays" :min="0" :max="3650"/>
               <span class="sub-text" style="margin-left:8px">完结 N 天后自动释放转存文件,0=关闭</span>
             </el-form-item>
+            <el-form-item v-if="store.admin" label="单集磁力配额">
+              <el-input-number v-model="notifyForm.magnetEpisodeQuota" :min="0" :max="50"/>
+              <span class="sub-text" style="margin-left:8px">同一集的磁力离线提交尝试上限(含失败),0=不限,默认 2;当前离线下载: {{ offlineAccountLabel }}</span>
+            </el-form-item>
+            <el-form-item v-if="store.admin" label="单订阅磁力配额">
+              <el-input-number v-model="notifyForm.magnetSubscriptionQuota" :min="0" :max="1000"/>
+              <span class="sub-text" style="margin-left:8px">单个订阅的磁力离线提交总数上限,0=不限,默认 30</span>
+            </el-form-item>
+            <el-form-item v-if="store.admin" label="追剧总磁力配额">
+              <el-input-number v-model="notifyForm.magnetTotalQuota" :min="0" :max="10000"/>
+              <span class="sub-text" style="margin-left:8px">全部追剧订阅的磁力离线提交总数上限,0=不限,默认 200</span>
+            </el-form-item>
             <el-form-item v-if="store.admin" label="豆瓣 Cookie">
               <el-input v-model="notifyForm.doubanCookie" type="textarea" :rows="2"
                         placeholder="登录 movie.douban.com 后复制 Cookie,留空关闭;用于解析详情页又名/单集播出时间(限速抓取)"/>
@@ -868,6 +887,7 @@ interface SubscriptionDto {
   activeResourceTitle: string | null
   mountPath: string | null
   crossDrive: boolean
+  magnetOffline: boolean
   filter: Filter | null
 }
 
@@ -1063,6 +1083,21 @@ const saving = ref(false)
 const form = ref<any>({})
 // 编辑前的原季号:保存时季号有变要确认换季重置(旧季挂载/进度清空,按新季重搜)
 const originalSeason = ref<number | null>(null)
+/** 磁力兜底提示行:当前离线下载配置的账号(未配置/未开启给出可行动文案);非 admin 保持默认不展示 */
+const offlineAccountLabel = ref('加载中...')
+const loadOfflineAccountLabel = () => {
+  if (!store.admin) {
+    offlineAccountLabel.value = ''
+    return
+  }
+  axios.get('/api/offline_download/config').then(({data}) => {
+    offlineAccountLabel.value = data?.enabled
+        ? `${data.accountName || ('#' + data.accountId)}(${data.folder || data.driverType})`
+        : '未开启,需先在网盘账号配置的「离线下载」页签开启并选择账号'
+  }).catch(() => {
+    offlineAccountLabel.value = ''
+  })
+}
 const metaProvider = ref('tmdb')
 const metaKeyword = ref('')
 const metaSearching = ref(false)
@@ -1150,6 +1185,9 @@ const notifyForm = ref({
   botEnabled: true,
   doubanCookie: '',
   archiveDays: 0,
+  magnetEpisodeQuota: 2,
+  magnetSubscriptionQuota: 30,
+  magnetTotalQuota: 200,
   tmdbApiKey: '',
   tmdbApiHost: '',
   vipAccounts: [] as number[],
@@ -1368,6 +1406,7 @@ const loadAll = () => {
 
 const handleAdd = () => {
   originalSeason.value = null
+  loadOfflineAccountLabel()
   form.value = {
     name: '',
     keyword: '',
@@ -1382,6 +1421,7 @@ const handleAdd = () => {
     accountId: null,
     accountIds: [] as string[],
     crossDrive: false,
+    magnetOffline: false,
     checkIntervalHours: 6,
     customAirClock: null,
     mainDrives: [] as number[],
@@ -1401,6 +1441,7 @@ const handleAdd = () => {
 }
 
 const handleEdit = (row: SubscriptionDto) => {
+  loadOfflineAccountLabel()
   originalSeason.value = row.season ?? 1
   form.value = {
     id: row.id,
@@ -1417,6 +1458,7 @@ const handleEdit = (row: SubscriptionDto) => {
     accountId: null,
     accountIds: row.accountIds?.length ? row.accountIds : (row.accountId ? ['pan:' + row.accountId] : []),
     crossDrive: !!row.crossDrive,
+    magnetOffline: !!row.magnetOffline,
     checkIntervalHours: row.checkIntervalHours ?? 6,
     customAirClock: row.customAirClock ?? null,
     mainDrives: row.mainDrives || [],
@@ -1519,6 +1561,7 @@ const buildBody = () => ({
   accountId: form.value.accountId,
   accountIds: form.value.accountIds,
   crossDrive: form.value.crossDrive,
+  magnetOffline: form.value.magnetOffline,
   checkIntervalHours: form.value.checkIntervalHours,
   customAirClock: form.value.customAirClock || '',
   mainDrives: [...new Set(form.value.mainDrives || [])].slice(0, 2),
@@ -1949,6 +1992,7 @@ const buildPoolFilterValue = () => JSON.stringify({
   maxEpisodeSizeMb: notifyForm.value.poolMaxEpisodeSizeMb || 0,
 })
 const openNotify = () => {
+  loadOfflineAccountLabel()
   notifyTab.value = 'general'
   if (!store.admin) {
     // 普通用户:个人 TG 渠道 + 资源筛选偏好走用户级设置(读取回退全局值),其余全局项不展示
@@ -1985,6 +2029,9 @@ const openNotify = () => {
     notifyForm.value.tmdbApiKey = settings['tmdb_api_key'] || ''
     notifyForm.value.tmdbApiHost = settings['tmdb_api_host'] || ''
     notifyForm.value.archiveDays = parseInt(settings['msub_archive_days'] || '0') || 0
+    notifyForm.value.magnetEpisodeQuota = parseInt(settings['msub_magnet_episode_quota'] || '2') || 2
+    notifyForm.value.magnetSubscriptionQuota = parseInt(settings['msub_magnet_subscription_quota'] || '30') || 30
+    notifyForm.value.magnetTotalQuota = parseInt(settings['msub_magnet_total_quota'] || '200') || 200
     notifyForm.value.vipAccounts = (settings['msub_vip_accounts'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
     notifyForm.value.mainDrives = (settings['msub_main_drives'] || '')
@@ -2058,6 +2105,9 @@ const saveNotify = () => {
             ? [axios.post('/api/settings', {name: 'tmdb_image_host', value: ''})]
             : []),
     axios.post('/api/settings', {name: 'msub_archive_days', value: String(notifyForm.value.archiveDays)}),
+    axios.post('/api/settings', {name: 'msub_magnet_episode_quota', value: String(notifyForm.value.magnetEpisodeQuota)}),
+    axios.post('/api/settings', {name: 'msub_magnet_subscription_quota', value: String(notifyForm.value.magnetSubscriptionQuota)}),
+    axios.post('/api/settings', {name: 'msub_magnet_total_quota', value: String(notifyForm.value.magnetTotalQuota)}),
     axios.post('/api/settings', {name: 'msub_vip_accounts', value: notifyForm.value.vipAccounts.join(',')}),
     axios.post('/api/settings', {
       name: 'msub_main_drives',

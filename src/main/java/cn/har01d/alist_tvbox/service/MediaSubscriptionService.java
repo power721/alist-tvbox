@@ -223,6 +223,9 @@ public class MediaSubscriptionService {
         subscription.setAccountId(request.getAccountId());
         subscription.setAccountIds(serializeAccountIds(request.getAccountIds(), request.getAccountId()));
         subscription.setCrossDrive(request.getCrossDrive() != null && request.getCrossDrive());
+        // 磁力兜底仅转存模式可用:离线产物落全局离线配置账号,挂载模式无资源沉淀语义
+        subscription.setMagnetOffline(MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                && request.getMagnetOffline() != null && request.getMagnetOffline());
         subscription.setCheckIntervalHours(request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0
                 ? request.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours());
         subscription.setCustomAirClock(requireAirClock(request.getCustomAirClock()));
@@ -298,6 +301,10 @@ public class MediaSubscriptionService {
         }
         if (request.getMode() != null) {
             subscription.setMode(request.getMode());
+            // 磁力兜底仅转存模式:切出 TRANSFER 时同步关闭,防孤儿开关(magnetOffline 未随请求携带时)
+            if (!MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
+                subscription.setMagnetOffline(false);
+            }
         }
         if (request.getAccountId() != null) {
             subscription.setAccountId(request.getAccountId());
@@ -307,6 +314,11 @@ public class MediaSubscriptionService {
         }
         if (request.getCrossDrive() != null) {
             subscription.setCrossDrive(request.getCrossDrive());
+        }
+        if (request.getMagnetOffline() != null) {
+            // 模式可能同请求内切换:以更新后的 mode 为准,非转存模式静默回落 false(顺滑降级不报错)
+            subscription.setMagnetOffline(MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                    && request.getMagnetOffline());
         }
         if (request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0) {
             subscription.setCheckIntervalHours(request.getCheckIntervalHours());
@@ -2976,6 +2988,7 @@ public class MediaSubscriptionService {
         dto.setAccountIds(parseAccountIds(subscription));
         dto.setMountPath(subscription.getMountPath());
         dto.setCrossDrive(subscription.isCrossDrive());
+        dto.setMagnetOffline(subscription.isMagnetOffline());
         dto.setMainDrives(parseMainDrives(subscription.getMainDrives()));
         dto.setStatus(subscription.getStatus());
         dto.setExpectedEpisodes(subscription.getExpectedEpisodes());
