@@ -543,6 +543,29 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void candidatesOrderedExemptsManuallyAddedResource() {
+        // 手动粘贴入池的源豁免自动门禁(盘白名单/排除词/清晰度):这些门禁针对搜索召回噪声,
+        // 拦它等于手动添加的资源永远探测不到/换不上 —— 用户反馈"可不可以手动添加候选资源"的核心诉求
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        fixture.subscription.setMainDrives("10"); // 主网盘只配百度:夸克源域外
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_POOL_FILTER))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_POOL_FILTER,
+                        "{\"excludeKeywords\":[\"短剧\"],\"minQuality\":\"fhd\"}")));
+        MediaSubscriptionResource autoQuark = resource("苍兰诀 第01-08集 4K");
+        autoQuark.setType(5); // 夸克:白名单外,自动门禁正常滤掉
+        MediaSubscriptionResource manual = resource("苍兰诀 短剧合集 720P"); // 白名单外 + 排除词 + 低清,三重全撞
+        manual.setType(5);
+        manual.setSource(MediaSubscriptionResource.SOURCE_MANUAL);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(autoQuark, manual));
+
+        List<MediaSubscriptionResource> candidates = fixture.service.candidatesOrdered(fixture.subscription);
+
+        assertEquals(List.of(manual), candidates, "手动添加的源豁免盘白名单/排除词/清晰度门禁,自动源照常复筛");
+    }
+
+    @Test
     void previewAppliesGlobalFilterGates() {
         // 预览与入池同规:全局门禁在 preview 也生效(「预览看到的即能入池的」)
         Fixture fixture = new Fixture();

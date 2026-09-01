@@ -121,6 +121,15 @@ public class MediaSubscriptionController {
         return subscriptionService.resources(currentUid(), id);
     }
 
+    /** 手动添加候选资源:粘贴网盘分享链接直接入候选池(不挂载、不动主源),巡检/补缺时自动探测;
+     *  与 activate/pin(转主源)分开,回应"一启用就变主资源"。body {link, password?}。 */
+    @PostMapping("/{id}/resources")
+    public Map<String, Object> addResource(@PathVariable int id, @RequestBody Map<String, String> body) {
+        return subscriptionService.addResource(currentUid(), id,
+                body == null ? null : body.get("link"),
+                body == null ? null : body.get("password"));
+    }
+
     @PostMapping("/{id}/resources/{resourceId}/activate")
     public Map<String, Object> activate(@PathVariable int id, @PathVariable int resourceId) {
         checkService.activateAsync(currentUid(), id, resourceId);

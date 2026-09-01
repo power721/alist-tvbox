@@ -288,6 +288,10 @@
     </el-dialog>
 
     <el-drawer v-model="resourcesVisible" :title="'候选资源 - ' + (current?.name || '')" size="62%">
+      <div class="resources-toolbar">
+        <el-button size="small" type="primary" plain @click="openAddResource">添加资源</el-button>
+        <span class="sub-text">粘贴分享链接只入候选池,不挂载不动主源;巡检/补缺时自动探测,想立即挂载点「启用」</span>
+      </div>
       <el-table :data="resources" border v-loading="resourcesLoading">
         <el-table-column prop="title" label="资源" min-width="240" show-overflow-tooltip>
           <template #default="scope">
@@ -295,6 +299,7 @@
             <a v-if="scope.row.link?.startsWith('http')" :href="scope.row.link" target="_blank" rel="noopener"
                class="resource-link">{{ scope.row.title || scope.row.link }}</a>
             <span v-else>{{ scope.row.title || scope.row.link }}</span>
+            <el-tag v-if="scope.row.source === 'manual'" size="small" type="info" style="margin-left: 4px">手动</el-tag>
             <span v-if="scope.row.password" class="resource-passcode">提取码 {{ scope.row.password }}</span>
           </template>
         </el-table-column>
@@ -337,6 +342,25 @@
         </el-table-column>
       </el-table>
     </el-drawer>
+
+    <el-dialog v-model="addResourceVisible" title="手动添加候选资源" width="560">
+      <el-form label-width="70px" @submit.prevent>
+        <el-form-item label="分享链接">
+          <el-input v-model="addResourceForm.link" type="textarea" :rows="3" placeholder="网盘分享链接(夸克/UC/阿里/百度/115/天翼/移动/123/迅雷/光鸭)"
+                    :disabled="addResourceSaving"/>
+        </el-form-item>
+        <el-form-item label="提取码">
+          <el-input v-model="addResourceForm.password" placeholder="无提取码可留空" :disabled="addResourceSaving"/>
+        </el-form-item>
+      </el-form>
+      <div class="sub-text">
+        只加入候选池:不挂载、不替换当前主源。巡检补缺/换源时自动探测(候选序置顶);要立即挂载为源,请在列表点「启用」。
+      </div>
+      <template #footer>
+        <el-button @click="addResourceVisible = false">取消</el-button>
+        <el-button type="primary" :loading="addResourceSaving" @click="submitAddResource">添加</el-button>
+      </template>
+    </el-dialog>
 
     <el-drawer v-model="episodesVisible" :title="'集数清单 - ' + (current?.name || '')" size="52%">
       <div class="episode-filter">
@@ -863,6 +887,8 @@ interface ResourceDto {
   score: number | null
   /** 挂载生命周期:CANDIDATE/MOUNTED/RETIRED/REJECTED(可用性由集源行聚合,不再落在资源上) */
   state: string | null
+  /** 入池来源:manual = 用户手动粘贴链接(豁免盘白名单/年份/标题等自动门禁) */
+  source: string | null
   primary: boolean
   /** 手动钉选:换源候选序置顶、归属复核豁免(用户否决自动换源) */
   pinned: boolean
@@ -1017,6 +1043,10 @@ const notifySaving = ref(false)
 const resourcesVisible = ref(false)
 const resourcesLoading = ref(false)
 const resources = ref<ResourceDto[]>([])
+// 手动添加候选资源:只入候选池不挂载不动主源(与「启用/钉选」的转主源分开)
+const addResourceVisible = ref(false)
+const addResourceSaving = ref(false)
+const addResourceForm = ref({link: '', password: ''})
 const episodesVisible = ref(false)
 const episodesLoading = ref(false)
 const episodeItems = ref<any[]>([])
@@ -1588,6 +1618,37 @@ const loadResources = () => {
     resources.value = response.data
   }).finally(() => {
     if (my === resourcesSeq) resourcesLoading.value = false
+  })
+}
+
+/** 手动添加候选资源:只入池不挂载不动主源(用户反馈"一启用就变主资源"的解法 ——
+ *  添加与启用两个动作分开;同链幂等,曾移除/判死的复活回候选池)。 */
+const openAddResource = () => {
+  addResourceForm.value = {link: '', password: ''}
+  addResourceVisible.value = true
+}
+
+const submitAddResource = () => {
+  if (!current.value) return
+  const link = addResourceForm.value.link.trim()
+  if (!link) {
+    ElMessage.warning('请粘贴分享链接')
+    return
+  }
+  addResourceSaving.value = true
+  axios.post(`/api/media-subscriptions/${current.value.id}/resources`, {
+    link,
+    password: addResourceForm.value.password.trim() || null,
+  }).then(response => {
+    if (response.data?.existed) {
+      ElMessage.success('该链接已在资源池中,提取码已按填写更新')
+    } else {
+      ElMessage.success(response.data?.revived ? '已复活为候选(下轮巡检重探)' : '已加入候选池,巡检/补缺时自动探测')
+    }
+    addResourceVisible.value = false
+    loadResources()
+  }).finally(() => {
+    addResourceSaving.value = false
   })
 }
 
@@ -2534,6 +2595,13 @@ const formatClock = (time: number) => {
   margin-left: 6px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+.resources-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .meta-search {

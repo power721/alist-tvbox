@@ -40,6 +40,8 @@ public class MediaSubscriptionResource {
     public static final String STATE_REJECTED = "REJECTED";
     /** 用户手动移除(终态墓碑:保留行防重复入池,不参与冷却重探/自动换源;恢复走 restore) */
     public static final String STATE_REMOVED = "REMOVED";
+    /** 来源标记:用户手动粘贴分享链接入池(区别于搜索自动发现)——豁免入池/探测的自动门禁(盘白名单/年份/标题/排除词)。 */
+    public static final String SOURCE_MANUAL = "manual";
 
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")

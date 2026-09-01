@@ -1912,13 +1912,24 @@ public class MediaSubscriptionCheckService {
         return resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId()).stream()
                 .filter(r -> !MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState()))
                 .filter(r -> MediaSubscriptionResource.STATE_CANDIDATE.equals(r.getState()) || isBadCooled(r, now))
-                .filter(r -> ownPackExempt(ownPackSeries, subscription, r.getTitle())
-                        || titleYearMatches(metaYear, names, r.getTitle()))
-                .filter(r -> !titleProgressForeign(subscription, r.getTitle(), genres) && !liveActionForeign(genres, r.getTitle()))
-                .filter(r -> driveAllowed(allowedDrives, r.getType() == null ? null : DriveId.toDrive(r.getType())))
-                .filter(r -> !matchesKeywords(r.getTitle(), global.getExcludeKeywords()))
-                .filter(r -> globallyIncluded(global, r.getTitle()) && qualityAboveFloor(global, r.getTitle()))
+                // 手动添加的源豁免全部自动门禁:用户明确指定的链接,标题年份/盘白名单/排除词/清晰度
+                // 都是针对搜索召回噪声的门禁,拦它只会让手动添加的资源永远探测不到
+                .filter(r -> manuallyAdded(r)
+                        || (ownPackExempt(ownPackSeries, subscription, r.getTitle())
+                        || titleYearMatches(metaYear, names, r.getTitle())))
+                .filter(r -> manuallyAdded(r)
+                        || (!titleProgressForeign(subscription, r.getTitle(), genres) && !liveActionForeign(genres, r.getTitle())))
+                .filter(r -> manuallyAdded(r)
+                        || driveAllowed(allowedDrives, r.getType() == null ? null : DriveId.toDrive(r.getType())))
+                .filter(r -> manuallyAdded(r) || !matchesKeywords(r.getTitle(), global.getExcludeKeywords()))
+                .filter(r -> manuallyAdded(r)
+                        || (globallyIncluded(global, r.getTitle()) && qualityAboveFloor(global, r.getTitle())))
                 .toList();
+    }
+
+    /** 手动添加的资源行(source=manual):入池/探测门禁豁免、候选列表展示豁免(盘白名单外也可见)。 */
+    static boolean manuallyAdded(MediaSubscriptionResource resource) {
+        return MediaSubscriptionResource.SOURCE_MANUAL.equals(resource.getSource());
     }
 
     /** 订阅元数据年份(门禁基准):provider 侧有缓存,取不到/未绑元数据返回 null(门禁关闭)。 */
@@ -3579,6 +3590,11 @@ public class MediaSubscriptionCheckService {
     /** 候选盘白名单判定:白名单为空不限盘;配置后无 type 的旧资源(判不了盘)视为域外。 */
     static boolean driveAllowed(Set<String> allowed, String drive) {
         return allowed.isEmpty() || (drive != null && allowed.contains(drive));
+    }
+
+    /** 盘类型是否在追剧支持的网盘清单内(手动添加候选的链接校验,与搜索入池同口径)。 */
+    public static boolean supportedDriveType(Integer type) {
+        return type != null && PAN_TYPES.contains(String.valueOf(type));
     }
 
     /** 全局资源筛选(Setting msub_pool_filter 单行 JSON):即读即用,坏配置/未配置回落空对象(全部门禁关闭),不炸巡检。 */

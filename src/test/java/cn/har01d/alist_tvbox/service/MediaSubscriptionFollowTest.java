@@ -19,6 +19,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -196,5 +198,116 @@ class MediaSubscriptionFollowTest {
         var dto = service.create(1, request);
 
         assertEquals(99, dto.getId()); // S1 不复用 S3 行
+    }
+
+    // ---------- 手动添加候选资源(2026-09-01):用户反馈"一启用就变成主资源" ----------
+    // 添加与启用是两个动作:粘贴链接只入候选池(不挂载不动主源),想立即挂载再点「启用」。
+
+    private MediaSubscriptionService manualService(ShareService shareService,
+                                                   MediaSubscriptionEventRepository eventRepository) {
+        return new MediaSubscriptionService(
+                subscriptionRepository, resourceRepository, eventRepository,
+                Mockito.mock(MediaSubscriptionEpisodeRepository.class),
+                episodeSourceRepository, preferenceRepository, null, null, null,
+                shareService, null, checkService, null, null,
+                new AppProperties(), new ObjectMapper(), null, null);
+    }
+
+    private cn.har01d.alist_tvbox.entity.Share quarkShare() {
+        cn.har01d.alist_tvbox.entity.Share probe = new cn.har01d.alist_tvbox.entity.Share();
+        probe.setType(5); // 夸克
+        return probe;
+    }
+
+    @Test
+    void addResourceSavesManualCandidateWithoutActivating() {
+        ShareService shareService = Mockito.mock(ShareService.class);
+        MediaSubscriptionEventRepository eventRepository = Mockito.mock(MediaSubscriptionEventRepository.class);
+        MediaSubscriptionService manual = manualService(shareService, eventRepository);
+        when(subscriptionRepository.findById(3)).thenReturn(Optional.of(subscription()));
+        when(resourceRepository.findBySubscriptionIdAndLink(3, "https://pan.quark.cn/s/abc"))
+                .thenReturn(Optional.empty());
+        when(shareService.parseShareLink("https://pan.quark.cn/s/abc")).thenReturn(quarkShare());
+        when(resourceRepository.save(any(MediaSubscriptionResource.class))).thenAnswer(invocation -> {
+            MediaSubscriptionResource saved = invocation.getArgument(0);
+            saved.setId(31);
+            return saved;
+        });
+
+        Map<String, Object> result = manual.addResource(1, 3, " https://pan.quark.cn/s/abc ", "1a2b");
+
+        assertEquals(31, result.get("resourceId"));
+        assertEquals(false, result.get("existed"));
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        verify(resourceRepository).save(captor.capture());
+        MediaSubscriptionResource saved = captor.getValue();
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, saved.getState());
+        assertEquals(MediaSubscriptionResource.SOURCE_MANUAL, saved.getSource());
+        assertEquals(5, saved.getType());
+        assertEquals(1000, saved.getScore()); // 手动源候选序置顶(同 follow「订阅即所见」档)
+        assertEquals("1a2b", saved.getPassword());
+        verify(checkService, never()).activateAsync(anyInt(), anyInt(), anyInt()); // 关键:不转主源
+        verify(checkService, never()).checkAsync(anyInt(), anyInt());
+    }
+
+    @Test
+    void addResourceReusesExistingCandidateAndOnlyUpdatesPassword() {
+        ShareService shareService = Mockito.mock(ShareService.class);
+        MediaSubscriptionEventRepository eventRepository = Mockito.mock(MediaSubscriptionEventRepository.class);
+        MediaSubscriptionService manual = manualService(shareService, eventRepository);
+        when(subscriptionRepository.findById(3)).thenReturn(Optional.of(subscription()));
+        MediaSubscriptionResource existing = new MediaSubscriptionResource();
+        existing.setId(9);
+        existing.setSubscriptionId(3);
+        existing.setLink("https://pan.quark.cn/s/abc");
+        existing.setScore(40);
+        existing.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        when(resourceRepository.findBySubscriptionIdAndLink(3, "https://pan.quark.cn/s/abc"))
+                .thenReturn(Optional.of(existing));
+        when(shareService.parseShareLink("https://pan.quark.cn/s/abc")).thenReturn(quarkShare());
+
+        Map<String, Object> result = manual.addResource(1, 3, "https://pan.quark.cn/s/abc", "x9y8");
+
+        assertEquals(true, result.get("existed"));
+        assertEquals(40, existing.getScore()); // 已在池:打分/状态一概不动
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, existing.getState());
+        assertEquals("x9y8", existing.getPassword());
+        verify(resourceRepository).save(existing);
+    }
+
+    @Test
+    void addResourceRevivesRemovedTombstone() {
+        ShareService shareService = Mockito.mock(ShareService.class);
+        MediaSubscriptionEventRepository eventRepository = Mockito.mock(MediaSubscriptionEventRepository.class);
+        MediaSubscriptionService manual = manualService(shareService, eventRepository);
+        when(subscriptionRepository.findById(3)).thenReturn(Optional.of(subscription()));
+        MediaSubscriptionResource tomb = new MediaSubscriptionResource();
+        tomb.setId(10);
+        tomb.setSubscriptionId(3);
+        tomb.setLink("https://pan.quark.cn/s/abc");
+        tomb.setState(MediaSubscriptionResource.STATE_REMOVED);
+        tomb.setCheckedTime(1L);
+        when(resourceRepository.findBySubscriptionIdAndLink(3, "https://pan.quark.cn/s/abc"))
+                .thenReturn(Optional.of(tomb));
+        when(shareService.parseShareLink("https://pan.quark.cn/s/abc")).thenReturn(quarkShare());
+
+        Map<String, Object> result = manual.addResource(1, 3, "https://pan.quark.cn/s/abc", null);
+
+        assertEquals(true, result.get("revived"));
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, tomb.getState());
+        assertNull(tomb.getCheckedTime(), "清冷却计时:手动加回的源下轮巡检即可重探");
+    }
+
+    @Test
+    void addResourceRejectsUnrecognizedLink() {
+        ShareService shareService = Mockito.mock(ShareService.class);
+        MediaSubscriptionEventRepository eventRepository = Mockito.mock(MediaSubscriptionEventRepository.class);
+        MediaSubscriptionService manual = manualService(shareService, eventRepository);
+        when(subscriptionRepository.findById(3)).thenReturn(Optional.of(subscription()));
+        when(shareService.parseShareLink("https://example.com/nope")).thenReturn(null);
+
+        assertThrows(cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                () -> manual.addResource(1, 3, "https://example.com/nope", null));
+        verify(resourceRepository, never()).save(any());
     }
 }

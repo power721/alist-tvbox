@@ -491,6 +491,78 @@ public class MediaSubscriptionService {
         log.info("media subscription {} resource {} episode start set to {}: inventory reset", id, resourceId, start);
     }
 
+    /**
+     * 手动添加候选资源:用户自己找到的分享链接直接入候选池 —— 不挂载、不动当前主源
+     * (与「启用/钉选」的转主源语义分开,回应"一启用就变主资源"),下轮巡检按需探测,
+     * 可参与补缺/换源;手动源豁免自动门禁(盘白名单/年份/标题/排除词),候选序置顶(同 follow 的 1000 档)。
+     * <p>
+     * 同链幂等:候选/已挂载只更新提取码;REMOVED/RETIRED/REJECTED 复活回候选
+     * (手动事实优先于既有判定,restoreResource 同款语义)。
+     */
+    public Map<String, Object> addResource(int uid, int id, String link, String password) {
+        getOwned(uid, id);
+        String normalized = StringUtils.trimToEmpty(link);
+        if (StringUtils.isBlank(normalized)) {
+            throw new BadRequestException("缺少分享链接");
+        }
+        normalized = StringUtils.abbreviate(normalized, 1000); // 列 VARCHAR(1024)
+        cn.har01d.alist_tvbox.entity.Share probe = shareService.parseShareLink(normalized);
+        if (probe == null || probe.getType() == null || !MediaSubscriptionCheckService.supportedDriveType(probe.getType())) {
+            throw new BadRequestException("无法识别的网盘分享链接(支持夸克/UC/阿里/百度/115/天翼/移动/123/迅雷/光鸭)");
+        }
+        MediaSubscriptionResource resource =
+                resourceRepository.findBySubscriptionIdAndLink(id, normalized).orElse(null);
+        boolean existed = resource != null;
+        boolean revived = false;
+        if (resource == null) {
+            resource = new MediaSubscriptionResource();
+            resource.setSubscriptionId(id);
+            resource.setLink(normalized);
+            resource.setCreatedTime(System.currentTimeMillis());
+        } else if (MediaSubscriptionResource.STATE_CANDIDATE.equals(resource.getState())
+                || MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())) {
+            // 幂等:已在池/已挂载,只补提取码(挂载/状态一概不动)
+        } else {
+            // REMOVED/RETIRED/REJECTED:用户手动加 = 明确要它,复活回候选并允许下轮重探
+            resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+            resource.setCheckedTime(null);
+            resource.setMountPath(null);
+            resource.setShareId(null);
+            revived = true;
+        }
+        resource.setType(probe.getType());
+        resource.setSource(MediaSubscriptionResource.SOURCE_MANUAL);
+        if (StringUtils.isNotBlank(password)) {
+            resource.setPassword(StringUtils.abbreviate(password.trim(), 128)); // 列 VARCHAR(128)
+        }
+        if (!existed) {
+            resource.setTitle(null); // 探测后按目录内容呈现,展示时回落链接
+            resource.setScore(1000); // 手动提供的源:换源/探测候选序置顶(与 follow「订阅即所见」同档)
+            resource.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        }
+        resourceRepository.save(resource);
+        addPoolEvent(id, existed
+                ? "手动添加:链接已在资源池" + (StringUtils.isNotBlank(password) ? ",已更新提取码" : "")
+                : "已手动添加候选:" + normalized + "(不挂载不动主源,巡检/补缺时自动探测)");
+        log.info("media subscription {} manually added resource candidate {} (existed={}, revived={})",
+                id, resource.getId(), existed, revived);
+        return Map.of("success", true, "resourceId", resource.getId(), "existed", existed, "revived", revived);
+    }
+
+    /** 资源池事件(不发通知):手动添加/恢复这类管理动作只进页面时间线。 */
+    private void addPoolEvent(int subscriptionId, String detail) {
+        try {
+            MediaSubscriptionEvent event = new MediaSubscriptionEvent();
+            event.setSubscriptionId(subscriptionId);
+            event.setType(MediaSubscriptionEvent.TYPE_POOL_FILLED);
+            event.setDetail(detail);
+            event.setCreatedTime(System.currentTimeMillis());
+            eventRepository.save(event);
+        } catch (Exception e) {
+            log.warn("add pool event failed: {}", e.getMessage());
+        }
+    }
+
     public List<MediaSubscriptionResourceDto> resources(int uid, int id) {
         MediaSubscription subscription = getOwned(uid, id);
         Set<String> allowedDrives = checkService.allowedCandidateDrives(subscription);
@@ -502,8 +574,10 @@ public class MediaSubscriptionService {
         }
         return all.stream()
                 // 已挂载的照常展示(供流中,用户需要可见/可停用);其余行按候选盘白名单收敛,
-                // 白名单外的存量候选不再被探测/换源,展示出来只会误导"有个源躺着没用"
+                // 白名单外的存量候选不再被探测/换源,展示出来只会误导"有个源躺着没用";
+                // 手动添加的豁免(用户明确要的源,加进来却看不见等于白加)
                 .filter(r -> MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
+                        || MediaSubscriptionCheckService.manuallyAdded(r)
                         || MediaSubscriptionCheckService.driveAllowed(allowedDrives,
                         r.getType() == null ? null : DriveId.toDrive(r.getType())))
                 .map(r -> {
