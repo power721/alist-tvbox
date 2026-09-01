@@ -2603,7 +2603,7 @@ class MediaSubscriptionCheckServiceTest {
     // 季包年份是该季年份(完结季 2026 vs 首播 2020)、季号≠订阅季,年份/季号门禁全是误杀,
     // 72 条「它季资源」+49 条「年份不符」在入池前就被扔掉,资源级起始集号根本没机会跑。
 
-    private static void stubAbsoluteSeries(Fixture fixture, String name) {
+    private static MetadataDetails stubAbsoluteSeries(Fixture fixture, String name) {
         MetadataDetails details = new MetadataDetails();
         details.setTotalSeasons(1);
         details.setYear("2020");
@@ -2614,6 +2614,7 @@ class MediaSubscriptionCheckServiceTest {
         fixture.subscription.setName(name);
         fixture.subscription.setKeyword(name);
         fixture.subscription.setSeason(1);
+        return details;
     }
 
     @Test
@@ -3088,6 +3089,30 @@ class MediaSubscriptionCheckServiceTest {
         });
         assertEquals(Boolean.FALSE, fixture.service.likelyCoversMissing(fixture.subscription, finale, lowMissing),
                 "表缺 S4 行:inferSeasonStart 推出 166,完结季包照样判 FALSE");
+    }
+
+    @Test
+    void tencentNumbersSkipEndedSeries() {
+        // 完结剧不被腾讯登记口径抬总数(2026-09-01 线上 sub45:百花杀 36 集完结,腾讯三个重复
+        // 条目登记 75/54/21 取 max 得 75,ENDED 剧被抬成「缺 39 集」假缺口,只升不降让污染
+        // 永久化):ENDED 门禁跳过补正,存量污染(total>已播)夹回已播数自愈;在播滞后补正
+        // 场景由 tencentOfficialNumbersOnlyRaiseTotal 覆盖
+        Fixture fixture = new Fixture();
+        MetadataDetails details = stubAbsoluteSeries(fixture, "百花杀");
+        details.setStatus(MetadataDetails.STATUS_ENDED);
+        fixture.subscription.setOfficialEpisodes(36);
+        fixture.subscription.setOfficialTotal(75); // 已被腾讯口径污染的存量
+        fixture.service.setTencentSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner(null) {
+            @Override
+            public java.util.Map<Integer, Integer> seasonCounts(String seriesName, Integer firstYear) {
+                return java.util.Map.of(1, 75);
+            }
+        });
+
+        fixture.service.applyTencentOfficialNumbers(fixture.subscription);
+
+        assertEquals(36, fixture.subscription.getOfficialTotal(), "ENDED 剧总数不被腾讯登记抬高,存量污染夹回已播 36");
+        assertEquals(36, fixture.subscription.getOfficialEpisodes(), "已播口径不受影响");
     }
 
     @Test

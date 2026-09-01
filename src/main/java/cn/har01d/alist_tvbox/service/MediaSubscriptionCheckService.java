@@ -1989,6 +1989,10 @@ public class MediaSubscriptionCheckService {
      * —— 在播季含未上线分集(2026-09-01 线上:一念永恒完结季登记 16 集、实更 8 集,当已播求和
      * 得 181 凭空造出 174-181 假缺口,而 TMDB 排播 174 当晚才播),不能当已播;已播滞后由
      * B站 refineAiredCount 与 schedule 直播径兜底。豆瓣表不参与(分季集数有漏登,线上差 13 集)。
+     * <p>
+     * 官方已完结(ENDED)的剧整体不参与:登记口径对完结剧同样虚高(2026-09-01 线上 sub45:
+     * 百花杀 36 集完结,腾讯三个重复条目登记 75/54/21 取 max 得 75,把 ENDED 剧抬成「缺 39 集」,
+     * 只升不降让污染永久化),已完成剧总数只认 provider;存量污染在该分支夹回已播数自愈。
      */
     void applyTencentOfficialNumbers(MediaSubscription subscription) {
         if (tencentSeasonAligner == null) {
@@ -1996,6 +2000,17 @@ public class MediaSubscriptionCheckService {
         }
         MetadataDetails details = metaDetails(subscription);
         if (details == null || details.getTotalSeasons() == null || details.getTotalSeasons() != 1) {
+            return;
+        }
+        if (MetadataDetails.STATUS_ENDED.equals(details.getStatus())) {
+            Integer total = subscription.getOfficialTotal();
+            Integer episodes = subscription.getOfficialEpisodes();
+            if (total != null && episodes != null && total > episodes) {
+                subscription.setOfficialTotal(episodes);
+                subscriptionRepository.save(subscription);
+                addEvent(subscription.getId(), "ALIGN", "官方已完结,总集数对齐已播:" + episodes
+                        + "(原 " + total + ",腾讯登记口径不参与完结剧)");
+            }
             return;
         }
         Map<Integer, Integer> counts = tencentSeasonAligner.seasonCounts(
