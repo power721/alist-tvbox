@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.dto.MetadataDetails;
 import cn.har01d.alist_tvbox.util.Constants;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -19,9 +20,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -30,7 +33,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 /**
  * 平台排播时刻桥接:豆瓣「在哪儿看」vendors(线上形态:师兄太稳健 douban 36406417,双平台 12:00 更新)
  * → 平台页真实 HH:mm 校正 TMDB 日程的 20:00 约定。线上事实口径:爱奇艺 vendors url 是 www 域名
- * 播放页(须换 m 域名,分集 type=1 正片/3 预告,免费转免线时刻略早靠众数压掉);优酷 vendors url
+ * 播放页(须换 m 域名且带手机 UA —— m 站对桌面 UA 302 回 www 空壳,醒来 36126289 实测;
+ * 分集 type=1 正片/3 预告,免费转免线时刻略早靠众数压掉);优酷 vendors url
  * 是豆瓣小程序 scheme(showId 以 URL 编码形态嵌在 path,须抠出后走 show 页)。校正复用
  * BilibiliScheduleRefiner.applyScheduleClock:只换时分、日期不动,airedEpisodes/nextAirTime 重数;
  * externalIds 无豆瓣 id 未经桥接直接跳过;失败/未命中负缓存静默。
@@ -69,6 +73,7 @@ class PlayScheduleBridgeTest {
                                 + "\"http://www.iqiyi.com/v_19hly1wd1gg.html?vfm=m_331_dbdy&fv=4904d94982104144a1548dd9040df241\"}]}",
                         MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo(IQIYI_M)).andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.USER_AGENT, containsString("iPhone")))
                 .andRespond(withSuccess("{\"videoList\":{\"videos\":["
                                 + "{\"type\":1,\"shortTitle\":\"师兄太稳健第10集\",\"issueTime\":" + at(today.minusDays(1), LocalTime.of(12, 0)) + "},"
                                 + "{\"type\":3,\"shortTitle\":\"师兄太稳健 第12集预告\",\"issueTime\":" + at(today, LocalTime.of(14, 31)) + "},"

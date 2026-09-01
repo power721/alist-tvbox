@@ -40,9 +40,10 @@ import java.util.regex.Pattern;
  * 不依赖排播时刻命中)。两路同一份 vendors 数据零额外请求:
  * <ul>
  * <li>爱奇艺:vendors url 是 www 域名播放页,但 www 对无 JS 客户端只回空壳页 —— 换 m 域名同路径
- * 即完整 SSR;分集条目 type=1 正片(3=预告/花絮)的 issueTime 取最近 8 集时刻众数。免费转免线
- * 更新时刻会略早(次日 11:50 vs VIP 12:00)且数量少,众数天然压掉;播放链接剥豆瓣引流参数
- * (vfm/fv)并升级 https;</li>
+ * 即完整 SSR,且 m 站按 UA 分流:桌面 UA 302 回 www 空壳(醒来 36126289 实测,静默拿不到任何
+ * issueTime),必须带手机 UA;分集条目 type=1 正片(3=预告/花絮)的 issueTime 取最近 8 集
+ * 时刻众数。免费转免线更新时刻会略早(次日 11:50 vs VIP 12:00)且数量少,众数天然压掉;
+ * 播放链接剥豆瓣引流参数(vfm/fv)并升级 https;</li>
  * <li>优酷:vendors url 是豆瓣小程序 scheme(showId 以明文/URL 编码形态嵌在 path 里),抠出 showId
  * 构造 show 页链接(浏览器访问 302 落到播放页);排播时刻请求同一 show 页(游客直出
  * __INITIAL_DATA__)取 videoPublishTime(本集上线时刻)。</li>
@@ -87,6 +88,11 @@ public class PlayScheduleBridge {
     private static final Pattern CLOCK_TEXT = Pattern.compile("(\\d{1,2}):([0-5]\\d)|(\\d{1,2})点");
     /** 与 BilibiliScheduleRefiner 同口径:最近 8 个已上线集的 HH:mm 众数(平手取更新的集)。 */
     private static final int RECENT_LIMIT = 8;
+    private static final String DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+    /** m.iqiyi.com 按 UA 分流:桌面 UA 302 回 www JS 空壳(零分集数据),手机 UA 才直出完整 SSR 页。 */
+    private static final String MOBILE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+            + "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 
     private final RestTemplate restTemplate;
     /** 豆瓣 subject id → 播放源(Optional.empty 负缓存:无播放源/页面失败,6h 后重试)。 */
@@ -215,7 +221,7 @@ public class PlayScheduleBridge {
         if (!url.contains("iqiyi.com/v_")) {
             return null;
         }
-        String html = httpGet(url.replaceFirst("^https?://(www\\.)?iqiyi\\.com", "https://m.iqiyi.com"));
+        String html = httpGet(url.replaceFirst("^https?://(www\\.)?iqiyi\\.com", "https://m.iqiyi.com"), MOBILE_UA);
         if (html == null) {
             return null;
         }
@@ -324,10 +330,13 @@ public class PlayScheduleBridge {
 
     /** byte[] 收包 + UTF-8 解码:平台页面响应头多无 charset,String 收包按 ISO-8859-1 解码会乱码。 */
     private String httpGet(String url) {
+        return httpGet(url, DESKTOP_UA);
+    }
+
+    private String httpGet(String url, String userAgent) {
         try {
             HttpHeaders headers = new HttpHeaders();
-            headers.set(HttpHeaders.USER_AGENT,
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36");
+            headers.set(HttpHeaders.USER_AGENT, userAgent);
             headers.set(HttpHeaders.ACCEPT, "text/html");
             ResponseEntity<byte[]> response = restTemplate.exchange(
                     URI.create(url), HttpMethod.GET, new HttpEntity<>(null, headers), byte[].class);
