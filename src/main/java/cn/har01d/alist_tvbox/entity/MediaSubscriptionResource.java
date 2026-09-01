@@ -40,6 +40,11 @@ public class MediaSubscriptionResource {
     public static final String STATE_REJECTED = "REJECTED";
     /** 用户手动移除(终态墓碑:保留行防重复入池,不参与冷却重探/自动换源;恢复走 restore) */
     public static final String STATE_REMOVED = "REMOVED";
+
+    /** 退役原因分类:链接失效/异剧(确定性不符)→ 长冷却;瞬时故障连击达上限 → 短冷却快重探 */
+    public static final String FAIL_KIND_DEAD = "DEAD";
+    public static final String FAIL_KIND_ALIEN = "ALIEN";
+    public static final String FAIL_KIND_TRANSIENT = "TRANSIENT";
     /** 来源标记:用户手动粘贴分享链接入池(区别于搜索自动发现)——豁免入池/探测的自动门禁(盘白名单/年份/标题/排除词)。 */
     public static final String SOURCE_MANUAL = "manual";
 
@@ -108,6 +113,11 @@ public class MediaSubscriptionResource {
 
     @Column(name = "checked_time")
     private Long checkedTime;
+
+    /** 退役原因分类(DEAD/ALIEN/TRANSIENT):重探冷却按类分档 —— 瞬时故障(网络抖动/风控窗口)
+     *  误挂长冷却会让好源在池外躺满 badCooldownDays;存量行为 null,按 DEAD(保守,与旧口径一致)。 */
+    @Column(name = "fail_kind", length = 16)
+    private String failKind;
 
     /** 手动钉选(用户指定主源):换源候选序置顶、归属复核豁免(用户否决自动判定);
      * 每订阅至多一个,失效退役不清除 —— 恢复可用后优先回归。null 视为未钉选。 */

@@ -195,6 +195,10 @@
           <el-input-number v-model="form.expectedEpisodes" :min="0" :max="9999"/>
           <span class="sub-text" style="margin-left:8px">0/空 = 用官方总集数,均无则不自动完结</span>
         </el-form-item>
+        <el-form-item label="总集数锁定">
+          <el-input-number v-model="form.manualTotalEpisodes" :min="0" :max="9999"/>
+          <span class="sub-text" style="margin-left:8px">官方总集数不可信时(桥接污染/反复横跳)手动纠正:缺集/完结/分母以此为准;0/空 = 跟随官方</span>
+        </el-form-item>
         <el-form-item label="资源模式">
           <el-radio-group v-model="form.mode">
             <el-radio value="FOLLOW">挂载追更(免账号)</el-radio>
@@ -569,6 +573,10 @@
               <el-input v-model="notifyForm.chatId" placeholder="与 bot 对话后获取"/>
               <span v-if="!store.admin" class="sub-text">个人 TG 通知渠道:留空时沿用管理员配置的全局渠道</span>
             </el-form-item>
+            <el-form-item label="免打扰时段">
+              <el-input v-model="notifyForm.quietHours" placeholder="23:00-08:00,留空立即发送"/>
+              <span class="sub-text">时段内(可跨零点)巡检通知推迟到时段结束合并送达;凌晨巡检不半夜响铃</span>
+            </el-form-item>
             <el-form-item v-if="store.admin" label="Bot 交互">
               <el-switch v-model="notifyForm.botEnabled"/>
               <span class="sub-text" style="margin-left:8px">允许在 Telegram 里与 Bot 对话(查订阅/搜索/追剧/退订);只需收通知不需要对话时可关闭</span>
@@ -846,6 +854,7 @@ interface SubscriptionDto {
   accountId: number | null
   accountIds: string[] | null
   expectedEpisodes: number | null
+  manualTotalEpisodes: number | null
   currentEpisodes: number | null
   maxEpisode: number | null
   missingEpisodes: number[]
@@ -1137,6 +1146,7 @@ const loadPanSouAuth = () => {
 const notifyForm = ref({
   botToken: '',
   chatId: '',
+  quietHours: '',
   botEnabled: true,
   doubanCookie: '',
   archiveDays: 0,
@@ -1367,6 +1377,7 @@ const handleAdd = () => {
     metaProvider: null,
     metaId: null,
     expectedEpisodes: null,
+    manualTotalEpisodes: null,
     mode: 'FOLLOW',
     accountId: null,
     accountIds: [] as string[],
@@ -1401,6 +1412,7 @@ const handleEdit = (row: SubscriptionDto) => {
     metaProvider: row.metaProvider,
     metaId: row.metaId,
     expectedEpisodes: row.expectedEpisodes,
+    manualTotalEpisodes: row.manualTotalEpisodes,
     mode: row.mode,
     accountId: null,
     accountIds: row.accountIds?.length ? row.accountIds : (row.accountId ? ['pan:' + row.accountId] : []),
@@ -1502,6 +1514,7 @@ const buildBody = () => ({
   metaProvider: form.value.metaProvider,
   metaId: form.value.metaId,
   expectedEpisodes: form.value.expectedEpisodes,
+  manualTotalEpisodes: form.value.manualTotalEpisodes ?? 0,
   mode: form.value.mode,
   accountId: form.value.accountId,
   accountIds: form.value.accountIds,
@@ -1942,10 +1955,12 @@ const openNotify = () => {
     Promise.all([
       axios.get('/api/user-settings/msub_telegram_bot_token'),
       axios.get('/api/user-settings/msub_telegram_chat_id'),
+      axios.get('/api/user-settings/msub_notify_quiet_hours'),
       axios.get('/api/user-settings/msub_pool_filter'),
-    ]).then(([token, chat, pool]) => {
+    ]).then(([token, chat, quiet, pool]) => {
       notifyForm.value.botToken = token.data?.value || ''
       notifyForm.value.chatId = chat.data?.value || ''
+      notifyForm.value.quietHours = quiet.data?.value || ''
       const poolFilter = parsePoolFilter(pool.data?.value || '')
       notifyForm.value.poolMinQuality = poolFilter.minQuality
       notifyForm.value.poolIncludeKeywords = poolFilter.includeKeywords
@@ -1964,6 +1979,7 @@ const openNotify = () => {
     const settings = response.data || {}
     notifyForm.value.botToken = settings['msub_telegram_bot_token'] || ''
     notifyForm.value.chatId = settings['msub_telegram_chat_id'] || ''
+    notifyForm.value.quietHours = settings['msub_notify_quiet_hours'] || ''
     notifyForm.value.botEnabled = settings['msub_telegram_bot_enabled'] !== 'false'
     notifyForm.value.doubanCookie = settings['douban_cookie'] || ''
     notifyForm.value.tmdbApiKey = settings['tmdb_api_key'] || ''
@@ -2030,6 +2046,7 @@ const saveNotify = () => {
   const saves = store.admin ? [
     axios.post('/api/settings', {name: 'msub_telegram_bot_token', value: notifyForm.value.botToken}),
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
+    axios.post('/api/settings', {name: 'msub_notify_quiet_hours', value: notifyForm.value.quietHours.trim()}),
     axios.post('/api/settings', {name: 'msub_telegram_bot_enabled', value: String(notifyForm.value.botEnabled)}),
     axios.post('/api/settings', {name: 'douban_cookie', value: notifyForm.value.doubanCookie}),
     axios.post('/api/settings', {name: 'tmdb_api_key', value: notifyForm.value.tmdbApiKey}),
@@ -2087,6 +2104,7 @@ const saveNotify = () => {
     const saves = [
       axios.put('/api/user-settings/msub_telegram_bot_token', {name: 'msub_telegram_bot_token', value: notifyForm.value.botToken}),
       axios.put('/api/user-settings/msub_telegram_chat_id', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
+      axios.put('/api/user-settings/msub_notify_quiet_hours', {name: 'msub_notify_quiet_hours', value: notifyForm.value.quietHours.trim()}),
     ]
     if (poolFilterValue !== userPoolRaw.value) {
       saves.push(axios.put('/api/user-settings/msub_pool_filter', {name: 'msub_pool_filter', value: poolFilterValue}))

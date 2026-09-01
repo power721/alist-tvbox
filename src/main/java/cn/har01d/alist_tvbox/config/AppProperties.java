@@ -152,6 +152,9 @@ public class AppProperties {
         private int returningBackoffCapHours = 12;
         /** BAD 候选冷却(天):超期允许重探一次(误标自愈),再失败重新计时 */
         private int badCooldownDays = 7;
+        /** 瞬时失败候选的短冷却(小时):瞬时故障连击达上限退役的候选按此重探 —— 网盘窗口性抖动
+         *  攒满连击不等于链接死,7 天冷却会把好源白白关在池外 */
+        private int transientReprobeHours = 24;
         /** 字节级流探测:对直链 Range 请求的字节上限(解析成功后再拉一小段,验证 CDN 真出流) */
         private int streamProbeMaxBytes = 4096;
         /** 字节级流探测:HTTP 超时(秒) */

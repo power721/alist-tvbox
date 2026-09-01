@@ -182,6 +182,11 @@ public class MediaSubscriptionNotificationService {
                 markSent(tasks);
                 return;
             }
+            long quietMs = quietHoursRemainingMs(settingService.getUserSetting("msub_notify_quiet_hours", uid));
+            if (quietMs > 0) {
+                deferForQuietHours(tasks, quietMs);
+                return;
+            }
             String text = buildCard(subscription);
             try {
                 deliver(subscription, token, chatId, text);
@@ -194,6 +199,65 @@ public class MediaSubscriptionNotificationService {
         } finally {
             inFlight.remove(subscriptionId);
         }
+    }
+
+    /**
+     * 免打扰时段剩余毫秒:"HH:mm-HH:mm"(允许跨零点,如 23:00-08:00)。凌晨档巡检(nightCheckTimes)
+     * 的产物不半夜送达 —— 推迟投递不影响 outbox 账本(任务不失败、不计重试),卡片现算,到期一发即最新状态。
+     * 空/非法/起止相等返回 0(立即发送)。
+     */
+    static long quietHoursRemainingMs(String spec) {
+        return quietHoursRemainingMs(spec, java.time.LocalDateTime.now());
+    }
+
+    static long quietHoursRemainingMs(String spec, java.time.LocalDateTime now) {
+        if (spec == null) {
+            return 0;
+        }
+        String[] parts = spec.trim().split("-");
+        if (parts.length != 2) {
+            return 0;
+        }
+        int start = minuteOfDay(parts[0]);
+        int end = minuteOfDay(parts[1]);
+        if (start < 0 || end < 0 || start == end) {
+            return 0;
+        }
+        int nowMin = now.getHour() * 60 + now.getMinute();
+        boolean inWindow = start < end ? nowMin >= start && nowMin < end : nowMin >= start || nowMin < end;
+        if (!inWindow) {
+            return 0;
+        }
+        int remaining = start < end ? end - nowMin : (nowMin >= start ? 1440 - nowMin + end : end - nowMin);
+        return remaining * 60_000L;
+    }
+
+    /** "H:mm"/"HH:mm" → 当天分钟数;非法返回 -1(宽容单数字小时)。 */
+    private static int minuteOfDay(String text) {
+        String[] hm = text.trim().split(":");
+        if (hm.length != 2) {
+            return -1;
+        }
+        try {
+            int hour = Integer.parseInt(hm[0].trim());
+            int minute = Integer.parseInt(hm[1].trim());
+            if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                return -1;
+            }
+            return hour * 60 + minute;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    /** 免打扰推迟:nextAttemptAt 推到时段结束(不动 attempts/status,sweep 到期自动捞起)。 */
+    private void deferForQuietHours(List<MediaSubscriptionNotifyTask> tasks, long quietMs) {
+        long dueAt = System.currentTimeMillis() + quietMs;
+        for (MediaSubscriptionNotifyTask task : tasks) {
+            task.setNextAttemptAt(dueAt);
+        }
+        taskRepository.saveAll(tasks);
+        log.info("telegram notify deferred {} tasks for quiet hours ({}min)", tasks.size(), quietMs / 60_000);
     }
 
     /** 首选编辑绑定消息;绑定失效(chat 变更/消息被删/超龄)重发新消息换绑 */
@@ -323,11 +387,11 @@ public class MediaSubscriptionNotificationService {
             default -> "🔄 更新中";
         };
         Integer current = subscription.getCurrentEpisodes();
-        Integer total = subscription.getOfficialTotal();
+        int total = subscription.effectiveTotalEpisodes();
         if (current != null && current > 0) {
             return label + " · 更新至第 " + current + " 集";
         }
-        if (total != null && total > 0) {
+        if (total > 0) {
             return label + " · 共 " + total + " 集";
         }
         return label;

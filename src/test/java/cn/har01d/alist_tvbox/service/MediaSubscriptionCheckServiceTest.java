@@ -5186,4 +5186,89 @@ class MediaSubscriptionCheckServiceTest {
                     .thenReturn(List.of());
         }
     }
+
+    // ---------- MoviePilot 借鉴(2026-09-01):手动锁总集数 / 总集数回落保护 / 失败语义冷却 ----------
+
+    @Test
+    void computeMissingManualTotalOverridesPollutedOfficial() {
+        // 官方总 12/已播 11(桥接污染)而用户锁定总 10:缺口封在第 10 集,不再搜不存在的 11/12
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialTotal(12);
+        subscription.setOfficialEpisodes(11);
+        subscription.setManualTotalEpisodes(10);
+        Set<Integer> present = IntStream.rangeClosed(1, 9).boxed()
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertEquals(Set.of(10), service.computeMissing(subscription, present));
+    }
+
+    @Test
+    void computeMissingManualTotalDoesNotClampObservations() {
+        // 观测不夹(与官方口径同规):锁 10 但资源真有 11(官方低估),已持有的 11 不算缺
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setOfficialTotal(8);
+        subscription.setManualTotalEpisodes(10);
+        Set<Integer> present = IntStream.rangeClosed(1, 11).boxed()
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertTrue(service.computeMissing(subscription, present).isEmpty());
+    }
+
+    @Test
+    void shouldAutoEndByManualTotal() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setManualTotalEpisodes(10);
+        subscription.setOfficialStatus("RETURNING");
+        subscription.setOfficialEpisodes(12);
+        assertTrue(MediaSubscriptionCheckService.shouldAutoEnd(subscription, 10), "锁 10 收齐 10 即完结");
+        assertFalse(MediaSubscriptionCheckService.shouldAutoEnd(subscription, 9));
+    }
+
+    @Test
+    void clampTotalShrinkKeepsHeldEpisodes() {
+        MediaSubscriptionEpisodeSourceRepository episodeSourceRepository =
+                Mockito.mock(MediaSubscriptionEpisodeSourceRepository.class);
+        MediaSubscriptionEventRepository eventRepository = Mockito.mock(MediaSubscriptionEventRepository.class);
+        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
+                null, null, eventRepository, null, episodeSourceRepository,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                appProperties, new ObjectMapper(), (MediaSubscriptionNotificationService) null);
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setId(3);
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(3), Mockito.anyCollection()))
+                .thenReturn(List.of());
+
+        // 首次写入(旧值未知)与增长不设限
+        assertEquals(12, svc.clampTotalShrink(subscription, 12));
+        subscription.setOfficialTotal(12);
+        assertEquals(15, svc.clampTotalShrink(subscription, 15));
+
+        // 官方回落 12→10 而本地已持有 11:只允许回落到 11 —— 已持有的集不因总数缩水变"不存在"
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(3), Mockito.anyCollection()))
+                .thenReturn(List.of(1, 2, 11, 13));
+        assertEquals(11, svc.clampTotalShrink(subscription, 10));
+        assertEquals(11, svc.clampTotalShrink(subscription, 8));
+        Mockito.verify(eventRepository, Mockito.atLeastOnce()).save(Mockito.any(MediaSubscriptionEvent.class));
+    }
+
+    @Test
+    void isBadCooledByFailKind() {
+        long now = System.currentTimeMillis();
+        MediaSubscriptionResource dead = new MediaSubscriptionResource();
+        dead.setState(MediaSubscriptionResource.STATE_RETIRED);
+        dead.setCheckedTime(now - 2L * 24 * 3600_000);
+        assertFalse(service.isBadCooled(dead, now), "链接死走 badCooldownDays(7 天),2 天未到");
+
+        MediaSubscriptionResource transientRetired = new MediaSubscriptionResource();
+        transientRetired.setState(MediaSubscriptionResource.STATE_RETIRED);
+        transientRetired.setFailKind(MediaSubscriptionResource.FAIL_KIND_TRANSIENT);
+        transientRetired.setCheckedTime(now - 2L * 24 * 3600_000);
+        assertTrue(service.isBadCooled(transientRetired, now), "瞬时连击退役走 24h 短冷却,2 天已到");
+
+        // 存量行无 failKind:按 DEAD 保守,与旧口径一致
+        MediaSubscriptionResource legacy = new MediaSubscriptionResource();
+        legacy.setState(MediaSubscriptionResource.STATE_REJECTED);
+        legacy.setCheckedTime(now - 2L * 24 * 3600_000);
+        assertFalse(service.isBadCooled(legacy, now));
+    }
 }

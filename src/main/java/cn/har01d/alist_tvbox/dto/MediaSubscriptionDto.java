@@ -28,6 +28,8 @@ public class MediaSubscriptionDto {
     private boolean crossDrive;
     private String status;
     private Integer expectedEpisodes;
+    /** 手动锁定总集数(null = 跟随官方) */
+    private Integer manualTotalEpisodes;
     private Integer currentEpisodes;
     private Integer maxEpisode;
     private List<Integer> missingEpisodes;

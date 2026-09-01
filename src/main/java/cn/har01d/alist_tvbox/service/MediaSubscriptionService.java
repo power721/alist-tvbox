@@ -215,6 +215,8 @@ public class MediaSubscriptionService {
             subscription.setMetaId(String.valueOf(subscription.getDoubanId()));
         }
         subscription.setExpectedEpisodes(request.getExpectedEpisodes());
+        subscription.setManualTotalEpisodes(request.getManualTotalEpisodes() != null && request.getManualTotalEpisodes() > 0
+                ? request.getManualTotalEpisodes() : null);
         subscription.setSeasonStartEpisode(request.getSeasonStartEpisode() != null && request.getSeasonStartEpisode() > 1
                 ? request.getSeasonStartEpisode() : null);
         subscription.setMode(StringUtils.isBlank(request.getMode()) ? MediaSubscription.MODE_FOLLOW : request.getMode());
@@ -288,6 +290,11 @@ public class MediaSubscriptionService {
         }
         if (request.getExpectedEpisodes() != null) {
             subscription.setExpectedEpisodes(request.getExpectedEpisodes());
+        }
+        if (request.getManualTotalEpisodes() != null) {
+            // ≤0 = 清除(回退官方总集数口径)
+            subscription.setManualTotalEpisodes(request.getManualTotalEpisodes() > 0
+                    ? request.getManualTotalEpisodes() : null);
         }
         if (request.getMode() != null) {
             subscription.setMode(request.getMode());
@@ -1857,6 +1864,11 @@ public class MediaSubscriptionService {
      *  官方快照缺失返回 null(不臆测);全部同步返回「已全部同步」;缺集列号,超 8 个收敛为区间。 */
     private String missingEpisodesSummary(MediaSubscription subscription) {
         int official = subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes();
+        int totalCap = subscription.effectiveTotalEpisodes();
+        if (totalCap > 0 && official > totalCap) {
+            // 已播数不可能超过总集数(手动锁定口径),超出是上游污染 —— 与 computeMissing 夹紧同规
+            official = totalCap;
+        }
         if (official <= 0) {
             return null;
         }
@@ -2148,11 +2160,17 @@ public class MediaSubscriptionService {
         if (!deadByEpisode.isEmpty()) {
             base = Math.max(base, deadByEpisode.keySet().stream().max(Integer::compareTo).orElse(0));
         }
+        int observedBase = base;
         if (subscription.getOfficialEpisodes() != null) {
             base = Math.max(base, subscription.getOfficialEpisodes());
         }
         if (subscription.getExpectedEpisodes() != null) {
             base = Math.max(base, subscription.getExpectedEpisodes());
+        }
+        int totalCap = subscription.effectiveTotalEpisodes();
+        if (totalCap > 0 && base > totalCap) {
+            // 手动锁定总集数是未播占位的上界;观测真实文件不参与夹紧(与 computeMissing 同规)
+            base = Math.max(totalCap, observedBase);
         }
         List<Map<String, Object>> result = new ArrayList<>();
         // 季起始集号下界:分季订阅对齐后本季从全剧第 N 集开始,季前旧集不属于本订阅(与 computeMissing 同规)
@@ -2240,8 +2258,13 @@ public class MediaSubscriptionService {
         // 上游污染(瑞克 S9 总 10/已播 11),"已播 11 / 共 10"同样是倒挂
         int observedMax = subscription.getMaxEpisode() == null ? 0 : subscription.getMaxEpisode();
         int metaTotal = details == null || details.getTotalEpisodes() == null ? 0 : details.getTotalEpisodes();
-        int total = Math.max(Math.max(metaTotal,
-                subscription.getOfficialTotal() == null ? 0 : subscription.getOfficialTotal()), observedMax);
+        // 生效总集数(手动锁定优先)夹住官方侧;观测不夹(与巡检 computeMissing 同规)
+        int officialish = Math.max(metaTotal, subscription.getOfficialTotal() == null ? 0 : subscription.getOfficialTotal());
+        int totalCap = subscription.effectiveTotalEpisodes();
+        if (totalCap > 0 && officialish > totalCap) {
+            officialish = totalCap;
+        }
+        int total = Math.max(officialish, observedMax);
         media.put("totalEpisodes", total);
         int metaAired = details == null || details.getAiredEpisodes() == null ? 0 : details.getAiredEpisodes();
         media.put("airedEpisodes", Math.min(Math.max(Math.max(metaAired,
@@ -2822,8 +2845,12 @@ public class MediaSubscriptionService {
         // 推出来的本季体量都是假精度(35/16 两版都被否),完结(status=ENDED)后直接「N集完结」
         Integer start = subscription.getSeasonStartEpisode();
         boolean windowed = start != null && start > 1;
+        int manual = subscription.getManualTotalEpisodes() == null ? 0 : subscription.getManualTotalEpisodes();
         int officialTotal = subscription.getOfficialTotal() == null ? 0 : subscription.getOfficialTotal();
-        int total = expected > 0 ? expected : (windowed ? 0 : officialTotal);
+        // 总数口径:手填期望(主观目标)> 手动锁定(官方总数的纠正)> 官方总集数;分季在播季
+        // 无手动值时不显示自动分母(官方全剧连续空间+登记滞后,推本季体量是假精度,见下);
+        // 手动锁定的分母是用户明确给的数,不受分季抑制
+        int total = expected > 0 ? expected : (manual > 0 ? manual : (windowed ? 0 : officialTotal));
         boolean ended = MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
                 || (expected > 0 && current >= expected)
                 || (total > 0 && subscription.isSeasonAiredOut() && current >= total);
@@ -2952,6 +2979,7 @@ public class MediaSubscriptionService {
         dto.setMainDrives(parseMainDrives(subscription.getMainDrives()));
         dto.setStatus(subscription.getStatus());
         dto.setExpectedEpisodes(subscription.getExpectedEpisodes());
+        dto.setManualTotalEpisodes(subscription.getManualTotalEpisodes());
         dto.setCurrentEpisodes(subscription.getCurrentEpisodes());
         dto.setMaxEpisode(subscription.getMaxEpisode());
         dto.setMissingEpisodes(missingEpisodes(subscription));
@@ -3005,8 +3033,8 @@ public class MediaSubscriptionService {
         int projected = Math.max(
                 subscription.getOfficialEpisodes() == null ? 0 : subscription.getOfficialEpisodes(),
                 subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes());
-        Integer total = subscription.getOfficialTotal();
-        if (total != null && total > 0) {
+        int total = subscription.effectiveTotalEpisodes();
+        if (total > 0) {
             projected = Math.min(projected, total);
         }
         base = Math.max(base, projected);

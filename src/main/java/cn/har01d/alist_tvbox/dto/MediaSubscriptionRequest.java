@@ -15,6 +15,9 @@ public class MediaSubscriptionRequest {
     private String metaProvider;
     private String metaId;
     private Integer expectedEpisodes;
+    /** 手动锁定总集数(≤0 = 清除,跟随官方):官方总集数不可信时(桥接污染/反复横跳)的逃生舱,
+     *  生效后缺集/完结/展示分母以此为准 */
+    private Integer manualTotalEpisodes;
     /** P0 仅实现 FOLLOW(挂载+自动换源);TRANSFER(自动转存)为 P2 */
     private String mode;
     private Integer accountId;

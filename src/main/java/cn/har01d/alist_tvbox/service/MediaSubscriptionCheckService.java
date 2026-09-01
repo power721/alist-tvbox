@@ -210,6 +210,8 @@ public class MediaSubscriptionCheckService {
     private final TelegramService telegramService;
     /** 盘检服务(站点源统一过链检):setter 注入 —— 主构造器参数已 20+,裸实例测试占位 null 满天飞,不再加位 */
     private PanLinkCheckService panLinkCheckService;
+    /** 搜索源统一退避(订阅巡检侧;手动预览不走):setter 注入,同上。测试裸实例为 null(不限流)。 */
+    private cn.har01d.alist_tvbox.service.sitesearch.SearchSourceThrottle searchSourceThrottle;
     private final WanouSearchService wanouSearchService;
     private final PanLianSearchService panLianSearchService;
     private final GuanYingSearchService guanYingSearchService;
@@ -283,6 +285,11 @@ public class MediaSubscriptionCheckService {
     @Autowired
     void setPanLinkCheckService(PanLinkCheckService panLinkCheckService) {
         this.panLinkCheckService = panLinkCheckService;
+    }
+
+    @Autowired
+    void setSearchSourceThrottle(cn.har01d.alist_tvbox.service.sitesearch.SearchSourceThrottle searchSourceThrottle) {
+        this.searchSourceThrottle = searchSourceThrottle;
     }
     /**
      * 订阅巡检执行池:并发度可配(checkConcurrency,默认 3),到期订阅并发检查、手动触发的
@@ -1691,7 +1698,7 @@ public class MediaSubscriptionCheckService {
             subscription.setOfficialEpisodes(details.getAiredEpisodes());
         }
         if (details.getTotalEpisodes() != null) {
-            subscription.setOfficialTotal(details.getTotalEpisodes());
+            subscription.setOfficialTotal(clampTotalShrink(subscription, details.getTotalEpisodes()));
         }
         subscription.setOfficialStatus(details.getStatus());
         subscription.setNextAirTime(details.getNextAirTime());
@@ -1724,6 +1731,29 @@ public class MediaSubscriptionCheckService {
             }
         }
         applyCustomAirClock(subscription);
+    }
+
+    /**
+     * 官方总集数回落保护:总数缩水多系上游污染,只允许回落到旧范围内本地已确认持有的最高集号 ——
+     * 已持有的集不会因总数缩水变"不存在",无保护的回落会凭空造缺口/误完结。
+     * 增长不设限(在播剧总数随播出增长是常态);腾讯完结对齐(applyTencentOfficialNumbers)
+     * 是带日志的刻意修正路径,不经此闸。
+     */
+    int clampTotalShrink(MediaSubscription subscription, int newTotal) {
+        Integer old = subscription.getOfficialTotal();
+        if (old == null || old <= 0 || newTotal >= old || subscription.getId() == null) {
+            return newTotal;
+        }
+        int floor = liveEpisodeNumbers(subscription).stream()
+                .filter(n -> n > 0 && n <= old)
+                .max(Integer::compareTo)
+                .orElse(0);
+        if (floor > newTotal) {
+            addEvent(subscription.getId(), "ALIGN", "官方总集数回落被夹紧:上游 " + newTotal
+                    + ",已持有 " + floor + " 集,保持 " + floor);
+            return floor;
+        }
+        return newTotal;
     }
 
     /** "H:mm"/"HH:mm" 归一为 "HH:mm";空/非法返回 null(调用方决定拒绝或忽略)。 */
@@ -1794,8 +1824,8 @@ public class MediaSubscriptionCheckService {
         // 每轮报缺不存在的集、fillGaps 空转攒 stallCount;观测最大集号不参与夹紧(官方滞后)
         int projected = Math.max(airedTarget(subscription, System.currentTimeMillis()),
                 subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes());
-        Integer total = subscription.getOfficialTotal();
-        if (total != null && total > 0) {
+        int total = subscription.effectiveTotalEpisodes();
+        if (total > 0) {
             projected = Math.min(projected, total);
         }
         base = Math.max(base, projected);
@@ -2864,6 +2894,11 @@ public class MediaSubscriptionCheckService {
      * @param quiet true = 只记日志不发事件(探测失败/激活尝试失败这类高频路径,避免事件流刷屏)
      */
     void retireResource(MediaSubscription subscription, MediaSubscriptionResource resource, String reason, boolean quiet) {
+        retireResource(subscription, resource, reason, quiet, MediaSubscriptionResource.FAIL_KIND_DEAD);
+    }
+
+    void retireResource(MediaSubscription subscription, MediaSubscriptionResource resource, String reason, boolean quiet,
+                        String failKind) {
         if (resource.getShareId() != null) {
             // 共享挂载:share 被其它订阅引用时不卸载(内容对别人仍有效),本订阅的资源行照常退役
             boolean referencedByOthers = subscriptionRepository.existsByShareIdAndIdNot(resource.getShareId(), subscription.getId())
@@ -2882,6 +2917,7 @@ public class MediaSubscriptionCheckService {
         resource.setShareId(null);
         resource.setMountPath(null);
         resource.setCheckedTime(System.currentTimeMillis());
+        resource.setFailKind(failKind);
         resourceRepository.save(resource);
         for (MediaSubscriptionEpisodeSource row : episodeSourceRepository.findByResourceId(resource.getId())) {
             if (LIVE_STATES.contains(row.getState())) {
@@ -2927,6 +2963,7 @@ public class MediaSubscriptionCheckService {
         resource.setShareId(null);
         resource.setMountPath(null);
         resource.setCheckedTime(System.currentTimeMillis());
+        resource.setFailKind(MediaSubscriptionResource.FAIL_KIND_ALIEN);
         resourceRepository.save(resource);
         for (MediaSubscriptionEpisodeSource row : episodeSourceRepository.findByResourceId(resource.getId())) {
             if (LIVE_STATES.contains(row.getState())) {
@@ -3216,7 +3253,11 @@ public class MediaSubscriptionCheckService {
             if (classifyProbeFailure(e) == ProbeFailure.TRANSIENT && !transientStreakReached(resource)) {
                 return ProbeOutcome.TRANSIENT; // 瞬时故障:不退役不拉黑,下轮再探
             }
-            retireResource(subscription, resource, message, true);
+            // 走到这里:要么 GONE(真失效),要么瞬时连击达上限(措辞怪异的疑似死源)——
+            // 后者按 TRANSIENT 落档短冷却,网盘窗口性抖动攒满连击后 1 天即回池而非 7 天
+            retireResource(subscription, resource, message, true,
+                    classifyProbeFailure(e) == ProbeFailure.TRANSIENT
+                            ? MediaSubscriptionResource.FAIL_KIND_TRANSIENT : MediaSubscriptionResource.FAIL_KIND_DEAD);
             return ProbeOutcome.DEAD;
         }
     }
@@ -3984,14 +4025,20 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** RETIRED/REJECTED 冷却超期 = 允许重探一次(历史误标自愈;重探再失败会刷新计时)。 */
+    /** RETIRED/REJECTED 冷却超期 = 允许重探一次(历史误标自愈;重探再失败会刷新计时)。
+     *  冷却按失败语义分档:TRANSIENT(瞬时连击达上限,非链接死)短冷却快回池;DEAD/ALIEN 走 badCooldownDays。 */
     boolean isBadCooled(MediaSubscriptionResource resource, long now) {
         if (!MediaSubscriptionResource.STATE_RETIRED.equals(resource.getState())
                 && !MediaSubscriptionResource.STATE_REJECTED.equals(resource.getState())) {
             return false;
         }
         Long checked = resource.getCheckedTime();
-        long cooldown = appProperties.getSubscription().getBadCooldownDays() * 24L * 3600_000;
+        long cooldown;
+        if (MediaSubscriptionResource.FAIL_KIND_TRANSIENT.equals(resource.getFailKind())) {
+            cooldown = Math.max(1, appProperties.getSubscription().getTransientReprobeHours()) * 3600_000L;
+        } else {
+            cooldown = appProperties.getSubscription().getBadCooldownDays() * 24L * 3600_000;
+        }
         return checked == null || now - checked >= cooldown;
     }
 
@@ -4369,7 +4416,9 @@ public class MediaSubscriptionCheckService {
                     if (classifyProbeFailure(e) == ProbeFailure.TRANSIENT && !transientStreakReached(resource)) {
                         continue; // 瞬时故障不下结论(误判失效会进跨订阅黑名单);连续达上限才按失效处理
                     }
-                    retireResource(subscription, resource, e.getMessage(), true);
+                    retireResource(subscription, resource, e.getMessage(), true,
+                            classifyProbeFailure(e) == ProbeFailure.TRANSIENT
+                                    ? MediaSubscriptionResource.FAIL_KIND_TRANSIENT : MediaSubscriptionResource.FAIL_KIND_DEAD);
                 }
             }
         }
@@ -5234,12 +5283,15 @@ public class MediaSubscriptionCheckService {
     static boolean shouldAutoEnd(MediaSubscription subscription, int collected) {
         Integer expected = subscription.getExpectedEpisodes();
         boolean endedByExpected = expected != null && expected > 0 && collected >= expected;
+        // 手动锁定总集数:用户断言客观总数,收齐即完结 —— 官方总数被锁定的订阅不参与本判定
+        int manual = subscription.getManualTotalEpisodes() == null ? 0 : subscription.getManualTotalEpisodes();
+        boolean endedByManual = manual > 0 && collected >= manual;
         boolean endedByOfficial = MetadataDetails.STATUS_ENDED.equals(subscription.getOfficialStatus())
                 && subscription.getOfficialEpisodes() != null && subscription.getOfficialEpisodes() > 0
                 && collected >= subscription.getOfficialEpisodes();
         boolean endedBySeasonAired = subscription.isSeasonAiredOut()
                 && collected >= subscription.getOfficialEpisodes();
-        return endedByExpected || endedByOfficial || endedBySeasonAired;
+        return endedByExpected || endedByManual || endedByOfficial || endedBySeasonAired;
     }
 
     // ---------- 候选池与打分 ----------
@@ -5253,21 +5305,21 @@ public class MediaSubscriptionCheckService {
      * 串行排队,总时长 = 各源之和(线上 37s 级),并发后 = 最慢一路;各源内部自带超时/退避,
      * 外层 90s 硬顶兜底;任一源失败静默为空,按 link 天然去重,TG 结果在前(先见先得)。
      */
-    private List<Message> searchAllSources(String keyword, int size, boolean cached) {
+    private List<Message> searchAllSources(String keyword, int size, boolean cached, boolean respectBackoff) {
         CompletableFuture<List<Message>> telegram = searchAsync("telegram", keyword, () ->
                 appProperties.getSubscription().isAggregateSearch()
                         ? telegramService.searchAggregated(keyword, size, cached)
-                        : telegramService.search(keyword, size, false, cached));
+                        : telegramService.search(keyword, size, false, cached), respectBackoff);
         CompletableFuture<List<Message>> wanou = wanouSearchService != null && appProperties.getSubscription().isWanouEnabled()
-                ? searchAsync("wanou", keyword, () -> wanouSearchService.search(keyword)) : null;
+                ? searchAsync("wanou", keyword, () -> wanouSearchService.search(keyword), respectBackoff) : null;
         CompletableFuture<List<Message>> panlian = panLianSearchService != null
-                ? searchAsync("panlian", keyword, () -> panLianSearchService.search(keyword)) : null;
+                ? searchAsync("panlian", keyword, () -> panLianSearchService.search(keyword), respectBackoff) : null;
         CompletableFuture<List<Message>> guanying = guanYingSearchService != null
-                ? searchAsync("guanying", keyword, () -> guanYingSearchService.search(keyword)) : null;
+                ? searchAsync("guanying", keyword, () -> guanYingSearchService.search(keyword), respectBackoff) : null;
         CompletableFuture<List<Message>> woniu = woniuSearchService != null
-                ? searchAsync("woniu", keyword, () -> woniuSearchService.search(keyword)) : null;
+                ? searchAsync("woniu", keyword, () -> woniuSearchService.search(keyword), respectBackoff) : null;
         CompletableFuture<List<Message>> panju = panjuSearchService != null && appProperties.getSubscription().isPanjuEnabled()
-                ? searchAsync("panju", keyword, () -> panjuSearchService.search(keyword)) : null;
+                ? searchAsync("panju", keyword, () -> panjuSearchService.search(keyword), respectBackoff) : null;
 
         List<Message> messages = new ArrayList<>(joinSearch("telegram", telegram));
         Set<String> links = new java.util.HashSet<>();
@@ -5305,13 +5357,38 @@ public class MediaSubscriptionCheckService {
         return messages;
     }
 
-    /** 单源搜索任务:并发池执行 + 90s 硬顶(各源内部超时之外的兜底),失败静默为空不影响其它源。 */
-    private CompletableFuture<List<Message>> searchAsync(String source, String keyword, Supplier<List<Message>> task) {
-        return CompletableFuture.supplyAsync(task, searchExecutor)
+    /** 单源搜索任务:并发池执行 + 90s 硬顶(各源内部超时之外的兜底),失败静默为空不影响其它源。
+     *  订阅巡检路径(respectBackoff)过统一退避闸门:连续失败/限流的源跳过整轮,成功恢复期加最小间隔。 */
+    private CompletableFuture<List<Message>> searchAsync(String source, String keyword, Supplier<List<Message>> task,
+                                                         boolean respectBackoff) {
+        if (respectBackoff && searchSourceThrottle != null && searchSourceThrottle.blocked(source)) {
+            log.info("{} search skipped for [{}] (source backoff)", source, keyword);
+            return CompletableFuture.completedFuture(List.of());
+        }
+        return CompletableFuture.<List<Message>>supplyAsync(() -> {
+            try {
+                List<Message> messages = task.get();
+                if (respectBackoff && searchSourceThrottle != null) {
+                    searchSourceThrottle.recordSuccess(source);
+                }
+                return messages;
+            } catch (Exception e) {
+                if (respectBackoff && searchSourceThrottle != null) {
+                    searchSourceThrottle.recordFailure(source, e);
+                }
+                log.warn("{} search failed for [{}]: {}", source, keyword, e.getMessage());
+                return List.of();
+            }
+        }, searchExecutor)
                 .orTimeout(90, TimeUnit.SECONDS)
                 .exceptionally(e -> {
-                    log.warn("{} search failed for [{}]: {}", source, keyword, e.getMessage());
-                    return List.of();
+                    // 90s 硬顶到点(源内部超时失效):按超时记退避;底层任务迟到返回的成功会被
+                    // recordSuccess 抵消一次计数 —— 罕见且只影响连击数,可接受
+                    if (respectBackoff && searchSourceThrottle != null) {
+                        searchSourceThrottle.recordFailure(source, e);
+                    }
+                    log.warn("{} search timed out for [{}]", source, keyword);
+                    return List.<Message>of();
                 });
     }
 
@@ -5374,7 +5451,7 @@ public class MediaSubscriptionCheckService {
         try {
             var config = appProperties.getSubscription();
             messages = searchAllSources(keyword,
-                    exhausted ? config.getExhaustedSearchSize() : config.getSearchSize(), false);
+                    exhausted ? config.getExhaustedSearchSize() : config.getSearchSize(), false, true);
         } catch (Exception e) {
             log.warn("subscription {} search failed: {}", subscription.getId(), e.getMessage());
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "搜索失败:" + e.getMessage());
@@ -5670,7 +5747,7 @@ public class MediaSubscriptionCheckService {
     public List<Map<String, Object>> preview(String keyword, Integer season, MediaSubscriptionFilter filter) {
         List<Message> messages;
         try {
-            messages = searchAllSources(keyword, 50, true);
+            messages = searchAllSources(keyword, 50, true, false);
         } catch (Exception e) {
             return List.of(Map.of("error", StringUtils.defaultString(e.getMessage())));
         }

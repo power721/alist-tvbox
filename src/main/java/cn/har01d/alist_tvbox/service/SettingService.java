@@ -739,7 +739,8 @@ public class SettingService {
     public static final Set<String> USER_SETTING_KEYS = Set.of(
             MediaSubscriptionCheckService.MSUB_POOL_FILTER,
             "msub_telegram_bot_token",
-            "msub_telegram_chat_id");
+            "msub_telegram_chat_id",
+            "msub_notify_quiet_hours");
 
     /** 用户级设置行形态 {key}:u{uid}:findAll 一律剔除,不进设置页、不随配置下发(含密钥类值)。 */
     private static final Pattern USER_SETTING_ROW = Pattern.compile(".+:u\\d+");

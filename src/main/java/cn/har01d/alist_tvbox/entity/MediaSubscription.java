@@ -78,6 +78,14 @@ public class MediaSubscription {
     @Column(name = "official_status", length = 16)
     private String officialStatus;
 
+    /**
+     * 手动锁定总集数(>0 生效):官方总集数不可信时的用户逃生舱(上游桥接污染/反复横跳)。
+     * 生效后缺集计算、自动完结、展示分母全部以此为准,官方快照照常刷新但不参与上述口径。
+     * 与 {@link #expectedEpisodes}(期望完结线,主观目标)语义不同:这是对客观总数的纠正。
+     */
+    @Column(name = "manual_total_episodes")
+    private Integer manualTotalEpisodes;
+
     @Column(name = "next_air_time")
     private Long nextAirTime;
 
@@ -183,13 +191,22 @@ public class MediaSubscription {
     @Column(name = "tg_chat_id", length = 64)
     private String tgChatId;
 
+    /** 生效总集数:手动锁定(>0)优先,否则官方快照;0 = 未知。缺集/完结/展示统一走这个口径。 */
+    public int effectiveTotalEpisodes() {
+        if (manualTotalEpisodes != null && manualTotalEpisodes > 0) {
+            return manualTotalEpisodes;
+        }
+        return officialTotal == null ? 0 : officialTotal;
+    }
+
     /**
      * 本季官方集数已全部播完:已播 ≥ 总集数(>0)且无下集播出时间。
      * officialStatus 是剧级的(多季剧本季播完时整部剧仍 RETURNING),完结判定与展示要走这个季口径。
      */
     public boolean isSeasonAiredOut() {
-        return officialTotal != null && officialTotal > 0
-                && officialEpisodes != null && officialEpisodes >= officialTotal
+        int total = effectiveTotalEpisodes();
+        return total > 0
+                && officialEpisodes != null && officialEpisodes >= total
                 && nextAirTime == null;
     }
 }

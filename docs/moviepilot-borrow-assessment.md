@@ -1,7 +1,7 @@
 # MoviePilot 借鉴评估(对追剧系统)
 
 > 调查日期:2026-09-01。样本:本地 `/home/harold/workspace/MoviePilot`(v3 分支,HEAD c9f339a57)。
-> 结论先行:**A 级 4 项建议直接做**(免打扰通知队列、搜索源统一退避、失败语义分档冷却、手动锁总集数),B 级 5 项留触发条件,C 级明确不抄。
+> 结论先行:**A 级 4 项已于当日全部实现**(免打扰通知队列、搜索源统一退避、失败语义分档冷却、手动锁总集数+回落保护),B 级 5 项留触发条件,C 级明确不抄。
 > MoviePilot 定位是 PT 站自动下载+本地媒体库整理,与我们「网盘分享挂载+TVBox 直看」场景重叠度有限,但订阅域的工程细节值得挑着拿。
 
 ## 0. 样本健康度提醒
@@ -14,7 +14,12 @@ FastAPI + Vue3,聚焦订阅→搜索→下载→整理→刮削→通知。v3 �
 
 与我们追剧系统的形态差异:它是**事件驱动+对账兜底**混合,我们是**周期巡检对账**;它的资源是种子(标题+副标题文本),我们是分享链接(要列目录探测);它的终结动作是下载到本地,我们是转存+挂载。**订阅匹配/缺集/完结的核心思路两边高度同构**——它能借鉴的是细节防御层,不是架构。
 
-## 2. A 级:建议直接做
+## 2. A 级:已实现(2026-09-01,全量 1296 绿)
+
+> 实现落点:V46(manual_total_episodes)/V47(fail_kind)两个 Java 迁移;
+> `MediaSubscription.manualTotalEpisodes`+`effectiveTotalEpisodes()` 统一口径(computeMissing/shouldAutoEnd/展示分母/通知卡片);`clampTotalShrink` 回落保护;
+> 通知免打扰 `msub_notify_quiet_hours`(用户级回退全局,复用 outbox nextAttemptAt 推迟+sweep 到期捞起);
+> `SearchSourceThrottle`(失败分类 delay 表,fillPool 走闸门/preview 豁免);资源 failKind 分档冷却(transientReprobeHours=24h vs badCooldownDays=7d)。
 
 ### 2.1 免打扰时段通知队列(配合凌晨巡检档)
 
@@ -34,11 +39,11 @@ FastAPI + Vue3,聚焦订阅→搜索→下载→整理→刮削→通知。v3 �
 - **我们的现状**:BAD 冷却是资源级统一冷却(失效确认+BAD 冷却已有)。缺「按失败原因分 TTL」:网盘瞬时抖动(网关 5xx、列目录超时)和死链(分享被封)不该同冷却时长。
 - **建议**:BAD/失效记录带上失败语义(分享死/网盘瞬时/转存失败),冷却时长分档(死链类长、瞬时类短)。与 2.2 配套,是同一个「失败分类」枚举的两个消费方。
 
-### 2.4 手动锁总集数(manual_total_episode)
+### 2.4 手动锁总集数(manual_total_episodes)+ 总集数回落保护(已实现)
 
 - **MoviePilot 机制**:订阅字段 `manual_total_episode`(`app/db/models/subscribe.py:106`),置 1 后元数据刷新不再自动改总集数;配合 6h 元数据对账的「总集数回落保护」(总数缩水时只允许回落到旧范围内已确认下载存在的最高集号,`app/chain/subscribe/refresh.py:329-397`)。
 - **我们的痛点**:瑞克 S9 官方污染案(桥接把 officialEpisodes 污染成 11>真总数 10)我们靠夹紧(base 被 officialTotal 夹住)防上冲,但「官方总数本身错/反复横跳」时用户没有逃生舱,只能等修桥接。
-- **建议**:订阅级「总集数以我为准」开关(或直接可编辑总集数字段),置位后巡检缺集计算完全不信官方源。与钉选(pinned)同哲学:自动为主、手动逃生舱兜底。顺带把「总集数回落保护」一起看:我们的夹紧防上冲,回落保护防下冲,两个方向都该有。
+- **实现**:订阅级「总集数锁定」字段(manualTotalEpisodes,编辑对话框「期望集数」旁,0=跟随官方),实体 `effectiveTotalEpisodes()` 统一 six 消费点口径(缺集计算/自动完结/清单占位上界/详情 total/缺口行/通知分母);观测真实文件不受夹(与既有「观测不夹」同规)。回落保护 `clampTotalShrink` 一并实现:官方总数回落只允许落到旧范围内已持有最高集号,记 ALIGN 事件;腾讯完结对齐(刻意修正路径)不经此闸。
 
 ## 3. B 级:选抄,有明确触发再做
 

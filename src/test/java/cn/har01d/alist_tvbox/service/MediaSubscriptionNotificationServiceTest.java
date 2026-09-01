@@ -284,4 +284,58 @@ class MediaSubscriptionNotificationServiceTest {
         assertTrue(card.contains("🆕 更新 第23-24 集(共 24 集)"));
         assertTrue(!card.contains("换源"), "非推送类型不进卡片");
     }
+
+    // ---------- 免打扰时段(2026-09-01,借鉴 MoviePilot 免打扰队列):凌晨巡检不半夜响铃 ----------
+
+    @Test
+    void quietHoursSpecParsing() {
+        assertEquals(0L, MediaSubscriptionNotificationService.quietHoursRemainingMs(null));
+        assertEquals(0L, MediaSubscriptionNotificationService.quietHoursRemainingMs("bad"));
+        assertEquals(0L, MediaSubscriptionNotificationService.quietHoursRemainingMs("08:00-08:00"));
+
+        java.time.LocalDateTime at = java.time.LocalDateTime.of(2026, 9, 1, 23, 30);
+        assertEquals(30_600_000L, MediaSubscriptionNotificationService.quietHoursRemainingMs("23:00-08:00", at),
+                "跨零点窗口:23:30 剩 8.5 小时");
+        assertEquals(28_200_000L, MediaSubscriptionNotificationService.quietHoursRemainingMs("23:00-08:00",
+                java.time.LocalDateTime.of(2026, 9, 1, 0, 10)), "00:10 在窗口内:剩 7 小时 50 分");
+        assertEquals(0L, MediaSubscriptionNotificationService.quietHoursRemainingMs("23:00-08:00",
+                java.time.LocalDateTime.of(2026, 9, 1, 12, 0)), "白天不在窗口");
+        assertEquals(3_600_000L, MediaSubscriptionNotificationService.quietHoursRemainingMs("12:00-14:00",
+                java.time.LocalDateTime.of(2026, 9, 1, 13, 0)), "普通窗口剩 1 小时");
+        assertEquals(3_600_000L, MediaSubscriptionNotificationService.quietHoursRemainingMs("8:00-14:00",
+                java.time.LocalDateTime.of(2026, 9, 1, 13, 0)), "单数字小时宽容解析");
+    }
+
+    @Test
+    void processSubscriptionDefersDuringQuietHours() {
+        subscription(42L, "100200");
+        MediaSubscriptionNotifyTask task = pendingTask();
+        stubTasks(task);
+        // 覆盖"当前时刻 ±窗口"的动态 spec,保证此刻必在静默期内(含跨零点拼接)
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
+        String spec = now.minusMinutes(1).format(fmt) + "-" + now.plusMinutes(10).format(fmt);
+        when(settingService.getUserSetting("msub_notify_quiet_hours", 0)).thenReturn(spec);
+
+        service.processSubscription(7);
+
+        verify(rest, never()).exchange(any(URI.class), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class));
+        assertTrue(task.getNextAttemptAt() > System.currentTimeMillis(),
+                "任务推迟到静默结束,不计失败不计重试");
+        assertEquals(0, task.getAttempts());
+        verify(taskRepository).saveAll(Mockito.anyList());
+    }
+
+    @Test
+    void processSubscriptionSendsImmediatelyOutsideQuietHours() {
+        subscription(42L, "100200");
+        MediaSubscriptionNotifyTask task = pendingTask();
+        stubTasks(task);
+        when(settingService.getUserSetting("msub_notify_quiet_hours", 0)).thenReturn("");
+        stubSend("{\"ok\":true,\"result\":{\"message_id\":43}}");
+
+        service.processSubscription(7);
+
+        verify(rest).exchange(any(URI.class), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class));
+    }
 }
