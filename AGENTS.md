@@ -164,3 +164,19 @@ npm run lint
 ## Documents
 - Save all documents to folder docs/
 - Save security related documents to folder docs/security/
+
+# 关联代码仓库
+- PowerList（AList）： /home/harold/GolandProjects/PowerList
+- TG-search： /home/harold/workspace/telegram-search
+- TvBox爬虫（spring.jar）： /home/harold/workspace/CatVodTVSpider
+- 桌面客户端： /home/harold/workspace/atv-player
+- TvBox插件源码： /home/harold/workspace/atv-spiders
+- TvBox插件发布： /home/harold/workspace/tvbox-resources
+- 猫源插件： /home/harold/workspace/CatVodOpen/open/nodejs
+- 115分享索引： /home/harold/workspace/five
+- 豆瓣电影数据： /home/harold/workspace/xiaoya-douban
+- PG、真心本地包： /home/harold/workspace/pg
+- 斗鱼抖音签名： /home/harold/WebstormProjects/douyu-sign
+- 版本同步： /home/harold/GolandProjects/atv-sync
+- 阿里云盘Open Token： /home/harold/GolandProjects/AliToken
+- 115云盘驱动： /home/harold/GolandProjects/115driver
