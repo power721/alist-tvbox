@@ -102,9 +102,9 @@
               <div class="sub-text danger" v-if="scope.row.missingEpisodes && scope.row.missingEpisodes.length">
                 缺第 {{ compactNumbers(scope.row.missingEpisodes) }} 集
               </div>
-              <div class="sub-text" v-else-if="scope.row.officialEpisodes && scope.row.officialEpisodes > (scope.row.currentEpisodes ?? 0)
-                  && scope.row.officialEpisodes <= (progressTotal(scope.row) ?? scope.row.officialEpisodes)">
-                官方已播 {{ scope.row.officialEpisodes }} 集
+              <div class="sub-text" v-else-if="scope.row.officialEpisodes && airedInSeason(scope.row) > (scope.row.currentEpisodes ?? 0)
+                  && airedInSeason(scope.row) <= (progressTotal(scope.row) ?? airedInSeason(scope.row))">
+                官方已播 {{ airedInSeason(scope.row) }} 集
               </div>
             </template>
           </el-table-column>
@@ -2147,8 +2147,16 @@ const compactNumbers = (numbers: number[]) => {
 }
 
 /** 进度分母:官方总集数滞后于资源现实时(长番官方 1212/本地已到 1270)以观测最大集号兜底,避免 1243/1212 倒挂 */
-const progressTotal = (row: SubscriptionDto): number | null =>
-    Math.max(row.officialTotal ?? 0, row.expectedEpisodes ?? 0, row.maxEpisode ?? 0) || null
+// 分季订阅对齐(seasonStartEpisode)后 officialTotal/maxEpisode 是全剧连续集号空间,
+// 进度分母要减掉季前集数才是本季体量(一念永恒 S4:200-165=35);currentEpisodes/expected 本就是季内计数
+const seasonOffset = (row: SubscriptionDto): number =>
+    (row.seasonStartEpisode ?? 0) > 1 ? (row.seasonStartEpisode ?? 0) - 1 : 0
+const progressTotal = (row: SubscriptionDto): number | null => {
+    const offset = seasonOffset(row)
+    return Math.max((row.officialTotal ?? 0) - offset, row.expectedEpisodes ?? 0, (row.maxEpisode ?? 0) - offset) || null
+}
+// 官方已播的季内计数(与 currentEpisodes 同空间比较;绝对集号空间里的官方已播数要平移)
+const airedInSeason = (row: SubscriptionDto): number => (row.officialEpisodes ?? 0) - seasonOffset(row)
 
 const formatTime = (time: number | null) => {
   if (!time) return '-'

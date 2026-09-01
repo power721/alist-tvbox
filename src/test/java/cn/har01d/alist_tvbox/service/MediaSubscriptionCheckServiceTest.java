@@ -3091,9 +3091,10 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
-    void tencentOfficialNumbersOverrideTmdbLag() {
-        // TMDB 滞后(已播 173/总 200,腾讯完结季实更 16 = 实播 181):分季表求和覆盖已播,
-        // 总数取 max 防倒退(腾讯完结季逐集增长,完结前之和 < 真实总数);只升不降
+    void tencentOfficialNumbersOnlyRaiseTotal() {
+        // MbSearch 的 totalEpisode 是条目登记的分季集数,在播季含未上线分集(完结季登记 16、
+        // 实更 8):求和只能当总集数下界,绝不能当已播 —— 当已播会凭空造缺口(线上:已播被推到
+        // 181,列表「缺第 174-181 集」而 174 当晚才播)。已播滞后由 B站 refineAiredCount/schedule 兜底。
         Fixture fixture = new Fixture();
         stubAbsoluteSeries(fixture, "一念永恒");
         fixture.subscription.setOfficialEpisodes(173);
@@ -3106,24 +3107,18 @@ class MediaSubscriptionCheckServiceTest {
         });
 
         fixture.service.applyTencentOfficialNumbers(fixture.subscription);
-        assertEquals(181, fixture.subscription.getOfficialEpisodes(), "52+54+59+16 = 181 覆盖 TMDB 的 173");
+        assertEquals(173, fixture.subscription.getOfficialEpisodes(), "登记总集数(181)不得覆盖已播(173)");
         assertEquals(200, fixture.subscription.getOfficialTotal(), "max(200,181) = 200 不倒退");
 
-        // TMDB 偶尔回填超前(已播 185 > 腾讯 181):不降
-        fixture.subscription.setOfficialEpisodes(185);
-        fixture.service.applyTencentOfficialNumbers(fixture.subscription);
-        assertEquals(185, fixture.subscription.getOfficialEpisodes(), "只升不降");
-
-        // 腾讯之和超总数(完结季更到 47 集 = 212):总数跟着抬
+        // 腾讯之和超总数(完结季登记 47 集 = 212):总数跟着抬,已播仍不动
         fixture.service.setTencentSeasonAligner(new cn.har01d.alist_tvbox.service.metadata.TencentSeasonAligner(null) {
             @Override
             public java.util.Map<Integer, Integer> seasonCounts(String seriesName, Integer firstYear) {
                 return java.util.Map.of(1, 52, 2, 54, 3, 59, 4, 47);
             }
         });
-        fixture.subscription.setOfficialEpisodes(0);
         fixture.service.applyTencentOfficialNumbers(fixture.subscription);
-        assertEquals(212, fixture.subscription.getOfficialEpisodes());
+        assertEquals(173, fixture.subscription.getOfficialEpisodes(), "已播始终只认 provider/排播口径");
         assertEquals(212, fixture.subscription.getOfficialTotal());
     }
 

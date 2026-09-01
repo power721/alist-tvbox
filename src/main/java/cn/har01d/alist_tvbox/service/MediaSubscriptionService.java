@@ -2742,10 +2742,14 @@ public class MediaSubscriptionService {
     private String buildRemarks(MediaSubscription subscription) {
         int current = subscription.getCurrentEpisodes() == null ? 0 : subscription.getCurrentEpisodes();
         int expected = subscription.getExpectedEpisodes() == null ? 0 : subscription.getExpectedEpisodes();
-        // 总数口径与 web 列表一致:手填期望(expected=0 表示跟随官方) > 官方总集数;均无才退「已更新至 N 集」
+        // 总数口径与 web 列表一致:手填期望(expected=0 表示跟随官方) > 官方总集数;均无才退「已更新至 N 集」。
+        // 分季订阅对齐后官方总集数是全剧连续空间,减去季前集数才是本季体量(线上:一念永恒 S4 200-165=35,
+        // 不减会显示「8/200集」)
+        Integer start = subscription.getSeasonStartEpisode();
+        int offset = start != null && start > 1 ? start - 1 : 0;
         int total = expected > 0 ? expected
-                : (subscription.getOfficialTotal() != null && subscription.getOfficialTotal() > 0
-                ? subscription.getOfficialTotal() : 0);
+                : (subscription.getOfficialTotal() != null && subscription.getOfficialTotal() > offset
+                ? subscription.getOfficialTotal() - offset : 0);
         boolean ended = MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
                 || (expected > 0 && current >= expected)
                 || (total > 0 && subscription.isSeasonAiredOut() && current >= total);

@@ -1923,12 +1923,11 @@ public class MediaSubscriptionCheckService {
     }
 
     /**
-     * 腾讯集数覆盖 TMDB(绝对连续集号形态的追更时效补丁):TMDB 对国产年番的集数登记滞后
-     * (线上:一念永恒 TMDB 已播 173/总 200,腾讯完结季实更 16 集 = 实播 181)—— 缺集上界、
-     * 季包越界门禁 cap、追更判定全部跟着滞后几天。腾讯分季表各季集数求和覆盖<b>已播</b>;
-     * <b>总集数</b>取 max(TMDB, 腾讯之和):腾讯完结季条目逐集增长,完结前之和 &lt; 真实总数,
-     * 不能单独当总数用(会把在播剧误判已播完)。只升不降(TMDB 偶尔超前/回填时不倒退)。
-     * 仅「单季装全剧」形态且腾讯表可用时生效;豆瓣表不参与(分季集数有漏登,线上差 13 集)。
+     * 腾讯总集数补正 TMDB(绝对连续集号形态):腾讯分季表各季集数求和只用于<b>总集数</b>下界
+     * (max(TMDB, 腾讯之和),只升不降)。 MbSearch 的 totalEpisode 是条目<b>登记</b>的分季集数
+     * —— 在播季含未上线分集(2026-09-01 线上:一念永恒完结季登记 16 集、实更 8 集,当已播求和
+     * 得 181 凭空造出 174-181 假缺口,而 TMDB 排播 174 当晚才播),不能当已播;已播滞后由
+     * B站 refineAiredCount 与 schedule 直播径兜底。豆瓣表不参与(分季集数有漏登,线上差 13 集)。
      */
     void applyTencentOfficialNumbers(MediaSubscription subscription) {
         if (tencentSeasonAligner == null) {
@@ -1944,25 +1943,13 @@ public class MediaSubscriptionCheckService {
             return;
         }
         int sum = counts.values().stream().mapToInt(Integer::intValue).filter(c -> c > 0).sum();
-        if (sum <= 0) {
-            return;
-        }
-        Integer aired = subscription.getOfficialEpisodes();
         Integer total = subscription.getOfficialTotal();
-        boolean changed = false;
-        if (sum > (aired == null ? 0 : aired)) {
-            subscription.setOfficialEpisodes(sum);
-            changed = true;
-        }
         int tMax = Math.max(total == null ? 0 : total, sum);
-        if (tMax > (total == null ? 0 : total)) {
+        if (sum > 0 && tMax > (total == null ? 0 : total)) {
             subscription.setOfficialTotal(tMax);
-            changed = true;
-        }
-        if (changed) {
             subscriptionRepository.save(subscription);
-            addEvent(subscription.getId(), "ALIGN", "官方集数按腾讯口径补正:已播 " + sum + " 集(TMDB 登记 "
-                    + (aired == null ? "未知" : aired) + "),总集数 " + tMax);
+            addEvent(subscription.getId(), "ALIGN", "官方总集数按腾讯口径补正:总集数 " + tMax
+                    + "(原 " + (total == null ? "未知" : total) + ")");
         }
     }
 

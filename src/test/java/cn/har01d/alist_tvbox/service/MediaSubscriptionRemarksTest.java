@@ -57,6 +57,19 @@ class MediaSubscriptionRemarksTest {
     // ---------- 「最近更新」虚拟分类(updatedTime 近 7 天) ----------
 
     @Test
+    void progressDenominatorSeasonWindowed() {
+        // 分季订阅对齐后官方总集数是全剧连续空间:进度分母减季前集数才是本季体量
+        // (线上:一念永恒 S4 官方总 200、起点 166 → 8/35集,而非 8/200集)
+        subscription.setCurrentEpisodes(8);
+        subscription.setOfficialTotal(200);
+        subscription.setSeasonStartEpisode(166);
+        Mockito.when(subscriptionRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(subscription));
+
+        String remarks = service.contentList(1).getList().getFirst().getVod_remarks();
+        assertEquals("8/35集", remarks);
+    }
+
+    @Test
     void recentCategoryKeepsRecentlyUpdatedSubscriptions() {
         MediaSubscription stale = subscription();
         stale.setId(8);
