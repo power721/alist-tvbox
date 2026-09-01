@@ -253,7 +253,7 @@
         </el-form-item>
         <el-form-item label="单集上限(MB)">
           <el-input-number v-model="form.maxEpisodeSizeMb" :min="0" :max="1000000"/>
-          <span class="sub-text" style="margin-left:8px">0 = 不限;过滤捆绑包/异常大文件</span>
+          <span class="sub-text" style="margin-left:8px">0 = 跟随全局({{ globalMaxEpisodeSizeLabel }});过滤捆绑包/异常大文件</span>
         </el-form-item>
         <el-collapse style="width:100%">
           <el-collapse-item title="打分权重(高级,留空用默认)">
@@ -1005,13 +1005,16 @@ const globalMainDrivesLabel = computed(() => globalMainDrives.value.length
     ? `(${globalMainDrives.value.map(code => driveOptions.find(d => d.value === code)?.label || code).join('/')})`
     : '(未配置)')
 
-// 全局单集下限(新建订阅「0 = 跟随全局」的展示值):管理员读全局 msub_pool_filter,
-// 普通用户读用户级设置(后端读取回退全局),均未配置时后端兜底 20MB
+// 全局单集体积上下限(订阅表单「0 = 跟随全局」的展示值):管理员读全局 msub_pool_filter,
+// 普通用户读用户级设置(后端读取回退全局),均未配置时后端兜底(下限 20MB/上限不限)
 const globalPoolMinEpisodeSizeMb = ref(0)
+const globalPoolMaxEpisodeSizeMb = ref(0)
 
 const loadGlobalPoolFilter = () => {
   const apply = (raw: string) => {
-    globalPoolMinEpisodeSizeMb.value = parsePoolFilter(raw || '').minEpisodeSizeMb || 0
+    const poolFilter = parsePoolFilter(raw || '')
+    globalPoolMinEpisodeSizeMb.value = poolFilter.minEpisodeSizeMb || 0
+    globalPoolMaxEpisodeSizeMb.value = poolFilter.maxEpisodeSizeMb || 0
   }
   if (store.admin) {
     axios.get('/api/settings').then(response => {
@@ -1029,6 +1032,10 @@ const loadGlobalPoolFilter = () => {
 const globalMinEpisodeSizeLabel = computed(() => globalPoolMinEpisodeSizeMb.value > 0
     ? `当前 ${globalPoolMinEpisodeSizeMb.value}MB`
     : '未配置时默认 20MB')
+
+const globalMaxEpisodeSizeLabel = computed(() => globalPoolMaxEpisodeSizeMb.value > 0
+    ? `当前 ${globalPoolMaxEpisodeSizeMb.value}MB`
+    : '未配置时不限')
 
 const subscriptions = ref<SubscriptionDto[]>([])
 // 状态筛选(100+ 订阅规模):列表页按状态收敛;全选/批量操作天然只作用于过滤后的可见行
