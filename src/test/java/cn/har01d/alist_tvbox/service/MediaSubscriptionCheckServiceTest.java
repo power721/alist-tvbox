@@ -3055,6 +3055,108 @@ class MediaSubscriptionCheckServiceTest {
                 "LISTED 行已补上缺口:GAP_FILLED 记录 107 起");
     }
 
+    // ---------- 手动启用候选:挂为补缺源,不动主源(回应"点启用就变成主源") ----------
+
+    @Test
+    void mountCandidateMountsAuxWithoutTouchingPrimary() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(400);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        primary.setShareId(5);
+        MediaSubscriptionResource candidate = new MediaSubscriptionResource();
+        candidate.setId(401);
+        candidate.setSubscriptionId(1);
+        candidate.setLink("https://pan.quark.cn/s/abc");
+        candidate.setTitle("测试剧 4K [12集全]");
+        candidate.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(primary, candidate));
+        Mockito.when(fixture.shareRepository.existsByPath(Mockito.anyString())).thenReturn(false);
+        Share auxMount = new Share();
+        auxMount.setId(66);
+        Mockito.when(fixture.shareRepository.findByPath("/追剧/.sources/1-测试剧-补1")).thenReturn(auxMount);
+        MediaSubscriptionCheckService spy = Mockito.spy(fixture.service);
+        Mockito.doReturn(MediaSubscriptionCheckService.ProbeOutcome.PROBED)
+                .when(spy).probeCandidateSafely(Mockito.any(), Mockito.any());
+
+        spy.mountCandidate(fixture.subscription, candidate);
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, candidate.getState(), "启用=挂为补缺源(MOUNTED)");
+        assertEquals("/追剧/.sources/1-测试剧-补1", candidate.getMountPath(), "挂到内部补缺目录,不占主源路径");
+        assertEquals(66, candidate.getShareId().intValue());
+        assertEquals("/追剧/1-测试剧", fixture.subscription.getMountPath(), "订阅主路径不动");
+        assertEquals(5, fixture.subscription.getShareId().intValue(), "订阅主 share 不动(activate 会顶替,这里必须原样)");
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, primary.getState());
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt()); // 不删旧主挂载
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository).save(events.capture());
+        assertTrue(events.getAllValues().stream().anyMatch(e ->
+                        MediaSubscriptionEvent.TYPE_GAP_FILLED.equals(e.getType()) && e.getDetail().contains("主源未动")),
+                "挂载成功记补缺事件并明确主源未动");
+    }
+
+    @Test
+    void mountCandidateSkipsMountWhenProbeFails() {
+        // 探测失败(失效/异剧/限流)已由 probeCandidateSafely 按分级处置:启用流程不接管挂载
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource candidate = new MediaSubscriptionResource();
+        candidate.setId(401);
+        candidate.setSubscriptionId(1);
+        candidate.setLink("https://pan.quark.cn/s/dead");
+        candidate.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        MediaSubscriptionCheckService spy = Mockito.spy(fixture.service);
+        Mockito.doReturn(MediaSubscriptionCheckService.ProbeOutcome.DEAD)
+                .when(spy).probeCandidateSafely(Mockito.any(), Mockito.any());
+
+        spy.mountCandidate(fixture.subscription, candidate);
+
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, candidate.getState(), "探测失败不再挂载");
+        Mockito.verify(fixture.shareService, Mockito.never()).add(Mockito.any());
+        Mockito.verifyNoInteractions(fixture.eventRepository);
+    }
+
+    @Test
+    void mountCandidateKeepsCandidateWhenMountFails() {
+        // 探测已证明链接活着,挂载失败(AList 侧)不退役不拉黑:留候选池下轮补缺重探
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource candidate = new MediaSubscriptionResource();
+        candidate.setId(401);
+        candidate.setSubscriptionId(1);
+        candidate.setLink("https://pan.quark.cn/s/alive");
+        candidate.setTitle("测试剧 4K");
+        candidate.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.shareRepository.existsByPath(Mockito.anyString())).thenReturn(false);
+        Mockito.when(fixture.shareRepository.findByPath(Mockito.anyString())).thenReturn(null); // 挂载失败
+        MediaSubscriptionCheckService spy = Mockito.spy(fixture.service);
+        Mockito.doReturn(MediaSubscriptionCheckService.ProbeOutcome.PROBED)
+                .when(spy).probeCandidateSafely(Mockito.any(), Mockito.any());
+
+        spy.mountCandidate(fixture.subscription, candidate);
+
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, candidate.getState(), "挂载失败不退役");
+        Mockito.verify(fixture.deadLinkRepository, Mockito.never()).save(Mockito.any());
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository).save(events.capture());
+        assertTrue(events.getAllValues().stream().anyMatch(e ->
+                        MediaSubscriptionEvent.TYPE_ERROR.equals(e.getType()) && e.getDetail().contains("启用挂载失败")),
+                "挂载失败记 ERROR 事件给用户回执");
+    }
+
+    @Test
+    void mountAsyncRejectsForeignOwnerOrResource() {
+        // 归属校验(同步抛,不进线程池):订阅/资源不是本人的拒绝
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource candidate = new MediaSubscriptionResource();
+        candidate.setId(401);
+        candidate.setSubscriptionId(2); // 不属于订阅 1
+        Mockito.when(fixture.resourceRepository.findById(401)).thenReturn(Optional.of(candidate));
+
+        assertThrows(cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                () -> fixture.service.mountAsync(1, 1, 401), "资源不属于该订阅:拒");
+    }
+
     @Test
     void evictWeakestAuxMountRefusesNetLoss() {
         // 候选可用覆盖(1 集)≤ 被挤者独占覆盖(5 集):挤了净亏,不挤 —— 候选退化行级供流

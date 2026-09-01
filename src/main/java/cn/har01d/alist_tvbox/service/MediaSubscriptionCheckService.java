@@ -920,7 +920,7 @@ public class MediaSubscriptionCheckService {
                 && subscription.getMountPath() != null
                 && subscription.getMountPath().equals(resource.getMountPath())) {
             throw new cn.har01d.alist_tvbox.exception.BadRequestException(
-                    "主源不能移除:请换源(启用/钉选其它候选)或删除整个订阅");
+                    "主源不能移除:请钉选其它候选换源(或先启用挂载再转主源),或删除整个订阅");
         }
         // 顺序:先 AList 侧卸载成功,再动本地行 —— 失败中止可重试,不留孤儿挂载
         if (MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
@@ -1016,6 +1016,59 @@ public class MediaSubscriptionCheckService {
                 inFlight.remove(id);
             }
         });
+    }
+
+    /** 手动启用候选(异步):探测落集源行 → 挂为补缺源(.sources/,不动主源)→ 触发一轮巡检。
+     *  与 activate/pin(转主源)分开:启用只把该源挂上来供流,主源与播放历史不动 —— 回应"点启用就变成主源"。 */
+    public void mountAsync(int uid, int id, int resourceId) {
+        MediaSubscription subscription = subscriptionRepository.findById(id).orElse(null);
+        if (subscription == null || subscription.getUid() != uid) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
+        }
+        MediaSubscriptionResource resource = resourceRepository.findById(resourceId).orElse(null);
+        if (resource == null || resource.getSubscriptionId() != id) {
+            throw new cn.har01d.alist_tvbox.exception.BadRequestException("候选资源不存在: " + resourceId);
+        }
+        executor.submit(() -> {
+            if (!tryLock(id)) {
+                return;
+            }
+            try {
+                // 锁内取新实体:排队期间 doCheck/手动刷新可能已整行保存,旧实体再 save 会回滚覆盖
+                MediaSubscription current = subscriptionRepository.findById(id).orElse(null);
+                if (current == null) {
+                    return;
+                }
+                mountCandidate(current, resource);
+            } finally {
+                inFlight.remove(id);
+            }
+            // 挂载后同线程串行触发一轮巡检(集数清单/事件/转存排队同步刷新);锁被并发任务抢走
+            // 也只是一个检查已在跑,check 静默返回不丢事
+            check(id);
+        });
+    }
+
+    /** 启用核心:探测(临时挂载列集数落集源行+字节级抽验)→ 挂为补缺源。主源/mountPath/shareId 全程不动。
+     *  失败处置沿用 probeCandidateSafely 分级(限流不退役/异剧不拉黑/瞬时累计);挂载失败不退役 ——
+     *  探测已证明链接活着,挂载炸多半是 AList 侧问题,退回候选池下轮补缺重探即可。 */
+    void mountCandidate(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        if (probeCandidateSafely(subscription, resource) != ProbeOutcome.PROBED) {
+            return; // 失败已按分级处置(事件/退役/限流退避)
+        }
+        if (stopIfDeleted(subscription.getId())) {
+            return;
+        }
+        String name = StringUtils.defaultIfBlank(resource.getTitle(), resource.getLink());
+        try {
+            if (mountAux(subscription, resource)) {
+                addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
+                        "已挂载为补缺源(主源未动):" + name);
+            }
+        } catch (Exception e) {
+            log.warn("mount candidate {} failed: {}", resource.getId(), e.getMessage());
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "启用挂载失败:" + e.getMessage());
+        }
     }
 
     public void check(Integer id) {
@@ -1480,7 +1533,7 @@ public class MediaSubscriptionCheckService {
             if (!coverage.isEmpty() && coverage.containsAll(present)) {
                 addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_UPGRADE_AVAILABLE,
                         "发现更优画质完整源:" + StringUtils.defaultIfBlank(candidate.getTitle(), candidate.getLink())
-                                + "(" + coverage.size() + "集 · 4K),可在候选池手动启用");
+                                + "(" + coverage.size() + "集 · 4K),可在候选池钉选换源");
             }
         } catch (Exception e) {
             log.debug("upgrade probe failed: {}", e.getMessage());

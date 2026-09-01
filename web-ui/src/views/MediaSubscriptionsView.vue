@@ -290,7 +290,7 @@
     <el-drawer v-model="resourcesVisible" :title="'候选资源 - ' + (current?.name || '')" size="62%">
       <div class="resources-toolbar">
         <el-button size="small" type="primary" plain @click="openAddResource">添加资源</el-button>
-        <span class="sub-text">粘贴分享链接只入候选池,不挂载不动主源;巡检/补缺时自动探测,想立即挂载点「启用」</span>
+        <span class="sub-text">粘贴分享链接只入候选池,不挂载不动主源;巡检/补缺时自动探测,想立即挂载点「启用」(只挂为补缺源,不动主源;换主源用「转主源」)</span>
       </div>
       <el-table :data="resources" border v-loading="resourcesLoading">
         <el-table-column prop="title" label="资源" min-width="240" show-overflow-tooltip>
@@ -325,7 +325,7 @@
         <el-table-column fixed="right" label="操作" width="320">
           <template #default="scope">
             <el-button v-if="scope.row.state === 'CANDIDATE'" link type="primary" size="small"
-                       @click="activateResource(scope.row)">启用</el-button>
+                       @click="enableResource(scope.row)">启用</el-button>
             <el-button v-else-if="scope.row.state === 'MOUNTED' && !scope.row.primary" link type="primary" size="small"
                        @click="activateResource(scope.row)">转主源</el-button>
             <el-button v-if="scope.row.pinned" link type="danger" size="small"
@@ -354,7 +354,7 @@
         </el-form-item>
       </el-form>
       <div class="sub-text">
-        只加入候选池:不挂载、不替换当前主源。巡检补缺/换源时自动探测(候选序置顶);要立即挂载为源,请在列表点「启用」。
+        只加入候选池:不挂载、不替换当前主源。巡检补缺/换源时自动探测(候选序置顶);要立即挂载,请在列表点「启用」(只挂为补缺源,不动主源;换主源用「转主源/钉选」)。
       </div>
       <template #footer>
         <el-button @click="addResourceVisible = false">取消</el-button>
@@ -1075,7 +1075,7 @@ const notifySaving = ref(false)
 const resourcesVisible = ref(false)
 const resourcesLoading = ref(false)
 const resources = ref<ResourceDto[]>([])
-// 手动添加候选资源:只入候选池不挂载不动主源(与「启用/钉选」的转主源分开)
+// 手动添加候选资源:只入候选池不挂载不动主源(与「转主源/钉选」的换主源分开)
 const addResourceVisible = ref(false)
 const addResourceSaving = ref(false)
 const addResourceForm = ref({link: '', password: ''})
@@ -1685,6 +1685,18 @@ const submitAddResource = () => {
   })
 }
 
+/** 启用候选(挂为补缺源,不动主源):探测落集源行 → 挂到 .sources/ → 自动触发一轮巡检。
+ *  与「转主源」分开 —— 回应"点启用就变成主源"。 */
+const enableResource = (resource: ResourceDto) => {
+  if (!current.value) return
+  axios.post(`/api/media-subscriptions/${current.value.id}/resources/${resource.id}/mount`).then(() => {
+    ElMessage.success('已开始挂载为补缺源(主源不动),稍后刷新')
+    schedule(loadResources, 6000)
+    schedule(loadAll, 8000)
+  })
+}
+
+/** 转主源(已挂载的补缺源升级/手动换源):删旧挂载换到订阅固定路径。 */
 const activateResource = (resource: ResourceDto) => {
   if (!current.value) return
   axios.post(`/api/media-subscriptions/${current.value.id}/resources/${resource.id}/activate`).then(() => {
