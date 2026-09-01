@@ -4163,6 +4163,91 @@ class MediaSubscriptionCheckServiceTest {
         assertTrue(String.valueOf(events.getValue().getDetail()).contains("取消钉选"));
     }
 
+    // ---------- 线上事故回归:短中文名被前缀异剧冒领 ----------
+    // 订阅《醒来》(2026,两字剧名):标题门禁用归一化包含,「醒来就成了千古一帝」(同名
+    // 短剧)包含「醒来」直接放行,补缺挂载冒领 16/18/19 集位;fuzzy 兜底要求名长 ≥3,
+    // 短名被包含匹配放行后没有第二道防线。包含命中必须整词/白名单粘连。
+
+    @Test
+    void matchesTitleShortNameRejectsLongerPrefixTitle() {
+        List<String> names = MediaSubscriptionCheckService.matchNames("醒来", "醒来", null);
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "醒来就成了千古一帝"));
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "醒来就成了千古一帝 全86集"));
+        assertFalse(MediaSubscriptionCheckService.matchesTitle(names, "短剧 醒来就成了千古一帝"));
+        // ≤4 字前缀异剧(悬案⊂悬案解码)不归标题门禁管,留给年份门禁 —— 阈值是刻意的
+        List<String> xuan = MediaSubscriptionCheckService.matchNames("悬案", "悬案", null);
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(xuan, "悬案解码 第一季 Dept. Q (2025)"));
+    }
+
+    @Test
+    void matchesTitleShortNameKeepsWordBoundaryAndGlueVariants() {
+        List<String> names = MediaSubscriptionCheckService.matchNames("醒来", "醒来", null);
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "醒来 更新至14集 4K"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "【4K】醒来(真彩) 第13集"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "醒来4 全22集"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "醒来2026 全集 夸克"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "醒来全集"));
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "醒来第2季 1080P"));
+        List<String> xuan = MediaSubscriptionCheckService.matchNames("悬案", "悬案", null);
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(xuan, "悬案 4K 高码率 更17集"),
+                "高码率类 3-4 字装饰词不得误杀(悬案线上形态)");
+    }
+
+    // ---------- 手动移除资源:误挂异剧源此前没有任何移除入口(「删不掉」) ----------
+
+    @Test
+    void removeResourceUnmountsAuxAndDeletesRows() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource aux = new MediaSubscriptionResource();
+        aux.setId(81);
+        aux.setSubscriptionId(1);
+        aux.setTitle("醒来就成了千古一帝");
+        aux.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        aux.setMountPath("/追剧/.sources/x");
+        aux.setShareId(9);
+        Mockito.when(fixture.resourceRepository.findById(81)).thenReturn(Optional.of(aux));
+        Mockito.when(fixture.subscriptionRepository.existsByShareIdAndIdNot(9, 1)).thenReturn(false);
+        Mockito.when(fixture.resourceRepository.existsByShareIdAndSubscriptionIdNot(9, 1)).thenReturn(false);
+
+        fixture.service.removeResource(0, 1, 81);
+
+        Mockito.verify(fixture.shareService).deleteShare(9); // 先 AList 侧卸载
+        Mockito.verify(fixture.episodeSourceRepository).deleteByResourceId(81); // 再清本地集源行
+        assertEquals(MediaSubscriptionResource.STATE_REMOVED, aux.getState(), "墓碑态防重新入池");
+        assertNull(aux.getShareId());
+        assertNull(aux.getMountPath());
+        assertFalse(Boolean.TRUE.equals(aux.getPinned()));
+    }
+
+    @Test
+    void removeResourceRejectsPrimary() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(82);
+        primary.setSubscriptionId(1);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        Mockito.when(fixture.resourceRepository.findById(82)).thenReturn(Optional.of(primary));
+
+        assertThrows(cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                () -> fixture.service.removeResource(0, 1, 82), "主源移除会掏空订阅主路径,必须拒绝");
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, primary.getState());
+    }
+
+    @Test
+    void restoreResourceReturnsTombstoneToCandidate() {
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource tomb = new MediaSubscriptionResource();
+        tomb.setId(83);
+        tomb.setSubscriptionId(1);
+        tomb.setState(MediaSubscriptionResource.STATE_REMOVED);
+        Mockito.when(fixture.resourceRepository.findById(83)).thenReturn(Optional.of(tomb));
+
+        fixture.service.restoreResource(0, 1, 83);
+
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, tomb.getState());
+    }
+
     private static Set<Integer> episodeRange(int from, int to) {
         Set<Integer> numbers = new TreeSet<>();
         for (int i = from; i <= to; i++) {

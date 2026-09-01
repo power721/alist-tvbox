@@ -5996,11 +5996,13 @@ public class MediaSubscriptionCheckService {
         return fuzzyChineseMatch(names, normalized);
     }
 
-    /** 短中文名(≤2 汉字)的包含命中必须「整词」:出现位置两侧的粘连为空格/串尾(整词)、
-     * 数字/字母(醒来2026/醒来4K)、≤1 个汉字(醒来版),或粘连汉字全由同剧描述词组成
-     * (醒来全集/诛仙动画/第2季)。剧名只是更长标题的前缀 = 前缀异剧:短剧「醒来就成了
-     * 千古一帝」冒领《醒来》的集位(线上:补缺挂载占了 16/18/19 集);而 fuzzy 兜底要求
-     * 名长 ≥3,短名在这里被包含匹配放行后没有任何第二道防线,必须自行收紧。 */
+    /** 短中文名(≤2 汉字)的包含命中必须「整词」:出现位置同词粘连的串,剥掉已知同剧
+     * 词汇(更新至/全N集/完结/盘名/季部序数)与数字字母后,剩余未知汉字 <5 才放行。
+     * 汉字间空格被 collapseCjkSpaces 塌掉,中文没有词边界可用,只能按粘连内容判:
+     * 「醒来更新至14集」剥完剩 0 字,而短剧「醒来就成了千古一帝」剩 7 字全是剧名本体
+     * (线上:补缺挂载冒领《醒来》16/18/19 集位)。fuzzy 兜底要求名长 ≥3,短名被包含
+     * 匹配放行后没有任何第二道防线,必须在此自行收紧;阈值 5 容忍装饰词(「真彩」2 字、
+     * 「高码率」3 字),≤4 字的前缀异剧(悬案⊂悬案解码)留给年份门禁,维持既有分工。 */
     static boolean containsAsTitleWord(String normalizedTitle, String n) {
         int from = 0;
         for (int idx = normalizedTitle.indexOf(n, from); idx >= 0; idx = normalizedTitle.indexOf(n, from)) {
@@ -6009,7 +6011,7 @@ public class MediaSubscriptionCheckService {
             int spaceAfter = after.indexOf(' ');
             String glued = before.substring(before.lastIndexOf(' ') + 1)
                     + after.substring(0, spaceAfter < 0 ? after.length() : spaceAfter);
-            if (countCjkChars(glued) <= 1 || SAME_SHOW_GLUE.matcher(glued).matches()) {
+            if (unknownGlueCjk(glued) < 5) {
                 return true;
             }
             from = idx + 1;
@@ -6017,11 +6019,16 @@ public class MediaSubscriptionCheckService {
         return false;
     }
 
-    /** 整词判定的同剧粘连词:完结类(全集/大结局/完结)、载体(电视剧/动画片/动漫)、
-     *  音轨字幕画质(国语/粤语/中字/双语/高清/正片)、季部序数(第N季/N季/第N部)。 */
+    /** 同剧粘连词汇(长词在前防半截截断):更新/完结类、载体与音轨字幕、盘名、季部集序数、数字字母。 */
     private static final Pattern SAME_SHOW_GLUE = Pattern.compile(
-            "(?:全集|大结局|结局|完结|电视剧|动画片?|动漫|国语|粤语|中字|中英双字|双语|高清|正片"
-                    + "|第[0-9一二三四五六七八九十百]+[季部]|[0-9一二三四五六七八九十]+季)*");
+            "更新至|更至|更新|大结局|完结|全集|合集|结局|电视剧|动画片?|动漫|剧场版|电影|国语|粤语|中字|双字|双语|字幕|高清|正片|首发|独家|抢先|修复"
+                    + "|夸克网盘|网盘|云盘|夸克|阿里|百度|迅雷|天翼|移动|联通"
+                    + "|第[0-9一二三四五六七八九十百]+[季部集]|[0-9一二三四五六七八九十百]+季|[集季部版篇]|[0-9]+|[a-zA-Z]+");
+
+    /** 粘连串剥掉已知词汇后剩余的未知汉字数。 */
+    private static int unknownGlueCjk(String glued) {
+        return countCjkChars(SAME_SHOW_GLUE.matcher(glued).replaceAll(""));
+    }
 
     private static int countCjkChars(String s) {
         int count = 0;

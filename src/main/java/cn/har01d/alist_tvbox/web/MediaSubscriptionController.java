@@ -141,6 +141,21 @@ public class MediaSubscriptionController {
         return Map.of("success", true);
     }
 
+    /** 手动移除资源:误挂的异剧源(同名短剧冒领)/不想要的源 —— 卸载补缺挂载、清集源行、
+     *  墓碑防自动重入池;主源拒绝(换源走启用/钉选,整体下线走删除订阅)。 */
+    @DeleteMapping("/{id}/resources/{resourceId}")
+    public Map<String, Object> removeResource(@PathVariable int id, @PathVariable int resourceId) {
+        checkService.removeResource(currentUid(), id, resourceId);
+        return Map.of("success", true);
+    }
+
+    /** 恢复手动移除的资源:墓碑行回到候选池。 */
+    @PostMapping("/{id}/resources/{resourceId}/restore")
+    public Map<String, Object> restoreResource(@PathVariable int id, @PathVariable int resourceId) {
+        checkService.restoreResource(currentUid(), id, resourceId);
+        return Map.of("success", true);
+    }
+
     /** 资源级起始集号:该资源第 1 集对应全剧第 N 集(body {startEpisode},0/缺省=清除)。
      *  季包资源(完结季裸 1-8 实为全剧 153-160)混进连续编号订阅时手动对齐;改动后该资源集源行重扫。 */
     @PostMapping("/{id}/resources/{resourceId}/episode-start")

@@ -317,7 +317,7 @@
             <el-tag v-if="scope.row.startEpisode" size="small" type="info" style="margin-left: 4px">起{{ scope.row.startEpisode }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="220">
+        <el-table-column fixed="right" label="操作" width="260">
           <template #default="scope">
             <el-button v-if="scope.row.state === 'CANDIDATE'" link type="primary" size="small"
                        @click="activateResource(scope.row)">启用</el-button>
@@ -325,10 +325,14 @@
                        @click="activateResource(scope.row)">转主源</el-button>
             <el-button v-if="scope.row.pinned" link type="danger" size="small"
                        @click="unpinResource(scope.row)">取消钉选</el-button>
-            <el-button v-else link type="danger" size="small"
+            <el-button v-else-if="scope.row.state !== 'REMOVED'" link type="danger" size="small"
                        @click="pinResource(scope.row)">钉选</el-button>
-            <el-button link type="warning" size="small"
+            <el-button v-if="scope.row.state !== 'REMOVED'" link type="warning" size="small"
                        @click="setResourceStart(scope.row)">起始集号</el-button>
+            <el-button v-if="scope.row.state === 'REMOVED'" link type="primary" size="small"
+                       @click="restoreResource(scope.row)">恢复</el-button>
+            <el-button v-else-if="!scope.row.primary" link type="danger" size="small"
+                       @click="removeResource(scope.row)">移除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -1613,6 +1617,30 @@ const unpinResource = (resource: ResourceDto) => {
   })
 }
 
+/** 手动移除资源:误挂的异剧源(同名短剧冒领集位)/不想要的源 —— 卸载挂载、清集源行、
+ *  墓碑防下轮搜索重新入池;主源不可移除(先换源)。误移除可用「恢复」回候选池。 */
+const removeResource = (resource: ResourceDto) => {
+  if (!current.value) return
+  ElMessageBox.confirm(
+      `确定移除「${resource.title || resource.link}」?将卸载其挂载并清除集数记录,之后不再自动入池(可恢复)。`,
+      '移除资源', {type: 'warning'}).then(() => {
+    axios.delete(`/api/media-subscriptions/${current.value!.id}/resources/${resource.id}`).then(() => {
+      ElMessage.success('已移除')
+      loadResources()
+      if (episodesVisible.value) showEpisodes(current.value!)
+      schedule(loadAll, 2000)
+    })
+  }).catch(() => {})
+}
+
+const restoreResource = (resource: ResourceDto) => {
+  if (!current.value) return
+  axios.post(`/api/media-subscriptions/${current.value.id}/resources/${resource.id}/restore`).then(() => {
+    ElMessage.success('已恢复为候选')
+    loadResources()
+  })
+}
+
 /** 资源级起始集号:该资源第 1 集对应全剧第 N 集(季包资源混进连续编号订阅时手动对齐) */
 const setResourceStart = (resource: ResourceDto) => {
   if (!current.value) return
@@ -2014,6 +2042,7 @@ const stateType = (state: string | null) => {
   if (state === 'MOUNTED') return 'success'
   if (state === 'RETIRED') return 'danger'
   if (state === 'REJECTED') return 'danger'
+  if (state === 'REMOVED') return 'info'
   return 'info'
 }
 
@@ -2079,6 +2108,7 @@ const stateLabel = (state: string | null) => {
     case 'MOUNTED': return '已挂载'
     case 'RETIRED': return '已退役'
     case 'REJECTED': return '已拒绝'
+    case 'REMOVED': return '已移除'
     default: return '候选'
   }
 }
