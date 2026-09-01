@@ -317,7 +317,7 @@
             <el-tag v-if="scope.row.startEpisode" size="small" type="info" style="margin-left: 4px">起{{ scope.row.startEpisode }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="260">
+        <el-table-column fixed="right" label="操作" width="320">
           <template #default="scope">
             <el-button v-if="scope.row.state === 'CANDIDATE'" link type="primary" size="small"
                        @click="activateResource(scope.row)">启用</el-button>
