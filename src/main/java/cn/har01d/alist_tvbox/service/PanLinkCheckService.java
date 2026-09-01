@@ -42,6 +42,7 @@ public class PanLinkCheckService {
     private static final String CHECK_STATE_OK = "ok";
     private static final String CHECK_STATE_BAD = "bad";
     private static final String CHECK_STATE_UNCERTAIN = "uncertain";
+    private static final String CHECK_STATE_RATE_LIMITED = "rate_limited";
     private static final Set<String> PAN_SOU_CHECK_TYPES = Set.of(
             "baidu", "aliyun", "quark", "tianyi", "uc", "mobile", "115", "xunlei", "123");
 
@@ -78,13 +79,53 @@ public class PanLinkCheckService {
     }
 
     public ObjectNode checkPanSouLinks(ObjectNode request) {        // Priority: dedicated 盘检地址 (PanCheck) > TG-Search > PanSou
+        ObjectNode response;
         if (StringUtils.isNotBlank(appProperties.getPanCheckUrl())) {
-            return checkViaPanCheck(request);
+            response = checkViaPanCheck(request);
+        } else if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+            response = checkViaTgSearch(request);
+        } else {
+            response = checkViaPanSou(request);
         }
-        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
-            return checkViaTgSearch(request);
+        return demoteSuspectedBaiduRateLimit(request, response);
+    }
+
+    /**
+     * 百度批量异常降级:后端(PanCheck/tg-search/pansou 均为第三方)把限流链接混进
+     * invalid/uncertain 且无法逐条区分。一批送检里百度 bad/uncertain 占比 >=80% 且 >=5 条,
+     * 与 IP 级风控(-62/-65)形态一致而与真死链分布不符,按疑似限流降级为 rate_limited:
+     * 只标注不剔除,防止限流期间追剧候选池的百度源被整体误杀。
+     */
+    private ObjectNode demoteSuspectedBaiduRateLimit(ObjectNode request, ObjectNode response) {
+        if (response == null || !response.has("results") || !response.get("results").isArray()) {
+            return response;
         }
-        return checkViaPanSou(request);
+        Set<String> baiduUrls = new LinkedHashSet<>();
+        if (request != null && request.has("items") && request.get("items").isArray()) {
+            for (JsonNode item : request.get("items")) {
+                if ("baidu".equals(item.path("disk_type").asText("")) && item.has("url")) {
+                    baiduUrls.add(item.get("url").asText());
+                }
+            }
+        }
+        List<ObjectNode> demotable = new ArrayList<>();
+        for (JsonNode result : response.get("results")) {
+            if (result.isObject() && baiduUrls.contains(result.path("url").asText())) {
+                String state = result.path("state").asText();
+                if (CHECK_STATE_BAD.equals(state) || CHECK_STATE_UNCERTAIN.equals(state)) {
+                    demotable.add((ObjectNode) result);
+                }
+            }
+        }
+        if (baiduUrls.size() >= 5 && !demotable.isEmpty()
+                && demotable.size() * 5 >= baiduUrls.size() * 4) {
+            log.warn("百度链接批量异常({}/{} bad/uncertain),疑似网盘限流,降级为保留待复查", demotable.size(), baiduUrls.size());
+            for (JsonNode result : demotable) {
+                ((ObjectNode) result).put("state", CHECK_STATE_RATE_LIMITED);
+                ((ObjectNode) result).put("summary", "检测受限(疑似网盘限流),保留待复查");
+            }
+        }
+        return response;
     }
 
     // Plugin-facing entry: fill in disk_type from the share URL when the caller omits it,
@@ -213,6 +254,9 @@ public class PanLinkCheckService {
         if ("locked".equals(state)) {
             return "链接受限";
         }
+        if (CHECK_STATE_RATE_LIMITED.equals(state)) {
+            return "检测受限(网盘限流)";
+        }
         return "链接有效";
     }
 
@@ -293,6 +337,8 @@ public class PanLinkCheckService {
         addPanCheckResults(results, response, "invalid_links", "bad");
         addPanCheckResults(results, response, "locked_links", "locked");
         addPanCheckResults(results, response, "pending_links", "uncertain");
+        // 限流分桶:被网盘风控拦下的链接状态未知,只标注不剔除,防止限流期间整源被误杀
+        addPanCheckResults(results, response, "rate_limited_links", CHECK_STATE_RATE_LIMITED);
         return result;
     }
 
@@ -312,6 +358,7 @@ public class PanLinkCheckService {
             case "ok" -> "链接有效";
             case "bad" -> "链接失效";
             case "locked" -> "链接受限";
+            case CHECK_STATE_RATE_LIMITED -> "检测受限(网盘限流),保留待复查";
             case "uncertain" -> "状态不确定";
             default -> state;
         };

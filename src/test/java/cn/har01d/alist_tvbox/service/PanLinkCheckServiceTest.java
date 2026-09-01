@@ -136,6 +136,66 @@ class PanLinkCheckServiceTest {
     }
 
     @Test
+    void filterInvalidPanSouLinksKeepsRateLimitedLinks() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouLinkCheckEnabled(true);
+        appProperties.setPanCheckUrl("http://pc.example");
+        PanLinkCheckService service = newService(appProperties, restTemplate);
+
+        server.expect(org.springframework.test.web.client.ExpectedCount.once(),
+                        org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo("http://pc.example/api/v1/links/check"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess("""
+                        {"valid_links":["https://pan.quark.cn/s/ok"],
+                         "invalid_links":["https://pan.baidu.com/s/bad"],
+                         "rate_limited_links":["https://pan.baidu.com/s/rl"]}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        List<Message> result = service.filterInvalidPanSouLinks(List.of(
+                message("5", "https://pan.quark.cn/s/ok"),
+                message("10", "https://pan.baidu.com/s/bad"),
+                message("10", "https://pan.baidu.com/s/rl")));
+
+        server.verify();
+        // 限流链接状态未知:只标注不剔除,防止限流期间百度源被整体误杀
+        assertThat(result).extracting(Message::getLink)
+                .containsExactly("https://pan.quark.cn/s/ok", "https://pan.baidu.com/s/rl");
+        Message rateLimited = result.get(1);
+        assertThat(rateLimited.getValidityState()).isEqualTo("rate_limited");
+        assertThat(rateLimited.getValiditySummary()).contains("限流");
+    }
+
+    @Test
+    void filterInvalidPanSouLinksDemotesBatchBaiduFailuresAsSuspectedRateLimit() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouLinkCheckEnabled(true);
+        appProperties.setPanCheckUrl("http://pc.example");
+        PanLinkCheckService service = newService(appProperties, restTemplate);
+
+        // 后端把限流混进 invalid_links 且无法逐条区分:6 条百度全 bad = 疑似 IP 级限流
+        List<Message> messages = new java.util.ArrayList<>();
+        messages.add(message("5", "https://pan.quark.cn/s/ok"));
+        for (int i = 0; i < 6; i++) messages.add(message("10", "https://pan.baidu.com/s/b" + i));
+        server.expect(org.springframework.test.web.client.ExpectedCount.once(),
+                        org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo("http://pc.example/api/v1/links/check"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess("""
+                        {"valid_links":["https://pan.quark.cn/s/ok"],
+                         "invalid_links":["https://pan.baidu.com/s/b0","https://pan.baidu.com/s/b1",
+                          "https://pan.baidu.com/s/b2","https://pan.baidu.com/s/b3",
+                          "https://pan.baidu.com/s/b4","https://pan.baidu.com/s/b5"]}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        List<Message> result = service.filterInvalidPanSouLinks(messages);
+
+        server.verify();
+        assertThat(result).extracting(Message::getLink).hasSize(7);
+        assertThat(result.get(1).getValidityState()).isEqualTo("rate_limited");
+    }
+
+    @Test
     void checkPanSouLinksUsesPanCheckWhenConfiguredAndNormalizesBuckets() {
         RestTemplate restTemplate = new RestTemplate();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
