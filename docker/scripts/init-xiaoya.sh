@@ -33,6 +33,9 @@ update_movie() {
     unzip -q -o /data.zip -d /data/atv/
     cp /base_version /data/atv/base_version
     rm -f /data/atv/sql/*.sql
+    # 同时清掉已缓存的电影数据版本号:不清的话 downloadMovie 看到 movie_version == 远端就跳过下载,
+    # 被删的 sql diff 链永远不会重新拉回,基线与 diff 链之间的增量数据就丢了(线上 1317-1339 实证)
+    rm -f /data/atv/movie_version
   fi
 }
 

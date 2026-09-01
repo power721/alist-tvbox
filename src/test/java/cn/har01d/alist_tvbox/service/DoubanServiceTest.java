@@ -59,7 +59,7 @@ class DoubanServiceTest {
     @BeforeEach
     void setUp() {
         doubanService = new DoubanService(appProperties, metaRepository, movieRepository, aliasRepository,
-                settingRepository, siteService, taskService, fileDownloader, mock(cn.har01d.alist_tvbox.entity.TmdbRepository.class),
+                settingRepository, siteService, taskService, fileDownloader,
                 new RestTemplateBuilder(), jdbcTemplate, environment);
     }
 

@@ -69,11 +69,14 @@ class MovieDiffApplyTest {
         service = new DoubanService(mock(cn.har01d.alist_tvbox.config.AppProperties.class), metaRepository,
                 movieRepository, aliasRepository, settingRepository, mock(SiteService.class),
                 mock(TaskService.class), mock(FileDownloader.class),
-                mock(cn.har01d.alist_tvbox.entity.TmdbRepository.class), builder,
-                jdbcTemplate, environment);
+                builder, jdbcTemplate, environment);
         // movie_diff 无记录 → attempts null(执行),queryForObject 不会被调用到 SUCCESS 分支
         org.mockito.Mockito.lenient().when(jdbcTemplate.queryForList(anyString(), eq(Integer.class), anyString()))
                 .thenReturn(Collections.emptyList());
+        // 瞬态重试的退避清零,测试不被 sleep 拖慢
+        java.lang.reflect.Field backoff = DoubanService.class.getDeclaredField("diffRetryBackoffMs");
+        backoff.setAccessible(true);
+        backoff.setLong(service, 0L);
     }
 
     @AfterEach
@@ -168,6 +171,153 @@ class MovieDiffApplyTest {
         verify(jdbcTemplate).update(eq("INSERT INTO movie_diff (version, status, statements, failed, attempts, updated_time) "
                 + "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"),
                 eq("1004.5"), eq("SUCCESS"), eq(4), eq(0), eq(1));
+    }
+
+    @Test
+    void jsonUpsertUpdatesExistingMetaNatively() throws Exception {
+        // 2 参 queryForList 是 upsert 的存在性探测:movie 行已存在、meta 行已存在
+        when(jdbcTemplate.queryForList(anyString(), eq(Integer.class))).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0, String.class);
+            return sql.contains("FROM movie") ? List.of(36406417) : List.of(9);
+        });
+        writeJson("1005.6.json", """
+                {"movieUpserts":[{"id":36406417,"name":"师兄太稳健","year":2026}],
+                 "metaUpserts":[{"id":9,"path":"/p","name":"n","movieId":36406417,"time":1788264073587}]}
+                """);
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        // 已存在 meta 行原生 UPDATE 全列:禁用行也被直接覆盖,不再依赖 JPA merge 的可见性
+        verify(jdbcTemplate).update(org.mockito.ArgumentMatchers.argThat(
+                        (org.mockito.ArgumentMatcher<String>) sql -> sql.startsWith("UPDATE meta SET path = ?")),
+                eq("/p"), eq("n"), eq(null), eq(null), eq(36406417),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), eq(false),
+                org.mockito.ArgumentMatchers.isA(java.sql.Timestamp.class), eq(9));
+        verify(jdbcTemplate, never()).update(org.mockito.ArgumentMatchers.argThat(
+                        (org.mockito.ArgumentMatcher<String>) sql -> sql.startsWith("INSERT INTO meta")),
+                org.mockito.ArgumentMatchers.<Object[]>any());
+        verify(jdbcTemplate, never()).update(org.mockito.ArgumentMatchers.argThat(
+                        (org.mockito.ArgumentMatcher<String>) sql -> sql.startsWith("INSERT INTO movie")),
+                org.mockito.ArgumentMatchers.<Object[]>any());
+        verify(movieRepository).saveAll(org.mockito.ArgumentMatchers.anyList());
+        // META 不再走 JPA(merge 解析关联代理会在外键悬空时炸 ObjectNotFoundException)
+        verify(metaRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
+        verify(settingRepository).save(org.mockito.ArgumentMatchers.argThat(s2 ->
+                "movie_version".equals(s2.getName()) && "1005.6".equals(s2.getValue())));
+    }
+
+    @Test
+    void jsonUpsertToleratesDanglingMovieReference() throws Exception {
+        // 线上 1341.1923 形态:基线重灌抹掉 movie 行后 meta 引用悬空 —— 全原生 upsert 照写不炸,版本照常推进
+        when(jdbcTemplate.queryForList(anyString(), eq(Integer.class))).thenReturn(Collections.emptyList());
+        writeJson("1013.4.json", """
+                {"metaUpserts":[{"id":96234,"path":"/每日更新/电视剧/TVB Viu/日落下的彩虹","name":"日落下的彩虹","movieId":37816238}]}
+                """);
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        verify(jdbcTemplate).update(org.mockito.ArgumentMatchers.argThat(
+                        (org.mockito.ArgumentMatcher<String>) sql -> sql.startsWith("INSERT INTO meta (id, path, name")),
+                eq(96234), eq("/每日更新/电视剧/TVB Viu/日落下的彩虹"), eq("日落下的彩虹"),
+                eq(null), eq(null), eq(37816238),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), eq(false),
+                org.mockito.ArgumentMatchers.isA(java.sql.Timestamp.class));
+        verify(settingRepository).save(org.mockito.ArgumentMatchers.argThat(s2 ->
+                "movie_version".equals(s2.getName()) && "1013.4".equals(s2.getValue())));
+    }
+
+    @Test
+    void jsonUpsertInsertsMissingMovieRows() throws Exception {
+        when(jdbcTemplate.queryForList(anyString(), eq(Integer.class))).thenReturn(Collections.emptyList());
+        writeJson("1006.7.json", """
+                {"movieUpserts":[{"id":35811064,"name":"欢迎来龙餐馆","year":2025,"genre":"剧情"}]}
+                """);
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        // 新片行缺失 → 原生 INSERT 补行,saveAll merge 不再抛 StaleObjectStateException
+        verify(jdbcTemplate).update(org.mockito.ArgumentMatchers.argThat(
+                        (org.mockito.ArgumentMatcher<String>) sql -> sql.startsWith("INSERT INTO movie (id, name, genre")),
+                eq(35811064), eq("欢迎来龙餐馆"), eq("剧情"), eq(null), eq(null), eq(null),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), eq(2025));
+        verify(movieRepository).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    void resetsFailedDiffAttemptsOnStartup() throws Exception {
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("setup");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        // 3/3 卡死的版本随重启获得新的重试预算,修复后的构建才能补放
+        verify(jdbcTemplate).update("UPDATE movie_diff SET attempts = 0 WHERE status = ?", "FAILED");
+    }
+
+    @Test
+    void deterministicJsonFailureSkipsRetry() throws Exception {
+        // 约束冲突 = 确定性失败:一次即弃,不连炸 3 次(movie 仍走 JPA saveAll,由此注入失败)
+        when(jdbcTemplate.queryForList(anyString(), eq(Integer.class))).thenReturn(Collections.emptyList());
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("unique path"))
+                .when(movieRepository).saveAll(org.mockito.ArgumentMatchers.anyList());
+        writeJson("1010.1.json", """
+                {"movieUpserts":[{"id":36406417,"name":"师兄太稳健","year":2026}],
+                 "metaUpserts":[{"id":9,"path":"/p","name":"n"}]}
+                """);
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        verify(movieRepository, times(1)).saveAll(org.mockito.ArgumentMatchers.anyList());
+        verify(jdbcTemplate).update(eq("INSERT INTO movie_diff (version, status, statements, failed, attempts, updated_time) "
+                + "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"),
+                eq("1010.1"), eq("FAILED"), eq(0), eq(1), eq(1));
+        verify(settingRepository, never()).save(org.mockito.ArgumentMatchers.any(Setting.class));
+    }
+
+    @Test
+    void malformedJsonFailsFastWithoutRetry() throws Exception {
+        writeJson("1011.2.json", "{not json");
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        // JSON 解析错误确定性失败:1 次尝试,版本不推进
+        verify(metaRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
+        verify(jdbcTemplate).update(eq("INSERT INTO movie_diff (version, status, statements, failed, attempts, updated_time) "
+                + "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"),
+                eq("1011.2"), eq("FAILED"), eq(0), eq(1), eq(1));
+        verify(settingRepository, never()).save(org.mockito.ArgumentMatchers.any(Setting.class));
+    }
+
+    @Test
+    void deterministicSqlLineFailureSkipsRetry() throws Exception {
+        writeSql("1012.3.sql", "INSERT INTO x VALUES(1);\n");
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"))
+                .when(jdbcTemplate).execute(anyString());
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        // 确定性 SQL 失败整文件只跑一轮(对比:未分类异常 retriesFailedFileUpToLimit 跑满 3 轮)
+        verify(jdbcTemplate, times(1)).execute(anyString());
+        verify(jdbcTemplate).update(eq("INSERT INTO movie_diff (version, status, statements, failed, attempts, updated_time) "
+                + "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"),
+                eq("1012.3"), eq("FAILED"), eq(0), eq(1), eq(1));
     }
 
     private void writeJson(String name, String content) throws Exception {
