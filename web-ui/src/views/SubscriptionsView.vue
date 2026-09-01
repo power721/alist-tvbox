@@ -923,7 +923,7 @@
           </el-select>
         </span>
         <span v-else />
-        <el-link type="info" href="https://github.com/FongMi/TV/blob/release/docs/CONFIG.md" target="_blank" :underline="false">
+        <el-link type="info" href="https://github.com/FongMi/TV/blob/fongmi/docs/CONFIG.md" target="_blank" :underline="false">
           配置文档 <el-icon><Link /></el-icon>
         </el-link>
       </div>
