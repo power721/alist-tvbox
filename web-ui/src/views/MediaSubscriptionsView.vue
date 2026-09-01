@@ -249,7 +249,7 @@
         </el-form-item>
         <el-form-item label="单集下限(MB)">
           <el-input-number v-model="form.minEpisodeSizeMb" :min="0" :max="100000"/>
-          <span class="sub-text" style="margin-left:8px">过滤预告/花絮</span>
+          <span class="sub-text" style="margin-left:8px">0 = 跟随全局({{ globalMinEpisodeSizeLabel }});过滤预告/花絮</span>
         </el-form-item>
         <el-form-item label="单集上限(MB)">
           <el-input-number v-model="form.maxEpisodeSizeMb" :min="0" :max="1000000"/>
@@ -1005,6 +1005,31 @@ const globalMainDrivesLabel = computed(() => globalMainDrives.value.length
     ? `(${globalMainDrives.value.map(code => driveOptions.find(d => d.value === code)?.label || code).join('/')})`
     : '(未配置)')
 
+// 全局单集下限(新建订阅「0 = 跟随全局」的展示值):管理员读全局 msub_pool_filter,
+// 普通用户读用户级设置(后端读取回退全局),均未配置时后端兜底 20MB
+const globalPoolMinEpisodeSizeMb = ref(0)
+
+const loadGlobalPoolFilter = () => {
+  const apply = (raw: string) => {
+    globalPoolMinEpisodeSizeMb.value = parsePoolFilter(raw || '').minEpisodeSizeMb || 0
+  }
+  if (store.admin) {
+    axios.get('/api/settings').then(response => {
+      apply((response.data || {})['msub_pool_filter'] || '')
+    }).catch(() => {
+    })
+  } else {
+    axios.get('/api/user-settings/msub_pool_filter').then(response => {
+      apply(response.data?.value || '')
+    }).catch(() => {
+    })
+  }
+}
+
+const globalMinEpisodeSizeLabel = computed(() => globalPoolMinEpisodeSizeMb.value > 0
+    ? `当前 ${globalPoolMinEpisodeSizeMb.value}MB`
+    : '未配置时默认 20MB')
+
 const subscriptions = ref<SubscriptionDto[]>([])
 // 状态筛选(100+ 订阅规模):列表页按状态收敛;全选/批量操作天然只作用于过滤后的可见行
 const statusFilter = ref('')
@@ -1184,6 +1209,7 @@ const navPending = ref<any>(null)
 onMounted(() => {
   loadAll()
   loadGlobalMainDrives()
+  loadGlobalPoolFilter()
   axios.get('/api/pan/accounts').then(response => {
     accounts.value = response.data || []
   }).catch(() => {
@@ -1345,7 +1371,7 @@ const handleAdd = () => {
     qualities: [],
     includeKeywords: [],
     excludeKeywords: [],
-    minEpisodeSizeMb: 20,
+    minEpisodeSizeMb: 0,
     maxEpisodeSizeMb: 0,
     weights: {} as Record<string, number | null>,
   }
@@ -1379,7 +1405,7 @@ const handleEdit = (row: SubscriptionDto) => {
     qualities: row.filter?.qualities || [],
     includeKeywords: row.filter?.includeKeywords || [],
     excludeKeywords: row.filter?.excludeKeywords || [],
-    minEpisodeSizeMb: row.filter?.minEpisodeSizeMb ?? 20,
+    minEpisodeSizeMb: row.filter?.minEpisodeSizeMb ?? 0,
     maxEpisodeSizeMb: row.filter?.maxEpisodeSizeMb ?? 0,
     weights: { ...(row.filter?.weights || {}) },
   }
@@ -2057,6 +2083,7 @@ const saveNotify = () => {
     } else {
       ElMessage.success('已保存(下轮巡检生效)')
       notifyVisible.value = false
+      loadGlobalPoolFilter() // 全局单集下限变了,新建订阅表单「跟随全局」的展示值同步刷新
     }
   }).finally(() => {
     notifySaving.value = false
