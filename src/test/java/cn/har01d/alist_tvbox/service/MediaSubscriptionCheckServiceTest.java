@@ -75,8 +75,9 @@ class MediaSubscriptionCheckServiceTest {
 
     @BeforeEach
     void disablePrimeCheckSlots() {
-        // 高峰档位兜底让常规间隔断言随一天内的时刻漂移:默认关闭,档位专项测试自行开启
+        // 高峰/凌晨档位兜底让常规间隔断言随一天内的时刻漂移:默认关闭,档位专项测试自行开启
         appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of());
+        appProperties.getSubscription().setNightCheckTimes(java.util.List.of());
     }
 
     @Test
@@ -787,6 +788,55 @@ class MediaSubscriptionCheckServiceTest {
         long now = System.currentTimeMillis();
         service.scheduleNext(subscription);
         assertClose(now + 6 * 3600_000L, subscription.getNextCheckTime(), "1h 内的档位不算,回常规间隔");
+    }
+
+    // ---------- 完结剧凌晨档:巡检避开高峰期 ----------
+
+    @Test
+    void scheduleNextEndedSlotsToNightTimeNotPrime() {
+        java.time.ZoneId zone = java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID);
+        // prime 档 90min 后(更早)、night 档 2h 后:仍在追看的完结剧须落凌晨档,不被高峰档吸附
+        java.time.LocalDateTime primeTime = java.time.LocalDateTime.now(zone).plusMinutes(90)
+                .truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        java.time.LocalDateTime nightTime = java.time.LocalDateTime.now(zone).plusHours(2)
+                .truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of(primeTime.toLocalTime().toString()));
+        appProperties.getSubscription().setNightCheckTimes(java.util.List.of(nightTime.toLocalTime().toString()));
+        MediaSubscription subscription = subscription();
+        subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        service.scheduleNext(subscription);
+        long slot = nightTime.toLocalDate().atTime(nightTime.toLocalTime()).atZone(zone).toInstant().toEpochMilli();
+        assertClose(slot, subscription.getNextCheckTime(), "ENDED 巡检排凌晨档,90min 后的高峰档更早也不抢");
+    }
+
+    @Test
+    void scheduleNextActiveKeepsPrimeSlotDespiteNight() {
+        // 反向门禁:完结分流不能误伤在播剧 —— ACTIVE 无日程仍按高峰档排(新集发现优先)
+        java.time.ZoneId zone = java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID);
+        java.time.LocalDateTime primeTime = java.time.LocalDateTime.now(zone).plusMinutes(90)
+                .truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        java.time.LocalDateTime nightTime = java.time.LocalDateTime.now(zone).plusHours(2)
+                .truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of(primeTime.toLocalTime().toString()));
+        appProperties.getSubscription().setNightCheckTimes(java.util.List.of(nightTime.toLocalTime().toString()));
+        MediaSubscription subscription = subscription();
+        service.scheduleNext(subscription);
+        long slot = primeTime.toLocalDate().atTime(primeTime.toLocalTime()).atZone(zone).toInstant().toEpochMilli();
+        assertClose(slot, subscription.getNextCheckTime(), "ACTIVE 仍排高峰档,凌晨档不参与在播剧调度");
+    }
+
+    @Test
+    void weeklyLiteCheckAlignsToNightSlot() {
+        java.time.ZoneId zone = java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID);
+        appProperties.getSubscription().setNightCheckTimes(java.util.List.of("03:15"));
+        long now = System.currentTimeMillis();
+        long next = service.nextWeeklyLiteCheckTime(now);
+        java.time.ZonedDateTime at = java.time.Instant.ofEpochMilli(next).atZone(zone);
+        assertEquals(3, at.getHour(), "每周轻查对齐凌晨档小时");
+        assertEquals(15, at.getMinute(), "每周轻查对齐凌晨档分钟");
+        long sevenDays = now + 7 * 24 * 3600_000L;
+        assertTrue(next >= sevenDays && next <= sevenDays + 25 * 3600_000L,
+                "对齐到 7 天后的第一个凌晨档(至多顺延一天)");
     }
 
     @Test
@@ -5012,6 +5062,7 @@ class MediaSubscriptionCheckServiceTest {
             AppProperties appProperties = new AppProperties();
             appProperties.setFormats(Set.of("mkv", "mp4")); // 生产由 yaml 绑定,裸实例需手动补
             appProperties.getSubscription().setPrimeCheckTimes(java.util.List.of()); // 档位兜底关闭,断言确定性
+            appProperties.getSubscription().setNightCheckTimes(java.util.List.of());
             service = new MediaSubscriptionCheckService(subscriptionRepository, resourceRepository, eventRepository,
                     episodeRepository, episodeSourceRepository, deadLinkRepository,
                     shareRepository, siteRepository, Mockito.mock(DriverAccountRepository.class),

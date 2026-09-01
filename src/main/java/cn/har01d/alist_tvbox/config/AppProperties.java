@@ -143,6 +143,11 @@ public class AppProperties {
          *  完全无日程的订阅除常规间隔外,取 min(常规间隔, 下一档位) 排程 —— 国产平台午间档 12:00 /
          *  黄金档 19:00-20:00 双高峰,国漫晨间簇 11:00(4567 实例 15 个有日程订阅实测分布)。 */
         private java.util.List<String> primeCheckTimes = java.util.List.of("11:15", "12:15", "19:15", "20:15");
+        /** 完结剧(ENDED)凌晨巡检档位("HH:mm" 列表,北京时间):仍在追看的完结剧完整巡检取
+         *  min(常规间隔, 下一凌晨档)、看完的每周轻查对齐凌晨档 —— 高峰档的"新集上线多查"语义
+         *  对完结剧是反向负载(无上线时效,播放失败另有即时信号兜底),反而挤进晚间观看/播后短轮/
+         *  网盘外部高峰;默认避开 06:00 清理与 22:00 索引构建。 */
+        private java.util.List<String> nightCheckTimes = java.util.List.of("03:15");
         /** 追更中(官方状态 RETURNING)无新集退避封顶(小时);完结/无元数据维持 24h */
         private int returningBackoffCapHours = 12;
         /** BAD 候选冷却(天):超期允许重探一次(误标自愈),再失败重新计时 */

@@ -1035,8 +1035,8 @@ public class MediaSubscriptionCheckService {
                 if (!playbackFailure && !reopenEnded(subscription) && !staleSeasonReopen(subscription)) {
                 if (!watchingRecently(subscription)) {
                     // 完结看完:官方加重重开场景每日一查纯属浪费,拉长到每周(重开路 playEpisode
-                    // 失败/加更/换季残留/异剧四条都由即时信号触发,不依赖这轮轻查)
-                    subscription.setNextCheckTime(System.currentTimeMillis() + 7 * 24 * 3600_000L);
+                    // 失败/加更/换季残留/异剧四条都由即时信号触发,不依赖这轮轻查),并落到凌晨档
+                    subscription.setNextCheckTime(nextWeeklyLiteCheckTime(System.currentTimeMillis()));
                     saveUnlessDeleted(id, subscription);
                     return;
                 }
@@ -6168,16 +6168,35 @@ public class MediaSubscriptionCheckService {
             subscription.setNextCheckTime(Math.min(now + interval, air + 15 * 60_000L));
             return;
         }
-        // 无日程/日程已过尽:常规间隔与高峰档位兜底取早 —— 高峰时段后自动加一轮检查,
-        // 检查零成本(重列主源+缺集判定),无日程订阅的新集发现不再纯等固定周期
-        long slot = nextPrimeCheckTime(now);
+        // 无日程/日程已过尽:常规间隔与档位兜底取早 —— 高峰时段后自动加一轮检查,
+        // 检查零成本(重列主源+缺集判定),无日程订阅的新集发现不再纯等固定周期;
+        // ENDED(仍在追看的完结剧)例外:改对齐凌晨档 —— 高峰档"尽快发现新集"的语义对
+        // 完结剧是反向负载,把资源维护巡检挤进晚间观看/播后短轮/网盘外部高峰
+        long slot = MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
+                ? nextNightCheckTime(now) : nextPrimeCheckTime(now);
         subscription.setNextCheckTime(slot > 0 ? Math.min(now + interval, slot) : now + interval);
     }
 
-    /** 下一个高峰检查档位(epoch ms):primeCheckTimes 里最近的未来时刻,只认 ≥now+1h 的档
-     *  (避开刚查完的冗余轮),今天无可用档取明天首个;未配置返回 0。 */
+    /** 完结看完的每周轻查时刻:7 天后对齐到下一个凌晨档(nightCheckTimes 未配置回落裸 +7d)。 */
+    long nextWeeklyLiteCheckTime(long now) {
+        long raw = now + 7 * 24 * 3600_000L;
+        long slot = nextNightCheckTime(raw);
+        return slot > 0 ? slot : raw;
+    }
+
+    /** 下一个高峰检查档位(epoch ms):primeCheckTimes 里最近的未来时刻(见 {@link #nextSlotTime})。 */
     private long nextPrimeCheckTime(long now) {
-        List<String> times = appProperties.getSubscription().getPrimeCheckTimes();
+        return nextSlotTime(appProperties.getSubscription().getPrimeCheckTimes(), now);
+    }
+
+    /** 完结剧凌晨档位(epoch ms):nightCheckTimes 里最近的未来时刻,语义同高峰档。 */
+    private long nextNightCheckTime(long now) {
+        return nextSlotTime(appProperties.getSubscription().getNightCheckTimes(), now);
+    }
+
+    /** 下一个检查档位(epoch ms):times 里最近的未来时刻,只认 ≥now+1h 的档
+     *  (避开刚查完的冗余轮),今天无可用档取明天首个;未配置返回 0。 */
+    private long nextSlotTime(List<String> times, long now) {
         if (times == null || times.isEmpty()) {
             return 0;
         }
