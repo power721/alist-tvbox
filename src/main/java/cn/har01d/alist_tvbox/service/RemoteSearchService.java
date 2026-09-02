@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.DriveId;
+import cn.har01d.alist_tvbox.domain.SearchTargets;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.pansou.MergedLink;
 import cn.har01d.alist_tvbox.dto.pansou.PanSouSearchResponse;
@@ -41,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -314,16 +317,28 @@ public class RemoteSearchService {
     }
 
     public List<Message> search(String keyword, List<String> channels) {
-        return search(keyword, channels, null);
+        return doSearch(keyword, channels, null, null);
+    }
+
+    /** 追剧口径:盘搜按订阅定向集({@link SearchTargets})服务端定向 + 结果本地门禁,null = 观影全局口径。 */
+    public List<Message> search(String keyword, List<String> channels, SearchTargets targets) {
+        return doSearch(keyword, channels, null, targets);
     }
 
     public List<Message> search(String keyword, List<String> channels, String siteKey) {
+        return doSearch(keyword, channels, siteKey, null);
+    }
+
+    private List<Message> doSearch(String keyword, List<String> channels, String siteKey, SearchTargets targets) {
         JsonNode sourceConfig = pansouSourceConfig(siteKey);
         var request = new SearchRequest(keyword, getSearchChannels(channels), resolvePanSouSource(sourceConfig));
         request.setExt(Map.of("referer", "https://dm.xueximeng.com"));
         boolean offlineDownloadEnabled = offlineDownloadService.getConfig().enabled();
         if (StringUtils.isNotBlank(keyword)) {
-            request.setCloudTypes(getPanSouCloudTypes());
+            List<String> cloudTypes = resolveCloudTypes(targets);
+            if (!cloudTypes.isEmpty()) {
+                request.setCloudTypes(cloudTypes);
+            }
         }
         if (!CollectionUtils.isEmpty(appProperties.getPanSouPlugins())) {
             request.setPlugins(appProperties.getPanSouPlugins());
@@ -348,7 +363,7 @@ public class RemoteSearchService {
             var json = searchPanSou(url, request);
             var response = objectMapper.readValue(json, PanSouSearchResponse.class);
             List<Message> messages = new ArrayList<>();
-            addMergedMessages(response.getSearchResponse().getMergedByType(), keyword, offlineDownloadEnabled, messages);
+            addMergedMessages(response.getSearchResponse().getMergedByType(), keyword, offlineDownloadEnabled, messages, targets);
             if (!messages.isEmpty()) {
                 return filterInvalidPanSouLinks(messages.stream().sorted(comparator()).distinct().toList());
             }
@@ -357,7 +372,6 @@ public class RemoteSearchService {
             if (results == null) {
                 return messages;
             }
-            List<String> tgDrivers = appProperties.getTgDrivers();
             for (var result : results) {
                 if (!isMatched(result, keyword)) {
                     log.debug("ignore PanSou result '{}' because it does not match keyword '{}'", result.getTitle(), keyword);
@@ -372,7 +386,7 @@ public class RemoteSearchService {
                         continue;
                     }
                     var message = new Message(result, link);
-                    if (tgDrivers.isEmpty() || tgDrivers.contains(message.getType())) {
+                    if (resultTypeAllowed(message.getType(), targets)) {
                         messages.add(message);
                     }
                 }
@@ -381,6 +395,66 @@ public class RemoteSearchService {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /**
+     * 盘搜 cloud_types 定向:盘白名单非空按白名单映射,否则全局 tg.drivers(现状);磁力兜底生效
+     * 追加 magnet/ed2k。pan 部分为空返回空表(不发送 —— 不限模式服务端本就返回离线类型,
+     * 单发离线列表会把网盘结果裁光)。
+     */
+    private List<String> resolveCloudTypes(SearchTargets targets) {
+        List<String> base;
+        if (targets != null && !targets.drives().isEmpty()) {
+            base = targets.drives().stream()
+                    .map(DriveId::toTypeLeniently)
+                    .filter(Objects::nonNull)
+                    .map(type -> PanSouClient.cloudType(String.valueOf(type)))
+                    .filter(StringUtils::isNotBlank)
+                    .distinct()
+                    .toList();
+        } else {
+            base = getPanSouCloudTypes();
+        }
+        if (base.isEmpty() || targets == null || !targets.offlineIncluded()) {
+            return base;
+        }
+        List<String> withOffline = new ArrayList<>(base);
+        if (!withOffline.contains("magnet")) {
+            withOffline.add("magnet");
+        }
+        if (!withOffline.contains("ed2k")) {
+            withOffline.add("ed2k");
+        }
+        return withOffline;
+    }
+
+    /**
+     * 结果本地盘门禁:定向集(null = 观影全局口径)——盘白名单非空时替换全局 tg.drivers
+     * (订阅生效盘优先);白名单空时网盘维持现状;离线类型不在此收口(telegram 聚合出口的
+     * 定向门禁统一裁决)。targets==null 逐字保留两条路径的存量差异(merged 恒放行离线,
+     * results 按 tg.drivers)。
+     */
+    private boolean mergedTypeAllowed(String messageType, SearchTargets targets) {
+        if (targets == null) {
+            List<String> tgDrivers = appProperties.getTgDrivers();
+            return isOfflineDownloadType(messageType) || tgDrivers.isEmpty() || tgDrivers.contains(messageType);
+        }
+        if (SearchTargets.isOfflineType(messageType)) {
+            return true;
+        }
+        if (targets.drives().isEmpty()) {
+            List<String> tgDrivers = appProperties.getTgDrivers();
+            return tgDrivers.isEmpty() || tgDrivers.contains(messageType);
+        }
+        return targets.allowsDrive(messageType);
+    }
+
+    private boolean resultTypeAllowed(String messageType, SearchTargets targets) {
+        if (targets == null) {
+            List<String> tgDrivers = appProperties.getTgDrivers();
+            return tgDrivers.isEmpty() || tgDrivers.contains(messageType);
+        }
+        return mergedTypeAllowed(messageType, targets);
     }
 
     /** 盘检过滤(搜索即过滤):bad/uncertain 剔除、ok/locked 盖 validityState —— 实现在 {@link PanLinkCheckService}。 */
@@ -442,17 +516,17 @@ public class RemoteSearchService {
         }
     }
 
-    private void addMergedMessages(Map<String, List<MergedLink>> mergedByType, String keyword, boolean offlineDownloadEnabled, List<Message> messages) {
+    private void addMergedMessages(Map<String, List<MergedLink>> mergedByType, String keyword, boolean offlineDownloadEnabled,
+                                   List<Message> messages, SearchTargets targets) {
         if (CollectionUtils.isEmpty(mergedByType)) {
             return;
         }
-        List<String> tgDrivers = appProperties.getTgDrivers();
         for (var entry : mergedByType.entrySet()) {
 //            if (!offlineDownloadEnabled && isOfflineDownloadType(entry.getKey())) {
 //                continue;
 //            }
             String messageType = getMessageType(entry.getKey());
-            if (messageType == null || !isEnabledDriver(messageType, tgDrivers)) {
+            if (messageType == null || !mergedTypeAllowed(messageType, targets)) {
                 continue;
             }
             for (var link : entry.getValue()) {
@@ -463,10 +537,6 @@ public class RemoteSearchService {
                 messages.add(new Message(messageType, link));
             }
         }
-    }
-
-    private boolean isEnabledDriver(String messageType, List<String> tgDrivers) {
-        return isOfflineDownloadType(messageType) || tgDrivers.isEmpty() || tgDrivers.contains(messageType);
     }
 
     private boolean isOfflineDownloadType(String type) {

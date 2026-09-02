@@ -43,6 +43,8 @@ class PanjuSearchServiceTest {
               </ul></div>
               <div class="seed-list"><ul class="seeds">
                 <li><a href="/link_start/?seed_id=111">magnet 行</a></li>
+                <li><a href="/link_start/?seed_id=222&amp;movie_title=末日地堡.第3季.磁力" title="4K 种子">种子</a></li>
+                <li><a href="/link_start/?seed_id=111&amp;movie_title=dup">重复 seed 去重</a></li>
               </ul></div>
             </body></html>
             """;
@@ -61,6 +63,11 @@ class PanjuSearchServiceTest {
 
     private static final String MAGNET_REDIRECT = """
             <html><body><script>const data = "bWFnbmV0Oj94dD11cm46YnRpaDo=";</script></body></html>
+            """;
+
+    /** seed 中转页:脚本里直出 magnet 明链(window.location.href 形态,引号即正则边界) */
+    private static final String SEED_PLAIN_PAGE = """
+            <html><body><script>window.location.href='magnet:?xt=urn:btih:1111aaaabbbb';</script></body></html>
             """;
 
     private static AppProperties props() {
@@ -153,7 +160,52 @@ class PanjuSearchServiceTest {
     }
 
     @Test
+    void parseSeedRowsDedupesAndStripsMovieTitle() {
+        PanjuSearchService service = new PanjuSearchService(props(), new ObjectMapper());
+        List<PanjuSearchService.SeedRow> rows = service.parseSeedRows(DETAIL_HTML);
+        // 重复 seed_id 去重;href 剥裸 Unicode 的 movie_title 只留 seed_id;label 跳过泛化名
+        assertEquals(2, rows.size());
+        assertEquals("/link_start/?seed_id=111", rows.get(0).href());
+        assertEquals("magnet 行", rows.get(0).label());
+        assertEquals("/link_start/?seed_id=222", rows.get(1).href());
+        assertEquals("4K 种子", rows.get(1).label());
+    }
+
+    @Test
+    void resolveSeedLinkPrefersPlainLinkOverBase64() {
+        String ed2k = "ed2k://|file|末日地堡.EP08.mp4|123456|hash|/";
+        String encoded = java.util.Base64.getEncoder()
+                .encodeToString(ed2k.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String base64Page = "<html><body><script>const data = \"" + encoded + "\";</script></body></html>";
+        PanjuSearchService service = new PanjuSearchService(props(), new ObjectMapper()) {
+            @Override
+            protected String fetch(String url) {
+                if (url.contains("seed_id=111")) {
+                    return SEED_PLAIN_PAGE;
+                }
+                if (url.contains("seed_id=222")) {
+                    return base64Page;
+                }
+                if (url.contains("seed_id=333")) {
+                    return MAGNET_REDIRECT; // base64 解出截断的 magnet 前缀,仍算离线链
+                }
+                return "<html><body>无链接</body></html>";
+            }
+        };
+        // 明链优先
+        assertEquals("magnet:?xt=urn:btih:1111aaaabbbb",
+                service.resolveSeedLink("https://sidhub.cc/link_start/?seed_id=111"));
+        // base64 密文兜底,解出 ed2k
+        assertEquals(ed2k, service.resolveSeedLink("https://sidhub.cc/link_start/?seed_id=222"));
+        assertEquals("magnet:?xt=urn:btih:",
+                service.resolveSeedLink("https://sidhub.cc/link_start/?seed_id=333"));
+        assertEquals("", service.resolveSeedLink("https://sidhub.cc/link_start/?seed_id=444"));
+        assertEquals("", service.resolveSeedLink(""));
+    }
+
+    @Test
     void searchEndToEndWithStubbedFetch() {
+        java.util.concurrent.atomic.AtomicInteger seedRequests = new java.util.concurrent.atomic.AtomicInteger();
         PanjuSearchService service = new PanjuSearchService(props(), new ObjectMapper()) {
             @Override
             protected String fetch(String url) {
@@ -172,12 +224,18 @@ class PanjuSearchServiceTest {
                 if (url.contains("pan_id_4")) {
                     return UC_REDIRECT;
                 }
-                return ""; // hosts 刷新接口 / 磁力中转页等:空=失败,不干扰主流程
+                if (url.contains("seed_id=")) {
+                    seedRequests.incrementAndGet();
+                    return SEED_PLAIN_PAGE;
+                }
+                return ""; // hosts 刷新接口等:空=失败,不干扰主流程
             }
         };
         List<Message> messages = service.search("末日地堡");
-        // 两张卡片共用同一份详情样本 → 中转链按 link 去重后剩 3 条(夸克/UC/百度)
+        // 两张卡片共用同一份详情样本 → 中转链按 link 去重后剩 3 条(夸克/UC/百度);
+        // 默认不解析 seed 行(磁力兜底未开,不白烧中转请求)
         assertEquals(3, messages.size());
+        assertEquals(0, seedRequests.get(), "includeOffline=false 不得发起 seed 中转请求");
         Message quark = messages.get(0);
         assertEquals("5", quark.getType());
         assertEquals("https://pan.quark.cn/s/9391ecca1fe8", quark.getLink());
@@ -187,6 +245,54 @@ class PanjuSearchServiceTest {
         assertEquals("7", messages.get(1).getType());
         assertEquals("10", messages.get(2).getType());
         assertTrue(messages.get(2).getLink().endsWith("?pwd=ewiq"));
+    }
+
+    @Test
+    void searchOfflineIncludeHarvestsSeeds() {
+        String ed2k = "ed2k://|file|末日地堡.S03E08.1080p.mp4|4567890|hash|/";
+        String base64Page = "<html><body><script>const data = \"" + java.util.Base64.getEncoder()
+                .encodeToString(ed2k.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                + "\";</script></body></html>";
+        PanjuSearchService service = new PanjuSearchService(props(), new ObjectMapper()) {
+            @Override
+            protected String fetch(String url) {
+                if (url.contains("/s/") && url.contains("page=1")) {
+                    return SEARCH_HTML;
+                }
+                if (url.contains("/movies/")) {
+                    return DETAIL_HTML;
+                }
+                if (url.contains("pan_id_1")) {
+                    return QUARK_REDIRECT;
+                }
+                if (url.contains("pan_id_2")) {
+                    return BAIDU_REDIRECT;
+                }
+                if (url.contains("pan_id_4")) {
+                    return UC_REDIRECT;
+                }
+                if (url.contains("seed_id=111")) {
+                    return SEED_PLAIN_PAGE;
+                }
+                if (url.contains("seed_id=222")) {
+                    return base64Page;
+                }
+                return "";
+            }
+        };
+        List<Message> messages = service.search("末日地堡", true);
+        // 3 网盘 + 2 seed 离线(明链 magnet + base64 ed2k);两卡片同详情,link 去重
+        assertEquals(5, messages.size());
+        Message magnet = messages.get(3);
+        assertEquals("magnet", magnet.getType());
+        assertEquals("magnet:?xt=urn:btih:1111aaaabbbb", magnet.getLink());
+        assertEquals("盘聚", magnet.getChannel());
+        assertEquals("末日地堡 第三季 Silo Season 3", magnet.getName());
+        assertEquals("magnet 行", magnet.getContent());
+        Message ed2kMessage = messages.get(4);
+        assertEquals("ed2k", ed2kMessage.getType());
+        assertEquals(ed2k, ed2kMessage.getLink());
+        assertEquals("4K 种子", ed2kMessage.getContent());
     }
 
     @Test

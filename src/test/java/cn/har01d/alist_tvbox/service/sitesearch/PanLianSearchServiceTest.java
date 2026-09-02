@@ -102,7 +102,8 @@ class PanLianSearchServiceTest {
                             {"success":true,"data":{"quark":{"name":"夸克","links":[
                                {"url":"https://pan.quark.cn/s/direct1","title":"夸克直链","time":"2025-08-01"},
                                {"token":"tok-baidu","password":"ab12","type":"百度","time":"2025-07-01"},
-                               {"url":"magnet:?xt=urn:btih:xyz","title":"磁力","time":"2025-06-01"}]},
+                               {"url":"magnet:?xt=urn:btih:abc123&dn=%E9%9A%BE%E5%93%8404","title":"难哄 04集 1080P·介绍：全集网盘","time":"2025-06-01"},
+                               {"url":"ed2k://|file|难哄.EP05.1080p.mp4|1234567|hash|/","title":"第05集 电驴","time":"2025-05-01"}]},
                               "dead":{"name":"其他","links":[{"url":"https://unknown.example/s/x","title":"未知盘"}]}}}
                             """);
                 }
@@ -120,7 +121,7 @@ class PanLianSearchServiceTest {
             }
         };
         List<Message> messages = service.search("难哄");
-        assertEquals(2, messages.size());
+        assertEquals(4, messages.size());
         assertEquals("https://pan.quark.cn/s/direct1", messages.get(0).getLink());
         assertEquals("5", messages.get(0).getType());
         assertEquals("盘链", messages.get(0).getChannel());
@@ -128,7 +129,21 @@ class PanLianSearchServiceTest {
         // token 经 go.php 解析出的百度链,结构化 password 折成 pwd=
         assertEquals("https://pan.baidu.com/s/1AbCdEfGhIjKlMnOpQrSt?pwd=ab12", messages.get(1).getLink());
         assertEquals("10", messages.get(1).getType());
+        // 磁力条目:link 原样,type=magnet,content=清洗后的资源标题(剥「介绍:」尾巴)
+        assertEquals("magnet:?xt=urn:btih:abc123&dn=%E9%9A%BE%E5%93%8404", messages.get(2).getLink());
+        assertEquals("magnet", messages.get(2).getType());
+        assertEquals("难哄 04集 1080P", messages.get(2).getContent());
+        // ed2k 条目:type=ed2k(文件名在链接 |file| 段,标题口径由磁力兜底侧解析)
+        assertEquals("ed2k://|file|难哄.EP05.1080p.mp4|1234567|hash|/", messages.get(3).getLink());
+        assertEquals("ed2k", messages.get(3).getType());
         assertEquals(1, loginCalls.get());
+    }
+
+    @Test
+    void cleanLinkTitleStripsIntroAndHtml() {
+        assertEquals("难哄 04集 1080P", PanLianSearchService.cleanLinkTitle("难哄 04集 1080P·介绍：全集网盘"));
+        assertEquals("资源", PanLianSearchService.cleanLinkTitle("<b>资源</b>"));
+        assertEquals("", PanLianSearchService.cleanLinkTitle(""));
     }
 
     @Test

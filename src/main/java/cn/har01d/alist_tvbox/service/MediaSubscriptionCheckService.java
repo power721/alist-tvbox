@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriveId;
+import cn.har01d.alist_tvbox.domain.SearchTargets;
 import cn.har01d.alist_tvbox.dto.EpisodeAirDate;
 import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionFilter;
@@ -3514,9 +3515,7 @@ public class MediaSubscriptionCheckService {
      * 维护由 {@link #harvestOfflineProducts} 每轮对账承担(产物消失即退役,行失效集源由播放采样兜底)。
      */
     void magnetFallback(MediaSubscription subscription, Set<Integer> missing, int round) {
-        if (missing.isEmpty() || offlineDownloadService == null || !subscription.isMagnetOffline()
-                || !MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
-                || !offlineDownloadService.isConfigured()) {
+        if (missing.isEmpty() || !magnetFallbackEnabled(subscription)) {
             return;
         }
         // 转存优先:别抢在网盘源上线前烧离线配额
@@ -4126,6 +4125,20 @@ public class MediaSubscriptionCheckService {
         Set<String> allowed = new java.util.LinkedHashSet<>(mainDrives(subscription));
         allowed.addAll(extendedDrives());
         return allowed;
+    }
+
+    /** 磁力兜底生效谓词(magnetFallback 同源):订阅开关 + TRANSFER 模式 + 离线已配置 ——
+     * 开关开了但离线未配置/非转存模式的订阅,磁力/ed2k 不可消费,搜索侧即剔除。 */
+    boolean magnetFallbackEnabled(MediaSubscription subscription) {
+        return offlineDownloadService != null && subscription.isMagnetOffline()
+                && MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                && offlineDownloadService.isConfigured();
+    }
+
+    /** 搜索定向集(仅追剧搜索侧,docs/msub-search-drive-targeting.md):候选盘白名单 ∪
+     * 磁力兜底生效时的 {magnet,ed2k};入池/探测/换源仍走 allowedCandidateDrives(不含离线类型)。 */
+    SearchTargets searchTargetTypes(MediaSubscription subscription) {
+        return SearchTargets.of(allowedCandidateDrives(subscription), magnetFallbackEnabled(subscription));
     }
 
     /** 候选盘白名单判定:白名单为空不限盘;配置后无 type 的旧资源(判不了盘)视为域外。 */
@@ -5754,12 +5767,19 @@ public class MediaSubscriptionCheckService {
      * 静默降级)。<b>六路同时发起</b> —— 原先站点源在 TG 全部返回后逐个
      * 串行排队,总时长 = 各源之和(线上 37s 级),并发后 = 最慢一路;各源内部自带超时/退避,
      * 外层 90s 硬顶兜底;任一源失败静默为空,按 link 天然去重,TG 结果在前(先见先得)。
+     * <p>
+     * 按订阅定向集搜索:PanSou/TG-Search 服务端 cloud_types 只请求生效盘(白名单空 = 全局口径
+     * 不限,防 limit 配额被域外盘吃掉);站点源无服务端能力,结果在盘检送检前按定向集剔除
+     * (域外盘不烧盘检配额);magnet/ed2k 仅磁力兜底生效时召回(入 NON_PAN 收割,不入池)。
+     * 站点源的磁力:观影(downlist 磁力哈希)与盘链(links 磁力/ed2k)在详情响应里顺手产出,
+     * 盘聚 seed 行按开关决定是否发起两跳中转解析 —— 三源产出后统一走定向集闸门。
      */
-    private List<Message> searchAllSources(String keyword, int size, boolean cached, boolean respectBackoff) {
+    private List<Message> searchAllSources(String keyword, int size, boolean cached, boolean respectBackoff,
+                                           SearchTargets targets) {
         CompletableFuture<List<Message>> telegram = searchAsync("telegram", keyword, () ->
                 appProperties.getSubscription().isAggregateSearch()
-                        ? telegramService.searchAggregated(keyword, size, cached)
-                        : telegramService.search(keyword, size, false, cached), respectBackoff);
+                        ? telegramService.searchAggregated(keyword, size, cached, targets)
+                        : telegramService.search(keyword, size, false, cached, targets), respectBackoff);
         CompletableFuture<List<Message>> wanou = wanouSearchService != null && appProperties.getSubscription().isWanouEnabled()
                 ? searchAsync("wanou", keyword, () -> wanouSearchService.search(keyword), respectBackoff) : null;
         CompletableFuture<List<Message>> panlian = panLianSearchService != null
@@ -5769,7 +5789,8 @@ public class MediaSubscriptionCheckService {
         CompletableFuture<List<Message>> woniu = woniuSearchService != null
                 ? searchAsync("woniu", keyword, () -> woniuSearchService.search(keyword), respectBackoff) : null;
         CompletableFuture<List<Message>> panju = panjuSearchService != null && appProperties.getSubscription().isPanjuEnabled()
-                ? searchAsync("panju", keyword, () -> panjuSearchService.search(keyword), respectBackoff) : null;
+                ? searchAsync("panju", keyword, () -> panjuSearchService.search(keyword,
+                        targets != null && targets.offlineIncluded()), respectBackoff) : null;
 
         List<Message> messages = new ArrayList<>(joinSearch("telegram", telegram));
         Set<String> links = new java.util.HashSet<>();
@@ -5782,19 +5803,19 @@ public class MediaSubscriptionCheckService {
         List<Message> siteMessages = new ArrayList<>();
         Set<String> siteLinks = new java.util.HashSet<>();
         if (wanou != null) {
-            mergeSource(siteMessages, siteLinks, joinSearch("wanou", wanou), "wanou", keyword);
+            mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("wanou", wanou), targets), "wanou", keyword);
         }
         if (panlian != null) {
-            mergeSource(siteMessages, siteLinks, joinSearch("panlian", panlian), "panlian", keyword);
+            mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("panlian", panlian), targets), "panlian", keyword);
         }
         if (guanying != null) {
-            mergeSource(siteMessages, siteLinks, joinSearch("guanying", guanying), "guanying", keyword);
+            mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("guanying", guanying), targets), "guanying", keyword);
         }
         if (woniu != null) {
-            mergeSource(siteMessages, siteLinks, joinSearch("woniu", woniu), "woniu", keyword);
+            mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("woniu", woniu), targets), "woniu", keyword);
         }
         if (panju != null) {
-            mergeSource(siteMessages, siteLinks, joinSearch("panju", panju), "panju", keyword);
+            mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("panju", panju), targets), "panju", keyword);
         }
         if (!siteMessages.isEmpty() && panLinkCheckService != null) {
             siteMessages = new ArrayList<>(panLinkCheckService.filterInvalidPanSouLinks(siteMessages));
@@ -5898,10 +5919,11 @@ public class MediaSubscriptionCheckService {
             }
         }
         List<Message> messages;
+        SearchTargets targets = searchTargetTypes(subscription);
         try {
             var config = appProperties.getSubscription();
             messages = searchAllSources(keyword,
-                    exhausted ? config.getExhaustedSearchSize() : config.getSearchSize(), false, true);
+                    exhausted ? config.getExhaustedSearchSize() : config.getSearchSize(), false, true, targets);
         } catch (Exception e) {
             log.warn("subscription {} search failed: {}", subscription.getId(), e.getMessage());
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "搜索失败:" + e.getMessage());
@@ -6070,6 +6092,20 @@ public class MediaSubscriptionCheckService {
         }
     }
 
+    /** 站点源结果的定向集闸门(盘检送检之前,域外盘不烧盘检配额;兜底未开时 magnet/ed2k 剔除)。 */
+    private static List<Message> retainTargetTypes(List<Message> messages, SearchTargets targets) {
+        if (messages == null || messages.isEmpty()) {
+            return messages;
+        }
+        List<Message> kept = new ArrayList<>();
+        for (Message message : messages) {
+            if (targets.allowsType(StringUtils.defaultString(message.getType()))) {
+                kept.add(message);
+            }
+        }
+        return kept;
+    }
+
     /**
      * 候选池的分层席位:每个主网盘一档独立配额,其余盘共享一档。
      * <p>
@@ -6196,11 +6232,13 @@ public class MediaSubscriptionCheckService {
     }
 
     /** dry-run 预览(§10.2):按关键词+偏好即时搜索,返回候选与打分明细,不落库。
-     * 盘白名单与 fillPool 同规(无订阅上下文,取全局主盘∪扩展盘),预览看到的即能入池的。 */
+     * 盘白名单与 fillPool 同规(无订阅上下文,取全局主盘∪扩展盘),预览看到的即能入池的;
+     * 无订阅上下文不含 magnet/ed2k(分享候选预览,磁力有独立提交/配额语义)。 */
     public List<Map<String, Object>> preview(String keyword, Integer season, MediaSubscriptionFilter filter) {
         List<Message> messages;
         try {
-            messages = searchAllSources(keyword, 50, true, false);
+            messages = searchAllSources(keyword, 50, true, false,
+                    SearchTargets.of(allowedCandidateDrives(null), false));
         } catch (Exception e) {
             return List.of(Map.of("error", StringUtils.defaultString(e.getMessage())));
         }
