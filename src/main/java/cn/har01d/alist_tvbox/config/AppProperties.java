@@ -201,6 +201,13 @@ public class AppProperties {
         private int pan123communityMaxDetailPages = 3;
         /** 123社区:整源搜索总超时(秒) */
         private int pan123communityTimeoutSeconds = 45;
+        /** 夸父搜索源(kfzy.net,Xiuno BBS「夸父资源社」;夸克为主混 UC/阿里/天翼/123/115/百度/迅雷,
+         *  链接四级提取(锁贴泄漏 JSON-LD 匿名可抓),回复解锁需论坛 Cookie;仅订阅候选盘白名单包含夸克时参与搜索) */
+        private boolean kuafuEnabled = true;
+        /** 夸父:每次搜索最多抓取的详情页数 */
+        private int kuafuMaxDetailPages = 3;
+        /** 夸父:整源搜索总超时(秒) */
+        private int kuafuTimeoutSeconds = 45;
         /** 订阅巡检并发度:到期订阅并发检查,多个订阅的搜索不再互相排队(源侧压力不放大,见 searchExecutor) */
         private int checkConcurrency = 4;
         /** 磁力兜底介入的补搜轮次门槛(转存优先):round 达到该值(单集词轮)且仍缺才用磁力,
