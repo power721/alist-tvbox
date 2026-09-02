@@ -133,6 +133,16 @@ class MediaSubscriptionMagnetFallbackTest {
     }
 
     @Test
+    void gatesBlockDuringCustomKeywordRounds() {
+        // 自定义词轮插进补搜轮转后,磁力阈值按词数推后(K=2 → 有效 minRound 4):
+        // 网盘侧多词未穷尽前,磁力不提前入场烧离线配额
+        MediaSubscription subscription = subscription();
+        subscription.setCustomKeywords("英文名\n别名");
+        service.magnetFallback(subscription, Set.of(3), 3);
+        verify(offlineDownloadService, never()).offlineRootPath();
+    }
+
+    @Test
     void gatesBlockDisabledFlag() {
         MediaSubscription subscription = subscription();
         subscription.setMagnetOffline(false);

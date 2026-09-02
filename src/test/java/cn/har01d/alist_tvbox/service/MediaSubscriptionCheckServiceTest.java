@@ -1034,6 +1034,51 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals("测试剧 第5集", service.gapSearchKeyword(subscription, Set.of(5), 2));
     }
 
+    // ---------- 自定义搜索词:解析、补搜轮转、归属匹配 ----------
+
+    @Test
+    void customKeywordsSplitTrimsDedupesAndLimits() {
+        List<String> split = MediaSubscriptionCheckService.splitCustomKeywords(
+                " 英文名 \n英文2，别名、Alias\n\n英文2 \n 第五 \n第六 \n第七 \n第八");
+        assertEquals(List.of("英文名", "英文2", "别名", "Alias", "第五"), split, "多分隔符+trim+去重,至多 5 个");
+        assertEquals(List.of(), MediaSubscriptionCheckService.splitCustomKeywords(null));
+        assertEquals(List.of(), MediaSubscriptionCheckService.splitCustomKeywords(" \n ,,、"));
+    }
+
+    @Test
+    void customKeywordsDropsPrimaryWord() {
+        MediaSubscription subscription = subscription(); // keyword = "测试剧 4K"
+        subscription.setCustomKeywords("测试剧 4K\n英文名\n测试剧");
+        // 与主搜索词相同的词剔除(重复搜索纯浪费);与剧名相同但主词不同时保留(剧名兜底词仍要独立成路)
+        assertEquals(List.of("英文名", "测试剧"), MediaSubscriptionCheckService.customKeywords(subscription));
+        assertEquals(List.of(), MediaSubscriptionCheckService.customKeywords(new MediaSubscription()));
+    }
+
+    @Test
+    void gapSearchKeywordInsertsCustomKeywordRoundsBeforeEpisodeDegrade() {
+        MediaSubscription subscription = subscription();
+        subscription.setNextAirTime(System.currentTimeMillis() - 13 * 3600_000L);
+        subscription.setOfficialEpisodes(5);
+        subscription.setCustomKeywords("英文名\n别名");
+        Set<Integer> missing = new TreeSet<>(Set.of(3, 5));
+        assertEquals("测试剧 4K", service.gapSearchKeyword(subscription, missing, 1)); // 首轮整季主词
+        assertEquals("英文名", service.gapSearchKeyword(subscription, missing, 2)); // 自定义词轮
+        assertEquals("别名", service.gapSearchKeyword(subscription, missing, 3));
+        assertEquals("测试剧 第3集", service.gapSearchKeyword(subscription, missing, 4)); // 单集降级起点推后
+        assertEquals("测试剧 第5集", service.gapSearchKeyword(subscription, missing, 5));
+    }
+
+    @Test
+    void matchNamesIncludeCustomKeywords() {
+        MediaSubscription subscription = subscription();
+        subscription.setCustomKeywords("The Test Drama\n测试剧别名");
+        List<String> names = service.matchNames(subscription);
+        assertTrue(names.contains("The Test Drama"));
+        assertTrue(names.contains("测试剧别名"));
+        // 自定义词召回的资源标题(不含剧名本名)须过剧名门禁,否则多词召回被整条误杀
+        assertTrue(MediaSubscriptionCheckService.matchesTitle(names, "The Test Drama 4K 全集"));
+    }
+
     // ---------- ENDED 重开判定(本地集数 = 集源行 LIVE 并集) ----------
 
     @Test

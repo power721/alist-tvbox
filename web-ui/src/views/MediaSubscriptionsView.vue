@@ -1451,6 +1451,7 @@ const handleAdd = () => {
   form.value = {
     name: '',
     keyword: '',
+    customKeywords: '',
     season: 1,
     seasonStartEpisode: null,
     doubanId: null,
@@ -1488,6 +1489,7 @@ const handleEdit = (row: SubscriptionDto) => {
     id: row.id,
     name: row.name,
     keyword: row.keyword,
+    customKeywords: row.customKeywords || '',
     season: row.season ?? 1,
     seasonStartEpisode: row.seasonStartEpisode ?? null,
     doubanId: row.doubanId,
@@ -1591,6 +1593,7 @@ const ratingOfSource = (label: string) => {
 const buildBody = () => ({
   name: form.value.name,
   keyword: form.value.keyword,
+  customKeywords: form.value.customKeywords,
   season: form.value.season,
   seasonStartEpisode: form.value.seasonStartEpisode ?? 0,
   doubanId: form.value.doubanId,

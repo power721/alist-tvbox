@@ -269,15 +269,13 @@ public class MediaSubscriptionCheckService {
     /** 搜索顺手收下的磁力候选(订阅 id → 候选,按 link 去重,上限 50):巡检搜索每轮都带磁力结果,
      *  磁力兜底优先消费这里,专项搜索只作兜底 —— 不为磁力单独打一轮搜索 */
     private final Map<Integer, List<cn.har01d.alist_tvbox.dto.tg.Message>> magnetCandidates = new ConcurrentHashMap<>();
-    /** 同关键词补池去重(订阅 id → 上次关键词+时间):一次巡检内 ensureSource/fillGaps/ensureMainDrives
+    /** 同关键词补池去重(订阅 id → 关键词 → 上次搜索时间):一次巡检内 ensureSource/fillGaps/ensureMainDrives
      *  三个机制各自判定"需要补池",用的却都是订阅词(线上:一念永恒 id=66 一轮巡检连发 3 次同词
      *  全量搜索,结果集几乎相同,每轮还附带 ~450 条盘检)。窗口内同词直接跳过;单集降级词、
-     *  池枯竭加倍召回不受影响。 */
-    private final Map<Integer, KeywordSearch> lastPoolSearch = new ConcurrentHashMap<>();
+     *  池枯竭加倍召回不受影响。按词分槽 —— 自定义搜索词与主词各自独立去重,互不覆盖。 */
+    private final Map<Integer, Map<String, Long>> lastPoolSearch = new ConcurrentHashMap<>();
     private static final long POOL_SEARCH_DEDUP_MS = 10 * 60_000L;
 
-    record KeywordSearch(String keyword, long time) {
-    }
     /** 主网盘补池搜索限频(订阅 id → 上次搜索时间):池内无该盘资源时主动搜索,至多每检查周期一次 */
     private final Map<Integer, Long> mainDriveSearchTime = new ConcurrentHashMap<>();
     /** 详情触发补线的限频(订阅 id → 上次触发时间),TVBox 每次打开详情都会装配线路,不能次次起后台探测 */
@@ -1346,7 +1344,7 @@ public class MediaSubscriptionCheckService {
             // activate 会把旧主源降级回候选池(行落 MISSING,不进黑名单:链接没死,只是不属于本剧)。
             String alienReason = primaryHollow ? "主源无可识别的本季剧集文件:" : "主源与剧集不符(误挂异剧):";
             if (!activateNextCandidate(subscription)) {
-                fillPool(subscription, true, null);
+                fillPoolAllKeywords(subscription, true, null);
                 activateNextCandidate(subscription);
             }
             if (subscription.getShareId() == null || shareRepository.findById(subscription.getShareId()).isEmpty()) {
@@ -1418,7 +1416,7 @@ public class MediaSubscriptionCheckService {
             retireCoveredAuxMounts(subscription, present);
             // 停滞多轮且池中无可用备胎 → 搜索补池(主源未失效不主动换源,避免频繁扰动播放列表)
             if (subscription.getStallCount() >= appProperties.getSubscription().getStallRoundsBeforeSearch()) {
-                fillPool(subscription, false, null);
+                fillPoolAllKeywords(subscription, false, null);
             }
             detectUpgrade(subscription, present);
         }
@@ -3527,7 +3525,7 @@ public class MediaSubscriptionCheckService {
     }
 
     /**
-     * 磁力兜底入口(fillGaps 尾部):转存优先 —— 网盘源池内探测+补搜穷尽(单集词轮)仍缺,
+     * 磁力兜底入口(fillGaps 尾部):转存优先 —— 网盘源池内探测+补搜穷尽(自定义词轮+单集词轮)仍缺,
      * 且订阅开了磁力兜底、离线下载已配置,才扫描收割离线产物(覆盖上轮超时任务)并在仍缺时提交新磁力。
      * 磁力产物资源行(shareId=null,挂载路径直连)不走普通候选探测/挂载槽位/换血/同盘回收,
      * 维护由 {@link #harvestOfflineProducts} 每轮对账承担(产物消失即退役,行失效集源由播放采样兜底)。
@@ -3536,8 +3534,9 @@ public class MediaSubscriptionCheckService {
         if (missing.isEmpty() || !magnetFallbackEnabled(subscription)) {
             return;
         }
-        // 转存优先:别抢在网盘源上线前烧离线配额
-        if (round < appProperties.getSubscription().getMagnetFallbackMinRound()) {
+        // 转存优先:别抢在网盘源上线前烧离线配额。自定义词轮插进了补搜轮转(gapSearchKeyword),
+        // 阈值同步按词数推后 —— 网盘侧多词没穷尽前,磁力不提前入场
+        if (round < appProperties.getSubscription().getMagnetFallbackMinRound() + customKeywords(subscription).size()) {
             return;
         }
         Long cooldownUntil = magnetCooldown.get(subscription.getId());
@@ -4069,7 +4068,8 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 补搜关键词决策:播出窗口内且缺口只含官方已播最新一集 = 资源大概率未上线,
-     * 保持整季关键词且隔轮限频(空搜节制,窗口过后恢复逐集降级);其余场景整季(首轮)→单集降级。
+     * 保持整季关键词且隔轮限频(空搜节制,窗口过后恢复逐集降级);其余场景整季(首轮)→
+     * 自定义词轮(用户声明的别名/英文名写法,整季粒度)→单集降级。
      * @return null = 本轮跳过搜索(限频) */
     String gapSearchKeyword(MediaSubscription subscription, Set<Integer> missing, int round) {
         if (inPostAirWindow(subscription) && latestOnlyGap(subscription, missing)) {
@@ -4078,9 +4078,15 @@ public class MediaSubscriptionCheckService {
         if (round == 1) {
             return seasonKeyword(subscription);
         }
+        // 自定义词轮插在单集降级前:整季粒度的换写法召回优先于拆单集(单集词粒度细召回窄)
+        List<String> customs = customKeywords(subscription);
+        int idx = round - 2;
+        if (idx < customs.size()) {
+            return customs.get(idx);
+        }
         // 单集降级:逐次尝试不同缺失集
         List<Integer> list = new ArrayList<>(missing);
-        int index = Math.min(round - 2, list.size() - 1);
+        int index = Math.min(idx - customs.size(), list.size() - 1);
         return subscription.getName() + " 第" + list.get(Math.max(index, 0)) + "集";
     }
 
@@ -4332,7 +4338,7 @@ public class MediaSubscriptionCheckService {
                 if (last == null || now - last >= interval) {
                     mainDriveSearchTime.put(subscription.getId(), now);
                     log.info("subscription {} force search for main drive [{}] complete sources", subscription.getId(), drive);
-                    fillPool(subscription, true, seasonKeyword(subscription));
+                    fillPoolAllKeywords(subscription, true, seasonKeyword(subscription));
                 }
             }
         }
@@ -4804,7 +4810,7 @@ public class MediaSubscriptionCheckService {
     }
 
     private void ensureSource(MediaSubscription subscription) {
-        fillPool(subscription, true, null);
+        fillPoolAllKeywords(subscription, true, null);
         if (!activateNextCandidate(subscription)) {
             subscription.setStatus(MediaSubscription.STATUS_ERROR);
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "未找到可用资源,请检查关键词或稍后重试");
@@ -4818,7 +4824,7 @@ public class MediaSubscriptionCheckService {
             retireResource(subscription, primary, reason, true); // 事件已发,退役不再重复报
         }
         if (!activateNextCandidate(subscription)) {
-            fillPool(subscription, true, null);
+            fillPoolAllKeywords(subscription, true, null);
             if (!activateNextCandidate(subscription)) {
                 subscription.setStatus(MediaSubscription.STATUS_ERROR);
                 addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "主源失效且无可用候选");
@@ -5949,6 +5955,20 @@ public class MediaSubscriptionCheckService {
     }
 
     /**
+     * 填充候选池(含自定义搜索词):主词一路(或补搜 override)之后,订阅配置的每个自定义词
+     * 各补一路 —— 资源命名差异大的场景(英文名/别名/简繁写法)靠多写法召回。各词独立走
+     * fillPool 的池闸门与同词去重:force=false 时池不枯竭自定义词自然跳过,
+     * force=true 时逐词全量(词数 ≤5,每词一路并发搜索,串行词间叠加可控)。
+     * <p>补搜轮次(fillGaps)不走这里 —— 那边的轮转 {@link #gapSearchKeyword} 已含自定义词。
+     */
+    void fillPoolAllKeywords(MediaSubscription subscription, boolean force, String keywordOverride) {
+        fillPool(subscription, force, keywordOverride);
+        for (String custom : customKeywords(subscription)) {
+            fillPool(subscription, force, custom);
+        }
+    }
+
+    /**
      * 填充候选池:多源聚合搜索,按偏好打分取分层配额 TopN。
      *
      * @param keywordOverride 缺集补搜的单集关键词(空 = 默认订阅关键词)
@@ -5973,11 +5993,11 @@ public class MediaSubscriptionCheckService {
                 StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName()));
         // 同词短窗去重(池枯竭的加倍召回除外):跳过即可,池内候选与上次搜索结果几乎一致
         if (!exhausted) {
-            KeywordSearch last = lastPoolSearch.get(subscription.getId());
+            Long last = lastPoolSearch.getOrDefault(subscription.getId(), Map.of()).get(keyword);
             long now = System.currentTimeMillis();
-            if (last != null && last.keyword().equals(keyword) && now - last.time() < POOL_SEARCH_DEDUP_MS) {
+            if (last != null && now - last < POOL_SEARCH_DEDUP_MS) {
                 log.info("subscription {} skip duplicate pool search for '{}' ({}s ago)",
-                        subscription.getId(), keyword, (now - last.time()) / 1000);
+                        subscription.getId(), keyword, (now - last) / 1000);
                 return;
             }
         }
@@ -5992,7 +6012,8 @@ public class MediaSubscriptionCheckService {
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "搜索失败:" + e.getMessage());
             return;
         }
-        lastPoolSearch.put(subscription.getId(), new KeywordSearch(keyword, System.currentTimeMillis()));
+        lastPoolSearch.computeIfAbsent(subscription.getId(), k -> new ConcurrentHashMap<>())
+                .put(keyword, System.currentTimeMillis());
 
         MediaSubscriptionFilter filter = parseFilter(subscription);
         // 一念永恒形态(元数据单季装全剧)预判一次:标题声明本剧季包(第N季/完结季/合集)的
@@ -6675,7 +6696,38 @@ public class MediaSubscriptionCheckService {
     }
 
     List<String> matchNames(MediaSubscription subscription) {
-        return matchNames(subscription.getName(), subscription.getKeyword(), subscription.getAliases());
+        List<String> names = matchNames(subscription.getName(), subscription.getKeyword(), subscription.getAliases());
+        // 自定义搜索词并入归属名单:自定义词召回的资源标题可能不含剧名本名(英文名/别名写法),
+        // 不并入会被剧名门禁整条误杀 —— 搜索侧扩大召回面,匹配侧必须同步认识这些词
+        for (String custom : customKeywords(subscription)) {
+            addName(names, custom, false);
+        }
+        return names;
+    }
+
+    /** 订阅自定义搜索词解析:换行/逗号(中英文)/顿号分隔,trim、去空、去重,与主搜索词相同的剔除
+     *  (同词重复搜索纯浪费一路全源请求),至多 5 个(每词独立一路全源搜索,防配置过长拖爆巡检)。 */
+    static List<String> customKeywords(MediaSubscription subscription) {
+        String raw = subscription == null ? null : subscription.getCustomKeywords();
+        List<String> split = splitCustomKeywords(raw);
+        if (split.isEmpty()) {
+            return split;
+        }
+        String primary = StringUtils.defaultIfBlank(subscription.getKeyword(), subscription.getName());
+        return split.stream().filter(k -> !k.equals(primary)).toList();
+    }
+
+    /** 自定义搜索词的存储/解析共用拆分口径(不剔主词):存储侧规范化 join("\n") 与读取侧解析必须同规 */
+    static List<String> splitCustomKeywords(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(raw.split("[\\r\\n,，、]+"))
+                .map(String::trim)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .limit(5)
+                .toList();
     }
 
     /** 归一化:小写、剥技术标签、非字母数字/汉字转空格、汉字间空格塌缩 —— 抵消 TG 标题的 .【】·等防审查写法。 */

@@ -46,6 +46,14 @@ public class MediaSubscription {
 
     private String keyword;
 
+    /**
+     * 自定义搜索词(手动,换行分隔,至多 5 个):主搜索词以外的额外召回词 —— 英文名/别名/简繁写法等
+     * 资源命名差异大的场景。巡检填池时各词独立成一路全源搜索;补搜轮次里插在单集降级之前;
+     * 标题归属匹配(matchNames)同时并入,自定义词搜回的召回才能过剧名门禁入池。空 = 不启用。
+     */
+    @Column(columnDefinition = "TEXT", name = "custom_keywords")
+    private String customKeywords;
+
     private Integer season;
 
     /**

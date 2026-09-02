@@ -10,6 +10,8 @@ public class MediaSubscriptionDto {
     private Integer id;
     private String name;
     private String keyword;
+    /** 自定义搜索词(换行分隔,至多 5 个):主搜索词以外的额外召回词,空 = 不启用 */
+    private String customKeywords;
     private Integer season;
     /** 季起始集号(null = 季内编号即官方编号) */
     private Integer seasonStartEpisode;

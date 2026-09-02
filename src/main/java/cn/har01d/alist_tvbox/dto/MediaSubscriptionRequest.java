@@ -7,6 +7,8 @@ import lombok.Data;
 public class MediaSubscriptionRequest {
     private String name;
     private String keyword;
+    /** 自定义搜索词(换行/逗号分隔,至多 5 个,空 = 清除):主搜索词以外的额外召回词(英文名/别名/写法差异) */
+    private String customKeywords;
     private Integer season;
     /** 季起始集号(≤0 = 清除):本季第 1 集对应全剧第 N 集;资源季内编号而官方连续编号时用 */
     private Integer seasonStartEpisode;
