@@ -707,6 +707,16 @@
                     placeholder="须含 user_check(登录后复制);未登录网盘链接会被打码,无凭证时该搜索源自动关闭"/>
         </el-form-item>
           </el-tab-pane>
+          <el-tab-pane v-if="store.admin" label="123臻藏" name="zencang">
+            <el-form-item label="站点">
+              <el-input v-model="notifyForm.zencangHost" placeholder="留空用内置地址;自定义镜像站填 https://..."/>
+            </el-form-item>
+            <el-form-item label="Cookie">
+              <el-input v-model="notifyForm.zencangCookie" type="textarea" :rows="2"
+                        placeholder="浏览器登录 123 云盘·臻藏阁后复制 Cookie(须含 wordpress_logged_in_xxx);正文默认隐藏,无 Cookie 时该搜索源自动关闭"/>
+            </el-form-item>
+            <span class="sub-text">123 云盘主题资源站;仅订阅的候选盘(主网盘/扩展网盘)包含 123 网盘时才参与搜索</span>
+          </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="TG-Search" name="tgsearch">
             <el-form-item label="TG-Search地址">
               <el-input v-model="notifyForm.tgSearch" placeholder="http://IP:9900"/>
@@ -1210,6 +1220,8 @@ const notifyForm = ref({
   woniuUsername: '',
   woniuPassword: '',
   woniuCookie: '',
+  zencangHost: '',
+  zencangCookie: '',
   panSouUrl: '',
   panSouUsername: '',
   panSouPassword: '',
@@ -2056,6 +2068,8 @@ const openNotify = () => {
     notifyForm.value.woniuUsername = settings['woniu_username'] || ''
     notifyForm.value.woniuPassword = settings['woniu_password'] || ''
     notifyForm.value.woniuCookie = settings['woniu_cookie'] || ''
+    notifyForm.value.zencangHost = settings['zencang_host'] || ''
+    notifyForm.value.zencangCookie = settings['zencang_cookie'] || ''
     notifyForm.value.panSouUrl = settings['pan_sou_url'] || ''
     notifyForm.value.panSouUsername = settings['pan_sou_username'] || ''
     notifyForm.value.panSouPassword = settings['pan_sou_password'] || ''
@@ -2133,6 +2147,8 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'woniu_username', value: notifyForm.value.woniuUsername.trim()}),
     axios.post('/api/settings', {name: 'woniu_password', value: notifyForm.value.woniuPassword}),
     axios.post('/api/settings', {name: 'woniu_cookie', value: notifyForm.value.woniuCookie.trim()}),
+    axios.post('/api/settings', {name: 'zencang_host', value: notifyForm.value.zencangHost.trim()}),
+    axios.post('/api/settings', {name: 'zencang_cookie', value: notifyForm.value.zencangCookie.trim()}),
     axios.post('/api/settings', {name: 'pan_sou_url', value: notifyForm.value.panSouUrl.trim()}),
     axios.post('/api/settings', {name: 'pan_sou_username', value: notifyForm.value.panSouUsername.trim()}),
     axios.post('/api/settings', {name: 'pan_sou_password', value: notifyForm.value.panSouPassword}),
@@ -2241,6 +2257,7 @@ const weightDefs: { key: string; label: string; value: number }[] = [
   { key: 'source.panju', label: '盘聚源(SeedHub)', value: 12 },
   { key: 'source.guanying', label: '观影源', value: 12 },
   { key: 'source.xb6v', label: '6V磁力源', value: 12 },
+  { key: 'source.zencang', label: '123臻藏源', value: 12 },
   { key: 'baidu.free', label: '百度免会员', value: 17 },
   { key: 'pan115', label: '115追更弱', value: -10 },
   { key: 'pack.complete', label: '完结包', value: -6 },

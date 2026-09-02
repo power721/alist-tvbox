@@ -187,6 +187,13 @@ public class AppProperties {
         private int xb6vMaxMagnets = 50;
         /** 6V磁力:整源搜索总超时(秒) */
         private int xb6vTimeoutSeconds = 45;
+        /** 123臻藏搜索源(123.qsxy.top,WordPress+Zibll,详情正文需 Cookie;123 盘为主混少量其它盘/磁力,
+         *  仅订阅候选盘白名单包含 123 时参与搜索):追剧候选池补充来源 */
+        private boolean zencangEnabled = true;
+        /** 123臻藏:每次搜索最多抓取的详情页数 */
+        private int zencangMaxDetailPages = 3;
+        /** 123臻藏:整源搜索总超时(秒) */
+        private int zencangTimeoutSeconds = 45;
         /** 订阅巡检并发度:到期订阅并发检查,多个订阅的搜索不再互相排队(源侧压力不放大,见 searchExecutor) */
         private int checkConcurrency = 4;
         /** 磁力兜底介入的补搜轮次门槛(转存优先):round 达到该值(单集词轮)且仍缺才用磁力,
