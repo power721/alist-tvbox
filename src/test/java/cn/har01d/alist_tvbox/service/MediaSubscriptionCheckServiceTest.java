@@ -449,6 +449,47 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void fillPoolAllKeywordsStopsWhenPrimaryFoundCandidates() {
+        // 主词已搜到候选入池 → 自定义词不再搜索(扩展召回面只服务"主词召回不足",不为备胎翻倍烧请求)
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        fixture.subscription.setCustomKeywords("英文名");
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(List.of(message("https://pan.quark.cn/s/ok", "苍兰诀 第01-08集 1080P")));
+        MediaSubscriptionResource admitted = new MediaSubscriptionResource();
+        admitted.setLink("https://pan.quark.cn/s/ok");
+        admitted.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of()) // 主词填池前:池空
+                .thenReturn(List.of(admitted)); // 自定义词填池前:主词已入池 → 闸门生效
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdAndLink(1, "https://pan.quark.cn/s/ok"))
+                .thenReturn(Optional.empty());
+
+        fixture.service.fillPoolAllKeywords(fixture.subscription, true, null);
+
+        Mockito.verify(fixture.telegramService, Mockito.times(1))
+                .searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean(), Mockito.any());
+    }
+
+    @Test
+    void fillPoolAllKeywordsContinuesWhenPrimaryExhausted() {
+        // 主词搜不到任何候选(池仍枯竭)→ 自定义词逐个补搜
+        Fixture fixture = new Fixture();
+        fixture.subscription.setName("苍兰诀");
+        fixture.subscription.setCustomKeywords("英文名\n别名");
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(List.of());
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of());
+
+        fixture.service.fillPoolAllKeywords(fixture.subscription, true, null);
+
+        ArgumentCaptor<String> keywords = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(fixture.telegramService, Mockito.times(3))
+                .searchAggregated(keywords.capture(), Mockito.anyInt(), Mockito.anyBoolean(), Mockito.any());
+        assertEquals(List.of("苍兰诀", "英文名", "别名"), keywords.getAllValues());
+    }
+
+    @Test
     void fillPoolAppliesGlobalFilterGates() {
         Fixture fixture = new Fixture();
         fixture.subscription.setName("苍兰诀");

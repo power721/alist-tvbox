@@ -5955,16 +5955,18 @@ public class MediaSubscriptionCheckService {
     }
 
     /**
-     * 填充候选池(含自定义搜索词):主词一路(或补搜 override)之后,订阅配置的每个自定义词
-     * 各补一路 —— 资源命名差异大的场景(英文名/别名/简繁写法)靠多写法召回。各词独立走
-     * fillPool 的池闸门与同词去重:force=false 时池不枯竭自定义词自然跳过,
-     * force=true 时逐词全量(词数 ≤5,每词一路并发搜索,串行词间叠加可控)。
-     * <p>补搜轮次(fillGaps)不走这里 —— 那边的轮转 {@link #gapSearchKeyword} 已含自定义词。
+     * 填充候选池(含自定义搜索词):主词一路(或补搜 override)之后,仅当池仍枯竭
+     * (无任何可用候选 = 主词召回不足)才逐个自定义词补搜 —— 资源命名差异大的场景
+     * (英文名/别名/简繁写法)靠多写法召回。主词已找到候选即收手,不为"更多备胎"
+     * 翻倍搜索:自定义词一律 force=false(池闸门生效),调用方的 force 只给主词
+     * (首轮/换源等入口本来就带着"池空"前提进来,不影响语义)。
+     * <p>补搜轮次(fillGaps)不走这里 —— 那边的轮转 {@link #gapSearchKeyword} 已含自定义词,
+     * 且缺口补上即清轮次短路。
      */
     void fillPoolAllKeywords(MediaSubscription subscription, boolean force, String keywordOverride) {
         fillPool(subscription, force, keywordOverride);
         for (String custom : customKeywords(subscription)) {
-            fillPool(subscription, force, custom);
+            fillPool(subscription, false, custom);
         }
     }
 
