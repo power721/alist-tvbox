@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -306,11 +307,11 @@ class OfflineDownloadServiceTest {
                 .thenReturn(Optional.of(completedTask("/pan115/alist-tvbox-offline/完成任务", "完成任务")));
 
         cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
-                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null);
+                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null, 30);
 
         assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED, result.status());
         assertEquals("完成任务", result.taskName());
-        verify(pan115Handler, never()).submitAndWait(any(), any(), any());
+        verify(pan115Handler, never()).submitAndWait(any(), any(), any(), anyInt());
     }
 
     @Test
@@ -320,11 +321,11 @@ class OfflineDownloadServiceTest {
         when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
                 .thenReturn(Optional.empty());
         when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(pan115Handler.submitAndWait(any(), any(), any()))
-                .thenThrow(new BadRequestException("离线下载任务未在10秒内完成"));
+        when(pan115Handler.submitAndWait(any(), any(), any(), anyInt()))
+                .thenThrow(new BadRequestException("离线下载任务未在30秒内完成"));
 
         cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
-                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null);
+                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null, 30);
 
         assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.SUBMITTED, result.status());
         var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
@@ -343,10 +344,10 @@ class OfflineDownloadServiceTest {
                 .thenReturn(Optional.of(pending));
 
         cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
-                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null);
+                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null, 30);
 
         assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.SUBMITTED, result.status());
-        verify(pan115Handler, never()).submitAndWait(any(), any(), any()); // 网盘侧任务已在,不重复建
+        verify(pan115Handler, never()).submitAndWait(any(), any(), any(), anyInt()); // 网盘侧任务已在,不重复建
     }
 
     @Test
@@ -356,11 +357,11 @@ class OfflineDownloadServiceTest {
         when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
                 .thenReturn(Optional.empty());
         when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(pan115Handler.submitAndWait(any(), any(), any()))
+        when(pan115Handler.submitAndWait(any(), any(), any(), anyInt()))
                 .thenThrow(new BadRequestException("task failed: 链接违规"));
 
         cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
-                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3);
+                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3, 30);
 
         assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.FAILED, result.status());
         assertEquals("task failed: 链接违规", result.message());
@@ -385,10 +386,58 @@ class OfflineDownloadServiceTest {
                 .thenReturn(Optional.of(failed));
 
         cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
-                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3);
+                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3, 30);
 
         assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.FAILED, result.status());
-        verify(pan115Handler, never()).submitAndWait(any(), any(), any());
+        verify(pan115Handler, never()).submitAndWait(any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void submitMagnetPassesWaitSecondsToHandler() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any(), eq(77)))
+                .thenReturn(new OfflineDownloadHandler.TaskResult("产物", "hash", false));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3, 77);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED, result.status());
+        verify(pan115Handler).submitAndWait(any(), any(), any(), eq(77)); // 等待时长由追剧侧配置透传
+    }
+
+    @Test
+    void settlePendingTaskCompletesNewestPendingRow() {
+        OfflineDownloadTask pending = new OfflineDownloadTask();
+        pending.setId(41);
+        pending.setAccountId(12);
+        pending.setStatus("PENDING");
+        pending.setSubscriptionId(9);
+        pending.setEpisode(3);
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeAndStatusOrderByUpdatedTimeDesc(9, 3, "PENDING"))
+                .thenReturn(Optional.of(pending));
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.settlePendingTask(9, 3, "测试剧 - 第03集", "/drive/alist-tvbox-offline/测试剧 - 第03集");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("COMPLETED", captor.getValue().getStatus());
+        assertEquals("测试剧 - 第03集", captor.getValue().getTaskName());
+        assertEquals("/drive/alist-tvbox-offline/测试剧 - 第03集", captor.getValue().getTargetPath());
+    }
+
+    @Test
+    void settlePendingTaskIsNoopWithoutPendingRowOrAnchor() {
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeAndStatusOrderByUpdatedTimeDesc(9, 3, "PENDING"))
+                .thenReturn(Optional.empty());
+        service.settlePendingTask(9, 3, "产物", "/root/产物");
+        service.settlePendingTask(null, 3, "产物", "/root/产物"); // 无订阅锚点(手动离线)不结算
+        service.settlePendingTask(9, null, "产物", "/root/产物");
+        verify(offlineDownloadTaskRepository, never()).save(any());
     }
 
     @Test

@@ -80,6 +80,11 @@ public class Pan115OfflineDownloadHandler implements OfflineDownloadHandler {
 
     @Override
     public TaskResult submitAndWait(DriverAccount account, String url, String folderId) {
+        return submitAndWait(account, url, folderId, 10);
+    }
+
+    @Override
+    public TaskResult submitAndWait(DriverAccount account, String url, String folderId, int waitSeconds) {
         String cookie = requireCookie(account);
         String uid = extractUid(cookie);
 
@@ -110,7 +115,7 @@ public class Pan115OfflineDownloadHandler implements OfflineDownloadHandler {
             throw new BadRequestException("task failed: " + message);
         }
 
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < Math.max(1, waitSeconds); i++) {
             ObjectNode task = findTask(url, cookie, duplicateTask ? 2 : 1);
             if (task == null) {
                 sleepOneSecond();
@@ -136,7 +141,7 @@ public class Pan115OfflineDownloadHandler implements OfflineDownloadHandler {
             sleepOneSecond();
         }
 
-        throw new BadRequestException("离线下载任务未在10秒内完成");
+        throw new BadRequestException("离线下载任务未在" + Math.max(1, waitSeconds) + "秒内完成");
     }
 
     @Override

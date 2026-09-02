@@ -108,6 +108,11 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
 
     @Override
     public TaskResult submitAndWait(DriverAccount account, String url, String folderId) {
+        return submitAndWait(account, url, folderId, 30);
+    }
+
+    @Override
+    public TaskResult submitAndWait(DriverAccount account, String url, String folderId, int waitSeconds) {
         log.info("submitting thunder offline download: accountId={}, folderId={}", account.getId(), folderId);
 
         ObjectNode createBody = objectMapper.createObjectNode();
@@ -133,7 +138,7 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
         }
         log.info("thunder task created: taskId={}", taskId);
 
-        for (int i = 0; i < 30; i++) {
+        for (int i = 0; i < Math.max(1, waitSeconds); i++) {
             ObjectNode taskList = exchangeWithRetry(account,
                     TASKS_URL + "?type=offline&limit=10000&page_token=",
                     HttpMethod.GET, null);
@@ -162,7 +167,7 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
             sleepOneSecond();
         }
 
-        throw new BadRequestException("迅雷云盘离线下载任务未在30秒内完成");
+        throw new BadRequestException("迅雷云盘离线下载任务未在" + Math.max(1, waitSeconds) + "秒内完成");
     }
 
     @Override

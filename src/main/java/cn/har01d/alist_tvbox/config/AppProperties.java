@@ -179,6 +179,14 @@ public class AppProperties {
         private int panjuMaxResolves = 8;
         /** 盘聚:整源搜索总超时(秒) */
         private int panjuTimeoutSeconds = 45;
+        /** 6V磁力搜索源(xb6v.com,帝国CMS,免登录;磁力为主+少量网盘资源):追剧磁力兜底与候选池补充来源 */
+        private boolean xb6vEnabled = true;
+        /** 6V磁力:每次搜索最多抓取的详情页数 */
+        private int xb6vMaxDetailPages = 3;
+        /** 6V磁力:每个详情页最多产出的磁力条目数(长番详情页磁力可达数百条) */
+        private int xb6vMaxMagnets = 50;
+        /** 6V磁力:整源搜索总超时(秒) */
+        private int xb6vTimeoutSeconds = 45;
         /** 订阅巡检并发度:到期订阅并发检查,多个订阅的搜索不再互相排队(源侧压力不放大,见 searchExecutor) */
         private int checkConcurrency = 4;
         /** 磁力兜底介入的补搜轮次门槛(转存优先):round 达到该值(单集词轮)且仍缺才用磁力,
@@ -186,6 +194,9 @@ public class AppProperties {
         private int magnetFallbackMinRound = 2;
         /** 磁力兜底:离线账号上未收割(PENDING)任务数上限,防一部剧把离线配额烧光 */
         private int magnetMaxPending = 2;
+        /** 磁力兜底提交的同步等待时长(秒,默认与迅雷/光鸭一致 30):超时仍按 PENDING 落行等收割;
+         *  手动离线下载不受此影响,走各盘默认等待(115=10 秒/迅雷、光鸭=30 秒) */
+        private int magnetSubmitTimeoutSeconds = 30;
         /** 磁力兜底硬失败冷却(小时):候选全灭/提交被拒后的退避 */
         private int magnetCooldownHours = 24;
         /** 磁力兜底超时重查间隔(小时):SUBMITTED 任务网盘侧还在下载,到期前不再提交新磁力 */

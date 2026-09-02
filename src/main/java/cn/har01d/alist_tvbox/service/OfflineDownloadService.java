@@ -188,13 +188,15 @@ public class OfflineDownloadService {
     }
 
     /**
-     * 追剧磁力兜底提交(三态,见 {@link MagnetSubmitResult})。
+     * 追剧磁力兜底提交(三态,见 {@link MagnetSubmitResult})。waitSeconds 为同步等待时长
+     * (app.subscription.magnet-submit-timeout-seconds,默认 30 秒;超时仍按 PENDING 落行
+     * 等收割,手动离线走各盘默认等待不受影响)。
      * <p>
      * 与 {@link #downloadTarget} 的差异:超时(submitAndWait 等不到完成)不当失败——网盘侧任务
      * 已创建,记 PENDING 等巡检下轮扫描收割,重复提交会在网盘侧重复建任务烧离线配额。
      * FAILED 也落行(带订阅/集号):试错同样消耗配额与网盘侧风控信任,且同磁力不再重试。
      */
-    public MagnetSubmitResult submitMagnet(String url, Integer subscriptionId, Integer episode) {
+    public MagnetSubmitResult submitMagnet(String url, Integer subscriptionId, Integer episode, int waitSeconds) {
         validateUrl(url);
         StoredConfig config = loadEnabledConfig();
         DriverAccount account = getAccount(config.accountId(), config.driverType());
@@ -216,11 +218,11 @@ public class OfflineDownloadService {
 
         OfflineDownloadHandler handler = getHandler(config.driverType());
         String pathId = requireOfflineFolderId(config);
-        log.info("submitting magnet offline download: driverType={}, accountId={}, urlHash={}, subscription={}, episode={}",
-                config.driverType(), account.getId(), urlHash, subscriptionId, episode);
+        log.info("submitting magnet offline download: driverType={}, accountId={}, urlHash={}, subscription={}, episode={}, waitSeconds={}",
+                config.driverType(), account.getId(), urlHash, subscriptionId, episode, waitSeconds);
         OfflineDownloadHandler.TaskResult result;
         try {
-            result = handler.submitAndWait(account, url, pathId);
+            result = handler.submitAndWait(account, url, pathId, waitSeconds);
         } catch (BadRequestException e) {
             if (isTimeoutMessage(e.getMessage())) {
                 saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_PENDING, null, null, false);
@@ -244,6 +246,31 @@ public class OfflineDownloadService {
             refreshOfflineFolderId(config.accountId());
         } catch (BadRequestException e) {
             log.debug("skip syncing offline folder on startup: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 收割入账后结算超时 PENDING 行:该订阅该集最新一条 PENDING 置 COMPLETED 并补 taskName/targetPath ——
+     * pending 闸门(countByAccountIdAndStatus)与 urlHash 查重语义随之恢复,不会再被已完成任务永久占满;
+     * 同步完成路径本就有 COMPLETED 行,此处自然 no-op。结算失败只记日志,不影响收割入账。
+     */
+    public void settlePendingTask(Integer subscriptionId, Integer episode, String taskName, String targetPath) {
+        if (subscriptionId == null || episode == null || StringUtils.isBlank(taskName)) {
+            return;
+        }
+        try {
+            offlineDownloadTaskRepository
+                    .findFirstBySubscriptionIdAndEpisodeAndStatusOrderByUpdatedTimeDesc(subscriptionId, episode, STATUS_PENDING)
+                    .ifPresent(task -> {
+                        task.setStatus(STATUS_COMPLETED);
+                        task.setTaskName(taskName);
+                        task.setTargetPath(StringUtils.defaultString(targetPath));
+                        task.setUpdatedTime(Instant.now());
+                        offlineDownloadTaskRepository.save(task);
+                        log.info("settled pending offline download task {} to product {}", task.getId(), taskName);
+                    });
+        } catch (Exception e) {
+            log.warn("settle pending offline download task failed: {}", e.getMessage());
         }
     }
 
@@ -374,7 +401,7 @@ public class OfflineDownloadService {
         return Storage.getMountPath(account) + "/" + OFFLINE_DIR_NAME;
     }
 
-    /** 三 handler 的超时文案(115=10秒/迅雷=30秒/光鸭=30秒「未在…内完成」)。 */
+    /** 三 handler 的超时文案(「未在N秒内完成」,N 随等待时长动态)。 */
     private static boolean isTimeoutMessage(String message) {
         return message != null && message.contains("未在") && message.contains("内完成");
     }

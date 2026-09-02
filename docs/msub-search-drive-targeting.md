@@ -1,16 +1,16 @@
 # 追剧搜索按订阅生效盘定向(含磁力/ed2k)
 
 > 状态(2026-09-02):**已全部实现(未提交)**——磁力/ed2k 候选收割(§4,ed2k 同权消费;§4a
-> 站点源三源磁力产出:观影 downlist/盘链 links/盘聚 seed 两跳)+
+> 站点源磁力产出:观影 downlist/盘链 links/盘聚 seed 两跳/6V磁力 详情表格)+
 > 盘定向主体(§3:`SearchTargets` 值对象贯穿,TG-Search/盘搜 cloud_types 服务端定向,
 > 站点源盘检前过滤,专项搜索扩 magnet+ed2k 双类型)。决策 2/3/4 均按推荐落地。
 
 ## 1. 问题
 
-追剧搜索(`fillPool` / `preview` → `searchAllSources` 六路并发)目前全量召回,不做订阅级盘定向:
+追剧搜索(`fillPool` / `preview` → `searchAllSources` 七路并发)目前全量召回,不做订阅级盘定向:
 
 - **TG-Search**(`searchTgSearchApi`)与**盘搜 PanSou**(`RemoteSearchService.search`)的服务端都支持 `cloud_types` 过滤,但当前用**全局 `tg.drivers`** 口径,与订阅实际能用的盘无关。
-- **站点源**(玩偶/盘链/观影/蜗牛/盘聚)与**电报网页源**无服务端定向能力,结果全量返回。
+- **站点源**(玩偶/盘链/观影/蜗牛/盘聚/6V磁力)与**电报网页源**无服务端定向能力,结果全量返回。
 - 域外盘结果的三重浪费:
   1. tg-search 的 `limit`(searchSize)配额被域外盘结果吃掉,白名单盘反而可能被挤出;
   2. 站点源结果**全部**送盘检(`filterInvalidPanSouLinks`),域外盘烧盘检账号配额;
@@ -41,7 +41,7 @@
 |---|---|---|
 | TG-Search | `cloud_types` 覆盖参数:盘白名单非空时**替换**全局 `tg.drivers` 口径;磁力兜底生效时追加 `magnet`+`ed2k` | 聚合出口统一过滤 |
 | 盘搜 PanSou | `request.cloudTypes` 同上口径 | `addMergedMessages`/结果循环的 `tgDrivers` 门禁替换为定向集数值类型 |
-| 站点源×5 | 无能力 | **盘检送检之前**按定向集剔除(省盘检配额,这是最大收益点之一);磁力见 §4a |
+| 站点源×6 | 无能力 | **盘检送检之前**按定向集剔除(省盘检配额,这是最大收益点之一);磁力见 §4a |
 | 电报网页源 | 无能力 | 聚合出口统一过滤 |
 | 磁力专项 `searchMagnets` | 现状单查 `cloudType=magnet`(见 §8 决策 4) | 不动(绕过所有盘门禁,round≥2 按集精确搜索) |
 
@@ -77,20 +77,22 @@ pan 部分 = 白名单非空 ? 白名单映射 : 全局 tg.drivers 映射(= 现�
 
 ### 4a. 站点源的磁力产出(2026-09-02 追加,已实现未提交)
 
-> 站点源此前只产出可挂载网盘分享,磁力在源头即被丢弃;磁力兜底开启后这三个源的磁力
-> 资源应进入 §4 的收割管道。atv-spiders/py 的对应爬虫(观影/盘链/盘聚)是契约参考。
+> 站点源此前只产出可挂载网盘分享,磁力在源头即被丢弃;磁力兜底开启后这些源的磁力
+> 资源应进入 §4 的收割管道。atv-spiders/py 的对应爬虫(观影/盘链/盘聚/6V磁力)是契约参考。
 
 | 源 | 磁力形态(契约) | 实现要点 |
 |---|---|---|
 | 观影 | 详情 `/res/downurl` 同一响应的 `downlist.list.{m,t}`:btih 哈希+种子名平行数组 | `magnetsFromDetail`:哈希小写、长度 ≥8(py 同口径),折 `magnet:?xt=urn:btih:{hash}&dn={种子名}`(种子名剥开头杂符+压空白,py `_clean_name`);**零额外请求** —— 顺手解析同一详情响应 |
 | 盘链 | `search_pan_links` 的 `data.{group}.links[]`:`url` 为 `magnet:`/`ed2k:` 直链,或 token 经 `/api/go.php` 302 解出 | `messagesFromGroups` 非数字 type 分支产出离线 Message;资源标题(`title` 字段,剥「介绍:」尾巴与 HTML 标签,py `_clean_link_title`)进 `content` —— 磁力标题门禁的回落口径 |
 | 盘聚 | 详情页 `.seed-list .seeds` 行(href 含 `seed_id=`)→ 站内中转页(两跳)脚本里的磁力 | `parseSeedRows`(seed_id 去重、href 剥裸 Unicode 的 movie_title)+ `resolveSeedLink`(明链正则优先,`const data="base64"` 密文解码兜底,py `_extract_download_link`);**每行一次真实请求** —— `search(keyword, includeOffline)` 按磁力兜底开关门控,预算独立(`MAX_SEED_RESOLVES=3`/详情页,不挤占网盘中转配额) |
+| 6V磁力 | 帝国 CMS 站(xb6v.com,免登录):POST `/e/search/11index.php`(py 版 `1index.php` 已随改版 404)→302→ result 页卡片 → 详情页下载表格;**磁力为主、少量网盘资源同页混排** | `Xb6vSearchService`:磁力行(a[href^=magnet:],自带 `dn=` 种子名解码优先,回落行文本)+ 网盘行(parseType 数字盘型,提取码多内嵌 `?pwd=`),所在资源组组头(前向最近 strong 行,如「幕兰之战 年番4」)并入 content 供集数分组打分;磁力上限 `xb6vMaxMagnets=50`/详情页(长番磁力可达数百条) |
 
-统一闸门:三源产出的 magnet/ed2k Message(type=`magnet`/`ed2k`)走既有 `retainTargetTypes`
+统一闸门:四源产出的 magnet/ed2k Message(type=`magnet`/`ed2k`)走既有 `retainTargetTypes`
 (兜底未开即剔除,盘检 `selectCheckable` 本就跳过离线类型)+ fillPool 的 NON_PAN 收割,
 与 TG 源磁力完全同管道;`preview`(offlineIncluded=false)不受影响。观影/盘链磁力与网盘
 链接同响应零额外请求,故不设开关参数;盘聚 seed 是真实网络成本,由 `searchAllSources` 传
-`targets.offlineIncluded()` 决定是否发起。
+`targets.offlineIncluded()` 决定是否发起;**6V 整源门控**——磁力为主、网盘只是少量顺手
+产出,订阅磁力兜底未生效时整路不搜(不为几条网盘链接白付一路搜索 + N 个详情页请求)。
 
 ## 5. preview(候选预览)
 

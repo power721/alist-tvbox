@@ -2240,6 +2240,7 @@ const weightDefs: { key: string; label: string; value: number }[] = [
   { key: 'source.panlian', label: '盘链源', value: 12 },
   { key: 'source.panju', label: '盘聚源(SeedHub)', value: 12 },
   { key: 'source.guanying', label: '观影源', value: 12 },
+  { key: 'source.xb6v', label: '6V磁力源', value: 12 },
   { key: 'baidu.free', label: '百度免会员', value: 17 },
   { key: 'pan115', label: '115追更弱', value: -10 },
   { key: 'pack.complete', label: '完结包', value: -6 },

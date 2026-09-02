@@ -7,6 +7,10 @@ import java.util.Optional;
 public interface OfflineDownloadTaskRepository extends JpaRepository<OfflineDownloadTask, Integer> {
     Optional<OfflineDownloadTask> findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(Integer accountId, String urlHash);
 
+    /** 收割结算用:该订阅该集最新一条超时 PENDING(按集回写产物名/路径,恢复 pending 闸门语义)。 */
+    Optional<OfflineDownloadTask> findFirstBySubscriptionIdAndEpisodeAndStatusOrderByUpdatedTimeDesc(
+            Integer subscriptionId, Integer episode, String status);
+
     long countByAccountIdAndStatus(Integer accountId, String status);
 
     /** 单集离线配额:该订阅该集的提交尝试次数(含 FAILED) */

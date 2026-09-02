@@ -212,6 +212,33 @@ class MediaSubscriptionMagnetFallbackTest {
     }
 
     @Test
+    void harvestSettlesPendingTaskForCoveredEpisodes() {
+        // 超时 PENDING 行在收割入账时按集结算为 COMPLETED(补产物名/路径):
+        // pending 闸门不被已完成任务永久占满,urlHash 查重语义恢复
+        String root = "/drive/alist-tvbox-offline";
+        FsInfo dir = new FsInfo();
+        dir.setName("测试剧 - 第03集");
+        dir.setType(1);
+        FsResponse rootListing = new FsResponse();
+        rootListing.setFiles(List.of(dir));
+        when(aListService.listFiles(any(), org.mockito.ArgumentMatchers.eq(root), anyInt(), anyInt(), anyBoolean()))
+                .thenReturn(rootListing);
+        FsInfo file = new FsInfo();
+        file.setName("Show.S01E03.1080p.mkv");
+        file.setType(0);
+        file.setSize(800L * 1024 * 1024);
+        FsResponse productListing = new FsResponse();
+        productListing.setFiles(List.of(file));
+        when(aListService.listFiles(any(), org.mockito.ArgumentMatchers.eq(root + "/" + dir.getName()), anyInt(), anyInt(), anyBoolean()))
+                .thenReturn(productListing);
+
+        invokeHarvest(subscription(), Set.of(3));
+
+        verify(offlineDownloadService).settlePendingTask(9, 3, "测试剧 - 第03集",
+                root + "/测试剧 - 第03集");
+    }
+
+    @Test
     void retiresMagnetRowWhenProductDisappears() {
         String root = "/drive/alist-tvbox-offline";
         MediaSubscriptionResource row = new MediaSubscriptionResource();
@@ -279,18 +306,18 @@ class MediaSubscriptionMagnetFallbackTest {
         magnet.setLink("magnet:?xt=urn:btih:abc&dn=" + URLEncoder.encode("测试剧 - 03 4K", StandardCharsets.UTF_8));
         magnet.setSize(900L * 1024 * 1024);
         when(telegramService.searchMagnets(anyString(), anyInt())).thenReturn(List.of(magnet));
-        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt())).thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
+        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt(), anyInt())).thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
-        verify(offlineDownloadService).submitMagnet(org.mockito.ArgumentMatchers.startsWith("magnet:"), anyInt(), anyInt());
+        verify(offlineDownloadService).submitMagnet(org.mockito.ArgumentMatchers.startsWith("magnet:"), anyInt(), anyInt(), anyInt());
         ArgumentCaptor<MediaSubscriptionEvent> captor = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
         verify(eventRepository).save(captor.capture());
         assertEquals(MediaSubscriptionEvent.TYPE_MAGNET_SUBMITTED, captor.getValue().getType());
 
         // SUBMITTED 冷却:下轮不重复提交(网盘侧任务已在,重复提交烧配额)
         service.magnetFallback(subscription(), Set.of(3), 6);
-        verify(offlineDownloadService, times(1)).submitMagnet(anyString(), anyInt(), anyInt());
+        verify(offlineDownloadService, times(1)).submitMagnet(anyString(), anyInt(), anyInt(), anyInt());
     }
 
     @Test
@@ -302,7 +329,7 @@ class MediaSubscriptionMagnetFallbackTest {
         when(telegramService.searchMagnets(anyString(), anyInt())).thenReturn(List.of(magnet));
 
         service.magnetFallback(subscription(), Set.of(3), 5);
-        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt()); // 剧名不匹配:不提交
+        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt(), anyInt()); // 剧名不匹配:不提交
 
         service.magnetFallback(subscription(), Set.of(3), 6);
         verify(telegramService, times(1)).searchMagnets(anyString(), anyInt()); // 冷却期:连搜索都不发起
@@ -324,7 +351,7 @@ class MediaSubscriptionMagnetFallbackTest {
         when(telegramService.searchMagnets(anyString(), anyInt())).thenReturn(List.of(magnet));
 
         service.magnetFallback(subscription(), Set.of(3), 5);
-        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt()); // 缺 3 来 7:不提交
+        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt(), anyInt()); // 缺 3 来 7:不提交
     }
 
     // ---------- 磁力标题集号解析 ----------
@@ -386,19 +413,19 @@ class MediaSubscriptionMagnetFallbackTest {
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
-        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt());
+        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt(), anyInt());
     }
 
     @Test
     void episodeQuotaMovesToNextGapEpisode() {
         when(offlineDownloadService.episodeMagnetCount(9, 3)).thenReturn(2L); // 单集配额(默认 2)已耗尽
         when(telegramService.searchMagnets(anyString(), anyInt())).thenReturn(List.of(matchedMagnet(5)));
-        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt()))
+        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         service.magnetFallback(subscription(), Set.of(3, 5), 5);
 
-        verify(offlineDownloadService).submitMagnet(anyString(), org.mockito.ArgumentMatchers.eq(9), org.mockito.ArgumentMatchers.eq(5));
+        verify(offlineDownloadService).submitMagnet(anyString(), org.mockito.ArgumentMatchers.eq(9), org.mockito.ArgumentMatchers.eq(5), anyInt());
     }
 
     @Test
@@ -406,12 +433,12 @@ class MediaSubscriptionMagnetFallbackTest {
         when(settingRepository.findById("msub_magnet_total_quota")).thenReturn(Optional.of(new cn.har01d.alist_tvbox.entity.Setting("msub_magnet_total_quota", "0")));
         when(offlineDownloadService.totalMagnetCount()).thenReturn(9999L);
         when(telegramService.searchMagnets(anyString(), anyInt())).thenReturn(List.of(matchedMagnet(3)));
-        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt()))
+        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
-        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt());
+        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt(), anyInt());
     }
 
     // ---------- 磁力解析预筛 ----------
@@ -428,7 +455,7 @@ class MediaSubscriptionMagnetFallbackTest {
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
-        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt());
+        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt(), anyInt());
     }
 
     @Test
@@ -439,24 +466,24 @@ class MediaSubscriptionMagnetFallbackTest {
                 "abc", "测试剧", 800L * 1024 * 1024,
                 List.of(new cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetFile("Show.S01E03.1080p.mkv", 800L * 1024 * 1024)))));
         when(telegramService.searchMagnets(anyString(), anyInt())).thenReturn(List.of(matchedMagnet(3)));
-        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt()))
+        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
-        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt());
+        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt(), anyInt());
     }
 
     @Test
     void resolverFailureFallsBackToDnMatchWithZeroSize() {
         // 镜像全挂(resolve empty)→ dn 名口径:size=0 的磁力条目也能提交(修复体积门禁全灭)
         when(telegramService.searchMagnets(anyString(), anyInt())).thenReturn(List.of(matchedMagnet(3)));
-        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt()))
+        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
-        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt());
+        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt(), anyInt());
     }
 
     @Test
@@ -496,12 +523,12 @@ class MediaSubscriptionMagnetFallbackTest {
     @Test
     void poolMagnetsAreConsumedBeforeDedicatedSearch() {
         service.collectMagnetCandidate(9, matchedMagnet(3)); // 巡检搜索顺手收下的
-        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt()))
+        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
-        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt());
+        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt(), anyInt());
         verify(telegramService, never()).searchMagnets(anyString(), anyInt()); // 有现成磁力:不专项搜
     }
 
@@ -512,13 +539,13 @@ class MediaSubscriptionMagnetFallbackTest {
         ed2k.setLink("ed2k://|file|测试剧 - 03.mkv|834000000|31D6CFE0D16AE931B73C59D7E0C089C0|/");
         ed2k.setType("ed2k");
         when(telegramService.searchMagnets(anyString(), anyInt())).thenReturn(List.of(ed2k));
-        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt()))
+        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
         verify(offlineDownloadService).submitMagnet(
-                org.mockito.ArgumentMatchers.startsWith("ed2k://"), anyInt(), anyInt());
+                org.mockito.ArgumentMatchers.startsWith("ed2k://"), anyInt(), anyInt(), anyInt());
     }
 
     @Test
@@ -534,13 +561,13 @@ class MediaSubscriptionMagnetFallbackTest {
         Message wrongEpisode = matchedMagnet(7); // 缓存里有但缺 3 来 7:不可用
         service.collectMagnetCandidate(9, wrongEpisode);
         when(telegramService.searchMagnets(anyString(), anyInt())).thenReturn(List.of(matchedMagnet(3)));
-        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt()))
+        when(offlineDownloadService.submitMagnet(anyString(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
         verify(telegramService, times(1)).searchMagnets(anyString(), anyInt()); // 缓存无可用项才兜底搜
-        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt());
+        verify(offlineDownloadService).submitMagnet(anyString(), anyInt(), anyInt(), anyInt());
     }
 
     @Test
@@ -555,6 +582,6 @@ class MediaSubscriptionMagnetFallbackTest {
 
         service.magnetFallback(subscription, Set.of(3), 5);
 
-        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt()); // 订阅排除词硬拒
+        verify(offlineDownloadService, never()).submitMagnet(anyString(), anyInt(), anyInt(), anyInt()); // 订阅排除词硬拒
     }
 }

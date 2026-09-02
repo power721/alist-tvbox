@@ -42,6 +42,7 @@ import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanjuSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.Xb6vSearchService;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -229,6 +230,7 @@ public class MediaSubscriptionCheckService {
     private final GuanYingSearchService guanYingSearchService;
     private final WoniuSearchService woniuSearchService;
     private final PanjuSearchService panjuSearchService;
+    private final Xb6vSearchService xb6vSearchService;
     private final MetadataService metadataService;
     private final AutoUpdateExecutor autoUpdateExecutor;
     /** 观看进度只读来源:追更系统不自行存储进度,多端合并由播放记录同步负责 */
@@ -324,8 +326,8 @@ public class MediaSubscriptionCheckService {
      * 源侧压力不随并发订阅数放大 —— 搜索五路池(searchExecutor)与玩偶/TG 内部池全局共享,天然限流。
      */
     private final ExecutorService executor;
-    /** 多源搜索并发池(TG 聚合 + 玩偶/盘链/观影/蜗牛/盘聚 各一路):串行排队时总时长=各源之和(线上 37s),并发后=最慢一路 */
-    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(6, r -> {
+    /** 多源搜索并发池(TG 聚合 + 玩偶/盘链/观影/蜗牛/盘聚/6V 各一路):串行排队时总时长=各源之和(线上 37s),并发后=最慢一路 */
+    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(7, r -> {
         Thread thread = new Thread(r, "msub-search-" + SEARCH_SEQ.incrementAndGet());
         thread.setDaemon(true);
         return thread;
@@ -351,6 +353,7 @@ public class MediaSubscriptionCheckService {
                                          GuanYingSearchService guanYingSearchService,
                                          WoniuSearchService woniuSearchService,
                                          PanjuSearchService panjuSearchService,
+                                         Xb6vSearchService xb6vSearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          HistoryRepository historyRepository,
@@ -383,6 +386,7 @@ public class MediaSubscriptionCheckService {
         this.guanYingSearchService = guanYingSearchService;
         this.woniuSearchService = woniuSearchService;
         this.panjuSearchService = panjuSearchService;
+        this.xb6vSearchService = xb6vSearchService;
         this.metadataService = metadataService;
         this.autoUpdateExecutor = autoUpdateExecutor;
         this.historyRepository = historyRepository;
@@ -428,7 +432,7 @@ public class MediaSubscriptionCheckService {
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
-                guanYingSearchService, woniuSearchService, panjuSearchService, metadataService, autoUpdateExecutor,
+                guanYingSearchService, woniuSearchService, panjuSearchService, null, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper,
                 fixedProvider(transferService), notificationService, null, null);
     }
@@ -476,7 +480,7 @@ public class MediaSubscriptionCheckService {
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
-                guanYingSearchService, woniuSearchService, panjuSearchService, metadataService, autoUpdateExecutor,
+                guanYingSearchService, woniuSearchService, panjuSearchService, null, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper, fixedProvider(null),
                 notificationService, null, null);
     }
@@ -3659,6 +3663,10 @@ public class MediaSubscriptionCheckService {
         addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_GAP_FILLED,
                 "磁力离线补缺 第" + joinNumbers(new ArrayList<>(covered)) + " 集("
                         + StringUtils.abbreviate(taskName, 40) + ")");
+        // 收割结算:超时 PENDING 行按集回写产物名/路径 —— pending 闸门不被已完成任务永久占满
+        for (Integer episode : covered) {
+            offlineDownloadService.settlePendingTask(subscription.getId(), episode, taskName, root + "/" + taskName);
+        }
         gapSearchRounds.remove(subscription.getId());
         return covered;
     }
@@ -3739,7 +3747,8 @@ public class MediaSubscriptionCheckService {
                 }
             }
             cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
-                    offlineDownloadService.submitMagnet(message.getLink(), subscription.getId(), episode);
+                    offlineDownloadService.submitMagnet(message.getLink(), subscription.getId(), episode,
+                            appProperties.getSubscription().getMagnetSubmitTimeoutSeconds());
             if (cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED.equals(result.status())) {
                 harvestCompletedProduct(subscription, result.taskName());
                 return true;
@@ -5763,8 +5772,9 @@ public class MediaSubscriptionCheckService {
      * 多源聚合搜索(六路并发):TG 聚合(PanSou/TG-Search/网页,内部再并行 —— 追更一律走聚合,
      * 回退链"够用即停"会让配了盘搜的部署永远调不到另外两个源)之上,并入玩偶聚合站源
      * (玩偶/多多/木偶等 11 站,详情页直接提取网盘分享链接)、盘链/观影/蜗牛源(需用户自配
-     * 账号/Cookie,未配置时静默关闭)与盘聚源(seedhub 系聚合站,免登录,Cloudflare 被拦时
-     * 静默降级)。<b>六路同时发起</b> —— 原先站点源在 TG 全部返回后逐个
+     * 账号/Cookie,未配置时静默关闭)、盘聚源(seedhub 系聚合站,免登录,Cloudflare 被拦时
+     * 静默降级)与 6V磁力源(xb6v.com,帝国CMS 免登录,磁力为主+少量网盘资源,<b>仅订阅
+     * 磁力兜底生效时参与搜索</b>)。<b>七路同时发起</b> —— 原先站点源在 TG 全部返回后逐个
      * 串行排队,总时长 = 各源之和(线上 37s 级),并发后 = 最慢一路;各源内部自带超时/退避,
      * 外层 90s 硬顶兜底;任一源失败静默为空,按 link 天然去重,TG 结果在前(先见先得)。
      * <p>
@@ -5772,7 +5782,8 @@ public class MediaSubscriptionCheckService {
      * 不限,防 limit 配额被域外盘吃掉);站点源无服务端能力,结果在盘检送检前按定向集剔除
      * (域外盘不烧盘检配额);magnet/ed2k 仅磁力兜底生效时召回(入 NON_PAN 收割,不入池)。
      * 站点源的磁力:观影(downlist 磁力哈希)与盘链(links 磁力/ed2k)在详情响应里顺手产出,
-     * 盘聚 seed 行按开关决定是否发起两跳中转解析 —— 三源产出后统一走定向集闸门。
+     * 盘聚 seed 行按开关决定是否发起两跳中转解析,6V 详情表格磁力行与网盘行同页混排 ——
+     * 四源产出后统一走定向集闸门。
      */
     private List<Message> searchAllSources(String keyword, int size, boolean cached, boolean respectBackoff,
                                            SearchTargets targets) {
@@ -5791,13 +5802,18 @@ public class MediaSubscriptionCheckService {
         CompletableFuture<List<Message>> panju = panjuSearchService != null && appProperties.getSubscription().isPanjuEnabled()
                 ? searchAsync("panju", keyword, () -> panjuSearchService.search(keyword,
                         targets != null && targets.offlineIncluded()), respectBackoff) : null;
+        // 6V 是磁力为主的站(网盘只是少量顺手产出):订阅未开磁力兜底时整源不搜 ——
+        // 不为那几条网盘链接白付一路搜索 + N 个详情页请求(门控口径与盘聚 seed 解析同为 offlineIncluded)
+        CompletableFuture<List<Message>> xb6v = xb6vSearchService != null && appProperties.getSubscription().isXb6vEnabled()
+                && targets != null && targets.offlineIncluded()
+                ? searchAsync("xb6v", keyword, () -> xb6vSearchService.search(keyword), respectBackoff) : null;
 
         List<Message> messages = new ArrayList<>(joinSearch("telegram", telegram));
         Set<String> links = new java.util.HashSet<>();
         for (Message message : messages) {
             links.add(message.getLink());
         }
-        // 站点源(玩偶/盘链/观影/蜗牛/盘聚)是聚合站抓取,链接新鲜度未知 —— 统一过盘检再入列
+        // 站点源(玩偶/盘链/观影/蜗牛/盘聚/6V)是聚合站抓取,链接新鲜度未知 —— 统一过盘检再入列
         // (telegram 聚合在其内部已过检,不重复送检):合并去重后送检一次,好链接盖 validityState
         // 供入池准入/审计消费,bad/uncertain 在此剔除;盘检未配置时原样返回。
         List<Message> siteMessages = new ArrayList<>();
@@ -5816,6 +5832,9 @@ public class MediaSubscriptionCheckService {
         }
         if (panju != null) {
             mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("panju", panju), targets), "panju", keyword);
+        }
+        if (xb6v != null) {
+            mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("xb6v", xb6v), targets), "xb6v", keyword);
         }
         if (!siteMessages.isEmpty() && panLinkCheckService != null) {
             siteMessages = new ArrayList<>(panLinkCheckService.filterInvalidPanSouLinks(siteMessages));
@@ -6299,11 +6318,12 @@ public class MediaSubscriptionCheckService {
             Map.entry("drive.outside", -10),   // 偏好之外的盘(降权不硬过滤)
             Map.entry("account", 8),           // 已配置该盘账号
             Map.entry("account.vip", 15),      // VIP 账号
-            Map.entry("source.wanou", 22),     // 站点源档位:玩偶略大于蜗牛 > 盘链/盘聚/观影 > TG 系(0 基准,不入表)
+            Map.entry("source.wanou", 22),     // 站点源档位:玩偶略大于蜗牛 > 盘链/盘聚/观影/6V > TG 系(0 基准,不入表)
             Map.entry("source.woniu", 20),     // 蜗牛
             Map.entry("source.panlian", 12),   // 盘链
             Map.entry("source.panju", 12),     // 盘聚
             Map.entry("source.guanying", 12),  // 观影
+            Map.entry("source.xb6v", 12),      // 6V磁力(磁力不入池,权重只作用于其少量网盘条目)
             Map.entry("drive.main", 15),       // 主网盘候选
             Map.entry("baidu.free", 17),       // 百度分享免会员 15 + 夸克易和谐耐删加成 2(线上「重器」:夸克滚动窗分享说删就删)
             Map.entry("pan115", -10),          // 115 分享追更弱
