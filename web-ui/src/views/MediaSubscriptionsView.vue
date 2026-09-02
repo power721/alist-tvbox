@@ -150,8 +150,8 @@
           <el-input v-model="form.keyword" placeholder="默认同剧名;资源命名差异大时可填别名"/>
         </el-form-item>
         <el-form-item label="自定义搜索词">
-          <el-input v-model="form.customKeywords" type="textarea" :rows="2"
-                    placeholder="每行一个,至多 5 个;英文名/别名/简繁写法等额外搜索词,巡检与补搜各词独立搜索,留空不启用"/>
+          <el-select v-model="form.customKeywords" multiple allow-create filterable
+                     placeholder="英文名/别名/简繁写法等,回车添加,至多5个"/>
         </el-form-item>
         <el-form-item label="条目链接">
           <div class="meta-search">
@@ -1451,7 +1451,7 @@ const handleAdd = () => {
   form.value = {
     name: '',
     keyword: '',
-    customKeywords: '',
+    customKeywords: [] as string[],
     season: 1,
     seasonStartEpisode: null,
     doubanId: null,
@@ -1489,7 +1489,7 @@ const handleEdit = (row: SubscriptionDto) => {
     id: row.id,
     name: row.name,
     keyword: row.keyword,
-    customKeywords: row.customKeywords || '',
+    customKeywords: (row.customKeywords || '').split('\n').map((s: string) => s.trim()).filter(Boolean),
     season: row.season ?? 1,
     seasonStartEpisode: row.seasonStartEpisode ?? null,
     doubanId: row.doubanId,
@@ -1593,7 +1593,7 @@ const ratingOfSource = (label: string) => {
 const buildBody = () => ({
   name: form.value.name,
   keyword: form.value.keyword,
-  customKeywords: form.value.customKeywords,
+  customKeywords: form.value.customKeywords.map((k: string) => k.trim()).filter(Boolean).join('\n'),
   season: form.value.season,
   seasonStartEpisode: form.value.seasonStartEpisode ?? 0,
   doubanId: form.value.doubanId,
