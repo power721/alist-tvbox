@@ -43,6 +43,7 @@ import cn.har01d.alist_tvbox.service.sitesearch.PanjuSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.Xb6vSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.Pan123CommunitySearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.ZhenCangSearchService;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
@@ -235,6 +236,7 @@ public class MediaSubscriptionCheckService {
     private final PanjuSearchService panjuSearchService;
     private final Xb6vSearchService xb6vSearchService;
     private final ZhenCangSearchService zhenCangSearchService;
+    private final Pan123CommunitySearchService pan123CommunitySearchService;
     private final MetadataService metadataService;
     private final AutoUpdateExecutor autoUpdateExecutor;
     /** 观看进度只读来源:追更系统不自行存储进度,多端合并由播放记录同步负责 */
@@ -327,11 +329,11 @@ public class MediaSubscriptionCheckService {
     /**
      * 订阅巡检执行池:并发度可配(checkConcurrency,默认 3),到期订阅并发检查、手动触发的
      * 检查/换源/刷新不再与定时 sweep 排同一条队。同订阅重入由 {@link #inFlight} 防护;
-     * 源侧压力不随并发订阅数放大 —— 搜索八路池(searchExecutor)与玩偶/TG 内部池全局共享,天然限流。
+     * 源侧压力不随并发订阅数放大 —— 搜索九路池(searchExecutor)与玩偶/TG 内部池全局共享,天然限流。
      */
     private final ExecutorService executor;
-    /** 多源搜索并发池(TG 聚合 + 玩偶/盘链/观影/蜗牛/盘聚/6V/123臻藏 各一路):串行排队时总时长=各源之和(线上 37s),并发后=最慢一路 */
-    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(8, r -> {
+    /** 多源搜索并发池(TG 聚合 + 玩偶/盘链/观影/蜗牛/盘聚/6V/123臻藏/123社区 各一路):串行排队时总时长=各源之和(线上 37s),并发后=最慢一路 */
+    private final ExecutorService searchExecutor = Executors.newFixedThreadPool(9, r -> {
         Thread thread = new Thread(r, "msub-search-" + SEARCH_SEQ.incrementAndGet());
         thread.setDaemon(true);
         return thread;
@@ -359,6 +361,7 @@ public class MediaSubscriptionCheckService {
                                          PanjuSearchService panjuSearchService,
                                          Xb6vSearchService xb6vSearchService,
                                          ZhenCangSearchService zhenCangSearchService,
+                                         Pan123CommunitySearchService pan123CommunitySearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          HistoryRepository historyRepository,
@@ -393,6 +396,7 @@ public class MediaSubscriptionCheckService {
         this.panjuSearchService = panjuSearchService;
         this.xb6vSearchService = xb6vSearchService;
         this.zhenCangSearchService = zhenCangSearchService;
+        this.pan123CommunitySearchService = pan123CommunitySearchService;
         this.metadataService = metadataService;
         this.autoUpdateExecutor = autoUpdateExecutor;
         this.historyRepository = historyRepository;
@@ -438,7 +442,7 @@ public class MediaSubscriptionCheckService {
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
-                guanYingSearchService, woniuSearchService, panjuSearchService, null, null, metadataService, autoUpdateExecutor,
+                guanYingSearchService, woniuSearchService, panjuSearchService, null, null, null, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper,
                 fixedProvider(transferService), notificationService, null, null);
     }
@@ -486,7 +490,7 @@ public class MediaSubscriptionCheckService {
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
-                guanYingSearchService, woniuSearchService, panjuSearchService, null, null, metadataService, autoUpdateExecutor,
+                guanYingSearchService, woniuSearchService, panjuSearchService, null, null, null, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper, fixedProvider(null),
                 notificationService, null, null);
     }
@@ -5782,7 +5786,8 @@ public class MediaSubscriptionCheckService {
      * 账号/Cookie,未配置时静默关闭)、盘聚源(seedhub 系聚合站,免登录,Cloudflare 被拦时
      * 静默降级)与 6V磁力源(xb6v.com,帝国CMS 免登录,磁力为主+少量网盘资源,<b>仅订阅
      * 磁力兜底生效时参与搜索</b>)与 123臻藏源(123.qsxy.top,WordPress+Zibll,详情正文
-     * 需 Cookie,<b>仅订阅候选盘白名单包含 123 时参与搜索</b>)。<b>八路同时发起</b> —— 原先站点源在 TG 全部返回后逐个
+     * 需 Cookie)与 123社区源(123panfx.com/pan1.me,Xiuno BBS 论坛,纯 123 盘产出,
+     * <b>两源均仅订阅候选盘白名单包含 123 时参与搜索</b>)。<b>九路同时发起</b> —— 原先站点源在 TG 全部返回后逐个
      * 串行排队,总时长 = 各源之和(线上 37s 级),并发后 = 最慢一路;各源内部自带超时/退避,
      * 外层 90s 硬顶兜底;任一源失败静默为空,按 link 天然去重,TG 结果在前(先见先得)。
      * <p>
@@ -5815,20 +5820,24 @@ public class MediaSubscriptionCheckService {
         CompletableFuture<List<Message>> xb6v = xb6vSearchService != null && appProperties.getSubscription().isXb6vEnabled()
                 && targets != null && targets.offlineIncluded()
                 ? searchAsync("xb6v", keyword, () -> xb6vSearchService.search(keyword), respectBackoff) : null;
-        // 123臻藏是 123 云盘主题站(混少量其它盘/磁力):订阅候选盘白名单不含 123 时整源不搜 ——
-        // 搜了产出也几乎全被定向集闸门裁掉,不值一路搜索 + N 个详情页请求;白名单空(不限盘,
-        // 未配置的兜底口径)同理不搜,显式定向 123 才算「订阅包含 123」
+        // 123臻藏/123社区都是 123 云盘主题站(前者混少量其它盘,后者纯 123 产出):订阅候选盘
+        // 白名单不含 123 时整源不搜 —— 搜了产出几乎全被定向集闸门裁掉(123社区更是全灭),
+        // 不值一路搜索 + N 个详情页请求;白名单空(不限盘,未配置的兜底口径)同理不搜,
+        // 显式定向 123 才算「订阅包含 123」
+        boolean drive123 = targets != null && targets.drives().contains(ZhenCangSearchService.DRIVE_KEY);
         CompletableFuture<List<Message>> zencang = zhenCangSearchService != null
-                && appProperties.getSubscription().isZencangEnabled()
-                && targets != null && targets.drives().contains(ZhenCangSearchService.DRIVE_KEY)
+                && appProperties.getSubscription().isZencangEnabled() && drive123
                 ? searchAsync("zencang", keyword, () -> zhenCangSearchService.search(keyword), respectBackoff) : null;
+        CompletableFuture<List<Message>> pan123community = pan123CommunitySearchService != null
+                && appProperties.getSubscription().isPan123communityEnabled() && drive123
+                ? searchAsync("pan123community", keyword, () -> pan123CommunitySearchService.search(keyword), respectBackoff) : null;
 
         List<Message> messages = new ArrayList<>(joinSearch("telegram", telegram));
         Set<String> links = new java.util.HashSet<>();
         for (Message message : messages) {
             links.add(message.getLink());
         }
-        // 站点源(玩偶/盘链/观影/蜗牛/盘聚/6V/123臻藏)是聚合站抓取,链接新鲜度未知 —— 统一过盘检再入列
+        // 站点源(玩偶/盘链/观影/蜗牛/盘聚/6V/123臻藏/123社区)是聚合站抓取,链接新鲜度未知 —— 统一过盘检再入列
         // (telegram 聚合在其内部已过检,不重复送检):合并去重后送检一次,好链接盖 validityState
         // 供入池准入/审计消费,bad/uncertain 在此剔除;盘检未配置时原样返回。
         List<Message> siteMessages = new ArrayList<>();
@@ -5853,6 +5862,10 @@ public class MediaSubscriptionCheckService {
         }
         if (zencang != null) {
             mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("zencang", zencang), targets), "zencang", keyword);
+        }
+        if (pan123community != null) {
+            mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("pan123community", pan123community), targets),
+                    "pan123community", keyword);
         }
         if (!siteMessages.isEmpty() && panLinkCheckService != null) {
             siteMessages = new ArrayList<>(panLinkCheckService.filterInvalidPanSouLinks(siteMessages));
@@ -6336,13 +6349,14 @@ public class MediaSubscriptionCheckService {
             Map.entry("drive.outside", -10),   // 偏好之外的盘(降权不硬过滤)
             Map.entry("account", 8),           // 已配置该盘账号
             Map.entry("account.vip", 15),      // VIP 账号
-            Map.entry("source.wanou", 22),     // 站点源档位:玩偶略大于蜗牛 > 盘链/盘聚/观影/6V/123臻藏 > TG 系(0 基准,不入表)
+            Map.entry("source.wanou", 22),     // 站点源档位:玩偶略大于蜗牛 > 盘链/盘聚/观影/6V/123系 > TG 系(0 基准,不入表)
             Map.entry("source.woniu", 20),     // 蜗牛
             Map.entry("source.panlian", 12),   // 盘链
             Map.entry("source.panju", 12),     // 盘聚
             Map.entry("source.guanying", 12),  // 观影
             Map.entry("source.xb6v", 12),      // 6V磁力(磁力不入池,权重只作用于其少量网盘条目)
             Map.entry("source.zencang", 12),   // 123臻藏(123 主题站,仅订阅定向 123 时搜索)
+            Map.entry("source.pan123community", 12), // 123社区(纯 123 产出,仅订阅定向 123 时搜索)
             Map.entry("drive.main", 15),       // 主网盘候选
             Map.entry("baidu.free", 17),       // 百度分享免会员 15 + 夸克易和谐耐删加成 2(线上「重器」:夸克滚动窗分享说删就删)
             Map.entry("pan115", -10),          // 115 分享追更弱

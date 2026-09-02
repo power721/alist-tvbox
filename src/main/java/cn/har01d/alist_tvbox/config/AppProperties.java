@@ -194,6 +194,13 @@ public class AppProperties {
         private int zencangMaxDetailPages = 3;
         /** 123臻藏:整源搜索总超时(秒) */
         private int zencangTimeoutSeconds = 45;
+        /** 123社区搜索源(123panfx.com/pan1.me 双站探活,Xiuno BBS 论坛;纯 123 盘产出(链接规范化收敛 123pan.cn),
+         *  匿名可搜,「回复后可见」帖解锁需社区 Cookie;仅订阅候选盘白名单包含 123 时参与搜索):追剧候选池补充来源 */
+        private boolean pan123communityEnabled = true;
+        /** 123社区:每次搜索最多抓取的详情页数 */
+        private int pan123communityMaxDetailPages = 3;
+        /** 123社区:整源搜索总超时(秒) */
+        private int pan123communityTimeoutSeconds = 45;
         /** 订阅巡检并发度:到期订阅并发检查,多个订阅的搜索不再互相排队(源侧压力不放大,见 searchExecutor) */
         private int checkConcurrency = 4;
         /** 磁力兜底介入的补搜轮次门槛(转存优先):round 达到该值(单集词轮)且仍缺才用磁力,

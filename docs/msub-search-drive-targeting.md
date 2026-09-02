@@ -10,7 +10,7 @@
 追剧搜索(`fillPool` / `preview` → `searchAllSources` 八路并发)目前全量召回,不做订阅级盘定向:
 
 - **TG-Search**(`searchTgSearchApi`)与**盘搜 PanSou**(`RemoteSearchService.search`)的服务端都支持 `cloud_types` 过滤,但当前用**全局 `tg.drivers`** 口径,与订阅实际能用的盘无关。
-- **站点源**(玩偶/盘链/观影/蜗牛/盘聚/6V磁力/123臻藏)与**电报网页源**无服务端定向能力,结果全量返回。
+- **站点源**(玩偶/盘链/观影/蜗牛/盘聚/6V磁力/123臻藏/123社区)与**电报网页源**无服务端定向能力,结果全量返回。
 - 域外盘结果的三重浪费:
   1. tg-search 的 `limit`(searchSize)配额被域外盘结果吃掉,白名单盘反而可能被挤出;
   2. 站点源结果**全部**送盘检(`filterInvalidPanSouLinks`),域外盘烧盘检账号配额;
@@ -41,7 +41,7 @@
 |---|---|---|
 | TG-Search | `cloud_types` 覆盖参数:盘白名单非空时**替换**全局 `tg.drivers` 口径;磁力兜底生效时追加 `magnet`+`ed2k` | 聚合出口统一过滤 |
 | 盘搜 PanSou | `request.cloudTypes` 同上口径 | `addMergedMessages`/结果循环的 `tgDrivers` 门禁替换为定向集数值类型 |
-| 站点源×7 | 无能力 | **盘检送检之前**按定向集剔除(省盘检配额,这是最大收益点之一);磁力见 §4a;123臻藏整源门控见 §4a 末尾 |
+| 站点源×8 | 无能力 | **盘检送检之前**按定向集剔除(省盘检配额,这是最大收益点之一);磁力见 §4a;123臻藏/123社区整源门控见 §4a 末尾 |
 | 电报网页源 | 无能力 | 聚合出口统一过滤 |
 | 磁力专项 `searchMagnets` | 现状单查 `cloudType=magnet`(见 §8 决策 4) | 不动(绕过所有盘门禁,round≥2 按集精确搜索) |
 
@@ -87,6 +87,7 @@ pan 部分 = 白名单非空 ? 白名单映射 : 全局 tg.drivers 映射(= 现�
 | 盘聚 | 详情页 `.seed-list .seeds` 行(href 含 `seed_id=`)→ 站内中转页(两跳)脚本里的磁力 | `parseSeedRows`(seed_id 去重、href 剥裸 Unicode 的 movie_title)+ `resolveSeedLink`(明链正则优先,`const data="base64"` 密文解码兜底,py `_extract_download_link`);**每行一次真实请求** —— `search(keyword, includeOffline)` 按磁力兜底开关门控,预算独立(`MAX_SEED_RESOLVES=3`/详情页,不挤占网盘中转配额) |
 | 6V磁力 | 帝国 CMS 站(xb6v.com,免登录):POST `/e/search/11index.php`(py 版 `1index.php` 已随改版 404)→302→ result 页卡片 → 详情页下载表格;**磁力为主、少量网盘资源同页混排** | `Xb6vSearchService`:磁力行(a[href^=magnet:],自带 `dn=` 种子名解码优先,回落行文本)+ 网盘行(parseType 数字盘型,提取码多内嵌 `?pwd=`),所在资源组组头(前向最近 strong 行,如「幕兰之战 年番4」)并入 content 供集数分组打分;磁力上限 `xb6vMaxMagnets=50`/详情页(长番磁力可达数百条) |
 | 123臻藏 | WordPress+Zibll 站(123.qsxy.top,详情正文需 Cookie,含 wordpress_logged_in;「评论后可见」自动发评论解锁):搜索页 `?s=` 匿名卡片 → 详情正文 `wp-posts-content`;**123 盘为主、混少量其它盘/磁力/ed2k**(属性 href/data-clipboard-text + 裸 URL 正则,golink= base64 中转解码,提取码折 `?pwd=`/115 `password=`,付费/推广地址块清单剔除) | `ZhenCangSearchService`:Setting `zencang_host`/`zencang_cookie`(无 Cookie 静默关闭,py 的每日签到不搬);**整源门控按盘定向而非磁力开关**——`targets.drives()` 显式包含 `123` 才搜(123 主题站,订阅不定向 123 时产出几乎全被闸门裁掉;白名单空的不限盘口径同理不搜) |
+| 123社区 | Xiuno BBS「123分享社区」(123panfx.com/pan1.me 双站探活):搜索 `/search.htm?keyword=` AJAX JSON(手机 UA+XHR,**匿名可用**)→ 帖子 `thread-{id}.htm` 楼层 div.message 前 3 层;**纯 123 盘产出** —— share123 正则+通用 URL 过滤,全部规范化收敛 `https://123pan.cn/{s\|123pan}/{key}?pwd=`(镜像域名统一,提取码 URL 自带优先否则 key 后 60 字符窗口) | `Pan123CommunitySearchService`:Setting `pan123community_host`/`pan123community_cookie`(Cookie **可选**——匿名可搜可提取非隐藏帖;「请回复后再查看」帖配 Cookie 才自动回复解锁:POST `/post-create-{tid}-1.htm`,**站点发帖间隔冷却内直接跳过不发**(py 的 sleep 等够不搬:阻塞共享搜索线程不值,下轮巡检自愈),每搜索至多回复一次,成功后 1.2s 重取);**整源门控同 123臻藏**(`drives` 含 `123` 才搜,两源同一谓词同一用户定规);登录墙帖(无权访问文案)静默跳过 |
 
 统一闸门:五源产出的 magnet/ed2k Message(type=`magnet`/`ed2k`)走既有 `retainTargetTypes`
 (兜底未开即剔除,盘检 `selectCheckable` 本就跳过离线类型)+ fillPool 的 NON_PAN 收割,
@@ -94,8 +95,8 @@ pan 部分 = 白名单非空 ? 白名单映射 : 全局 tg.drivers 映射(= 现�
 链接同响应零额外请求,故不设开关参数;盘聚 seed 是真实网络成本,由 `searchAllSources` 传
 `targets.offlineIncluded()` 决定是否发起;**6V 整源门控**——磁力为主、网盘只是少量顺手
 产出,订阅磁力兜底未生效时整路不搜(不为几条网盘链接白付一路搜索 + N 个详情页请求);
-**123臻藏整源门控按盘定向**(`targets.drives().contains("123")`,用户定规「订阅包含
-123 网盘才搜索」)——123 主题站,订阅不定向 123 时整路不搜。
+**123臻藏/123社区整源门控按盘定向**(`targets.drives().contains("123")`,用户定规「订阅
+包含 123 网盘才搜索」)——123 主题站,订阅不定向 123 时整路不搜。
 
 ## 5. preview(候选预览)
 
@@ -118,7 +119,8 @@ pan 部分 = 白名单非空 ? 白名单映射 : 全局 tg.drivers 映射(= 现�
 | `TelegramService` | `searchAggregated` 改四参签名(唯一调用方是追剧);`search` 增定向重载(核心下沉 `doSearch`,观影走旧签名);`filterAndSort` 定向版;`searchTgSearchApi` 增 cloud_types 覆盖参数;`searchMagnets` 扩 magnet+ed2k 双类型(决策 4) |
 | `RemoteSearchService` | `search` 增定向重载(核心下沉 `doSearch`);`resolveCloudTypes`(白名单映射/全局口径 + 离线追加 + pan 空不发送护栏);`mergedTypeAllowed`/`resultTypeAllowed`(targets==null 逐字保留存量差异) |
 | 站点源三文件(§4a) | `GuanYingSearchService.magnetsFromDetail`(downlist 磁力哈希→magnet+dn);`PanLianSearchService.messagesFromGroups` 磁力/ed2k 分支(title 进 content);`PanjuSearchService.parseSeedRows`/`resolveSeedLink`/`search(keyword, includeOffline)`(seed 两跳按开关门控);`searchAllSources` 给盘聚传 `offlineIncluded` |
-| `ZhenCangSearchService`(123臻藏) | 新站点源(2026-09-02):契约照 atv-spiders/py/123臻藏.py;`searchAllSources` 整源门控 `drives` 含 `123` 才搜,searchExecutor 7→8,权重 `source.zencang=12`,AppProperties `zencangEnabled/zencangMaxDetailPages/zencangTimeoutSeconds`,web-ui 追剧设置加「123臻藏」tab(zencang_host/zencang_cookie)+ 权重表;测试 `ZhenCangSearchServiceTest` ×10 |
+| `ZhenCangSearchService`(123臻藏) | 新站点源(2026-09-02,commit 84d8de33):契约照 atv-spiders/py/123臻藏.py;`searchAllSources` 整源门控 `drives` 含 `123` 才搜,searchExecutor 7→8,权重 `source.zencang=12`,AppProperties `zencangEnabled/zencangMaxDetailPages/zencangTimeoutSeconds`,web-ui 追剧设置加「123臻藏」tab(zencang_host/zencang_cookie)+ 权重表;测试 `ZhenCangSearchServiceTest` ×10 |
+| `Pan123CommunitySearchService`(123社区) | 新站点源(2026-09-02,同批工作树):契约照 atv-spiders/py/123社区.py;与 123臻藏共用 `drives` 含 `123` 门控谓词,searchExecutor 8→9,权重 `source.pan123community=12`,AppProperties `pan123communityEnabled/MaxDetailPages/TimeoutSeconds`,web-ui 追剧设置「123社区」tab(pan123community_host/pan123community_cookie)+ 权重表;测试 `Pan123CommunitySearchServiceTest` ×9 |
 | 测试 | 21 处 `searchAggregated` 桩补参;新增 `SearchTargetsTest`(口径真值表)、`RemoteSearchServiceTest` ×3(cloud_types 请求体 + 离线-only 护栏 + merged 结果门禁)、`MediaSubscriptionCheckServiceTest` ×4(定向集传参/兜底开关并离线/站点源盘检前剔除/站点源磁力收割+兜底未开零收割);三源磁力用例 ×7(观影 downlist 纯函数+端到端、盘链磁力/ed2k+标题清洗、盘聚 seed 解析/开关门控/离线端到端) |
 
 ## 8. 决策点(全部落定)
