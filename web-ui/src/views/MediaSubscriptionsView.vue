@@ -149,6 +149,10 @@
         <el-form-item label="搜索词">
           <el-input v-model="form.keyword" placeholder="默认同剧名;资源命名差异大时可填别名"/>
         </el-form-item>
+        <el-form-item label="自定义搜索词">
+          <el-input v-model="form.customKeywords" type="textarea" :rows="2"
+                    placeholder="每行一个,至多 5 个;英文名/别名/简繁写法等额外搜索词,巡检与补搜各词独立搜索,留空不启用"/>
+        </el-form-item>
         <el-form-item label="条目链接">
           <div class="meta-search">
             <el-input v-model="metaLink" placeholder="粘贴豆瓣/TMDB/Bangumi/腾讯视频条目链接,自动识别"
@@ -306,8 +310,8 @@
       <el-table :data="resources" border v-loading="resourcesLoading">
         <el-table-column prop="title" label="资源" min-width="240" show-overflow-tooltip>
           <template #default="scope">
-            <!-- 名称即分享链接入口:TG/站点入池的 link 均为可直达的分享地址 -->
-            <a v-if="scope.row.link?.startsWith('http')" :href="scope.row.link" target="_blank" rel="noopener"
+            <!-- 名称即分享链接入口:TG/站点入池的 link 均为可直达的分享地址,href 折入提取码免手输 -->
+            <a v-if="scope.row.link?.startsWith('http')" :href="resourceShareLink(scope.row)" target="_blank" rel="noopener"
                class="resource-link">{{ scope.row.title || scope.row.link }}</a>
             <span v-else>{{ scope.row.title || scope.row.link }}</span>
             <el-tag v-if="scope.row.source === 'manual'" size="small" type="info" style="margin-left: 4px">手动</el-tag>
@@ -888,6 +892,7 @@ interface SubscriptionDto {
   name: string
   mainDrives: number[] | null
   keyword: string
+  customKeywords: string | null
   season: number | null
   seasonStartEpisode: number | null
   doubanId: number | null
@@ -1726,6 +1731,33 @@ const subscribeNextSeason = (row: SubscriptionDto) => {
         }).catch(() => {
     })
   })
+}
+
+/** 盘型 → 分享链接提取码参数名(资源页 SharesView shareTypeMeta 同口径;123/夸克实测为 pwd) */
+const drivePasswordParam: Record<string, string> = {
+  ali: 'password',
+  pikpak: 'pwd',
+  thunder: 'pwd',
+  '123': 'pwd',
+  quark: 'pwd',
+  '139': 'password',
+  uc: 'password',
+  '115': 'password',
+  '189': 'password',
+  baidu: 'pwd',
+}
+
+/** 候选资源点击链接:提取码折进 URL 查询参数,打开网盘分享页免手输提取码;
+ *  链接已带 pwd=/password=/passcode=(站点源入池时已折)不重复折,无提取码原样返回。 */
+const resourceShareLink = (row: ResourceDto) => {
+  const link = row.link || ''
+  const password = (row.password || '').trim()
+  if (!password || !/^https?:\/\//i.test(link)) return link
+  const lowered = link.toLowerCase()
+  if (lowered.includes('pwd=') || lowered.includes('password=') || lowered.includes('passcode=')) return link
+  const param = drivePasswordParam[row.driveName || '']
+  if (!param) return link
+  return link + (link.includes('?') ? '&' : '?') + param + '=' + password
 }
 
 const showResources = (row: SubscriptionDto) => {
