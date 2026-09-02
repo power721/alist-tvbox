@@ -180,6 +180,8 @@
         </el-form-item>
         <el-form-item label="密码" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input type="password" show-password v-model="form.password"/>
+          <a href="https://yun.123pan.cn/" target="_blank" v-if="form.type=='PAN123'">123云盘</a>
+          <a href="https://pan.xunlei.com/" target="_blank" v-if="form.type=='THUNDER'">迅雷云盘</a>
         </el-form-item>
         <el-form-item label="验证码" v-if="form.type=='THUNDER'||form.type=='CLOUD189'">
           <el-input v-model="form.token"/>
