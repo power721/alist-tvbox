@@ -503,6 +503,25 @@ class MediaSubscriptionMagnetFallbackTest {
         assertEquals(3, service.parseEpisode("Show.S01E03.1080p.mkv", 1));
     }
 
+    @Test
+    void adDomainWatermarkTorrentMatchesRealEpisodesOnly() {
+        // 线上形态(醒来01-06 磁力,itorrents 实拉种子):六文件全部带 [最新电影www.dyg7.com] 水印,
+        // 域名数字曾把全部文件解析成第 7 集 —— 缺 7 时 1-6 的合集被误匹配提交。
+        MediaSubscription subscription = subscription();
+        MediaSubscriptionCheckService.EpisodeSizePolicy policy = new MediaSubscriptionCheckService.EpisodeSizePolicy(20L * 1024 * 1024, 0, 0);
+        cn.har01d.alist_tvbox.dto.MediaSubscriptionPoolFilter global = new cn.har01d.alist_tvbox.dto.MediaSubscriptionPoolFilter();
+        cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetInfo info =
+                new cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetInfo("abc", "醒来01-06", 7_376_609_792L, List.of(
+                        new cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetFile("01.2160p.HD国语中字无水印[最新电影www.dyg7.com].mkv", 1_139_312_006L),
+                        new cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetFile("02.2160p.HD国语中字无水印[最新电影www.dyg7.com].mkv", 1_263_718_482L),
+                        new cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetFile("03.2160p.HD国语中字无水印[最新电影www.dyg7.com].mkv", 1_288_622_395L),
+                        new cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetFile("04.2160p.HD国语中字无水印[最新电影www.dyg7.com].mkv", 1_239_261_832L),
+                        new cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetFile("05.2160p.HD国语中字无水印[最新电影www.dyg7.com].mkv", 1_160_238_511L),
+                        new cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetFile("06.2160p.HD国语中字无水印[最新电影www.dyg7.com].mkv", 1_285_456_566L)));
+        assertFalse(service.magnetFilesAcceptable(subscription, info, 7, policy, null, global), "第 7 集不在包里:不得误匹配");
+        assertTrue(service.magnetFilesAcceptable(subscription, info, 5, policy, null, global), "包内第 5 集有达标文件:应可用");
+    }
+
     // ---------- 优先消费搜索顺手的磁力候选 ----------
 
     @Test

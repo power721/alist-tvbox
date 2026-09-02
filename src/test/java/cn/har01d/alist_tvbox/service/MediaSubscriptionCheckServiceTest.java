@@ -270,6 +270,28 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(5, service.parseEpisode("Show.S01E05.2160p.mkv", 1));
     }
 
+    // ---------- 广告域名水印(2026-09-02):下载站推广尾巴毒化末号规则 ----------
+    // 线上事故(醒来 01-06 合集磁力,itorrents 实拉种子):六个集文件全部带
+    // [最新电影www.dyg7.com] 水印,域名里的 7 是末号规则取到的最后一个可信数字 ——
+    // 01~06 全部解析成第 7 集:磁力预筛缺 1-6 集时匹配不到,缺第 7 集时误匹配
+    // (1-6 的合集被当第 7 集提交,收割后六文件又塌成一个集源行)。
+
+    @Test
+    void adDomainWatermarkInBracketsIsNotMistakenForEpisode() {
+        assertEquals(1, service.parseEpisode("01.2160p.HD国语中字无水印[最新电影www.dyg7.com].mkv", null));
+        assertEquals(4, service.parseEpisode("04.2160p.HD国语中字无水印[最新电影www.dyg7.com].mkv", null));
+        assertEquals(6, service.parseEpisode("06.1080p.HD国语中字无水印[最新电影www.dyg7.com].mkv", null));
+        // 无 www 前缀的域名形态同样剥离
+        assertEquals(2, service.parseEpisode("醒来02[电影天堂dygod.net].mkv", null));
+    }
+
+    @Test
+    void adDomainWatermarkStrippingKeepsRealMarks() {
+        // 显式集号段(BRACKET_EPISODE_MARK 守卫优先于域名信号)与发布组标签不受影响
+        assertEquals(5, service.parseEpisode("剧名[第05集 1080P].mkv", null));
+        assertEquals(3, service.parseEpisode("Show[SubsPlease]S01E03.1080p.mkv", 1));
+    }
+
     // ---------- 四位数集号(2026-08-27):长寿动漫集号早已过千,999 上限整目录拒识 ----------
     // 线上事故(名侦探柯南,官方登记总 1212 集):百度主源 189 个文件全部四位集号命名
     // (1173.mp4/1178国语.mp4/1245 4KHDR日语.mp4),999 上限下零识别;唯一"识别"出的 1 集

@@ -134,10 +134,12 @@ public class MediaSubscriptionCheckService {
     /** 网盘限流/风控(非资源失效):百度 errno -62 = 验证次数过多;其余为通用限流措辞 */
     private static final Pattern THROTTLE_ERROR = Pattern.compile(
             "(?i)errno\"?\\s*:\\s*-62|验证次数过多|请稍[后候]|访问频繁|操作频繁|too many (requests|attempts)|rate.?limit|\\b429\\b");
-    /** 方括号段里的技术信号补充集(TECH_TAGS 之外):帧率/夸克转码模板名/体积标注/长数字 id。
-     * 线上形态 {@code [322155_maxplus_50fps_tv_6.45GB]}(夸克 4K 转码命名):模板 id 被拆成 3221+55,
-     * 体积 6.45 的 45 会被末号规则当集号,三集各解析成 45/60/72。 */
-    private static final Pattern BRACKET_TECH_EXTRA = Pattern.compile("(?i)fps|maxplus|\\d+(?:\\.\\d+)?\\s*[gmtk]b?\\b|\\d{5,}");
+    /** 方括号段里的技术信号补充集(TECH_TAGS 之外):帧率/夸克转码模板名/体积标注/长数字 id/推广域名。
+     *  线上形态 {@code [322155_maxplus_50fps_tv_6.45GB]}(夸克 4K 转码命名):模板 id 被拆成 3221+55,
+     *  体积 6.45 的 45 会被末号规则当集号,三集各解析成 45/60/72;资源站推广水印
+     *  {@code [最新电影www.dyg7.com]}(磁力种子/网盘分享的下载站尾巴):域名里的 7 同样毒化末号规则,
+     *  01-06 六个集文件全部解析成第 7 集 —— 缺 1-6 时匹配不到,缺第 7 集时误匹配且收割后整包塌成一集。 */
+    private static final Pattern BRACKET_TECH_EXTRA = Pattern.compile("(?i)fps|maxplus|\\d+(?:\\.\\d+)?\\s*[gmtk]b?\\b|\\d{5,}|https?://|www\\.|[a-z0-9-]+\\.(?:com|net|org|cc|cn|xyz|top|info|biz|tv|co|me|io|la|vip|site|shop|club|online|icu|fun|live|pro)\\b");
     /** 方括号段里的显式集号标记:段内虽混有技术词但集号是明确写出的,不剔(如 {@code [第05集 1080P]}) */
     private static final Pattern BRACKET_EPISODE_MARK = Pattern.compile("(?i)第\\s*\\d{1,4}\\s*集|[Ss]\\d{1,2}[Ee]\\d{1,4}|\\bep\\s*\\d{1,4}");
     /** 上/中/下章节标记(集/篇/部):无数字集号时的集序推定,上=1 中=2 下=3。
