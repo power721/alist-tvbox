@@ -3672,7 +3672,8 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 收割后仍缺时提交新磁力(每轮最多 1 个,转存优先语义下的最后兜底)。
-     * 三档离线配额(单集/单订阅/总,Setting 可配,0=不限)按提交尝试计数(含 FAILED,task 表跨轮持久);
+     * 三档离线配额(单集/单订阅/总,Setting 可配,0=不限)按提交尝试计数(含 FAILED,task 表跨轮持久),
+     * 计数窗口为自然月——每月1号归零(与网盘离线配额的月度节奏对齐);
      * 缺口集按序逐集推进,某集单集配额耗尽换下一集。 */
     private void submitMagnetForGaps(MediaSubscription subscription, Set<Integer> missing) {
         AppProperties.Subscription config = appProperties.getSubscription();
@@ -3693,7 +3694,7 @@ public class MediaSubscriptionCheckService {
         int episodeQuota = magnetQuota(MSUB_MAGNET_EPISODE_QUOTA, 2);
         for (int episode : new TreeSet<>(missing)) {
             if (quotaReached(episodeQuota, offlineDownloadService.episodeMagnetCount(subscription.getId(), episode))) {
-                continue; // 该集的磁力尝试额度耗尽:计数即跨轮记忆,换下一集
+                continue; // 该集的当月磁力尝试额度耗尽:计数即月内记忆,换下一集
             }
             if (submitMagnetForEpisode(subscription, episode)) {
                 return; // 每轮最多 1 个:同步等待最长 30s,别拖垮整轮巡检

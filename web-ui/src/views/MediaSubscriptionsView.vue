@@ -594,15 +594,15 @@
             </el-form-item>
             <el-form-item v-if="store.admin" label="单集磁力配额">
               <el-input-number v-model="notifyForm.magnetEpisodeQuota" :min="0" :max="50"/>
-              <span class="sub-text" style="margin-left:8px">同一集的磁力离线提交尝试上限(含失败),0=不限,默认 2;当前离线下载: {{ offlineAccountLabel }}</span>
+              <span class="sub-text" style="margin-left:8px">同一集的磁力离线提交尝试上限(含失败),0=不限,默认 2;每月1号重置;当前离线下载: {{ offlineAccountLabel }}</span>
             </el-form-item>
             <el-form-item v-if="store.admin" label="单订阅磁力配额">
               <el-input-number v-model="notifyForm.magnetSubscriptionQuota" :min="0" :max="1000"/>
-              <span class="sub-text" style="margin-left:8px">单个订阅的磁力离线提交总数上限,0=不限,默认 30</span>
+              <span class="sub-text" style="margin-left:8px">单个订阅的磁力离线提交总数上限,0=不限,默认 30;每月1号重置</span>
             </el-form-item>
             <el-form-item v-if="store.admin" label="追剧总磁力配额">
               <el-input-number v-model="notifyForm.magnetTotalQuota" :min="0" :max="10000"/>
-              <span class="sub-text" style="margin-left:8px">全部追剧订阅的磁力离线提交总数上限,0=不限,默认 200</span>
+              <span class="sub-text" style="margin-left:8px">全部追剧订阅的磁力离线提交总数上限,0=不限,默认 200;每月1号重置</span>
             </el-form-item>
             <el-form-item v-if="store.admin" label="豆瓣 Cookie">
               <el-input v-model="notifyForm.doubanCookie" type="textarea" :rows="2"

@@ -450,4 +450,43 @@ class OfflineDownloadServiceTest {
         assertTrue(service.isConfigured());
         assertTrue(service.offlineRootPath().endsWith("/alist-tvbox-offline"));
     }
+
+    // ---------- 三档配额计数:自然月窗口,每月1号重置 ----------
+
+    @Test
+    void magnetCountsAreWindowedFromCurrentMonthStart() {
+        var sinceCaptor = org.mockito.ArgumentCaptor.forClass(java.time.Instant.class);
+        when(offlineDownloadTaskRepository.countBySubscriptionIdNotNullAndCreatedTimeGreaterThanEqual(any()))
+                .thenReturn(7L);
+
+        assertEquals(7L, service.totalMagnetCount());
+        verify(offlineDownloadTaskRepository).countBySubscriptionIdNotNullAndCreatedTimeGreaterThanEqual(sinceCaptor.capture());
+        assertWithinCurrentMonth(sinceCaptor.getValue());
+    }
+
+    @Test
+    void episodeAndSubscriptionCountsAreWindowedFromCurrentMonthStart() {
+        var sinceCaptor = org.mockito.ArgumentCaptor.forClass(java.time.Instant.class);
+        when(offlineDownloadTaskRepository.countBySubscriptionIdAndEpisodeAndCreatedTimeGreaterThanEqual(eq(9), eq(3), any()))
+                .thenReturn(2L);
+        when(offlineDownloadTaskRepository.countBySubscriptionIdAndCreatedTimeGreaterThanEqual(eq(9), any()))
+                .thenReturn(30L);
+
+        assertEquals(2L, service.episodeMagnetCount(9, 3));
+        assertEquals(30L, service.subscriptionMagnetCount(9));
+        verify(offlineDownloadTaskRepository).countBySubscriptionIdAndEpisodeAndCreatedTimeGreaterThanEqual(eq(9), eq(3), sinceCaptor.capture());
+        assertWithinCurrentMonth(sinceCaptor.getValue());
+        verify(offlineDownloadTaskRepository).countBySubscriptionIdAndCreatedTimeGreaterThanEqual(eq(9), sinceCaptor.capture());
+        assertWithinCurrentMonth(sinceCaptor.getValue());
+    }
+
+    /** 传入的时间下界必须是本月1号零点(本地时区):月窗口生效、跨月自动重置的锚点。 */
+    private static void assertWithinCurrentMonth(java.time.Instant since) {
+        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+        java.time.Instant monthStart = java.time.YearMonth.now(zone).atDay(1).atStartOfDay(zone).toInstant();
+        java.time.Instant nextMonthStart = java.time.YearMonth.now(zone).plusMonths(1).atDay(1).atStartOfDay(zone).toInstant();
+        assertFalse(since.isBefore(monthStart));
+        assertFalse(since.isAfter(nextMonthStart));
+        assertEquals(monthStart, since);
+    }
 }

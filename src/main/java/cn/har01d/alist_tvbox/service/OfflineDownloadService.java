@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -172,19 +174,24 @@ public class OfflineDownloadService {
         return offlineDownloadTaskRepository.countByAccountIdAndStatus(config.accountId(), STATUS_PENDING);
     }
 
-    /** 单集离线配额已用量:该订阅该集的提交尝试次数(含 FAILED)。 */
+    /** 单集离线配额已用量:该订阅该集当月的提交尝试次数(含 FAILED)。 */
     public long episodeMagnetCount(Integer subscriptionId, Integer episode) {
-        return offlineDownloadTaskRepository.countBySubscriptionIdAndEpisode(subscriptionId, episode);
+        return offlineDownloadTaskRepository.countBySubscriptionIdAndEpisodeAndCreatedTimeGreaterThanEqual(subscriptionId, episode, currentMonthStart());
     }
 
-    /** 单订阅离线配额已用量。 */
+    /** 单订阅离线配额已用量(当月)。 */
     public long subscriptionMagnetCount(Integer subscriptionId) {
-        return offlineDownloadTaskRepository.countBySubscriptionId(subscriptionId);
+        return offlineDownloadTaskRepository.countBySubscriptionIdAndCreatedTimeGreaterThanEqual(subscriptionId, currentMonthStart());
     }
 
-    /** 追剧总离线配额已用量(磁力兜底提交的行才带 subscription_id)。 */
+    /** 追剧总离线配额已用量(当月;磁力兜底提交的行才带 subscription_id)。 */
     public long totalMagnetCount() {
-        return offlineDownloadTaskRepository.countBySubscriptionIdNotNull();
+        return offlineDownloadTaskRepository.countBySubscriptionIdNotNullAndCreatedTimeGreaterThanEqual(currentMonthStart());
+    }
+
+    /** 三档配额按自然月计窗口:每月1号零点(本地时区)后计数自动归零,无需定时清行。 */
+    private static Instant currentMonthStart() {
+        return YearMonth.now().atDay(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
     }
 
     /**
