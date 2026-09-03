@@ -60,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -865,11 +866,13 @@ public class DriverAccountService {
         } catch (NumberFormatException ignored) {
         }
         try {
-            return Instant.parse(value).getEpochSecond();
+            long timestamp = Instant.parse(value).getEpochSecond();
+            return timestamp > 0 ? timestamp : null;
         } catch (Exception ignored) {
         }
         try {
-            return OffsetDateTime.parse(value).toEpochSecond();
+            long timestamp = OffsetDateTime.parse(value).toEpochSecond();
+            return timestamp > 0 ? timestamp : null;
         } catch (Exception ignored) {
         }
         try {
@@ -993,6 +996,7 @@ public class DriverAccountService {
             case BAIDU -> getBaiduUserInfo(account);
             case PAN115 -> get115UserInfo(account);
             case OPEN123 -> get123UserInfo(account);
+            case PAN123 -> get123WebUserInfo(account);
             case PAN139 -> get139UserInfo(account);
             case THUNDER -> getThunderUserInfo(account);
             case QUARK, QUARK_TV -> getQuarkUserInfo(account);
@@ -1149,14 +1153,60 @@ public class DriverAccountService {
             String message = json == null ? "empty response" : json.path("message").asText("invalid response");
             throw new BadRequestException("123 Open账号信息获取失败: " + message);
         }
+        return build123UserInfo(data);
+    }
 
+    // 网页版 123云盘(PAN123):凭证在内嵌 AList 侧登录维护(x_storages addition 的 accesstoken/loginuuid),
+    // 对齐官网前端契约(api.123278.com/b/api/user/info,Bearer + loginuuid + platform=web)。
+    private AccountInfo get123WebUserInfo(DriverAccount account) {
+        String token = getStorageAdditionValue(account, "accesstoken");
+        if (StringUtils.isBlank(token)) {
+            token = StringUtils.defaultIfBlank(account.getToken(), text(readAddition(account.getAddition()).get("access_token")));
+        }
+        if (StringUtils.isBlank(token)) {
+            throw new BadRequestException("123网盘账号信息获取失败: 未获取到 AccessToken,请确认账号已在网盘账号页保存并登录成功");
+        }
+        if (token.startsWith("Bearer ")) {
+            token = token.substring("Bearer ".length()).trim();
+        }
+        String loginUuid = getStorageAdditionValue(account, "loginuuid");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.set(HttpHeaders.ACCEPT, Constants.ACCEPT);
+        headers.set(HttpHeaders.USER_AGENT, Constants.USER_AGENT);
+        headers.set(HttpHeaders.ORIGIN, "https://yun.123pan.cn");
+        headers.set(HttpHeaders.REFERER, "https://yun.123pan.cn/");
+        headers.set("platform", "web");
+        headers.set("app-version", "3");
+        if (StringUtils.isNotBlank(loginUuid)) {
+            headers.set("loginuuid", loginUuid);
+        }
+        String url = "https://api.123278.com/b/api/user/info?1597486751=" + generate123AuthKey();
+        ObjectNode json = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<Void>(headers), ObjectNode.class).getBody();
+        ObjectNode data = json == null ? null : object(json, "data");
+        if (data == null) {
+            String message = json == null ? "empty response" : json.path("message").asText("invalid response");
+            throw new BadRequestException("123网盘账号信息获取失败: " + message);
+        }
+        return build123UserInfo(data);
+    }
+
+    // 对齐官网前端的 auth-key 形参(名即固定数字串):秒级时间戳-9位随机-32位hex
+    private static String generate123AuthKey() {
+        int random = SECURE_RANDOM.nextInt(900000000) + 100000000;
+        return System.currentTimeMillis() / 1000 + "-" + random + "-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    // open-api(camelCase)与 web API(PascalCase)双口径兼容解析
+    private AccountInfo build123UserInfo(ObjectNode data) {
         var info = new AccountInfo();
         info.setId(firstNonBlank(data.path("UID"), data.path("uid"), data.path("user_id"), data.path("userId")));
         info.setName(firstNonBlank(data.path("Nickname"), data.path("NickName"), data.path("UserName"), data.path("displayName"),
                 data.path("username"), data.path("Passport"), data.path("passport"), data.path("Mail"),
                 data.path("mail"), data.path("Phone"), data.path("phone")));
         boolean vip = truthy(data.path("IsVip")) || truthy(data.path("isVip")) || truthy(data.path("VIP"))
-                || truthy(data.path("vip")) || truthy(data.path("IsMember")) || truthy(data.path("isMember"));
+                || truthy(data.path("vip")) || truthy(data.path("Vip")) || truthy(data.path("IsMember")) || truthy(data.path("isMember"));
         info.setVip(StringUtils.defaultIfBlank(firstNonBlank(data.path("VipName"), data.path("vipName")), vip ? "VIP" : "普通用户"));
         info.setExpireAt(parseExpireAt(firstPresent(data.path("VipExpire"), data.path("vipExpire"),
                 data.path("ExpireTime"), data.path("expireTime"), data.path("Expire"), data.path("expire"))));
@@ -1173,6 +1223,11 @@ public class DriverAccountService {
     }
 
     private String getOpen123RuntimeAccessToken(DriverAccount account) {
+        return getStorageAdditionValue(account, "AccessToken", "access_token");
+    }
+
+    // 读内嵌 AList x_storages addition 里驱动回写的运行时字段(如 123 系的 accesstoken/loginuuid)
+    private String getStorageAdditionValue(DriverAccount account, String... keys) {
         if (account.getId() == null) {
             return "";
         }
@@ -1180,11 +1235,16 @@ public class DriverAccountService {
             String addition = alistJdbcTemplate.queryForObject("SELECT addition FROM x_storages WHERE id = ?",
                     String.class, IDX + account.getId());
             Map<String, Object> values = readAddition(addition);
-            return StringUtils.defaultIfBlank(text(values.get("AccessToken")), text(values.get("access_token")));
+            for (String key : keys) {
+                String value = text(values.get(key));
+                if (StringUtils.isNotBlank(value)) {
+                    return value;
+                }
+            }
         } catch (Exception e) {
-            log.debug("123 Open runtime access token unavailable: {}", e.getMessage());
-            return "";
+            log.debug("storage addition unavailable for account {}: {}", account.getId(), e.getMessage());
         }
+        return "";
     }
 
     private AccountInfo getThunderUserInfo(DriverAccount account) {

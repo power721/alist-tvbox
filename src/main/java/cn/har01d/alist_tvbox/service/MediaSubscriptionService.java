@@ -190,6 +190,7 @@ public class MediaSubscriptionService {
         subscription.setName(StringUtils.abbreviate(request.getName().trim(), 250));
         subscription.setKeyword(StringUtils.abbreviate(
                 StringUtils.defaultIfBlank(request.getKeyword(), request.getName()).trim(), 250));
+        subscription.setCustomKeywords(normalizeCustomKeywords(request.getCustomKeywords()));
         // 季号兜底:片单/链接直订等入口不解析季号(片单曾硬编码 season=1),而条目名常写着"第四季"。
         // 季号错会同时击穿候选季过滤、SxxEyy 集号识别、播放列表集号解析三条链路,且都表现为"什么都没搜到"。
         subscription.setSeason(TextUtils.resolveSeason(request.getSeason(), subscription.getName()));
@@ -223,6 +224,9 @@ public class MediaSubscriptionService {
         subscription.setAccountId(request.getAccountId());
         subscription.setAccountIds(serializeAccountIds(request.getAccountIds(), request.getAccountId()));
         subscription.setCrossDrive(request.getCrossDrive() != null && request.getCrossDrive());
+        // 磁力兜底仅转存模式可用:离线产物落全局离线配置账号,挂载模式无资源沉淀语义
+        subscription.setMagnetOffline(MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                && request.getMagnetOffline() != null && request.getMagnetOffline());
         subscription.setCheckIntervalHours(request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0
                 ? request.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours());
         subscription.setCustomAirClock(requireAirClock(request.getCustomAirClock()));
@@ -257,6 +261,11 @@ public class MediaSubscriptionService {
         }
         if (request.getKeyword() != null) {
             subscription.setKeyword(StringUtils.abbreviate(request.getKeyword().trim(), 250));
+            searchRelevant = true;
+        }
+        if (request.getCustomKeywords() != null) {
+            // 空串 = 清除(回归单主词搜索);变更即触发下一轮巡检立即生效
+            subscription.setCustomKeywords(normalizeCustomKeywords(request.getCustomKeywords()));
             searchRelevant = true;
         }
         if (request.getSeason() != null) {
@@ -298,6 +307,10 @@ public class MediaSubscriptionService {
         }
         if (request.getMode() != null) {
             subscription.setMode(request.getMode());
+            // 磁力兜底仅转存模式:切出 TRANSFER 时同步关闭,防孤儿开关(magnetOffline 未随请求携带时)
+            if (!MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
+                subscription.setMagnetOffline(false);
+            }
         }
         if (request.getAccountId() != null) {
             subscription.setAccountId(request.getAccountId());
@@ -307,6 +320,11 @@ public class MediaSubscriptionService {
         }
         if (request.getCrossDrive() != null) {
             subscription.setCrossDrive(request.getCrossDrive());
+        }
+        if (request.getMagnetOffline() != null) {
+            // 模式可能同请求内切换:以更新后的 mode 为准,非转存模式静默回落 false(顺滑降级不报错)
+            subscription.setMagnetOffline(MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                    && request.getMagnetOffline());
         }
         if (request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0) {
             subscription.setCheckIntervalHours(request.getCheckIntervalHours());
@@ -2955,11 +2973,18 @@ public class MediaSubscriptionService {
         return normalized;
     }
 
+    /** 自定义搜索词存储规范化:与读取解析同口径拆分(trim/去空/去重/≤5),换行 join;空 = null(不启用) */
+    private String normalizeCustomKeywords(String raw) {
+        List<String> split = MediaSubscriptionCheckService.splitCustomKeywords(raw);
+        return split.isEmpty() ? null : String.join("\n", split);
+    }
+
     MediaSubscriptionDto toDto(MediaSubscription subscription) {
         MediaSubscriptionDto dto = new MediaSubscriptionDto();
         dto.setId(subscription.getId());
         dto.setName(subscription.getName());
         dto.setKeyword(subscription.getKeyword());
+        dto.setCustomKeywords(subscription.getCustomKeywords());
         dto.setSeason(subscription.getSeason());
         dto.setSeasonStartEpisode(subscription.getSeasonStartEpisode());
         dto.setDoubanId(subscription.getDoubanId());
@@ -2976,6 +3001,7 @@ public class MediaSubscriptionService {
         dto.setAccountIds(parseAccountIds(subscription));
         dto.setMountPath(subscription.getMountPath());
         dto.setCrossDrive(subscription.isCrossDrive());
+        dto.setMagnetOffline(subscription.isMagnetOffline());
         dto.setMainDrives(parseMainDrives(subscription.getMainDrives()));
         dto.setStatus(subscription.getStatus());
         dto.setExpectedEpisodes(subscription.getExpectedEpisodes());

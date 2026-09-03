@@ -41,6 +41,9 @@ import db.migration.current.V44__MediaSubscriptionResourceSeasonStarts;
 import db.migration.current.V45__MovieDiffLog;
 import db.migration.current.V46__MediaSubscriptionManualTotal;
 import db.migration.current.V47__MediaSubscriptionResourceFailKind;
+import db.migration.current.V48__MediaSubscriptionMagnetOffline;
+import db.migration.current.V49__OfflineDownloadTaskMagnetQuota;
+import db.migration.current.V50__MediaSubscriptionCustomKeywords;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -112,7 +115,10 @@ public class NativeFlywayMigrationConfig {
                     new V44__MediaSubscriptionResourceSeasonStarts(),
                     new V45__MovieDiffLog(),
                     new V46__MediaSubscriptionManualTotal(),
-                    new V47__MediaSubscriptionResourceFailKind());
+                    new V47__MediaSubscriptionResourceFailKind(),
+                    new V48__MediaSubscriptionMagnetOffline(),
+                    new V49__OfflineDownloadTaskMagnetQuota(),
+                    new V50__MediaSubscriptionCustomKeywords());
         };
     }
 }

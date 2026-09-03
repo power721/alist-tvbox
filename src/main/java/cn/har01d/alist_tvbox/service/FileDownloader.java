@@ -18,6 +18,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -49,7 +51,9 @@ public class FileDownloader {
     private static final String REMOTE_DIFF_ZIP_URL = BASE_URL + "diff.zip";
     private static final String PG_LATEST_URL = "https://github.com/power721/PG/releases/latest";
     private static final String ZX_LATEST_URL = "https://github.com/power721/ZX/releases/latest";
-    private static final String XS_INDEX_URL = BASE_URL + "xs.txt";
+    private static final String SYNC_BASE_URL = "https://8866033.xyz/";
+    private static final String XS_INDEX_URL = SYNC_BASE_URL + "xs.txt";
+    private static final String XS_VERSION_URL = SYNC_BASE_URL + "xs.version.txt";
     private static final String XS_USER_AGENT = "okhttp/5.3.2";
 
     private static final Set<String> GITHUB_PROXY = Set.of("https://slink.ltd/", "https://cors.zme.ink/", "https://git.886.be/", "https://gitdl.cn/", "https://ghfast.top/", "https://ghproxy.net/", "https://github.moeyy.xyz/", "https://gh-proxy.com/", "https://ghproxy.cc/", "https://gh.llkk.cc/", "https://gh.ddlc.top/", "https://gh-proxy.llyke.com/");
@@ -322,9 +326,9 @@ public class FileDownloader {
 
     public String getXsVersion() {
         try {
-            return getRemoteText(deriveVersionUrl(resolveXsSingleUrl()), XS_USER_AGENT).trim();
-        } catch (Exception e) {
-            log.warn("getXsVersion failed", e);
+            return getRemoteVersion(XS_VERSION_URL);
+        } catch (IOException e) {
+            log.warn("getXsVersion IOException", e);
         }
         return "";
     }
@@ -347,11 +351,6 @@ public class FileDownloader {
         throw new IOException("Cannot find xs download url from single.json");
     }
 
-    static String deriveVersionUrl(String singleUrl) {
-        int idx = singleUrl.lastIndexOf('/');
-        return (idx >= 0 ? singleUrl.substring(0, idx) : singleUrl) + "/version.txt";
-    }
-
     static String parseXsSingleUrl(String text) {
         if (text != null) {
             for (String line : text.split("\\R")) {
@@ -362,6 +361,24 @@ public class FileDownloader {
             }
         }
         throw new IllegalStateException("xs.txt 内容为空");
+    }
+
+    // HttpURLConnection 不做 URL 编码：路径含非 ASCII（如上游 zip 名「单线路」）时原样 UTF-8 字节进请求行，
+    // 部分 CDN 直接拒 400；纯 ASCII 一律原样返回（不动既有 %XX 编码），仅含非 ASCII 时解码/重编码为规范形式。
+    static String encodeUrl(String url) {
+        if (url == null || url.chars().allMatch(c -> c < 128)) {
+            return url;
+        }
+        try {
+            URI uri = new URI(url);
+            if (uri.getHost() == null) {
+                return url;
+            }
+            return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), uri.getPort(),
+                    uri.getPath(), uri.getQuery(), uri.getFragment()).toASCIIString();
+        } catch (URISyntaxException e) {
+            return url;
+        }
     }
 
     private String resolveXsSingleUrl() throws IOException {
@@ -484,7 +501,7 @@ public class FileDownloader {
     }
 
     private String getRemoteText(String url, String userAgent) throws IOException {
-        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection conn = (HttpURLConnection) new URL(encodeUrl(url)).openConnection();
         conn.setConnectTimeout(10000);
         conn.setReadTimeout(10000);
         if (userAgent != null && !userAgent.isEmpty()) {
@@ -509,6 +526,7 @@ public class FileDownloader {
     }
 
     private void downloadFile(String fileUrl, Path destination, String userAgent) throws IOException {
+        fileUrl = encodeUrl(fileUrl);
         log.info("download file: {}", fileUrl);
         HttpURLConnection conn = (HttpURLConnection) new URL(fileUrl).openConnection();
         conn.setConnectTimeout(10000);

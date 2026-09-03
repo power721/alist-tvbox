@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -286,5 +287,334 @@ class OfflineDownloadServiceTest {
         task.setStatus("COMPLETED");
         task.setFolder(true);
         return task;
+    }
+
+    // ---------- submitMagnet 三态(追剧磁力兜底) ----------
+
+    private void enableConfig(DriverAccount account) {
+        when(settingRepository.findById("offline_download_config")).thenReturn(Optional.of(new Setting(
+                "offline_download_config",
+                "{\"enabled\":true,\"driverType\":\"" + account.getType().name()
+                        + "\",\"accountId\":" + account.getId() + ",\"offlineFolderId\":\"folder-1\"}")));
+        when(driverAccountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+    }
+
+    @Test
+    void submitMagnetReusesCompletedTask() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(completedTask("/pan115/alist-tvbox-offline/完成任务", "完成任务")));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null, 30);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED, result.status());
+        assertEquals("完成任务", result.taskName());
+        verify(pan115Handler, never()).submitAndWait(any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void submitMagnetTreatsTimeoutAsSubmitted() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any(), anyInt()))
+                .thenThrow(new BadRequestException("离线下载任务未在30秒内完成"));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null, 30);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.SUBMITTED, result.status());
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("PENDING", captor.getValue().getStatus());
+    }
+
+    @Test
+    void submitMagnetPendingTaskIsIdempotent() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        OfflineDownloadTask pending = new OfflineDownloadTask();
+        pending.setAccountId(12);
+        pending.setStatus("PENDING");
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(pending));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", null, null, 30);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.SUBMITTED, result.status());
+        verify(pan115Handler, never()).submitAndWait(any(), any(), any(), anyInt()); // 网盘侧任务已在,不重复建
+    }
+
+    @Test
+    void submitMagnetReturnsFailedOnRejection() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any(), anyInt()))
+                .thenThrow(new BadRequestException("task failed: 链接违规"));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3, 30);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.FAILED, result.status());
+        assertEquals("task failed: 链接违规", result.message());
+        // FAILED 也落行(带订阅/集号):试错消耗配额,且同磁力不再重试
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("FAILED", captor.getValue().getStatus());
+        assertEquals(9, captor.getValue().getSubscriptionId());
+        assertEquals(3, captor.getValue().getEpisode());
+    }
+
+    @Test
+    void submitMagnetSkipsPreviouslyFailedMagnet() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        OfflineDownloadTask failed = new OfflineDownloadTask();
+        failed.setAccountId(12);
+        failed.setStatus("FAILED");
+        failed.setSubscriptionId(9);
+        failed.setEpisode(3);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(failed));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3, 30);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.FAILED, result.status());
+        verify(pan115Handler, never()).submitAndWait(any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void submitMagnetRetryFailedResubmitsAfterFailure() {
+        // 手动补缺:FAILED 记忆不拦用户明确的重试 —— 重贴失败磁力重新提交,行按 urlHash 原地更新
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        OfflineDownloadTask failed = new OfflineDownloadTask();
+        failed.setId(71);
+        failed.setAccountId(12);
+        failed.setUrlHash("hash");
+        failed.setStatus("FAILED");
+        failed.setSubscriptionId(9);
+        failed.setEpisode(3);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(failed));
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any(), anyInt()))
+                .thenReturn(new OfflineDownloadHandler.TaskResult("重试产物", "hash", false));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnetRetryFailed("magnet:?xt=urn:btih:abc", 9, 3, 30);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED, result.status());
+        verify(pan115Handler).submitAndWait(any(), any(), any(), anyInt());
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("COMPLETED", captor.getValue().getStatus(), "原 FAILED 行更新为 COMPLETED");
+        assertEquals(71, captor.getValue().getId());
+    }
+
+    @Test
+    void submitMagnetPendingStoresPredictedProductName() {
+        // 超时 PENDING 行从链接预测产物名(ed2k 文件名段):收割归属对账与手动行结算的匹配锚点
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any(), anyInt()))
+                .thenThrow(new BadRequestException("离线下载任务未在30秒内完成"));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnetRetryFailed("ed2k://|file|测试剧合集.mkv|834000000|31D6CFE0D16AE931B73C59D7E0C089C0|/", 9, null, 30);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.SUBMITTED, result.status());
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("PENDING", captor.getValue().getStatus());
+        assertEquals("测试剧合集.mkv", captor.getValue().getTaskName());
+    }
+
+    @Test
+    void submitMagnetPassesWaitSecondsToHandler() {
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any(), eq(77)))
+                .thenReturn(new OfflineDownloadHandler.TaskResult("产物", "hash", false));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnet("magnet:?xt=urn:btih:abc", 9, 3, 77);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED, result.status());
+        verify(pan115Handler).submitAndWait(any(), any(), any(), eq(77)); // 等待时长由追剧侧配置透传
+    }
+
+    @Test
+    void settlePendingTaskCompletesNewestPendingRow() {
+        OfflineDownloadTask pending = new OfflineDownloadTask();
+        pending.setId(41);
+        pending.setAccountId(12);
+        pending.setStatus("PENDING");
+        pending.setSubscriptionId(9);
+        pending.setEpisode(3);
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeAndStatusOrderByUpdatedTimeDesc(9, 3, "PENDING"))
+                .thenReturn(Optional.of(pending));
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.settlePendingTask(9, 3, "测试剧 - 第03集", "/drive/alist-tvbox-offline/测试剧 - 第03集");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("COMPLETED", captor.getValue().getStatus());
+        assertEquals("测试剧 - 第03集", captor.getValue().getTaskName());
+        assertEquals("/drive/alist-tvbox-offline/测试剧 - 第03集", captor.getValue().getTargetPath());
+    }
+
+    @Test
+    void settlePendingTaskIsNoopWithoutPendingRowOrAnchor() {
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeAndStatusOrderByUpdatedTimeDesc(9, 3, "PENDING"))
+                .thenReturn(Optional.empty());
+        service.settlePendingTask(9, 3, "产物", "/root/产物");
+        service.settlePendingTask(null, 3, "产物", "/root/产物"); // 无订阅锚点(手动离线)不结算
+        service.settlePendingTask(9, null, "产物", "/root/产物");
+        verify(offlineDownloadTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void settleManualPendingTaskCompletesNullEpisodeRow() {
+        // 手动磁力提交集号留空:episode=null 的 PENDING 行不按集结算,按预测产物名精确匹配结算
+        OfflineDownloadTask pending = new OfflineDownloadTask();
+        pending.setId(57);
+        pending.setAccountId(12);
+        pending.setStatus("PENDING");
+        pending.setSubscriptionId(9);
+        pending.setEpisode(null);
+        pending.setTaskName("测试剧 - 第03集");
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(9, "PENDING", "测试剧 - 第03集"))
+                .thenReturn(Optional.of(pending));
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.settleManualPendingTask(9, "测试剧 - 第03集", "/drive/alist-tvbox-offline/测试剧 - 第03集");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("COMPLETED", captor.getValue().getStatus());
+        assertEquals("测试剧 - 第03集", captor.getValue().getTaskName());
+        assertEquals("/drive/alist-tvbox-offline/测试剧 - 第03集", captor.getValue().getTargetPath());
+    }
+
+    @Test
+    void settleManualPendingTaskIsNoopWithoutRowOrAnchor() {
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(9, "PENDING", "产物"))
+                .thenReturn(Optional.empty());
+        service.settleManualPendingTask(9, "产物", "/root/产物");
+        service.settleManualPendingTask(null, "产物", "/root/产物");
+        service.settleManualPendingTask(9, " ", "/root/产物"); // 产物名缺失不结算
+        verify(offlineDownloadTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void settleManualPendingTaskDoesNotSettleNamedRowForForeignProduct() {
+        // 错配修复:别条磁力(自动路径)的产物结算时,带预测名的手动行对不上号不结算 ——
+        // 防自动产物冒名结算手动行,该行留待自己的产物收割
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(9, "PENDING", "自动产物"))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.findFirstManualPendingByNameLenient(9, "PENDING", "自动产物"))
+                .thenReturn(Optional.empty());
+        // 有预测名(不匹配)的手动行存在,但无名行不存在:两级回落都空,不落任何结算
+
+        service.settleManualPendingTask(9, "自动产物", "/root/自动产物");
+
+        verify(offlineDownloadTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void settleManualPendingTaskFallsBackToUnnamedRow() {
+        // 旧构建/dn 缺失的手动行无预测名:回退最新一条近似结算(原口径,防 pending 闸门永久占位)
+        OfflineDownloadTask pending = new OfflineDownloadTask();
+        pending.setId(58);
+        pending.setAccountId(12);
+        pending.setStatus("PENDING");
+        pending.setSubscriptionId(9);
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(9, "PENDING", "产物甲"))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskNameIsNull(9, "PENDING"))
+                .thenReturn(Optional.of(pending));
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.settleManualPendingTask(9, "产物甲", "/root/产物甲");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("COMPLETED", captor.getValue().getStatus());
+        assertEquals(58, captor.getValue().getId());
+    }
+
+    @Test
+    void hasPendingTaskDelegatesToRepository() {
+        when(offlineDownloadTaskRepository.existsBySubscriptionIdAndStatus(9, "PENDING")).thenReturn(true);
+        assertTrue(service.hasPendingTask(9));
+        when(offlineDownloadTaskRepository.existsBySubscriptionIdAndStatus(9, "PENDING")).thenReturn(false);
+        assertFalse(service.hasPendingTask(9));
+    }
+
+    @Test
+    void isConfiguredReflectsSettingState() {
+        when(settingRepository.findById("offline_download_config")).thenReturn(Optional.empty());
+        assertFalse(service.isConfigured());
+
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        assertTrue(service.isConfigured());
+        assertTrue(service.offlineRootPath().endsWith("/alist-tvbox-offline"));
+    }
+
+    // ---------- 三档配额计数:自然月窗口,每月1号重置 ----------
+
+    @Test
+    void magnetCountsAreWindowedFromCurrentMonthStart() {
+        var sinceCaptor = org.mockito.ArgumentCaptor.forClass(java.time.Instant.class);
+        when(offlineDownloadTaskRepository.countBySubscriptionIdNotNullAndCreatedTimeGreaterThanEqual(any()))
+                .thenReturn(7L);
+
+        assertEquals(7L, service.totalMagnetCount());
+        verify(offlineDownloadTaskRepository).countBySubscriptionIdNotNullAndCreatedTimeGreaterThanEqual(sinceCaptor.capture());
+        assertWithinCurrentMonth(sinceCaptor.getValue());
+    }
+
+    @Test
+    void episodeAndSubscriptionCountsAreWindowedFromCurrentMonthStart() {
+        var sinceCaptor = org.mockito.ArgumentCaptor.forClass(java.time.Instant.class);
+        when(offlineDownloadTaskRepository.countBySubscriptionIdAndEpisodeAndCreatedTimeGreaterThanEqual(eq(9), eq(3), any()))
+                .thenReturn(2L);
+        when(offlineDownloadTaskRepository.countBySubscriptionIdAndCreatedTimeGreaterThanEqual(eq(9), any()))
+                .thenReturn(30L);
+
+        assertEquals(2L, service.episodeMagnetCount(9, 3));
+        assertEquals(30L, service.subscriptionMagnetCount(9));
+        verify(offlineDownloadTaskRepository).countBySubscriptionIdAndEpisodeAndCreatedTimeGreaterThanEqual(eq(9), eq(3), sinceCaptor.capture());
+        assertWithinCurrentMonth(sinceCaptor.getValue());
+        verify(offlineDownloadTaskRepository).countBySubscriptionIdAndCreatedTimeGreaterThanEqual(eq(9), sinceCaptor.capture());
+        assertWithinCurrentMonth(sinceCaptor.getValue());
+    }
+
+    /** 传入的时间下界必须是本月1号零点(本地时区):月窗口生效、跨月自动重置的锚点。 */
+    private static void assertWithinCurrentMonth(java.time.Instant since) {
+        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+        java.time.Instant monthStart = java.time.YearMonth.now(zone).atDay(1).atStartOfDay(zone).toInstant();
+        java.time.Instant nextMonthStart = java.time.YearMonth.now(zone).plusMonths(1).atDay(1).atStartOfDay(zone).toInstant();
+        assertFalse(since.isBefore(monthStart));
+        assertFalse(since.isAfter(nextMonthStart));
+        assertEquals(monthStart, since);
     }
 }

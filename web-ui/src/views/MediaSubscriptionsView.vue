@@ -141,13 +141,17 @@
       </div>
     </div>
 
-    <el-dialog v-model="formVisible" :title="form.id ? '编辑订阅' : '新建订阅'" width="700" top="3vh">
+    <el-dialog v-model="formVisible" :title="form.id ? '编辑订阅' : '新建订阅'" width="750" top="3vh">
       <el-form :model="form" label-width="120">
         <el-form-item label="剧名" required>
           <el-input v-model="form.name" placeholder="展示名称,如:边水往事"/>
         </el-form-item>
         <el-form-item label="搜索词">
           <el-input v-model="form.keyword" placeholder="默认同剧名;资源命名差异大时可填别名"/>
+        </el-form-item>
+        <el-form-item label="自定义搜索词">
+          <el-select v-model="form.customKeywords" multiple allow-create filterable
+                     placeholder="英文名/别名/简繁写法等,回车添加,至多5个"/>
         </el-form-item>
         <el-form-item label="条目链接">
           <div class="meta-search">
@@ -218,6 +222,13 @@
         <el-form-item v-if="form.mode === 'TRANSFER'" label="跨网盘转存">
           <el-switch v-model="form.crossDrive"/>
           <span class="sub-text" style="margin-left:8px">默认仅同盘转存(快而稳);开启后跨盘也转(慢,走服务端中转);AList 跨盘秒传配置允许的方向不受此开关限制</span>
+        </el-form-item>
+        <el-form-item v-if="form.mode === 'TRANSFER'" label="磁力兜底">
+          <el-switch v-model="form.magnetOffline"/>
+          <span class="sub-text" style="margin-left:8px">缺集长期补不上时,用磁力链接经离线下载补集(转存优先,穷尽后才使用);需先在网盘账号配置中开启离线下载</span>
+          <span v-if="store.admin && form.mode === 'TRANSFER' && offlineAccountLabel" class="sub-text" style="display:block;width:100%">
+            当前离线下载: {{ offlineAccountLabel }}
+          </span>
         </el-form-item>
         <el-form-item label="巡检周期(时)">
           <el-input-number v-model="form.checkIntervalHours" :min="1" :max="168"/>
@@ -294,13 +305,14 @@
     <el-drawer v-model="resourcesVisible" :title="'候选资源 - ' + (current?.name || '')" size="62%">
       <div class="resources-toolbar">
         <el-button size="small" type="primary" plain @click="openAddResource">添加资源</el-button>
+        <el-button size="small" type="primary" plain @click="openManualMagnet">磁力补缺</el-button>
         <span class="sub-text">粘贴分享链接只入候选池,不挂载不动主源;巡检/补缺时自动探测,想立即挂载点「启用」(只挂为补缺源,不动主源;换主源用「转主源」)</span>
       </div>
       <el-table :data="resources" border v-loading="resourcesLoading">
         <el-table-column prop="title" label="资源" min-width="240" show-overflow-tooltip>
           <template #default="scope">
-            <!-- 名称即分享链接入口:TG/站点入池的 link 均为可直达的分享地址 -->
-            <a v-if="scope.row.link?.startsWith('http')" :href="scope.row.link" target="_blank" rel="noopener"
+            <!-- 名称即分享链接入口:TG/站点入池的 link 均为可直达的分享地址,href 折入提取码免手输 -->
+            <a v-if="scope.row.link?.startsWith('http')" :href="resourceShareLink(scope.row)" target="_blank" rel="noopener"
                class="resource-link">{{ scope.row.title || scope.row.link }}</a>
             <span v-else>{{ scope.row.title || scope.row.link }}</span>
             <el-tag v-if="scope.row.source === 'manual'" size="small" type="info" style="margin-left: 4px">手动</el-tag>
@@ -366,6 +378,63 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="magnetVisible" title="磁力补缺" width="720">
+      <div class="magnet-search-bar">
+        <el-input v-model="magnetSearchKeyword" placeholder="搜索关键词(留空按剧名)" clearable
+                  :disabled="magnetSearching" style="width: 260px" @keyup.enter="searchManualMagnets"/>
+        <el-button type="primary" :loading="magnetSearching" @click="searchManualMagnets">搜索</el-button>
+        <span class="sub-text">TG-Search + 6V/观影/盘聚/盘链 并发搜索磁力/ed2k(未配置的源自然为空);填了集号会拼进搜索词</span>
+      </div>
+      <div v-if="magnetResults.length" class="magnet-results">
+        <div v-for="(item, i) in magnetResults" :key="i" class="magnet-result-item">
+          <div class="magnet-result-head">
+            <el-tag size="small" :type="item.type === 'ed2k' ? 'warning' : 'info'">{{ item.type || 'magnet' }}</el-tag>
+            <el-tag size="small" effect="plain">{{ item.source }}</el-tag>
+            <span class="magnet-result-title" :title="item.title">{{ item.title }}</span>
+            <span v-if="item.size" class="sub-text">{{ formatSize(item.size) }}</span>
+            <el-button link type="primary" size="small" :loading="magnetResolving === item.link"
+                       @click="resolveMagnet(item)">解析</el-button>
+            <el-button link type="success" size="small" :loading="magnetSubmittingLink === item.link"
+                       @click="submitMagnetItem(item)">入库</el-button>
+          </div>
+          <div v-if="magnetResolved[item.link]" class="magnet-files">
+            <template v-if="magnetResolved[item.link].resolved">
+              <div class="sub-text">
+                种子 {{ magnetResolved[item.link].name }} · {{ formatSize(magnetResolved[item.link].totalSize) }}
+                · {{ magnetResolved[item.link].files.length }} 个文件
+              </div>
+              <div v-for="(f, j) in magnetResolved[item.link].files" :key="j" class="magnet-file-row">
+                <span class="magnet-file-name" :title="f.path">{{ f.path }}</span>
+                <span class="sub-text">{{ formatSize(f.size) }}</span>
+                <el-tag v-if="f.episode" size="small" type="success">第{{ f.episode }}集</el-tag>
+              </div>
+            </template>
+            <div v-else class="sub-text">{{ magnetResolved[item.link].message || '解析失败' }}</div>
+          </div>
+        </div>
+      </div>
+      <el-divider style="margin: 12px 0"/>
+      <el-form label-width="70px" @submit.prevent>
+        <el-form-item label="磁力链接">
+          <el-input v-model="magnetForm.url" type="textarea" :rows="3"
+                    placeholder="磁力(magnet:)或 ed2k 链接,也可从上方搜索结果入库" :disabled="magnetSaving"/>
+        </el-form-item>
+        <el-form-item label="集号">
+          <el-input-number v-model="magnetForm.episode" :min="1" :max="9999"
+                           placeholder="留空自动识别" :disabled="magnetSaving" style="width: 160px"/>
+        </el-form-item>
+      </el-form>
+      <div class="sub-text">
+        提交到全局离线下载账号(网盘账号页「离线下载」配置)补缺失的集,下载完成自动入账并出现在集数清单。
+        集号留空按文件名自动识别(整季/多集种子建议留空);提交同步等待最长约 30 秒,超时转为后台等待,
+        完成后点「检查更新」或等巡检自动入库。
+      </div>
+      <template #footer>
+        <el-button @click="magnetVisible = false">取消</el-button>
+        <el-button type="primary" :loading="magnetSaving" @click="submitManualMagnet">提交</el-button>
+      </template>
+    </el-dialog>
+
     <el-drawer v-model="episodesVisible" :title="'集数清单 - ' + (current?.name || '')" size="52%">
       <div class="episode-filter">
         <el-radio-group v-model="episodeFilter" size="small">
@@ -373,6 +442,9 @@
           <el-radio-button value="present">有源 {{ episodePresentCount }}</el-radio-button>
           <el-radio-button value="missing">缺失 {{ episodeMissingCount }}</el-radio-button>
         </el-radio-group>
+        <el-button size="small" type="primary" plain style="margin-left: 12px" @click="openManualMagnet">
+          磁力补缺
+        </el-button>
       </div>
       <el-table :data="filteredEpisodeItems" border v-loading="episodesLoading" max-height="600" row-key="episode">
         <el-table-column type="expand">
@@ -408,6 +480,7 @@
             刷新元数据
           </el-button>
           <el-button size="small" @click="checkFromDetail">检查更新</el-button>
+          <el-button size="small" type="primary" plain @click="openManualMagnet">磁力补缺</el-button>
           <el-button v-if="current?.status === 'ENDED' && hasNextSeason" size="small" type="warning" plain
                      @click="current && subscribeNextSeason(current)">下一季</el-button>
           <el-button v-if="detailData?.subscription?.mountPath" size="small" link type="primary"
@@ -585,6 +658,18 @@
               <el-input-number v-model="notifyForm.archiveDays" :min="0" :max="3650"/>
               <span class="sub-text" style="margin-left:8px">完结 N 天后自动释放转存文件,0=关闭</span>
             </el-form-item>
+            <el-form-item v-if="store.admin" label="单集磁力配额">
+              <el-input-number v-model="notifyForm.magnetEpisodeQuota" :min="0" :max="50"/>
+              <span class="sub-text" style="margin-left:8px">同一集的磁力离线提交尝试上限(含失败),0=不限,默认 2;每月1号重置;当前离线下载: {{ offlineAccountLabel }}</span>
+            </el-form-item>
+            <el-form-item v-if="store.admin" label="单订阅磁力配额">
+              <el-input-number v-model="notifyForm.magnetSubscriptionQuota" :min="0" :max="1000"/>
+              <span class="sub-text" style="margin-left:8px">单个订阅的磁力离线提交总数上限,0=不限,默认 30;每月1号重置</span>
+            </el-form-item>
+            <el-form-item v-if="store.admin" label="追剧总磁力配额">
+              <el-input-number v-model="notifyForm.magnetTotalQuota" :min="0" :max="10000"/>
+              <span class="sub-text" style="margin-left:8px">全部追剧订阅的磁力离线提交总数上限,0=不限,默认 200;每月1号重置</span>
+            </el-form-item>
             <el-form-item v-if="store.admin" label="豆瓣 Cookie">
               <el-input v-model="notifyForm.doubanCookie" type="textarea" :rows="2"
                         placeholder="登录 movie.douban.com 后复制 Cookie,留空关闭;用于解析详情页又名/单集播出时间(限速抓取)"/>
@@ -687,6 +772,36 @@
           <el-input v-model="notifyForm.woniuCookie" type="textarea" :rows="2"
                     placeholder="须含 user_check(登录后复制);未登录网盘链接会被打码,无凭证时该搜索源自动关闭"/>
         </el-form-item>
+          </el-tab-pane>
+          <el-tab-pane v-if="store.admin" label="123臻藏" name="zencang">
+            <el-form-item label="站点">
+              <el-input v-model="notifyForm.zencangHost" placeholder="留空用内置地址;自定义镜像站填 https://..."/>
+            </el-form-item>
+            <el-form-item label="Cookie">
+              <el-input v-model="notifyForm.zencangCookie" type="textarea" :rows="2"
+                        placeholder="浏览器登录 123 云盘·臻藏阁后复制 Cookie(须含 wordpress_logged_in_xxx);正文默认隐藏,无 Cookie 时该搜索源自动关闭"/>
+            </el-form-item>
+            <span class="sub-text">123 云盘主题资源站;仅订阅的候选盘(主网盘/扩展网盘)包含 123 网盘时才参与搜索</span>
+          </el-tab-pane>
+          <el-tab-pane v-if="store.admin" label="123社区" name="pan123community">
+            <el-form-item label="站点">
+              <el-input v-model="notifyForm.pan123communityHost" placeholder="留空自动探活双站点(123panfx/pan1.me);自定义填 https://..."/>
+            </el-form-item>
+            <el-form-item label="Cookie">
+              <el-input v-model="notifyForm.pan123communityCookie" type="textarea" :rows="2"
+                        placeholder="可选;须含 bbs_sid 和 bbs_token(浏览器登录 123分享社区后复制)。不配也可匿名搜索,只是「回复后可见」帖自动跳过"/>
+            </el-form-item>
+            <span class="sub-text">123 云盘分享社区(纯 123 盘产出);仅订阅的候选盘(主网盘/扩展网盘)包含 123 网盘时才参与搜索</span>
+          </el-tab-pane>
+          <el-tab-pane v-if="store.admin" label="夸父" name="kuafu">
+            <el-form-item label="站点">
+              <el-input v-model="notifyForm.kuafuHost" placeholder="留空用内置地址 https://www.kfzy.net;自定义填 https://..."/>
+            </el-form-item>
+            <el-form-item label="Cookie">
+              <el-input v-model="notifyForm.kuafuCookie" type="textarea" :rows="2"
+                        placeholder="可选;须含 bbs_sid 和 bbs_token(浏览器登录夸父资源社后复制)。不配也能取到公开链接与锁贴泄漏链接,只是「回复后可见」帖自动跳过"/>
+            </el-form-item>
+            <span class="sub-text">夸父资源社(夸克为主混多盘);仅订阅的候选盘(主网盘/扩展网盘)包含夸克网盘时才参与搜索</span>
           </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="TG-Search" name="tgsearch">
             <el-form-item label="TG-Search地址">
@@ -839,6 +954,7 @@ interface SubscriptionDto {
   name: string
   mainDrives: number[] | null
   keyword: string
+  customKeywords: string | null
   season: number | null
   seasonStartEpisode: number | null
   doubanId: number | null
@@ -868,6 +984,7 @@ interface SubscriptionDto {
   activeResourceTitle: string | null
   mountPath: string | null
   crossDrive: boolean
+  magnetOffline: boolean
   filter: Filter | null
 }
 
@@ -1063,6 +1180,21 @@ const saving = ref(false)
 const form = ref<any>({})
 // 编辑前的原季号:保存时季号有变要确认换季重置(旧季挂载/进度清空,按新季重搜)
 const originalSeason = ref<number | null>(null)
+/** 磁力兜底提示行:当前离线下载配置的账号(未配置/未开启给出可行动文案);非 admin 保持默认不展示 */
+const offlineAccountLabel = ref('加载中...')
+const loadOfflineAccountLabel = () => {
+  if (!store.admin) {
+    offlineAccountLabel.value = ''
+    return
+  }
+  axios.get('/api/offline_download/config').then(({data}) => {
+    offlineAccountLabel.value = data?.enabled
+        ? `${data.accountName || ('#' + data.accountId)}(${data.folder || data.driverType})`
+        : '未开启,需先在网盘账号配置的「离线下载」页签开启并选择账号'
+  }).catch(() => {
+    offlineAccountLabel.value = ''
+  })
+}
 const metaProvider = ref('tmdb')
 const metaKeyword = ref('')
 const metaSearching = ref(false)
@@ -1088,6 +1220,17 @@ const resources = ref<ResourceDto[]>([])
 const addResourceVisible = ref(false)
 const addResourceSaving = ref(false)
 const addResourceForm = ref({link: '', password: ''})
+// 手动磁力补缺:贴磁力/ed2k 提交全局离线下载账号补缺集(集号留空按文件名自动识别);
+// 搜索区按订阅关键词搜候选(TG-Search,与自动兜底同源),结果可解析看包内容、可入库提交
+const magnetVisible = ref(false)
+const magnetSaving = ref(false)
+const magnetForm = ref<{ url: string; episode: number | null }>({url: '', episode: null})
+const magnetSearchKeyword = ref('')
+const magnetSearching = ref(false)
+const magnetResults = ref<any[]>([])
+const magnetResolved = ref<Record<string, any>>({})
+const magnetResolving = ref<string | null>(null)
+const magnetSubmittingLink = ref<string | null>(null)
 const episodesVisible = ref(false)
 const episodesLoading = ref(false)
 const episodeItems = ref<any[]>([])
@@ -1150,6 +1293,9 @@ const notifyForm = ref({
   botEnabled: true,
   doubanCookie: '',
   archiveDays: 0,
+  magnetEpisodeQuota: 2,
+  magnetSubscriptionQuota: 30,
+  magnetTotalQuota: 200,
   tmdbApiKey: '',
   tmdbApiHost: '',
   vipAccounts: [] as number[],
@@ -1172,6 +1318,12 @@ const notifyForm = ref({
   woniuUsername: '',
   woniuPassword: '',
   woniuCookie: '',
+  zencangHost: '',
+  zencangCookie: '',
+  pan123communityHost: '',
+  pan123communityCookie: '',
+  kuafuHost: '',
+  kuafuCookie: '',
   panSouUrl: '',
   panSouUsername: '',
   panSouPassword: '',
@@ -1368,9 +1520,11 @@ const loadAll = () => {
 
 const handleAdd = () => {
   originalSeason.value = null
+  loadOfflineAccountLabel()
   form.value = {
     name: '',
     keyword: '',
+    customKeywords: [] as string[],
     season: 1,
     seasonStartEpisode: null,
     doubanId: null,
@@ -1382,6 +1536,7 @@ const handleAdd = () => {
     accountId: null,
     accountIds: [] as string[],
     crossDrive: false,
+    magnetOffline: false,
     checkIntervalHours: 6,
     customAirClock: null,
     mainDrives: [] as number[],
@@ -1401,11 +1556,13 @@ const handleAdd = () => {
 }
 
 const handleEdit = (row: SubscriptionDto) => {
+  loadOfflineAccountLabel()
   originalSeason.value = row.season ?? 1
   form.value = {
     id: row.id,
     name: row.name,
     keyword: row.keyword,
+    customKeywords: (row.customKeywords || '').split('\n').map((s: string) => s.trim()).filter(Boolean),
     season: row.season ?? 1,
     seasonStartEpisode: row.seasonStartEpisode ?? null,
     doubanId: row.doubanId,
@@ -1417,6 +1574,7 @@ const handleEdit = (row: SubscriptionDto) => {
     accountId: null,
     accountIds: row.accountIds?.length ? row.accountIds : (row.accountId ? ['pan:' + row.accountId] : []),
     crossDrive: !!row.crossDrive,
+    magnetOffline: !!row.magnetOffline,
     checkIntervalHours: row.checkIntervalHours ?? 6,
     customAirClock: row.customAirClock ?? null,
     mainDrives: row.mainDrives || [],
@@ -1508,6 +1666,7 @@ const ratingOfSource = (label: string) => {
 const buildBody = () => ({
   name: form.value.name,
   keyword: form.value.keyword,
+  customKeywords: form.value.customKeywords.map((k: string) => k.trim()).filter(Boolean).join('\n'),
   season: form.value.season,
   seasonStartEpisode: form.value.seasonStartEpisode ?? 0,
   doubanId: form.value.doubanId,
@@ -1519,6 +1678,7 @@ const buildBody = () => ({
   accountId: form.value.accountId,
   accountIds: form.value.accountIds,
   crossDrive: form.value.crossDrive,
+  magnetOffline: form.value.magnetOffline,
   checkIntervalHours: form.value.checkIntervalHours,
   customAirClock: form.value.customAirClock || '',
   mainDrives: [...new Set(form.value.mainDrives || [])].slice(0, 2),
@@ -1649,6 +1809,33 @@ const subscribeNextSeason = (row: SubscriptionDto) => {
   })
 }
 
+/** 盘型 → 分享链接提取码参数名(资源页 SharesView shareTypeMeta 同口径;123/夸克实测为 pwd) */
+const drivePasswordParam: Record<string, string> = {
+  ali: 'password',
+  pikpak: 'pwd',
+  thunder: 'pwd',
+  '123': 'pwd',
+  quark: 'pwd',
+  '139': 'password',
+  uc: 'password',
+  '115': 'password',
+  '189': 'password',
+  baidu: 'pwd',
+}
+
+/** 候选资源点击链接:提取码折进 URL 查询参数,打开网盘分享页免手输提取码;
+ *  链接已带 pwd=/password=/passcode=(站点源入池时已折)不重复折,无提取码原样返回。 */
+const resourceShareLink = (row: ResourceDto) => {
+  const link = row.link || ''
+  const password = (row.password || '').trim()
+  if (!password || !/^https?:\/\//i.test(link)) return link
+  const lowered = link.toLowerCase()
+  if (lowered.includes('pwd=') || lowered.includes('password=') || lowered.includes('passcode=')) return link
+  const param = drivePasswordParam[row.driveName || '']
+  if (!param) return link
+  return link + (link.includes('?') ? '&' : '?') + param + '=' + password
+}
+
 const showResources = (row: SubscriptionDto) => {
   current.value = row
   resourcesVisible.value = true
@@ -1672,6 +1859,110 @@ const loadResources = () => {
 const openAddResource = () => {
   addResourceForm.value = {link: '', password: ''}
   addResourceVisible.value = true
+}
+
+const openManualMagnet = () => {
+  magnetForm.value = {url: '', episode: null}
+  magnetSearchKeyword.value = ''
+  magnetResults.value = []
+  magnetResolved.value = {}
+  magnetResolving.value = null
+  magnetSubmittingLink.value = null
+  magnetVisible.value = true
+}
+
+/** 手动提交三态的统一提示/刷新(手动贴链接与搜索结果「入库」共用) */
+const handleMagnetResponse = (response: any) => {
+  const status = response.data?.status
+  if (status === 'completed') {
+    const episodes = response.data?.episodes as number[] | undefined
+    if (episodes?.length) {
+      ElMessage.success(response.data?.message || '已离线下载并入账')
+      magnetVisible.value = false
+      if (episodesVisible.value) showEpisodes(current.value!)
+      if (resourcesVisible.value) loadResources()
+      schedule(loadAll, 2000)
+    } else {
+      ElMessage.warning(response.data?.message || '产物已下载,但未识别出属于本剧的集文件,未入账')
+    }
+  } else if (status === 'submitted') {
+    ElMessage.success(response.data?.message || '已提交,网盘下载中')
+    magnetVisible.value = false
+  } else {
+    ElMessage.error(response.data?.message || '离线下载提交失败')
+  }
+}
+
+/** 手动磁力补缺:贴磁力/ed2k 提交离线下载账号,下载完成入账补缺集;
+ *  超时转后台等待(巡检 PENDING 感知收割),失败保留对话框便于换链接重试。 */
+const submitManualMagnet = () => {
+  if (!current.value) return
+  const url = magnetForm.value.url.trim()
+  if (!url) {
+    ElMessage.warning('请粘贴磁力链接')
+    return
+  }
+  magnetSaving.value = true
+  axios.post(`/api/media-subscriptions/${current.value.id}/magnet`, {
+    url,
+    episode: magnetForm.value.episode ?? null,
+  }).then(handleMagnetResponse).catch((error: any) => {
+    const data = error.response?.data
+    ElMessage.error(typeof data === 'string' ? data : data?.message || error.message || '提交失败')
+  }).finally(() => {
+    magnetSaving.value = false
+  })
+}
+
+/** 磁力候选搜索:关键词空=订阅关键词;填了集号拼进搜索词 */
+const searchManualMagnets = () => {
+  if (!current.value) return
+  magnetSearching.value = true
+  axios.get(`/api/media-subscriptions/${current.value.id}/magnet/search`, {
+    params: {
+      keyword: magnetSearchKeyword.value.trim() || null,
+      episode: magnetForm.value.episode ?? null,
+    },
+  }).then(response => {
+    magnetResults.value = response.data || []
+    magnetResolved.value = {}
+    if (!magnetResults.value.length) ElMessage.info('未搜到磁力资源')
+  }).catch((error: any) => {
+    const data = error.response?.data
+    ElMessage.error(typeof data === 'string' ? data : data?.message || error.message || '搜索失败')
+  }).finally(() => {
+    magnetSearching.value = false
+  })
+}
+
+/** 解析磁力种子:拉文件列表并按本剧季口径标集号,提交前确认包内容 */
+const resolveMagnet = (item: any) => {
+  if (!current.value) return
+  magnetResolving.value = item.link
+  axios.post(`/api/media-subscriptions/${current.value.id}/magnet/resolve`, {url: item.link}).then(response => {
+    magnetResolved.value[item.link] = response.data
+  }).catch((error: any) => {
+    const data = error.response?.data
+    magnetResolved.value[item.link] = {resolved: false,
+      message: typeof data === 'string' ? data : data?.message || error.message || '解析失败'}
+  }).finally(() => {
+    magnetResolving.value = null
+  })
+}
+
+/** 搜索结果「入库」:直接提交该磁力离线(复用手动提交的三态处理) */
+const submitMagnetItem = (item: any) => {
+  if (!current.value) return
+  magnetSubmittingLink.value = item.link
+  axios.post(`/api/media-subscriptions/${current.value.id}/magnet`, {
+    url: item.link,
+    episode: magnetForm.value.episode ?? null,
+  }).then(handleMagnetResponse).catch((error: any) => {
+    const data = error.response?.data
+    ElMessage.error(typeof data === 'string' ? data : data?.message || error.message || '提交失败')
+  }).finally(() => {
+    magnetSubmittingLink.value = null
+  })
 }
 
 const submitAddResource = () => {
@@ -1949,6 +2240,7 @@ const buildPoolFilterValue = () => JSON.stringify({
   maxEpisodeSizeMb: notifyForm.value.poolMaxEpisodeSizeMb || 0,
 })
 const openNotify = () => {
+  loadOfflineAccountLabel()
   notifyTab.value = 'general'
   if (!store.admin) {
     // 普通用户:个人 TG 渠道 + 资源筛选偏好走用户级设置(读取回退全局值),其余全局项不展示
@@ -1985,6 +2277,9 @@ const openNotify = () => {
     notifyForm.value.tmdbApiKey = settings['tmdb_api_key'] || ''
     notifyForm.value.tmdbApiHost = settings['tmdb_api_host'] || ''
     notifyForm.value.archiveDays = parseInt(settings['msub_archive_days'] || '0') || 0
+    notifyForm.value.magnetEpisodeQuota = parseInt(settings['msub_magnet_episode_quota'] || '2') || 2
+    notifyForm.value.magnetSubscriptionQuota = parseInt(settings['msub_magnet_subscription_quota'] || '30') || 30
+    notifyForm.value.magnetTotalQuota = parseInt(settings['msub_magnet_total_quota'] || '200') || 200
     notifyForm.value.vipAccounts = (settings['msub_vip_accounts'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
     notifyForm.value.mainDrives = (settings['msub_main_drives'] || '')
@@ -2009,6 +2304,12 @@ const openNotify = () => {
     notifyForm.value.woniuUsername = settings['woniu_username'] || ''
     notifyForm.value.woniuPassword = settings['woniu_password'] || ''
     notifyForm.value.woniuCookie = settings['woniu_cookie'] || ''
+    notifyForm.value.zencangHost = settings['zencang_host'] || ''
+    notifyForm.value.zencangCookie = settings['zencang_cookie'] || ''
+    notifyForm.value.pan123communityHost = settings['pan123community_host'] || ''
+    notifyForm.value.pan123communityCookie = settings['pan123community_cookie'] || ''
+    notifyForm.value.kuafuHost = settings['kuafu_host'] || ''
+    notifyForm.value.kuafuCookie = settings['kuafu_cookie'] || ''
     notifyForm.value.panSouUrl = settings['pan_sou_url'] || ''
     notifyForm.value.panSouUsername = settings['pan_sou_username'] || ''
     notifyForm.value.panSouPassword = settings['pan_sou_password'] || ''
@@ -2058,6 +2359,9 @@ const saveNotify = () => {
             ? [axios.post('/api/settings', {name: 'tmdb_image_host', value: ''})]
             : []),
     axios.post('/api/settings', {name: 'msub_archive_days', value: String(notifyForm.value.archiveDays)}),
+    axios.post('/api/settings', {name: 'msub_magnet_episode_quota', value: String(notifyForm.value.magnetEpisodeQuota)}),
+    axios.post('/api/settings', {name: 'msub_magnet_subscription_quota', value: String(notifyForm.value.magnetSubscriptionQuota)}),
+    axios.post('/api/settings', {name: 'msub_magnet_total_quota', value: String(notifyForm.value.magnetTotalQuota)}),
     axios.post('/api/settings', {name: 'msub_vip_accounts', value: notifyForm.value.vipAccounts.join(',')}),
     axios.post('/api/settings', {
       name: 'msub_main_drives',
@@ -2083,6 +2387,12 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'woniu_username', value: notifyForm.value.woniuUsername.trim()}),
     axios.post('/api/settings', {name: 'woniu_password', value: notifyForm.value.woniuPassword}),
     axios.post('/api/settings', {name: 'woniu_cookie', value: notifyForm.value.woniuCookie.trim()}),
+    axios.post('/api/settings', {name: 'zencang_host', value: notifyForm.value.zencangHost.trim()}),
+    axios.post('/api/settings', {name: 'zencang_cookie', value: notifyForm.value.zencangCookie.trim()}),
+    axios.post('/api/settings', {name: 'pan123community_host', value: notifyForm.value.pan123communityHost.trim()}),
+    axios.post('/api/settings', {name: 'pan123community_cookie', value: notifyForm.value.pan123communityCookie.trim()}),
+    axios.post('/api/settings', {name: 'kuafu_host', value: notifyForm.value.kuafuHost.trim()}),
+    axios.post('/api/settings', {name: 'kuafu_cookie', value: notifyForm.value.kuafuCookie.trim()}),
     axios.post('/api/settings', {name: 'pan_sou_url', value: notifyForm.value.panSouUrl.trim()}),
     axios.post('/api/settings', {name: 'pan_sou_username', value: notifyForm.value.panSouUsername.trim()}),
     axios.post('/api/settings', {name: 'pan_sou_password', value: notifyForm.value.panSouPassword}),
@@ -2190,6 +2500,10 @@ const weightDefs: { key: string; label: string; value: number }[] = [
   { key: 'source.panlian', label: '盘链源', value: 12 },
   { key: 'source.panju', label: '盘聚源(SeedHub)', value: 12 },
   { key: 'source.guanying', label: '观影源', value: 12 },
+  { key: 'source.xb6v', label: '6V磁力源', value: 12 },
+  { key: 'source.zencang', label: '123臻藏源', value: 12 },
+  { key: 'source.pan123community', label: '123社区源', value: 12 },
+  { key: 'source.kuafu', label: '夸父源', value: 12 },
   { key: 'baidu.free', label: '百度免会员', value: 17 },
   { key: 'pan115', label: '115追更弱', value: -10 },
   { key: 'pack.complete', label: '完结包', value: -6 },
@@ -2776,6 +3090,67 @@ const formatClock = (time: number) => {
 
 .episode-filter {
   margin-bottom: 10px;
+}
+
+.magnet-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.magnet-results {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.magnet-result-item {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.magnet-result-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.magnet-result-title {
+  flex: 1;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.magnet-files {
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--el-border-color-lighter);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.magnet-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.magnet-file-name {
+  flex: 1;
+  min-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .episode-matrix {

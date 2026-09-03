@@ -42,7 +42,7 @@ class RemoteSearchServiceTest {
         appProperties.setPanSouChannels("pansou");
         appProperties.setPanSouSource("all");
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties,
@@ -87,7 +87,7 @@ class RemoteSearchServiceTest {
         appProperties.setPanSouFilterInclude(List.of("1080"));
         appProperties.setPanSouFilterExclude(List.of("枪版"));
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties, restTemplateBuilder(restTemplate), objectMapper,
@@ -127,7 +127,7 @@ class RemoteSearchServiceTest {
         when(shareService.add(any())).thenReturn("/mock");
         TvBoxService tvBoxService = mock(TvBoxService.class);
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties,
@@ -206,7 +206,7 @@ class RemoteSearchServiceTest {
         TelegramChannelRepository telegramChannelRepository = mock(TelegramChannelRepository.class);
         when(telegramChannelRepository.findByEnabledTrue(any())).thenReturn(List.of());
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties, restTemplateBuilder(restTemplate), objectMapper,
@@ -250,6 +250,101 @@ class RemoteSearchServiceTest {
     }
 
     @Test
+    void targetedSearchSendsWhitelistCloudTypesWithOfflineAppended() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setPanSouSource("all");
+        appProperties.setTgDrivers(List.of("10")); // 全局口径是百度:定向模式下被白名单替换
+        OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
+
+        RemoteSearchService service = new RemoteSearchService(
+                appProperties, restTemplateBuilder(restTemplate), objectMapper,
+                mock(TelegramChannelRepository.class), mock(ShareService.class),
+                mock(TvBoxService.class), offlineDownloadService, mock(SubscriptionSourceService.class),
+                panSouClient(appProperties, restTemplate), panLinkCheck(appProperties, restTemplate));
+
+        server.expect(once(), requestTo("http://pansou.example/api/search"))
+                .andExpect(content().json("""
+                        {"kw":"movie","cloud_types":["quark","115","magnet","ed2k"]}
+                        """))
+                .andRespond(withSuccess("""
+                        {"code":0,"message":"ok","data":{"total":0,"results":[],"merged_by_type":{}}}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        // 主∪扩展 = 夸克/115,磁力兜底生效 → cloud_types 按订阅定向并追加离线类型
+        service.search("movie", List.of(),
+                cn.har01d.alist_tvbox.domain.SearchTargets.of(java.util.Set.of("quark", "115"), true));
+
+        server.verify();
+    }
+
+    @Test
+    void targetedSearchWithoutWhitelistNeverSendsOfflineOnlyCloudTypes() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setPanSouSource("all");
+        appProperties.setTgDrivers(List.of()); // 全局口径清空才会走到"pan 部分为空"分支(默认是全量)
+        OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
+
+        RemoteSearchService service = new RemoteSearchService(
+                appProperties, restTemplateBuilder(restTemplate), objectMapper,
+                mock(TelegramChannelRepository.class), mock(ShareService.class),
+                mock(TvBoxService.class), offlineDownloadService, mock(SubscriptionSourceService.class),
+                panSouClient(appProperties, restTemplate), panLinkCheck(appProperties, restTemplate));
+
+        server.expect(once(), requestTo("http://pansou.example/api/search"))
+                .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers
+                        .jsonPath("$.cloud_types").doesNotExist())
+                .andRespond(withSuccess("""
+                        {"code":0,"message":"ok","data":{"total":0,"results":[],"merged_by_type":{}}}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        // 白名单空 + 全局 tg.drivers 空:pan 部分为空 → 不发送 cloud_types
+        //(单发 [magnet,ed2k] 会把网盘结果裁光;不限模式服务端本就返回离线类型,由本地门禁收口)
+        service.search("movie", List.of(), cn.har01d.alist_tvbox.domain.SearchTargets.of(java.util.Set.of(), true));
+
+        server.verify();
+    }
+
+    @Test
+    void targetedSearchGatesOffWhitelistMergedResults() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setPanSouSource("all");
+        appProperties.setTgDrivers(List.of("5", "10")); // 全局放行夸克+百度:白名单只认夸克
+        OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
+
+        RemoteSearchService service = new RemoteSearchService(
+                appProperties, restTemplateBuilder(restTemplate), objectMapper,
+                mock(TelegramChannelRepository.class), mock(ShareService.class),
+                mock(TvBoxService.class), offlineDownloadService, mock(SubscriptionSourceService.class),
+                panSouClient(appProperties, restTemplate), panLinkCheck(appProperties, restTemplate));
+
+        server.expect(once(), requestTo("http://pansou.example/api/search"))
+                .andRespond(withSuccess("""
+                        {"code":0,"data":{"total":2,"results":[],"merged_by_type":{
+                          "quark":[{"note":"剧A","url":"https://pan.quark.cn/s/a"}],
+                          "baidu":[{"note":"剧B","url":"https://pan.baidu.com/s/b"}]}}}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        List<cn.har01d.alist_tvbox.dto.tg.Message> messages = service.search("剧", List.of(),
+                cn.har01d.alist_tvbox.domain.SearchTargets.of(java.util.Set.of("quark"), false));
+
+        assertThat(messages).extracting(cn.har01d.alist_tvbox.dto.tg.Message::getLink)
+                .containsExactly("https://pan.quark.cn/s/a");
+        server.verify();
+    }
+
+    @Test
     void perSourceOverrideWinsOverGlobal() {
         RestTemplate restTemplate = new RestTemplate();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
@@ -257,7 +352,7 @@ class RemoteSearchServiceTest {
         appProperties.setPanSouUrl("http://pansou.example");
         appProperties.setPanSouSource("all");
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
         SubscriptionSourceService subscriptionSourceService = mock(SubscriptionSourceService.class);
         when(subscriptionSourceService.getBuiltinExtend("csp_FishPanSou"))
                 .thenReturn("{\"source\":\"tg\",\"filter_include\":\"1080, 4K\",\"filter_exclude\":\"枪版\"}");
@@ -292,7 +387,7 @@ class RemoteSearchServiceTest {
         appProperties.setPanSouFilterInclude(List.of("1080"));
         appProperties.setPanSouFilterExclude(List.of("枪版"));
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, null, ""));
         SubscriptionSourceService subscriptionSourceService = mock(SubscriptionSourceService.class);
         when(subscriptionSourceService.getBuiltinExtend("csp_FishPanSou"))
                 .thenReturn("{\"source\":\"tg\"}");

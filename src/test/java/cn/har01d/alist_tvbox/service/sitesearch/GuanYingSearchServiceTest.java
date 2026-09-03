@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service.sitesearch;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.Request;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 观影搜索源:PoW 求解/挑战判定/搜索解析(内嵌 JSON+suggest 回退)/提取码折参/多镜像与登录。
+ * 观影搜索源:PoW 求解/挑战判定/搜索解析(内嵌 JSON+suggest 回退)/提取码折参/多镜像与登录/
+ * downlist 磁力种子产出。
  */
 class GuanYingSearchServiceTest {
 
@@ -148,14 +150,43 @@ class GuanYingSearchServiceTest {
             }
         };
         List<Message> messages = service.search("难哄");
-        assertEquals(2, messages.size());
+        assertEquals(3, messages.size());
         assertEquals("https://pan.quark.cn/s/gy1", messages.get(0).getLink());
         assertEquals("5", messages.get(0).getType());
         assertEquals("观影", messages.get(0).getChannel());
         assertEquals("难哄", messages.get(0).getName());
         assertEquals("https://pan.baidu.com/s/1GyBd?password=ab12", messages.get(1).getLink());
         assertEquals("10", messages.get(1).getType());
+        // downlist 磁力种子:btih 哈希折 magnet,种子名折 dn= 与 content
+        assertEquals("magnet:?xt=urn:btih:0123456789abcdef&dn=%E7%A3%81%E5%8A%9B", messages.get(2).getLink());
+        assertEquals("magnet", messages.get(2).getType());
+        assertEquals("观影", messages.get(2).getChannel());
+        assertEquals("磁力", messages.get(2).getContent());
         assertEquals(2, searchCalls.get(), "挑战后重试搜索一次");
+    }
+
+    @Test
+    void magnetsFromDetailParsesHashesAndNames() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode detail = mapper.readTree("""
+                {"downlist":{"list":{"m":["ABCDEF1234","Def567890AbcD","Fedcba098765","short"],
+                                     "t":["🎬 难哄 第04集   1080P","","ED2K 名","x"]}}}
+                """);
+        List<Message> messages = GuanYingSearchService.magnetsFromDetail(detail,
+                new GuanYingSearchService.Item("tv", "11", "难哄", "2025"));
+        // 短哈希(<8)跳过;哈希小写化;种子名剥开头杂符+压空白后折 dn
+        assertEquals(3, messages.size());
+        assertEquals("magnet:?xt=urn:btih:abcdef1234&dn=%E9%9A%BE%E5%93%84+%E7%AC%AC04%E9%9B%86+1080P",
+                messages.get(0).getLink());
+        assertEquals("难哄 第04集 1080P", messages.get(0).getContent());
+        assertEquals("难哄", messages.get(0).getName());
+        // 空种子名:不带 dn,content 回落"磁力"
+        assertEquals("magnet:?xt=urn:btih:def567890abcd", messages.get(1).getLink());
+        assertEquals("磁力", messages.get(1).getContent());
+        assertEquals("magnet:?xt=urn:btih:fedcba098765&dn=ED2K+%E5%90%8D", messages.get(2).getLink());
+        // 无 downlist 的详情:空列表
+        assertTrue(GuanYingSearchService.magnetsFromDetail(mapper.readTree("{\"panlist\":{}}"),
+                new GuanYingSearchService.Item("tv", "11", "难哄", "")).isEmpty());
     }
 
     @Test

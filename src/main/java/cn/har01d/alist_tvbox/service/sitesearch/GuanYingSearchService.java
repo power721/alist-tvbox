@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -40,7 +41,10 @@ import java.util.regex.Pattern;
  *
  * <p>搜索:HTML 页内嵌 {@code _obj.search={l:{i,title,d,year,info}}} 列表,空则回退
  * {@code /res/search_suggest} JSON;盘链取 {@code /res/downurl/{type}/{rid}} 的
- * {@code panlist.url/name/p} 平行数组,结构化提取码折 {@code ?password=}。
+ * {@code panlist.url/name/p} 平行数组,结构化提取码折 {@code ?password=};同一响应的
+ * {@code downlist.list.{m,t}} 是磁力种子(btih 哈希+名称平行数组),一并产出 magnet 条目
+ * (type=magnet,种子名折进 {@code dn=}),供追剧磁力兜底在 fillPool 的 NON_PAN 收割 ——
+ * 与网盘链接同响应零额外请求,兜底未开时由定向集闸门统一剔除。
  */
 @Slf4j
 @Service
@@ -143,6 +147,11 @@ public class GuanYingSearchService {
                     message.setChannel("观影");
                     message.setContent((item.title() + " " + StringUtils.defaultString(name) + " "
                             + StringUtils.defaultString(item.remarks())).trim());
+                    if (seen.add(message.getLink())) {
+                        result.add(message);
+                    }
+                }
+                for (Message message : magnetsFromDetail(detail, item)) {
                     if (seen.add(message.getLink())) {
                         result.add(message);
                     }
@@ -529,6 +538,45 @@ public class GuanYingSearchService {
     /** 结构化提取码折进 ?password=(已有 pwd=/password=/passcode= 不重复折,py _append_password)。 */
     static String appendPassword(String url, String code) {
         return SiteSearchSupport.appendPasswordParam(url, code, "password=");
+    }
+
+    private static final Pattern MAGNET_NAME_PREFIX = Pattern.compile("^[^一-龥A-Za-z0-9【\\[]+");
+
+    /**
+     * 详情磁力种子产出(py _build_play_fields 磁力段):{@code downlist.list.m} 是 btih 哈希
+     * 数组、{@code t} 是种子名平行数组,折成 {@code magnet:?xt=urn:btih:{hash}&dn={种子名}}。
+     * dn 是磁力候选的标题口径(集号解析/排除词门禁消费),长度不足 8 的哈希不是有效 btih 跳过。
+     */
+    static List<Message> magnetsFromDetail(JsonNode detail, Item item) {
+        JsonNode list = detail.path("downlist").path("list");
+        JsonNode hashes = list.path("m");
+        JsonNode names = list.path("t");
+        List<Message> messages = new ArrayList<>();
+        for (int i = 0; i < hashes.size(); i++) {
+            String hash = hashes.get(i).asText("").trim().toLowerCase(Locale.ROOT);
+            if (hash.length() < 8) {
+                continue;
+            }
+            String name = cleanMagnetName(names.path(i).asText(""));
+            StringBuilder link = new StringBuilder("magnet:?xt=urn:btih:").append(hash);
+            if (!name.isEmpty()) {
+                link.append("&dn=").append(URLEncoder.encode(name, StandardCharsets.UTF_8));
+            }
+            Message message = new Message();
+            message.setType("magnet");
+            message.setLink(link.toString());
+            message.setName(item.title());
+            message.setChannel("观影");
+            message.setContent(name.isEmpty() ? "磁力" : name);
+            messages.add(message);
+        }
+        return messages;
+    }
+
+    /** 磁力种子名清洗(py _clean_name):剥开头杂符(emoji/引导符),压空白。 */
+    static String cleanMagnetName(String value) {
+        String text = MAGNET_NAME_PREFIX.matcher(StringUtils.trimToEmpty(value)).replaceAll("");
+        return text.replaceAll("\\s+", " ").trim();
     }
 
     // ---------- 配置 ----------

@@ -35,6 +35,10 @@ public class OfflineDownloadTask {
     private String status;
     @Column(columnDefinition = "boolean default false")
     private boolean folder;
+    /** 追剧磁力兜底的提交归属(配额计数锚点);用户侧播放解析的离线为 null */
+    private Integer subscriptionId;
+    /** 追剧磁力兜底对应的目标集号;用户侧离线为 null */
+    private Integer episode;
     private Instant createdTime;
     private Instant updatedTime;
 

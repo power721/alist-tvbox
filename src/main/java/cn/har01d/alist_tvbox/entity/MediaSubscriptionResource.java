@@ -47,6 +47,9 @@ public class MediaSubscriptionResource {
     public static final String FAIL_KIND_TRANSIENT = "TRANSIENT";
     /** 来源标记:用户手动粘贴分享链接入池(区别于搜索自动发现)——豁免入池/探测的自动门禁(盘白名单/年份/标题/排除词)。 */
     public static final String SOURCE_MANUAL = "manual";
+    /** 来源标记:磁力离线产物(非分享链接,shareId 恒 null,link 形如 offline:{产物名})——
+     *  不参与普通候选探测/挂载槽位/换血/同盘回收,维护由磁力收割对账承担。 */
+    public static final String SOURCE_MAGNET = "magnet";
 
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")

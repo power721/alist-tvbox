@@ -130,6 +130,34 @@ public class MediaSubscriptionController {
                 body == null ? null : body.get("password"));
     }
 
+    /** 手动磁力补缺:粘贴磁力/ed2k 提交全局离线下载账号,下载完成入账补缺集。body {url, episode?}
+     *  (集号留空按文件名自动识别);不限订阅 mode,只要求离线下载已配置,不受磁力兜底开关/配额门控。 */
+    @PostMapping("/{id}/magnet")
+    public Map<String, Object> submitMagnet(@PathVariable int id, @RequestBody Map<String, Object> body) {
+        Integer episode = null;
+        if (body != null && body.get("episode") instanceof Number number) {
+            episode = number.intValue();
+        }
+        return checkService.submitManualMagnet(currentUid(), id,
+                body == null ? null : String.valueOf(body.get("url")),
+                episode);
+    }
+
+    /** 手动磁力搜索:按关键词(空=订阅关键词)+可选集号搜磁力/ed2k 候选(与自动兜底同源),
+     *  不做门禁 —— 结果由用户自己挑(解析看包内容 / 入库提交离线)。 */
+    @GetMapping("/{id}/magnet/search")
+    public List<Map<String, Object>> searchMagnets(@PathVariable int id,
+                                                   @RequestParam(required = false) String keyword,
+                                                   @RequestParam(required = false) Integer episode) {
+        return checkService.searchManualMagnets(currentUid(), id, keyword, episode);
+    }
+
+    /** 手动磁力解析:拉种子解文件列表并按本剧季口径标集号(入库前确认包内容)。body {url}。 */
+    @PostMapping("/{id}/magnet/resolve")
+    public Map<String, Object> resolveMagnet(@PathVariable int id, @RequestBody Map<String, String> body) {
+        return checkService.resolveManualMagnet(currentUid(), id, body == null ? null : body.get("url"));
+    }
+
     /** 手动换源(转主源):删旧挂载换到订阅固定路径,主源顶替。候选行的"启用"走 mount(只挂补缺不动主源)。 */
     @PostMapping("/{id}/resources/{resourceId}/activate")
     public Map<String, Object> activate(@PathVariable int id, @PathVariable int resourceId) {

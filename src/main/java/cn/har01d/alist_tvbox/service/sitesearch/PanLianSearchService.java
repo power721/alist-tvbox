@@ -30,6 +30,8 @@ import java.util.regex.Pattern;
  * 网盘分享聚合站,JSON API 搜索({@code /api/get_videos.php})与取盘链
  * ({@code /api/search_pan_links.php});链接可能是直链(结构化 password 折进
  * {@code pwd=/password=} 参数)或 token(经 {@code /api/go.php} 302 跳转解析出真实分享链)。
+ * links 里的 magnet/ed2k(直连或 token 302 解出)一并产出离线候选条目,供追剧磁力兜底
+ * 在 fillPool 的 NON_PAN 收割 —— 兜底未开时由定向集闸门统一剔除。
  *
  * <p><b>凭证必须用户自配</b>(Setting {@code panlian_username}/{@code panlian_password}
  * 或直接 {@code panlian_cookie},站点可 {@code panlian_host} 覆盖)——不内置任何共享账号;
@@ -175,7 +177,14 @@ public class PanLianSearchService {
                 }
                 String type = Message.parseType(url);
                 if (type == null || !SiteSearchSupport.isNumeric(type)) {
-                    continue; // 只留可挂载的网盘分享;磁力/电驴/未知类型对候选池无意义
+                    // 网盘只留可挂载分享;magnet/ed2k(token 也可能 302 到磁力)作离线候选产出,
+                    // 由追剧定向集闸门裁决 —— 兜底未开时在 searchAllSources 统一剔除
+                    if (StringUtils.startsWithIgnoreCase(url, "magnet:")
+                            || StringUtils.startsWithIgnoreCase(url, "ed2k:")) {
+                        messages.add(offlineMessage(vodName, url,
+                                cleanLinkTitle(link.path("title").asText(""))));
+                    }
+                    continue;
                 }
                 Message message = new Message();
                 message.setType(type);
@@ -189,8 +198,27 @@ public class PanLianSearchService {
         return messages;
     }
 
-    /** token 链接经 /api/go.php 302 解析真实分享链(手机 UA + skip_go_warning 免确认页)。 */
-    private String resolveTokenUrl(Config config, String token, String password) {
+    private static final Pattern LINK_TITLE_INTRO = Pattern.compile("\\s*[·•]\\s*介绍[:：].*$");
+    private static final Pattern HTML_TAG = Pattern.compile("<[^>]+>");
+
+    /** 资源标题清洗(py _clean_link_title):剥「介绍:」尾巴与 HTML 标签。 */
+    static String cleanLinkTitle(String value) {
+        String text = HTML_TAG.matcher(LINK_TITLE_INTRO.matcher(StringUtils.trimToEmpty(value)).replaceAll("")).replaceAll("");
+        return text.trim();
+    }
+
+    /** 离线候选条目(magnet/ed2k):content 放清洗后的资源标题(常带集数),磁力兜底的标题门禁消费。 */
+    private static Message offlineMessage(String vodName, String url, String title) {
+        Message message = new Message();
+        message.setType(StringUtils.startsWithIgnoreCase(url, "ed2k:") ? "ed2k" : "magnet");
+        message.setLink(url);
+        message.setName(vodName);
+        message.setChannel("盘链");
+        message.setContent(title.isEmpty() ? vodName : title);
+        return message;
+    }
+
+    /** token 链接经 /api/go.php 302 解析真实分享链(手机 UA + skip_go_warning 免确认页)。 */    private String resolveTokenUrl(Config config, String token, String password) {
         String goUrl = config.host() + "/api/go.php?t=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("User-Agent", MOBILE_UA);

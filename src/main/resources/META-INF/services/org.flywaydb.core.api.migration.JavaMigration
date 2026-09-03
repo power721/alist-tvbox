@@ -39,3 +39,6 @@ db.migration.current.V44__MediaSubscriptionResourceSeasonStarts
 db.migration.current.V45__MovieDiffLog
 db.migration.current.V46__MediaSubscriptionManualTotal
 db.migration.current.V47__MediaSubscriptionResourceFailKind
+db.migration.current.V48__MediaSubscriptionMagnetOffline
+db.migration.current.V49__OfflineDownloadTaskMagnetQuota
+db.migration.current.V50__MediaSubscriptionCustomKeywords

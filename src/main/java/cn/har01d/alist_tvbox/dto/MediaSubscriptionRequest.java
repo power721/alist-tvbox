@@ -7,6 +7,8 @@ import lombok.Data;
 public class MediaSubscriptionRequest {
     private String name;
     private String keyword;
+    /** 自定义搜索词(换行/逗号分隔,至多 5 个,空 = 清除):主搜索词以外的额外召回词(英文名/别名/写法差异) */
+    private String customKeywords;
     private Integer season;
     /** 季起始集号(≤0 = 清除):本季第 1 集对应全剧第 N 集;资源季内编号而官方连续编号时用 */
     private Integer seasonStartEpisode;
@@ -26,6 +28,8 @@ public class MediaSubscriptionRequest {
     private java.util.List<String> accountIds;
     /** 显式允许跨网盘转存(默认仅同盘,AList 秒传配置允许的方向除外) */
     private Boolean crossDrive;
+    /** 磁力兜底(仅转存模式生效):补缺穷尽后用磁力经离线下载补集,前置=网盘账号配置已开启离线下载 */
+    private Boolean magnetOffline;
     private Integer checkIntervalHours;
     /** 手动播出时刻校正("HH:mm",空=自动;仅日期无时刻的剧按 20:00 兜底,可按实际排播改写) */
     private String customAirClock;

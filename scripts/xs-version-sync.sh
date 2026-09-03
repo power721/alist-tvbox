@@ -1,28 +1,31 @@
 #!/usr/bin/env bash
 # xs-version-sync.sh — 潇洒本地包地址同步（生产端）
 #
-# 在 d.har01d.cn 服务器由 cron 运行，产出 /var/www/alist/xs.txt，
+# 在 d.har01d.cn 服务器由 cron 运行，产出 /var/www/html/xs.txt，
 # 供 alist-tvbox 消费端（FileDownloader.resolveXsSingleUrl）运行时读取。
 #
 # 流程：
-#   1. 读本地版本 /var/www/alist/xs.version.txt（不存在视为 0，触发首次下载）
+#   1. 读本地版本 /var/www/html/xs.version.txt（不存在视为 0，触发首次下载）
 #   2. 拉上游版本 $XS_BASE/version.txt
 #   3. 不同则：拉 single.json → 取 zip 地址 → 下载 zip → 解压
 #      → 从 api.json 取 sites[].ext（版本•信息，优先 api==csp_Market）
-#      → 原子写 /var/www/alist/xs.txt，更新 xs.version.txt
+#      → 原子写 /var/www/html/xs.txt，更新 xs.version.txt
 #
 # ⚠️ 只能检测「同一 XS_BASE 内」的版本号变化。上游换 host/路径时，改下面的 XS_BASE
 #    （或用环境变量 XS_BASE=... 覆盖）。这是唯一需要人工介入的情形。
 #
-# 依赖：curl、python3、unzip。需以对 /var/www/alist 有写权限的身份运行。
+# 依赖：curl、python3、unzip。需以对 /var/www/html 有写权限的身份运行。
 # cron 示例（每 6 小时）：  0 */6 * * * /path/to/xs-version-sync.sh >> /var/log/xs-sync.log 2>&1
 
 set -euo pipefail
 
 # ===== 配置 =====
-XS_BASE="${XS_BASE:-https://oss-v1.wangmeipo.cn/236}"   # 上游基址（version.txt / single.json 所在目录）
+# 上游基址（version.txt / single.json 所在目录）。
+# 迁移史：pizazz.s3.bitiful.net → 9877.kstore.space → oss-v1.wangmeipo.cn/236
+#         → 2026-09-03 回归 9877.kstore.space（zip 本体另行迁移至 pizazz.us.ci/单线路.zip）
+XS_BASE="${XS_BASE:-https://9877.kstore.space}"
 USER_AGENT="okhttp/5.3.2"
-OUT_DIR="/var/www/alist"
+OUT_DIR="${OUT_DIR:-/var/www/html}"
 XS_TXT="$OUT_DIR/xs.txt"                 # 产物：消费端读取的 single.json 地址
 VERSION_FILE="$OUT_DIR/xs.version.txt"   # 本地已知版本
 

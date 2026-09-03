@@ -51,6 +51,15 @@ public final class DriveId {
         }
     }
 
+    /** 宽松版:未知/不可解析标识返回 null(外部白名单映射用,坏值不炸搜索)。 */
+    public static Integer toTypeLeniently(String value) {
+        try {
+            return toTypeOrNull(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public static int toType(String value) {
         Integer type = toTypeOrNull(value);
         if (type == null) {

@@ -46,6 +46,14 @@ public class MediaSubscription {
 
     private String keyword;
 
+    /**
+     * 自定义搜索词(手动,换行分隔,至多 5 个):主搜索词以外的额外召回词 —— 英文名/别名/简繁写法等
+     * 资源命名差异大的场景。巡检填池时各词独立成一路全源搜索;补搜轮次里插在单集降级之前;
+     * 标题归属匹配(matchNames)同时并入,自定义词搜回的召回才能过剧名门禁入池。空 = 不启用。
+     */
+    @Column(columnDefinition = "TEXT", name = "custom_keywords")
+    private String customKeywords;
+
     private Integer season;
 
     /**
@@ -157,6 +165,11 @@ public class MediaSubscription {
     /** 显式允许跨网盘转存(默认仅同盘:AList 秒传配置允许的方向除外) */
     @Column(name = "cross_drive")
     private boolean crossDrive;
+
+    /** 磁力兜底(仅转存模式生效):补缺穷尽后用磁力链接经全局离线下载配置账号离线补集,
+     *  产物落离线账号挂载根/alist-tvbox-offline/,资源行 shareId=null 按挂载路径直接供播 */
+    @Column(name = "magnet_offline")
+    private boolean magnetOffline;
 
     @Column(nullable = false, length = 16)
     private String status = STATUS_ACTIVE;

@@ -101,6 +101,11 @@ public class GuangyapanOfflineDownloadHandler implements OfflineDownloadHandler 
 
     @Override
     public TaskResult submitAndWait(DriverAccount account, String url, String folderId) {
+        return submitAndWait(account, url, folderId, 30);
+    }
+
+    @Override
+    public TaskResult submitAndWait(DriverAccount account, String url, String folderId, int waitSeconds) {
         log.info("submitting guangyapan offline download: accountId={}, folderId={}", account.getId(), folderId);
 
         ObjectNode createBody = objectMapper.createObjectNode();
@@ -115,7 +120,7 @@ public class GuangyapanOfflineDownloadHandler implements OfflineDownloadHandler 
         }
         log.info("guangyapan task created: taskId={}", taskId);
 
-        for (int i = 0; i < 30; i++) {
+        for (int i = 0; i < Math.max(1, waitSeconds); i++) {
             ObjectNode taskListBody = objectMapper.createObjectNode();
             taskListBody.put("pageSize", 100);
             taskListBody.putArray("status").add(0).add(1).add(2).add(5);
@@ -146,7 +151,7 @@ public class GuangyapanOfflineDownloadHandler implements OfflineDownloadHandler 
             sleepOneSecond();
         }
 
-        throw new BadRequestException("光鸭云盘离线下载任务未在30秒内完成");
+        throw new BadRequestException("光鸭云盘离线下载任务未在" + Math.max(1, waitSeconds) + "秒内完成");
     }
 
     @Override

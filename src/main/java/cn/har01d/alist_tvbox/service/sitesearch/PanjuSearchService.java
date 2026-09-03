@@ -18,10 +18,12 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +43,8 @@ import java.util.regex.Pattern;
  * 域名,免请求预判)→ 按候选池价值排序盘型、上限截断后解析 link_start 站内中转页
  * (var panLink = "真实分享链")产出与 TG 搜索同构的 {@link Message}。中转页是必要开销:
  * 详情页只有站内跳转链,真实分享链(含百度 pwd 提取码内嵌)在中转页脚本里。
+ * 详情页 .seed-list 磁力行(seed_id 中转)两跳后解出 magnet/ed2k 产出离线候选 ——
+ * 每行一次真实请求,仅磁力兜底生效时解析(聚合层闸门统一裁决)。
  */
 @Slf4j
 @Service
@@ -57,6 +61,8 @@ public class PanjuSearchService {
     private static final long HOSTS_REFRESH_MS = 6 * 60 * 60_000L;
     private static final long HOSTS_RETRY_MS = 10 * 60_000L;
     private static final int REQUEST_TIMEOUT_SECONDS = 10;
+    /** 每个详情页最多解析多少磁力 seed 行(独立于网盘中转解析配额) */
+    private static final int MAX_SEED_RESOLVES = 3;
 
     /**
      * 盘型解析优先级:候选池价值排序(夸克/UC/阿里转存主力盘在前),与 py 版 disk_priority
@@ -95,6 +101,10 @@ public class PanjuSearchService {
     record PanRow(String disk, String href, String label) {
     }
 
+    /** 详情页磁力行(.seed-list 下,href 含 seed_id=):两跳中转后解出 magnet/ed2k */
+    record SeedRow(String href, String label) {
+    }
+
     /** failover 成功的一次抓取:url 用于把详情页里的相对中转链拼成绝对地址 */
     record Fetched(String url, String html) {
     }
@@ -126,8 +136,15 @@ public class PanjuSearchService {
     /**
      * 搜索第 1 页 → 卡片标题粗匹配 → 抓前 N 个详情页 → 按盘型优先级解析中转链。
      * 任一环节失败/超时静默返回已收集的部分,不抛出(多源聚合里单源失败不影响其它源)。
+     *
+     * @param includeOffline 磁力兜底生效时才解析 seed 行 —— 每行是一次真实的中转页请求,
+     *                       兜底未开的订阅/预览不应白烧;闸门与网盘条目统一在聚合层裁决
      */
     public List<Message> search(String keyword) {
+        return search(keyword, false);
+    }
+
+    public List<Message> search(String keyword, boolean includeOffline) {
         if (!appProperties.getSubscription().isPanjuEnabled() || StringUtils.isBlank(keyword)) {
             return List.of();
         }
@@ -167,6 +184,20 @@ public class PanjuSearchService {
                         }
                         result.add(toMessage(card, link, type, row.label()));
                     }
+                    // seed 磁力行(.seed-list):每行一次真实中转页请求,只在磁力兜底生效时解析。
+                    // 预算独立于网盘中转解析 —— 磁力行不该挤占网盘配额,反之亦然
+                    int seeds = 0;
+                    for (SeedRow row : includeOffline ? parseSeedRows(detail.html()) : List.<SeedRow>of()) {
+                        if (seeds >= MAX_SEED_RESOLVES || System.currentTimeMillis() > deadline) {
+                            break;
+                        }
+                        String link = resolveSeedLink(WanouSearchService.buildAbsoluteUrl(rootOf(detail.url()), row.href()));
+                        seeds++;
+                        if (link.isEmpty() || !seenLinks.add(link)) {
+                            continue;
+                        }
+                        result.add(offlineMessage(card, link, row.label()));
+                    }
                 } catch (Exception e) {
                     log.debug("panju detail {} failed: {}", card.id(), e.getMessage());
                 }
@@ -174,7 +205,7 @@ public class PanjuSearchService {
         } catch (Exception e) {
             log.debug("panju search {} failed: {}", kw, e.getMessage());
         }
-        log.info("Panju search {} get {} results", kw, result.size());
+        log.info("Panju search {} get {} results (offline={})", kw, result.size(), includeOffline);
         return result;
     }
 
@@ -219,6 +250,11 @@ public class PanjuSearchService {
     }
 
     private static final Pattern REDIRECT_TARGET = Pattern.compile("redirect_to=([a-zA-Z0-9_]+)");
+    private static final Pattern SEED_TARGET = Pattern.compile("seed_id=([a-zA-Z0-9_]+)");
+    /** seed 中转页明链/密文(py _extract_download_link):magnet/ed2k 直出优先,base64 const data 兜底 */
+    private static final Pattern OFFLINE_LINK_IN_PAGE =
+            Pattern.compile("(?i)(magnet:\\?[^<>\"'\\s]+|ed2k://[^\\s<>\"']+)");
+    private static final Pattern ENCODED_DATA = Pattern.compile("const\\s+data\\s*=\\s*[\"']([A-Za-z0-9+/=]+)[\"']");
 
     /**
      * 详情页网盘行解析:仅收 .pan-links 下的行(seed_list 磁力行不在此列),盘型三级判定
@@ -265,6 +301,116 @@ public class PanjuSearchService {
             }
         }
         return "";
+    }
+
+    /**
+     * 详情页磁力行解析(py _collect_seed_targets):.seed-list .seeds 下 href 含 seed_id= 的行,
+     * 按 seed_id 去重,标题取「非泛化」候选(title 属性 → movie_title 参数 → 行文本 → 磁力N,
+     * 「磁力/网盘N」这类泛化名跳过 —— 与 py _is_generic_resource_title 同口径)。
+     */
+    List<SeedRow> parseSeedRows(String html) {
+        Document doc = Jsoup.parse(html);
+        List<SeedRow> rows = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        int index = 1;
+        for (Element anchor : doc.select(".seed-list .seeds a[href]")) {
+            String href = anchor.attr("href").trim();
+            Matcher target = SEED_TARGET.matcher(href);
+            if (href.isEmpty() || !target.find() || !seen.add(target.group(1))) {
+                continue;
+            }
+            String label = resourceTitle(anchor, href, "磁力" + index);
+            rows.add(new SeedRow(stripToSeed(href), label));
+            index++;
+        }
+        return rows;
+    }
+
+    /** 资源标题四级候选,泛化名(磁力/网盘N、下载、资源、链接)跳过取下一级(py _extract_resource_title)。 */
+    private static String resourceTitle(Element anchor, String href, String fallback) {
+        String firstNonGeneric = "";
+        for (String candidate : new String[]{anchor.attr("title"), movieTitleFromHref(href), anchor.text()}) {
+            String value = StringUtils.trimToEmpty(candidate);
+            if (value.isEmpty()) {
+                continue;
+            }
+            if (firstNonGeneric.isEmpty()) {
+                firstNonGeneric = value;
+            }
+            if (!isGenericResourceTitle(value)) {
+                return value;
+            }
+        }
+        return firstNonGeneric.isEmpty() ? fallback : firstNonGeneric;
+    }
+
+    private static boolean isGenericResourceTitle(String value) {
+        String text = StringUtils.trimToEmpty(value);
+        if (text.isEmpty()) {
+            return true;
+        }
+        if (text.matches("网盘\\d*") || text.matches("磁力\\d*")) {
+            return true;
+        }
+        return Set.of("网盘", "磁力", "下载", "资源", "链接").contains(text.toLowerCase(Locale.ROOT));
+    }
+
+    /** seed 中转链只保留 seed_id 参数:movie_title 值是裸 Unicode,带着发请求会让 Referer 头构造炸掉。 */
+    private static String stripToSeed(String href) {
+        Matcher target = SEED_TARGET.matcher(href);
+        if (!target.find()) {
+            return href;
+        }
+        int query = href.indexOf('?');
+        return query < 0 ? href : href.substring(0, query + 1) + "seed_id=" + target.group(1);
+    }
+
+    /**
+     * seed 中转页解析(py _extract_download_link):页面磁力/ed2k 明链优先,
+     * {@code const data="base64"} 密文解码兜底(解出非离线链视为无链接)。
+     */
+    String resolveSeedLink(String url) {
+        if (StringUtils.isBlank(url)) {
+            return "";
+        }
+        String html;
+        try {
+            html = fetch(url);
+        } catch (Exception e) { // 单条坏链只作废该行,不中断同卡剩余行
+            log.debug("panju seed resolve {} failed: {}", url, e.getMessage());
+            return "";
+        }
+        if (StringUtils.isBlank(html)) {
+            return "";
+        }
+        Matcher direct = OFFLINE_LINK_IN_PAGE.matcher(html);
+        if (direct.find()) {
+            return direct.group().trim();
+        }
+        Matcher encoded = ENCODED_DATA.matcher(html);
+        if (encoded.find()) {
+            try {
+                String decoded = new String(Base64.getDecoder().decode(encoded.group(1)), StandardCharsets.UTF_8).trim();
+                if (StringUtils.startsWithIgnoreCase(decoded, "magnet:")
+                        || StringUtils.startsWithIgnoreCase(decoded, "ed2k:")) {
+                    return decoded;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // 非法 base64:视为无链接
+            }
+        }
+        return "";
+    }
+
+    /** 磁力/ed2k 候选条目:content 放资源标题(常带集数),磁力兜底的标题门禁消费。 */
+    private static Message offlineMessage(Card card, String link, String label) {
+        Message message = new Message();
+        message.setType(StringUtils.startsWithIgnoreCase(link, "ed2k:") ? "ed2k" : "magnet");
+        message.setLink(link);
+        message.setName(card.title());
+        message.setChannel(NAME);
+        message.setContent(StringUtils.defaultString(label));
+        return message;
     }
 
     /** href 里 movie_title 参数兜底资源标题(py _extract_movie_title_from_href)。 */
