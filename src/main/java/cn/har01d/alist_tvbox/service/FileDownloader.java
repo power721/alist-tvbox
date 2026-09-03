@@ -49,7 +49,9 @@ public class FileDownloader {
     private static final String REMOTE_DIFF_ZIP_URL = BASE_URL + "diff.zip";
     private static final String PG_LATEST_URL = "https://github.com/power721/PG/releases/latest";
     private static final String ZX_LATEST_URL = "https://github.com/power721/ZX/releases/latest";
-    private static final String XS_INDEX_URL = BASE_URL + "xs.txt";
+    private static final String SYNC_BASE_URL = "https://8866033.xyz/";
+    private static final String XS_INDEX_URL = SYNC_BASE_URL + "xs.txt";
+    private static final String XS_VERSION_URL = SYNC_BASE_URL + "xs.version.txt";
     private static final String XS_USER_AGENT = "okhttp/5.3.2";
 
     private static final Set<String> GITHUB_PROXY = Set.of("https://slink.ltd/", "https://cors.zme.ink/", "https://git.886.be/", "https://gitdl.cn/", "https://ghfast.top/", "https://ghproxy.net/", "https://github.moeyy.xyz/", "https://gh-proxy.com/", "https://ghproxy.cc/", "https://gh.llkk.cc/", "https://gh.ddlc.top/", "https://gh-proxy.llyke.com/");
@@ -322,9 +324,9 @@ public class FileDownloader {
 
     public String getXsVersion() {
         try {
-            return getRemoteText(deriveVersionUrl(resolveXsSingleUrl()), XS_USER_AGENT).trim();
-        } catch (Exception e) {
-            log.warn("getXsVersion failed", e);
+            return getRemoteVersion(XS_VERSION_URL);
+        } catch (IOException e) {
+            log.warn("getXsVersion IOException", e);
         }
         return "";
     }
@@ -345,11 +347,6 @@ public class FileDownloader {
             }
         }
         throw new IOException("Cannot find xs download url from single.json");
-    }
-
-    static String deriveVersionUrl(String singleUrl) {
-        int idx = singleUrl.lastIndexOf('/');
-        return (idx >= 0 ? singleUrl.substring(0, idx) : singleUrl) + "/version.txt";
     }
 
     static String parseXsSingleUrl(String text) {

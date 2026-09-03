@@ -69,18 +69,6 @@ class FileDownloaderTest {
 //    }
 
     @Test
-    void deriveVersionUrl_swapsSingleJsonForVersionTxt() {
-        assertThat(FileDownloader.deriveVersionUrl("https://oss-v1.wangmeipo.cn/236/single.json"))
-                .isEqualTo("https://oss-v1.wangmeipo.cn/236/version.txt");
-    }
-
-    @Test
-    void deriveVersionUrl_dropsQueryWhenTakingDirname() {
-        assertThat(FileDownloader.deriveVersionUrl("https://x/236/single.json?v=1"))
-                .isEqualTo("https://x/236/version.txt");
-    }
-
-    @Test
     void parseXsSingleUrl_returnsFirstNonEmptyLine() {
         assertThat(FileDownloader.parseXsSingleUrl("https://x/236/single.json\n"))
                 .isEqualTo("https://x/236/single.json");
