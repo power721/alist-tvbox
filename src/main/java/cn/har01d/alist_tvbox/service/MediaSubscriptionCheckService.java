@@ -149,10 +149,87 @@ public class MediaSubscriptionCheckService {
      * 三集迷你剧常按「上集/中集/下集」命名且与 TMDB 的 S1E1-3 标题一一对应。 */
     private static final Pattern CHAPTER_MARK = Pattern.compile("([上中下])[集篇部]");
     /** 明确失效(判死即拉黑):分享/提取码/过期类措辞(AList 报错原文,如 "failed get link: 参数错误")。
+     * 英文词必须带词边界:百度分享错误 JSON 全量携带 {@code "expired_type":0} 字段(值 0 恰表示非过期),
+     * 无边界 {@code expired} 会把会话过期(errno -9)误判死链,整源 RETIRED + 90 天黑名单(线上:
+     * 分享在 App 里可正常访问,巡检列目录撞 -9 后主源被退役、订阅落 ERROR)。
      * 其余未识别错误一律按瞬时处理(见 {@link #classifyProbeFailure}) */
     private static final Pattern GONE_ERROR = Pattern.compile(
             "(?i)分享已?失效|链接错误|链接已?过期|提取码(错误|不正确)|密码(错误|不正确)|已取消|不存在|参数错误|"
-                    + "object not found|not exist|expired|cancel|invalid");
+                    + "\\bobject not found\\b|\\bnot exist\\b|\\bexpired\\b|\\bcancel\\b|\\binvalid\\b");
+    /** 百度分享会话票据过期(errno -9,sekey/BDCLND 失效,show_msg「提取码验证失败,请重试」):
+     * 瞬时态 —— PowerList 驱动清 Token 重验证即可自愈,分享、提取码与文件全部存活,绝不判死。 */
+    private static final Pattern SESSION_EXPIRED_ERROR = Pattern.compile("(?i)errno\"?\\s*:\\s*-9|提取码验证失败");
+
+    // ---------- 夸克分享游客存活验证(判死前的第二信源) ----------
+
+    /** 夸克分享链接 id:pan.quark.cn/s/{pwd_id} */
+    private static final Pattern QUARK_SHARE_ID = Pattern.compile("pan\\.quark\\.cn/s/([0-9a-zA-Z]+)");
+    /** 夸克 token 响应里的业务码:0=ok(活),410xx 家族=死链(41012 好友已取消/分享已失效) */
+    private static final Pattern QUARK_RESP_CODE = Pattern.compile("\"code\"\\s*:\\s*(-?\\d+)");
+
+    /** 游客 token 探测的可注入桩:生产走 {@link #httpPostQuarkToken},单测替换以免真发外网请求。 */
+    java.util.function.BiFunction<String, String, String> quarkTokenFetcher = this::httpPostQuarkToken;
+
+    /**
+     * 夸克分享游客态存活验证。夸克 API 对<b>真死链与风控目标返回同文案</b>(如「分享地址已失效」),
+     * AList 挂载列目录失败未必是分享死 —— 线上:用户在网盘 App 可正常访问,主源却被判退役+黑名单。
+     * 匿名调 sharepage/token(无兜底 Cookie)是独立请求形态,实测同机同 IP:活链 code:0 ok,
+     * 死链 code 410xx,可区分死活。
+     *
+     * @return TRUE=分享活着(勿判死) / FALSE=确认死链 / null=无结论(不拦截判死)
+     */
+    Boolean quarkShareAlive(String link, String passcode) {
+        Matcher m = QUARK_SHARE_ID.matcher(StringUtils.defaultString(link));
+        if (!m.find()) {
+            return null;
+        }
+        String body;
+        try {
+            body = quarkTokenFetcher.apply(m.group(1), StringUtils.defaultString(passcode));
+        } catch (Exception e) {
+            log.debug("quark guest token probe failed: {}", e.getMessage());
+            return null;
+        }
+        Matcher code = QUARK_RESP_CODE.matcher(StringUtils.defaultString(body));
+        if (!code.find()) {
+            return null;
+        }
+        int c = Integer.parseInt(code.group(1));
+        if (c == 0 && body.contains("\"stoken\":\"")) {
+            return Boolean.TRUE;
+        }
+        if (c >= 41000 && c < 42000) {
+            return Boolean.FALSE;
+        }
+        return null;
+    }
+
+    /** 匿名 POST sharepage/token;返回响应体,网络/HTTP 异常返回 null(=无结论)。 */
+    String httpPostQuarkToken(String pwdId, String passcode) {
+        try {
+            var url = new java.net.URL("https://drive-pc.quark.cn/1/clouddrive/share/sharepage/token?pr=ucpro&fr=pc");
+            var conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(8_000);
+            conn.setReadTimeout(8_000);
+            conn.setRequestProperty("User-Agent", Constants.USER_AGENT);
+            conn.setRequestProperty("Referer", "https://pan.quark.cn/");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+            String payload = "{\"pwd_id\":\"" + pwdId + "\",\"passcode\":\""
+                    + passcode.replace("\\", "\\\\").replace("\"", "\\\"")
+                    + "\",\"share_for_transfer\":true}";
+            try (var os = conn.getOutputStream()) {
+                os.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            try (var in = conn.getResponseCode() < 400 ? conn.getInputStream() : conn.getErrorStream()) {
+                return in == null ? null : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            log.debug("quark guest token request failed: {}", e.getMessage());
+            return null;
+        }
+    }
     /** 搜索源判定失效的原始状态词(各源大小写/措辞不一,入池时统一归一化) */
     private static final Set<String> INVALID_STATES = Set.of("BAD", "INVALID", "FAILED", "EXPIRED", "DEAD", "ERROR");
     /** 集号范围门禁拒绝消息的识别标记:调用方据此退役候选但不进跨订阅失效黑名单(链接没死,只是不属于本剧) */
@@ -1058,6 +1135,10 @@ public class MediaSubscriptionCheckService {
                     throttleDrive(driveOf(resource));
                     resource.setCheckedTime(System.currentTimeMillis());
                     resourceRepository.save(resource);
+                } else if (isSessionExpiredError(e.getMessage())) {
+                    // sekey 会话过期(errno -9)同上不退役不拉黑:重验证可自愈,下轮重探
+                    resource.setCheckedTime(System.currentTimeMillis());
+                    resourceRepository.save(resource);
                 } else {
                     retireResource(current, resource, e.getMessage(), true);
                 }
@@ -1331,8 +1412,9 @@ public class MediaSubscriptionCheckService {
                 subscription.setNextCheckTime(System.currentTimeMillis() + INVALID_RETRY_DELAY_MS);
                 return;
             }
-            onInvalid(subscription, invalidReason);
-            scheduleNext(subscription);
+            if (!onInvalid(subscription, invalidReason)) {
+                scheduleNext(subscription);
+            }
             return;
         }
 
@@ -1375,8 +1457,9 @@ public class MediaSubscriptionCheckService {
             } catch (Exception e) {
                 // listEpisodeFiles 只抛错不返回 null:换源后新主源列不出目录走失效换源链,
                 // 而不是把异常漏到 check() 整轮判 ERROR
-                onInvalid(subscription, "换源后新主源列目录失败:" + e.getMessage());
-                scheduleNext(subscription);
+                if (!onInvalid(subscription, "换源后新主源列目录失败:" + e.getMessage())) {
+                    scheduleNext(subscription);
+                }
                 return;
             }
             if (files.isEmpty()) {
@@ -2906,6 +2989,16 @@ public class MediaSubscriptionCheckService {
                 collectResourceEpisodeFiles(site(), subscription, resource, resource.getMountPath(), files,
                         episodeSizePolicy(subscription), true);
             } catch (Exception e) {
+                if (isSessionExpiredError(e.getMessage())) {
+                    // sekey 会话过期(errno -9)不是分享死:不退役不拉黑,挂载原样保留下轮重试
+                    log.warn("aux mount refresh skipped, share session expired: {}", resource.getMountPath());
+                    continue;
+                }
+                if (Boolean.TRUE.equals(quarkShareAlive(resource.getLink(), resource.getPassword()))) {
+                    // 夸克游客探测证实分享活着:「分享地址已失效」是风控形态,挂载原样保留
+                    log.warn("aux mount refresh skipped, quark share alive via guest probe: {}", resource.getMountPath());
+                    continue;
+                }
                 log.info("aux mount refresh failed, retire: {} {}", resource.getMountPath(), e.getMessage());
                 retireResource(subscription, resource, e.getMessage(), false);
                 continue;
@@ -3252,6 +3345,9 @@ public class MediaSubscriptionCheckService {
         String message = e == null ? "" : StringUtils.defaultString(e.getMessage());
         if (isThrottleError(message)) {
             return ProbeFailure.THROTTLED;
+        }
+        if (isSessionExpiredError(message)) {
+            return ProbeFailure.TRANSIENT; // sekey 过期非链接死:streak 连击兜底,不进 GONE
         }
         if (GONE_ERROR.matcher(message).find()) {
             return ProbeFailure.GONE;
@@ -5029,9 +5125,24 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    private void onInvalid(MediaSubscription subscription, String reason) {
-        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID, "主源失效:" + StringUtils.defaultString(reason));
+    /** @return true = 命中会话过期/分享存活闸门(已推迟下轮),调用方不必再 scheduleNext */
+    private boolean onInvalid(MediaSubscription subscription, String reason) {
+        if (isSessionExpiredError(reason)) {
+            // 百度 sekey 会话过期(errno -9)不是主源失效:分享与文件都活着,重验证可自愈 ——
+            // 推迟下轮重试,不退役不拉黑(退役=RETIRED + 90 天黑名单,误杀好源)
+            log.warn("subscription {} skipped: share session expired, retry later", subscription.getId());
+            subscription.setNextCheckTime(System.currentTimeMillis() + INVALID_RETRY_DELAY_MS);
+            return true;
+        }
         MediaSubscriptionResource primary = primaryResource(subscription);
+        if (primary != null && Boolean.TRUE.equals(quarkShareAlive(primary.getLink(), primary.getPassword()))) {
+            // 夸克游客探测证实分享活着:挂载路径报「分享地址已失效」是风控形态(真死链与风控同文案),
+            // 不是分享死 —— 推迟重试,不退役不拉黑
+            log.warn("subscription {} skipped: quark share alive via guest probe, retry later", subscription.getId());
+            subscription.setNextCheckTime(System.currentTimeMillis() + INVALID_RETRY_DELAY_MS);
+            return true;
+        }
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID, "主源失效:" + StringUtils.defaultString(reason));
         if (primary != null) {
             retireResource(subscription, primary, reason, true); // 事件已发,退役不再重复报
         }
@@ -5042,6 +5153,7 @@ public class MediaSubscriptionCheckService {
                 addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "主源失效且无可用候选");
             }
         }
+        return false;
     }
 
     /** 换源时的主源候选序,分数序之上两层提前:①钉选候选置顶(用户指定压过一切自动判定,
@@ -5134,6 +5246,11 @@ public class MediaSubscriptionCheckService {
      * 百度分享密码验证接口的 errno -62 是最常见的一种(短时间内连敲同一网盘必触发)。 */
     static boolean isThrottleError(String message) {
         return message != null && THROTTLE_ERROR.matcher(message).find();
+    }
+
+    /** 百度分享会话票据过期(errno -9):瞬时态,重验证可自愈,不判死不退避整盘。 */
+    static boolean isSessionExpiredError(String message) {
+        return message != null && SESSION_EXPIRED_ERROR.matcher(message).find();
     }
 
     /**

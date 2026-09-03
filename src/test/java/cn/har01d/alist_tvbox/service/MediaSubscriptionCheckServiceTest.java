@@ -1243,6 +1243,96 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void baiduSekeyExpiredListingDoesNotInvalidate() {
+        // 线上事故(2026-09-03):分享在网盘 App 里可正常访问,巡检列目录撞百度 sekey 会话过期
+        // (errno -9「提取码验证失败,请重试」,瞬时态、重验证可自愈)。错误 JSON 携带 "expired_type":0
+        // 字段名(值 0=非过期),曾被 GONE_ERROR 的无边界 expired 误判死链:主源 RETIRED + 90 天黑名单,
+        // 换不出候选后订阅落 ERROR(「已退役」+「异常」)。会话过期须退避重试,不退役不换源。
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new RuntimeException("{\"errno\":-9,\"request_id\":9149375969895791869,"
+                        + "\"server_time\":1788395979,\"cfrom_id\":0,\"hitrisk\":0,\"appeal_status\":0,"
+                        + "\"is_zombie\":0,\"vip_point\":9779,\"vip_level\":4,\"svip10_id\":\"\","
+                        + "\"vip_type\":2,\"sharetype\":1,\"expired_type\":0,\"newno\":\"100000010001\","
+                        + "\"show_msg\":\"提取码验证失败,请重试\"}"));
+        long now = System.currentTimeMillis();
+        fixture.service.check(1);
+        assertEquals(MediaSubscription.STATUS_ACTIVE, fixture.subscription.getStatus(), "会话过期不是主源失效");
+        assertClose(now + 15 * 60_000L, fixture.subscription.getNextCheckTime());
+        Mockito.verify(fixture.resourceRepository, Mockito.never()).save(Mockito.any()); // 不退役不换源
+    }
+
+    @Test
+    void quarkRiskControlShareAliveDoesNotInvalidate() {
+        // 线上事故(2026-09-03,别的用户实例):夸克分享用户可正常访问,但 AList 挂载列目录报
+        // 「分享地址已失效」被无条件判死(主源 RETIRED + 90 天黑名单 + 订阅 ERROR)。
+        // 夸克对真死链与风控目标(挂载路径带的兜底 Cookie 被风控)返回同文案 —— 游客匿名
+        // token 探测是独立第二信源(实测同机活链 code:0 ok),分享活着就不能判死。
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(11);
+        primary.setSubscriptionId(1);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        primary.setLink("https://pan.quark.cn/s/riskcontrolled");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(primary));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new RuntimeException("failed get share files: 分享地址已失效"));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(new FsResponse());
+        fixture.service.quarkTokenFetcher = (pwdId, passcode) ->
+                "{\"status\":200,\"code\":0,\"message\":\"ok\",\"data\":{\"stoken\":\"fresh\",\"share_type\":0}}";
+        long now = System.currentTimeMillis();
+        fixture.service.check(1);
+        assertEquals(MediaSubscription.STATUS_ACTIVE, fixture.subscription.getStatus(), "游客探测分享活着,不判主源失效");
+        assertClose(now + 15 * 60_000L, fixture.subscription.getNextCheckTime());
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, primary.getState(), "不退役");
+        Mockito.verify(fixture.deadLinkRepository, Mockito.never()).save(Mockito.any()); // 不进黑名单
+    }
+
+    @Test
+    void quarkGuestDeadVerdictStillRetires() {
+        // 对照:游客探测确认死链(code 410xx 家族)时第二信源不拦截,原判死换源路径照走
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(11);
+        primary.setSubscriptionId(1);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        primary.setLink("https://pan.quark.cn/s/really-dead");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(primary));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/追剧/1-测试剧"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new RuntimeException("failed get share files: 分享地址已失效"));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.eq("/"),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenReturn(new FsResponse());
+        fixture.service.quarkTokenFetcher = (pwdId, passcode) ->
+                "{\"status\":404,\"code\":41012,\"message\":\"好友已取消了分享\"}";
+        fixture.service.check(1);
+        assertEquals(MediaSubscriptionResource.STATE_RETIRED, primary.getState(), "确认死链照常退役");
+        assertEquals(MediaSubscription.STATUS_ERROR, fixture.subscription.getStatus()); // 池空且搜索无果
+    }
+
+    @Test
+    void quarkShareAliveVerdictClassification() {
+        // 响应分类:code 0 + stoken = 活;410xx = 死;其它/网络异常(null)= 无结论
+        Fixture alive = new Fixture();
+        alive.service.quarkTokenFetcher = (p, c) -> "{\"status\":200,\"code\":0,\"message\":\"ok\",\"data\":{\"stoken\":\"fresh\"}}";
+        assertEquals(Boolean.TRUE, alive.service.quarkShareAlive("https://pan.quark.cn/s/abcd1234efgh", ""));
+        Fixture dead = new Fixture();
+        dead.service.quarkTokenFetcher = (p, c) -> "{\"status\":404,\"code\":41012,\"message\":\"好友已取消了分享\"}";
+        assertEquals(Boolean.FALSE, dead.service.quarkShareAlive("https://pan.quark.cn/s/x", ""));
+        Fixture weird = new Fixture();
+        weird.service.quarkTokenFetcher = (p, c) -> "{\"status\":429,\"code\":4294967,\"message\":\"too many\"}";
+        assertNull(weird.service.quarkShareAlive("https://pan.quark.cn/s/x", ""), "非 410xx 错误=无结论");
+        assertNull(new Fixture().service.quarkShareAlive("https://pan.baidu.com/s/1xyz", ""), "非夸克链接不探测");
+    }
+
+    @Test
     void transientListingFailureDoesNotInvalidate() {
         Fixture fixture = new Fixture();
         Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
@@ -2012,6 +2102,59 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(2, aux.getEpisodesFound(), "行数与目录观测一致");
     }
 
+    @Test
+    void baiduSekeyExpiredAuxMountNotRetired() {
+        // 线上事故(2026-09-03)同因:补缺挂载刷新撞 errno -9(sekey 过期,expired_type 字段名
+        // 曾命中无边界 expired)被整源退役+拉黑 —— 分享与文件都活着,挂载必须原样保留
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource aux = new MediaSubscriptionResource();
+        aux.setId(9);
+        aux.setSubscriptionId(1);
+        aux.setLink("https://pan.baidu.com/s/live");
+        aux.setType(10);
+        aux.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        aux.setShareId(7);
+        aux.setMountPath("/追剧/.sources/1-测试剧-补1");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(aux));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new IllegalStateException("{\"errno\":-9,\"expired_type\":0,"
+                        + "\"show_msg\":\"提取码验证失败,请重试\"}"));
+
+        fixture.service.refreshAuxMounts(fixture.subscription);
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, aux.getState(), "会话过期不退役");
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
+        Mockito.verify(fixture.deadLinkRepository, Mockito.never()).save(Mockito.any());
+    }
+
+    @Test
+    void quarkRiskControlAuxMountNotRetired() {
+        // 夸克「分享地址已失效」同路:游客探测证实分享活着时,补缺挂载原样保留
+        // (本机实证:事件「补缺源失效已退役:早春晴朗(分享地址已失效)」,分享页实际可访问)
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource aux = new MediaSubscriptionResource();
+        aux.setId(9);
+        aux.setSubscriptionId(1);
+        aux.setLink("https://pan.quark.cn/s/riskcontrolled");
+        aux.setType(5);
+        aux.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        aux.setShareId(7);
+        aux.setMountPath("/追剧/.sources/1-测试剧-补1");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(aux));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new IllegalStateException("failed get share files: 分享地址已失效"));
+        fixture.service.quarkTokenFetcher = (p, c) ->
+                "{\"status\":200,\"code\":0,\"message\":\"ok\",\"data\":{\"stoken\":\"fresh\"}}";
+
+        fixture.service.refreshAuxMounts(fixture.subscription);
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, aux.getState(), "分享活着不退役");
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
+        Mockito.verify(fixture.deadLinkRepository, Mockito.never()).save(Mockito.any());
+    }
+
     // ---------- 集源行生命周期:syncInventory ----------
 
     @Test
@@ -2179,12 +2322,22 @@ class MediaSubscriptionCheckServiceTest {
     void probeFailureClassification() {
         assertEquals(MediaSubscriptionCheckService.ProbeFailure.THROTTLED,
                 MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("{\"errno\":-62}")));
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.TRANSIENT,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException(
+                        "{\"errno\":-9,\"expired_type\":0,\"show_msg\":\"提取码验证失败,请重试\"}")),
+                "百度 sekey 过期(errno -9)是瞬时态,不判死");
         assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
                 MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("failed get link: 参数错误")));
         assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
                 MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("分享已失效")));
         assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
                 MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("object not found")));
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("share link is expired")),
+                "真死链英文文案仍判死(词边界不粘连)");
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.TRANSIENT,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("{\"expired_type\":0}")),
+                "expired_type 是字段名(值 0=非过期),不得当死链证据");
         assertEquals(MediaSubscriptionCheckService.ProbeFailure.TRANSIENT,
                 MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("connect timed out")));
         // 未识别错误默认按瞬时:误判瞬时只晚一轮,误判失效会 RETIRED + 跨订阅黑名单
@@ -5421,6 +5574,8 @@ class MediaSubscriptionCheckServiceTest {
             subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
             subscription.setMountPath("/追剧/1-测试剧");
             subscription.setShareId(5);
+            // 游客 token 探测默认无结论桩:存量判死路径测试零网络依赖,需要测活/死的用例显式换桩
+            service.quarkTokenFetcher = (pwdId, passcode) -> null;
             Mockito.when(subscriptionRepository.findById(1)).thenReturn(Optional.of(subscription));
             Mockito.when(shareRepository.findById(5)).thenReturn(Optional.of(new Share()));
             Mockito.when(siteRepository.findById(1)).thenReturn(Optional.of(new Site()));
