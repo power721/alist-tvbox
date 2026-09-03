@@ -305,6 +305,7 @@
     <el-drawer v-model="resourcesVisible" :title="'候选资源 - ' + (current?.name || '')" size="62%">
       <div class="resources-toolbar">
         <el-button size="small" type="primary" plain @click="openAddResource">添加资源</el-button>
+        <el-button size="small" type="primary" plain @click="openManualMagnet">磁力补缺</el-button>
         <span class="sub-text">粘贴分享链接只入候选池,不挂载不动主源;巡检/补缺时自动探测,想立即挂载点「启用」(只挂为补缺源,不动主源;换主源用「转主源」)</span>
       </div>
       <el-table :data="resources" border v-loading="resourcesLoading">
@@ -377,6 +378,63 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="magnetVisible" title="磁力补缺" width="720">
+      <div class="magnet-search-bar">
+        <el-input v-model="magnetSearchKeyword" placeholder="搜索关键词(留空按剧名)" clearable
+                  :disabled="magnetSearching" style="width: 260px" @keyup.enter="searchManualMagnets"/>
+        <el-button type="primary" :loading="magnetSearching" @click="searchManualMagnets">搜索</el-button>
+        <span class="sub-text">TG-Search + 6V/观影/盘聚/盘链 并发搜索磁力/ed2k(未配置的源自然为空);填了集号会拼进搜索词</span>
+      </div>
+      <div v-if="magnetResults.length" class="magnet-results">
+        <div v-for="(item, i) in magnetResults" :key="i" class="magnet-result-item">
+          <div class="magnet-result-head">
+            <el-tag size="small" :type="item.type === 'ed2k' ? 'warning' : 'info'">{{ item.type || 'magnet' }}</el-tag>
+            <el-tag size="small" effect="plain">{{ item.source }}</el-tag>
+            <span class="magnet-result-title" :title="item.title">{{ item.title }}</span>
+            <span v-if="item.size" class="sub-text">{{ formatSize(item.size) }}</span>
+            <el-button link type="primary" size="small" :loading="magnetResolving === item.link"
+                       @click="resolveMagnet(item)">解析</el-button>
+            <el-button link type="success" size="small" :loading="magnetSubmittingLink === item.link"
+                       @click="submitMagnetItem(item)">入库</el-button>
+          </div>
+          <div v-if="magnetResolved[item.link]" class="magnet-files">
+            <template v-if="magnetResolved[item.link].resolved">
+              <div class="sub-text">
+                种子 {{ magnetResolved[item.link].name }} · {{ formatSize(magnetResolved[item.link].totalSize) }}
+                · {{ magnetResolved[item.link].files.length }} 个文件
+              </div>
+              <div v-for="(f, j) in magnetResolved[item.link].files" :key="j" class="magnet-file-row">
+                <span class="magnet-file-name" :title="f.path">{{ f.path }}</span>
+                <span class="sub-text">{{ formatSize(f.size) }}</span>
+                <el-tag v-if="f.episode" size="small" type="success">第{{ f.episode }}集</el-tag>
+              </div>
+            </template>
+            <div v-else class="sub-text">{{ magnetResolved[item.link].message || '解析失败' }}</div>
+          </div>
+        </div>
+      </div>
+      <el-divider style="margin: 12px 0"/>
+      <el-form label-width="70px" @submit.prevent>
+        <el-form-item label="磁力链接">
+          <el-input v-model="magnetForm.url" type="textarea" :rows="3"
+                    placeholder="磁力(magnet:)或 ed2k 链接,也可从上方搜索结果入库" :disabled="magnetSaving"/>
+        </el-form-item>
+        <el-form-item label="集号">
+          <el-input-number v-model="magnetForm.episode" :min="1" :max="9999"
+                           placeholder="留空自动识别" :disabled="magnetSaving" style="width: 160px"/>
+        </el-form-item>
+      </el-form>
+      <div class="sub-text">
+        提交到全局离线下载账号(网盘账号页「离线下载」配置)补缺失的集,下载完成自动入账并出现在集数清单。
+        集号留空按文件名自动识别(整季/多集种子建议留空);提交同步等待最长约 30 秒,超时转为后台等待,
+        完成后点「检查更新」或等巡检自动入库。
+      </div>
+      <template #footer>
+        <el-button @click="magnetVisible = false">取消</el-button>
+        <el-button type="primary" :loading="magnetSaving" @click="submitManualMagnet">提交</el-button>
+      </template>
+    </el-dialog>
+
     <el-drawer v-model="episodesVisible" :title="'集数清单 - ' + (current?.name || '')" size="52%">
       <div class="episode-filter">
         <el-radio-group v-model="episodeFilter" size="small">
@@ -384,6 +442,9 @@
           <el-radio-button value="present">有源 {{ episodePresentCount }}</el-radio-button>
           <el-radio-button value="missing">缺失 {{ episodeMissingCount }}</el-radio-button>
         </el-radio-group>
+        <el-button size="small" type="primary" plain style="margin-left: 12px" @click="openManualMagnet">
+          磁力补缺
+        </el-button>
       </div>
       <el-table :data="filteredEpisodeItems" border v-loading="episodesLoading" max-height="600" row-key="episode">
         <el-table-column type="expand">
@@ -419,6 +480,7 @@
             刷新元数据
           </el-button>
           <el-button size="small" @click="checkFromDetail">检查更新</el-button>
+          <el-button size="small" type="primary" plain @click="openManualMagnet">磁力补缺</el-button>
           <el-button v-if="current?.status === 'ENDED' && hasNextSeason" size="small" type="warning" plain
                      @click="current && subscribeNextSeason(current)">下一季</el-button>
           <el-button v-if="detailData?.subscription?.mountPath" size="small" link type="primary"
@@ -1158,6 +1220,17 @@ const resources = ref<ResourceDto[]>([])
 const addResourceVisible = ref(false)
 const addResourceSaving = ref(false)
 const addResourceForm = ref({link: '', password: ''})
+// 手动磁力补缺:贴磁力/ed2k 提交全局离线下载账号补缺集(集号留空按文件名自动识别);
+// 搜索区按订阅关键词搜候选(TG-Search,与自动兜底同源),结果可解析看包内容、可入库提交
+const magnetVisible = ref(false)
+const magnetSaving = ref(false)
+const magnetForm = ref<{ url: string; episode: number | null }>({url: '', episode: null})
+const magnetSearchKeyword = ref('')
+const magnetSearching = ref(false)
+const magnetResults = ref<any[]>([])
+const magnetResolved = ref<Record<string, any>>({})
+const magnetResolving = ref<string | null>(null)
+const magnetSubmittingLink = ref<string | null>(null)
 const episodesVisible = ref(false)
 const episodesLoading = ref(false)
 const episodeItems = ref<any[]>([])
@@ -1786,6 +1859,110 @@ const loadResources = () => {
 const openAddResource = () => {
   addResourceForm.value = {link: '', password: ''}
   addResourceVisible.value = true
+}
+
+const openManualMagnet = () => {
+  magnetForm.value = {url: '', episode: null}
+  magnetSearchKeyword.value = ''
+  magnetResults.value = []
+  magnetResolved.value = {}
+  magnetResolving.value = null
+  magnetSubmittingLink.value = null
+  magnetVisible.value = true
+}
+
+/** 手动提交三态的统一提示/刷新(手动贴链接与搜索结果「入库」共用) */
+const handleMagnetResponse = (response: any) => {
+  const status = response.data?.status
+  if (status === 'completed') {
+    const episodes = response.data?.episodes as number[] | undefined
+    if (episodes?.length) {
+      ElMessage.success(response.data?.message || '已离线下载并入账')
+      magnetVisible.value = false
+      if (episodesVisible.value) showEpisodes(current.value!)
+      if (resourcesVisible.value) loadResources()
+      schedule(loadAll, 2000)
+    } else {
+      ElMessage.warning(response.data?.message || '产物已下载,但未识别出属于本剧的集文件,未入账')
+    }
+  } else if (status === 'submitted') {
+    ElMessage.success(response.data?.message || '已提交,网盘下载中')
+    magnetVisible.value = false
+  } else {
+    ElMessage.error(response.data?.message || '离线下载提交失败')
+  }
+}
+
+/** 手动磁力补缺:贴磁力/ed2k 提交离线下载账号,下载完成入账补缺集;
+ *  超时转后台等待(巡检 PENDING 感知收割),失败保留对话框便于换链接重试。 */
+const submitManualMagnet = () => {
+  if (!current.value) return
+  const url = magnetForm.value.url.trim()
+  if (!url) {
+    ElMessage.warning('请粘贴磁力链接')
+    return
+  }
+  magnetSaving.value = true
+  axios.post(`/api/media-subscriptions/${current.value.id}/magnet`, {
+    url,
+    episode: magnetForm.value.episode ?? null,
+  }).then(handleMagnetResponse).catch((error: any) => {
+    const data = error.response?.data
+    ElMessage.error(typeof data === 'string' ? data : data?.message || error.message || '提交失败')
+  }).finally(() => {
+    magnetSaving.value = false
+  })
+}
+
+/** 磁力候选搜索:关键词空=订阅关键词;填了集号拼进搜索词 */
+const searchManualMagnets = () => {
+  if (!current.value) return
+  magnetSearching.value = true
+  axios.get(`/api/media-subscriptions/${current.value.id}/magnet/search`, {
+    params: {
+      keyword: magnetSearchKeyword.value.trim() || null,
+      episode: magnetForm.value.episode ?? null,
+    },
+  }).then(response => {
+    magnetResults.value = response.data || []
+    magnetResolved.value = {}
+    if (!magnetResults.value.length) ElMessage.info('未搜到磁力资源')
+  }).catch((error: any) => {
+    const data = error.response?.data
+    ElMessage.error(typeof data === 'string' ? data : data?.message || error.message || '搜索失败')
+  }).finally(() => {
+    magnetSearching.value = false
+  })
+}
+
+/** 解析磁力种子:拉文件列表并按本剧季口径标集号,提交前确认包内容 */
+const resolveMagnet = (item: any) => {
+  if (!current.value) return
+  magnetResolving.value = item.link
+  axios.post(`/api/media-subscriptions/${current.value.id}/magnet/resolve`, {url: item.link}).then(response => {
+    magnetResolved.value[item.link] = response.data
+  }).catch((error: any) => {
+    const data = error.response?.data
+    magnetResolved.value[item.link] = {resolved: false,
+      message: typeof data === 'string' ? data : data?.message || error.message || '解析失败'}
+  }).finally(() => {
+    magnetResolving.value = null
+  })
+}
+
+/** 搜索结果「入库」:直接提交该磁力离线(复用手动提交的三态处理) */
+const submitMagnetItem = (item: any) => {
+  if (!current.value) return
+  magnetSubmittingLink.value = item.link
+  axios.post(`/api/media-subscriptions/${current.value.id}/magnet`, {
+    url: item.link,
+    episode: magnetForm.value.episode ?? null,
+  }).then(handleMagnetResponse).catch((error: any) => {
+    const data = error.response?.data
+    ElMessage.error(typeof data === 'string' ? data : data?.message || error.message || '提交失败')
+  }).finally(() => {
+    magnetSubmittingLink.value = null
+  })
 }
 
 const submitAddResource = () => {
@@ -2913,6 +3090,67 @@ const formatClock = (time: number) => {
 
 .episode-filter {
   margin-bottom: 10px;
+}
+
+.magnet-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.magnet-results {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.magnet-result-item {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.magnet-result-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.magnet-result-title {
+  flex: 1;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.magnet-files {
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--el-border-color-lighter);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.magnet-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.magnet-file-name {
+  flex: 1;
+  min-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .episode-matrix {

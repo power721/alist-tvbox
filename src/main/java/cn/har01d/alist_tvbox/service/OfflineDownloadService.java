@@ -281,6 +281,36 @@ public class OfflineDownloadService {
         }
     }
 
+    /** 该订阅是否有未收割的 PENDING 离线任务(巡检 PENDING 感知收割的判定,不限订阅 mode)。 */
+    public boolean hasPendingTask(Integer subscriptionId) {
+        return offlineDownloadTaskRepository.existsBySubscriptionIdAndStatus(subscriptionId, STATUS_PENDING);
+    }
+
+    /**
+     * 收割入账后结算手动路径(集号留空)的 PENDING 行:episode=null 的行不会被按集结算
+     * ({@link #settlePendingTask} 按 episode 匹配),不结算会永久占住 pending 闸门。
+     * 结算到本次收割的产物(最新一条,近似一一对应);失败只记日志,不影响收割入账。
+     */
+    public void settleManualPendingTask(Integer subscriptionId, String taskName, String targetPath) {
+        if (subscriptionId == null || StringUtils.isBlank(taskName)) {
+            return;
+        }
+        try {
+            offlineDownloadTaskRepository
+                    .findFirstBySubscriptionIdAndEpisodeIsNullAndStatusOrderByUpdatedTimeDesc(subscriptionId, STATUS_PENDING)
+                    .ifPresent(task -> {
+                        task.setStatus(STATUS_COMPLETED);
+                        task.setTaskName(taskName);
+                        task.setTargetPath(StringUtils.defaultString(targetPath));
+                        task.setUpdatedTime(Instant.now());
+                        offlineDownloadTaskRepository.save(task);
+                        log.info("settled manual pending offline download task {} to product {}", task.getId(), taskName);
+                    });
+        } catch (Exception e) {
+            log.warn("settle manual pending offline download task failed: {}", e.getMessage());
+        }
+    }
+
     private StoredConfig loadEnabledConfig() {
         Optional<Setting> setting = settingRepository.findById(SETTING_NAME);
         if (setting.isEmpty() || StringUtils.isBlank(setting.get().getValue())) {

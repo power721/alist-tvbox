@@ -441,6 +441,46 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
+    void settleManualPendingTaskCompletesNullEpisodeRow() {
+        // 手动磁力提交集号留空:episode=null 的 PENDING 行不按集结算,单独结算到收割产物
+        OfflineDownloadTask pending = new OfflineDownloadTask();
+        pending.setId(57);
+        pending.setAccountId(12);
+        pending.setStatus("PENDING");
+        pending.setSubscriptionId(9);
+        pending.setEpisode(null);
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusOrderByUpdatedTimeDesc(9, "PENDING"))
+                .thenReturn(Optional.of(pending));
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.settleManualPendingTask(9, "测试剧 - 第03集", "/drive/alist-tvbox-offline/测试剧 - 第03集");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("COMPLETED", captor.getValue().getStatus());
+        assertEquals("测试剧 - 第03集", captor.getValue().getTaskName());
+        assertEquals("/drive/alist-tvbox-offline/测试剧 - 第03集", captor.getValue().getTargetPath());
+    }
+
+    @Test
+    void settleManualPendingTaskIsNoopWithoutRowOrAnchor() {
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusOrderByUpdatedTimeDesc(9, "PENDING"))
+                .thenReturn(Optional.empty());
+        service.settleManualPendingTask(9, "产物", "/root/产物");
+        service.settleManualPendingTask(null, "产物", "/root/产物");
+        service.settleManualPendingTask(9, " ", "/root/产物"); // 产物名缺失不结算
+        verify(offlineDownloadTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void hasPendingTaskDelegatesToRepository() {
+        when(offlineDownloadTaskRepository.existsBySubscriptionIdAndStatus(9, "PENDING")).thenReturn(true);
+        assertTrue(service.hasPendingTask(9));
+        when(offlineDownloadTaskRepository.existsBySubscriptionIdAndStatus(9, "PENDING")).thenReturn(false);
+        assertFalse(service.hasPendingTask(9));
+    }
+
+    @Test
     void isConfiguredReflectsSettingState() {
         when(settingRepository.findById("offline_download_config")).thenReturn(Optional.empty());
         assertFalse(service.isConfigured());

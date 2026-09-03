@@ -100,6 +100,38 @@ pan 部分 = 白名单非空 ? 白名单映射 : 全局 tg.drivers 映射(= 现�
 包含 123 网盘才搜索」)——123 主题站,订阅不定向 123 时整路不搜;**夸父同理按夸克主题
 门控**(`drives` 含 `quark`,夸克主题社混多盘,产出仍过 retainTargetTypes 闸门)。
 
+### 4b. 手动磁力补缺(2026-09-03 追加,已实现)
+
+> 网页端贴磁力/ed2k 直接触发离线补缺——用户自己找到的链接不必等自动兜底轮次。入口:
+> 集数清单抽屉与媒体详情抽屉的「磁力补缺」按钮,共用对话框(磁力链接 + 可选集号)。
+
+- **端点**:`POST /api/media-subscriptions/{id}/magnet`,body `{url, episode?}` →
+  `MediaSubscriptionCheckService.submitManualMagnet`。鉴权/归属与其它订阅端点同口径(ADMIN/USER,uid 隔离)。
+- **候选搜索/解析**(同日追加):`GET /{id}/magnet/search?keyword&episode`(关键词空=订阅 seasonKeyword,
+  集号拼进搜索词)——**五路并发**:TG-Search 专项 `searchMagnets` + 磁力站点源 6V/观影/盘聚/盘链
+  (复用 `searchAsync` 并发池+90s 硬顶,`respectBackoff=false` 手动点击不过巡检退避闸门;盘聚 seed
+  解析无条件开,凭证缺失/源关闭自然空结果,**不做剧名/集号/排除词门禁——用户自己挑**,只滤
+  `isOfflineLink` + 跨源 link 去重 + source 标注)与 `POST /{id}/magnet/resolve`(body `{url}`,
+  `MagnetResolver` 拉种子解文件列表,文件名过 `parseEpisode` 按本剧季口径标集号;失败 resolved=false
+  带原因,结果走 7 天缓存)。前端「入库」直接复用 submitMagnet 端点。
+- **门禁:仅全局离线下载已配置**(用户定规,不限订阅 mode/磁力兜底开关——手动是明确意图,
+  与自动兜底 `magnetFallbackEnabled` 的 TRANSFER+开关门禁分开);不受轮次/冷却/三档配额闸,
+  但正常消耗月计数(task 行带 subscription_id)。
+- **三态**:`submitMagnet` 同管道——COMPLETED 立即 `harvestCompletedProduct` 入账
+  (响应带覆盖集列表;门禁拒入账时 episodes 空并在 message 说明);SUBMITTED 发
+  `TYPE_MAGNET_SUBMITTED` 事件(文案带「手动」)等巡检收割;FAILED 透传网盘错误。
+  重贴同一磁力 = urlHash COMPLETED 短路后再收割一次,可重试此前未入账的产物。
+- **PENDING 感知收割**(顺带救自动路径):`doCheck` 开头(季对齐/清理之后、refreshMetadata 前)
+  增 `isConfigured() && hasPendingTask(subscriptionId)` → `harvestOfflineProducts(sub, Set.of())`
+  ——该订阅有未收割 PENDING 离线任务就先扫产物目录,不再受 magnetFallback 的 round/冷却门控
+  (那些防的是自动提交烧配额,不是防收割);没开磁力兜底、主源挂不上 early return 的订阅也能收割手动产物。
+- **null-episode 结算**:手动集号留空(整季/多集种子按文件名自动识别)时 task 行 episode=null,
+  不被 `settlePendingTask`(按 episode 匹配)结算 → pending 闸门永久占位。`registerOfflineResource`
+  收割结算循环后补 `settleManualPendingTask`(该订阅最新一条 episode=null PENDING 结算到本次产物)。
+- 测试:`MediaSubscriptionManualMagnetTest`(三态/门禁/非 TRANSFER 允许/收割接线/搜索关键词回落与过滤/
+  多源合并去重+source 标注/单源失败容忍/解析集号标注,17 例)、
+  `OfflineDownloadServiceTest.settleManualPendingTask*/hasPendingTask`。
+
 ## 5. preview(候选预览)
 
 无订阅上下文:定向集 = 全局 主∪扩展,**不含 magnet/ed2k**(preview 是分享候选预览;磁力有独立的提交/配额语义,不适合进 preview 打分)。"磁力预览"如需要另议。

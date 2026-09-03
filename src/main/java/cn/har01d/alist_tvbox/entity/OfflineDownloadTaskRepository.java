@@ -12,6 +12,13 @@ public interface OfflineDownloadTaskRepository extends JpaRepository<OfflineDown
     Optional<OfflineDownloadTask> findFirstBySubscriptionIdAndEpisodeAndStatusOrderByUpdatedTimeDesc(
             Integer subscriptionId, Integer episode, String status);
 
+    /** 收割结算用(手动路径,集号留空):该订阅最新一条 episode=null 的超时 PENDING。 */
+    Optional<OfflineDownloadTask> findFirstBySubscriptionIdAndEpisodeIsNullAndStatusOrderByUpdatedTimeDesc(
+            Integer subscriptionId, String status);
+
+    /** 该订阅是否有未收割的 PENDING 离线任务(巡检 PENDING 感知收割的判定)。 */
+    boolean existsBySubscriptionIdAndStatus(Integer subscriptionId, String status);
+
     long countByAccountIdAndStatus(Integer accountId, String status);
 
     /** 单集离线配额:该订阅该集当月的提交尝试次数(含 FAILED),since=本月1号 */
