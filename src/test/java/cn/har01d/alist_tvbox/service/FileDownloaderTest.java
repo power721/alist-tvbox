@@ -85,4 +85,27 @@ class FileDownloaderTest {
         assertThatThrownBy(() -> FileDownloader.parseXsSingleUrl(""))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void encodeUrl_percentEncodesChinesePath() {
+        assertThat(FileDownloader.encodeUrl("https://pizazz.us.ci/单线路.zip"))
+                .isEqualTo("https://pizazz.us.ci/%E5%8D%95%E7%BA%BF%E8%B7%AF.zip");
+    }
+
+    @Test
+    void encodeUrl_keepsAlreadyEncodedForm() {
+        assertThat(FileDownloader.encodeUrl("https://pizazz.us.ci/%E5%8D%95%E7%BA%BF%E8%B7%AF.zip"))
+                .isEqualTo("https://pizazz.us.ci/%E5%8D%95%E7%BA%BF%E8%B7%AF.zip");
+    }
+
+    @Test
+    void encodeUrl_leavesAsciiUrlAndQueryUntouched() {
+        assertThat(FileDownloader.encodeUrl("https://d.har01d.cn/diff.zip?v=1&x=%2B"))
+                .isEqualTo("https://d.har01d.cn/diff.zip?v=1&x=%2B");
+    }
+
+    @Test
+    void encodeUrl_returnsInputOnMalformedUrl() {
+        assertThat(FileDownloader.encodeUrl("https://x/a b.zip")).isEqualTo("https://x/a b.zip");
+    }
 }

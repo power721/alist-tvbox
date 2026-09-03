@@ -18,6 +18,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -361,6 +363,24 @@ public class FileDownloader {
         throw new IllegalStateException("xs.txt 内容为空");
     }
 
+    // HttpURLConnection 不做 URL 编码：路径含非 ASCII（如上游 zip 名「单线路」）时原样 UTF-8 字节进请求行，
+    // 部分 CDN 直接拒 400；纯 ASCII 一律原样返回（不动既有 %XX 编码），仅含非 ASCII 时解码/重编码为规范形式。
+    static String encodeUrl(String url) {
+        if (url == null || url.chars().allMatch(c -> c < 128)) {
+            return url;
+        }
+        try {
+            URI uri = new URI(url);
+            if (uri.getHost() == null) {
+                return url;
+            }
+            return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), uri.getPort(),
+                    uri.getPath(), uri.getQuery(), uri.getFragment()).toASCIIString();
+        } catch (URISyntaxException e) {
+            return url;
+        }
+    }
+
     private String resolveXsSingleUrl() throws IOException {
         return parseXsSingleUrl(getRemoteText(XS_INDEX_URL, XS_USER_AGENT));
     }
@@ -481,7 +501,7 @@ public class FileDownloader {
     }
 
     private String getRemoteText(String url, String userAgent) throws IOException {
-        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection conn = (HttpURLConnection) new URL(encodeUrl(url)).openConnection();
         conn.setConnectTimeout(10000);
         conn.setReadTimeout(10000);
         if (userAgent != null && !userAgent.isEmpty()) {
@@ -506,6 +526,7 @@ public class FileDownloader {
     }
 
     private void downloadFile(String fileUrl, Path destination, String userAgent) throws IOException {
+        fileUrl = encodeUrl(fileUrl);
         log.info("download file: {}", fileUrl);
         HttpURLConnection conn = (HttpURLConnection) new URL(fileUrl).openConnection();
         conn.setConnectTimeout(10000);
