@@ -118,6 +118,7 @@ class MediaLibraryControllerTest {
                 .andExpect(jsonPath("$.list[0].vod_play_from").value("片单"))
                 .andExpect(jsonPath("$.list[0].vod_play_url")
                         .value("📄 媒体信息$msubinfo-" + encode("tmdb:tv:42|测试剧")
+                                + "#🔍 全局搜索$msubsearch-" + encode("测试剧")
                                 + "#➕ 加入追剧$msubadd-" + encode("tmdb:tv:42|测试剧")));
     }
 
@@ -136,6 +137,7 @@ class MediaLibraryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.list[0].vod_play_url")
                         .value("📄 媒体信息$msubinfo-" + encode("tmdb:tv:42|测试剧")
+                                + "#🔍 全局搜索$msubsearch-" + encode("测试剧")
                                 + "#➖ 取消·第1季$msubdel-" + encode("tmdb:tv:42|测试剧|1")
                                 + "#➕ 追剧·第5季$msubadd-" + encode("tmdb:tv:42|测试剧|5")))
                 .andExpect(jsonPath("$.list[0].ext").doesNotExist());
@@ -152,6 +154,7 @@ class MediaLibraryControllerTest {
                 .andExpect(jsonPath("$.list[0].vod_remarks").value("已追 "))
                 .andExpect(jsonPath("$.list[0].vod_play_url")
                         .value("📄 媒体信息$msubinfo-" + encode("s:showa|showa")
+                                + "#🔍 全局搜索$msubsearch-" + encode("showa")
                                 + "#➖ 取消追剧$msubdel-" + encode("s:showa|showa")));
     }
 

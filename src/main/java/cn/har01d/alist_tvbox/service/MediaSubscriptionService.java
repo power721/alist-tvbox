@@ -75,6 +75,9 @@ public class MediaSubscriptionService {
     /** 片单条目「媒体信息」伪播放 id 前缀:msubinfo-{vodId},msg 通道返回条目元数据,无任何副作用。
      *  排在选集第一位:部分播放器内核进详情会自动触发第一集播放,第一条目不能是订阅动作。 */
     public static final String INFO_PLAY_PREFIX = "msubinfo-";
+    /** 片单条目「全局搜索」伪播放 id 前缀:msubsearch-{剧名}。spider 端本地拦截跳播放器搜索页
+     *  (FongMi 系 SearchActivity 带 keyword extra 启动即对全部站点自动搜索),不请求后端。 */
+    public static final String SEARCH_PLAY_PREFIX = "msubsearch-";
     /** TVBox 分集标题美化开关(Setting,默认关):剧集列表显示「集数. 分集标题(大小)」替代文件名 */
     public static final String SETTING_EPISODE_TITLES = "msub_episode_titles";
     /** 资源侧"可播集"状态口径:列目录见过(LISTED)或取链成功过(VERIFIED)的集源行 —— 详情装配与角标同源。 */
