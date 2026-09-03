@@ -104,6 +104,9 @@ public class MediaSubscriptionCheckService {
     private static final Set<String> PAN_TYPES = Set.of("0", "1", "2", "3", "5", "6", "7", "8", "9", "10", "12");
     private static final Pattern SEASON_EPISODE = Pattern.compile("[Ss](\\d{1,2})[Ee](\\d{1,4})");
     private static final Pattern NUMBER = Pattern.compile("(\\d{1,4})");
+    /** 文件名里的显式集标「第N集/第N期」:综艺/国产剧把集号连单位写明,锚定它可免疫文案数字毒化
+     * (线上:「第3期上纯享:…主动贴贴188男大.mkv」末号规则取 188,真实集号是第 3 期)。 */
+    private static final Pattern EPISODE_MARK = Pattern.compile("第\\s*(\\d{1,4})\\s*[集期]");
     /** 全局主网盘 Setting key(逗号分隔分享类型码;订阅级 main_drives 覆盖) */
     public static final String MSUB_MAIN_DRIVES = "msub_main_drives";
     /** 全局扩展网盘 Setting key(逗号分隔分享类型码):主网盘以外允许入候选池的盘,未配置时候选仅收主网盘 */
@@ -117,8 +120,10 @@ public class MediaSubscriptionCheckService {
     public static final String MSUB_MAGNET_SUBSCRIPTION_QUOTA = "msub_magnet_subscription_quota";
     /** 追剧总离线配额(数字,0=不限,默认 200):全部追剧订阅的磁力提交尝试总数上限 */
     public static final String MSUB_MAGNET_TOTAL_QUOTA = "msub_magnet_total_quota";
-    /** 预告/花絮等非正片(片头/片尾:年番分享常带「片头尾/」目录装 OP/ED 片段,线上被当成第 2、3 集) */
-    private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost|片头|片尾)");
+    /** 预告/花絮等非正片(片头/片尾:年番分享常带「片头尾/」目录装 OP/ED 片段,线上被当成第 2、3 集;
+     * 综艺非正片形态:先导片/加更/纯享/陪看/特辑 —— 与正片同期混发且命名无期号或带文案数字,
+     * 线上「先导片上_4K_60fps」的 60 被当集号、观测冲到 60) */
+    private static final Pattern EXTRA = Pattern.compile("(?i)(pv|ncop|nced|sample|trailer|menu|预告|花絮|彩蛋|ost|片头|片尾|先导|加更|纯享|陪看|特辑)");
     /** 衍生篇目目录词(番外/前传/外传):自成条目、集号并入全剧连续计数,主季订阅整棵跳过 */
     private static final Pattern SPIN_OFF_DIR = Pattern.compile("番外|前传|外传");
     /** 季目录声明的本季起始集号(全剧连续编号形态):「067-更新中 4K 第三季」「070-092」的行首区间起点 */
@@ -133,7 +138,7 @@ public class MediaSubscriptionCheckService {
      * "识别"出的 1 集就是剧场版)。声道位带数字边界(前后都不是数字),日期戳 {@code 2026.08.21}
      * 里的 {@code 6.0}/{@code 8.2} 不在剥离范围,日期戳剥除(缺陷 10)不受影响。 */
     private static final Pattern TECH_TAGS = Pattern.compile(
-            "(?i)(2160p|1080p|720p|480p|4k|8k|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|truehd|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|[.\\-_ ]v\\d{1,2}(?![a-z0-9])|(?<!\\d)\\d\\.\\d(?!\\d)|国语|粤语|中字|简体|繁体|双语|字幕)");
+            "(?i)(2160p|1080p|720p|480p|4k|8k|\\d{1,3}\\s*fps|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|truehd|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|[.\\-_ ]v\\d{1,2}(?![a-z0-9])|(?<!\\d)\\d\\.\\d(?!\\d)|国语|粤语|中字|简体|繁体|双语|字幕)");
     /** 网盘限流/风控(非资源失效):百度 errno -62 = 验证次数过多;其余为通用限流措辞 */
     private static final Pattern THROTTLE_ERROR = Pattern.compile(
             "(?i)errno\"?\\s*:\\s*-62|验证次数过多|请稍[后候]|访问频繁|操作频繁|too many (requests|attempts)|rate.?limit|\\b429\\b");
@@ -812,6 +817,46 @@ public class MediaSubscriptionCheckService {
         playbackFailed.add(subscriptionId);
     }
 
+    /**
+     * 集源行集号重算自愈:集号解析口径升级(非正片词/帧率剥离/显式期标锚定)后,存量 LISTED 行的
+     * 假集号不会因补缺探测的「已探测过跳过」而消失 —— 假集号推高观测上限,缺口雪崩(线上:
+     * 「先导片_60fps」→60、「第3期上纯享…贴贴188男大」→188,missing 一路列到 188,gapSearch
+     * 逐集空转,真资源因与假缺口无交集被跳过)。每轮 doCheck 按当前口径重算 LISTED 行(纯正则
+     * 行级遍历,成本可忽略):文件名命中非正片词或集号变化的行删除,下轮探测/挂载刷新按新口径重建。
+     * VERIFIED 行是播放验证过的事实,不参与重算;SxxEyy 的季错配由 staleSeasonInventory 管。
+     */
+    void reconcileEpisodeRows(MediaSubscription subscription) {
+        if (subscription.getSeason() == null || subscription.getSeason() <= 0) {
+            return;
+        }
+        List<MediaSubscriptionEpisodeSource> rows = episodeSourceRepository
+                .findBySubscriptionAndStatesIn(subscription.getId(), List.of(MediaSubscriptionEpisodeSource.STATE_LISTED));
+        if (rows.isEmpty()) {
+            return;
+        }
+        Map<Integer, Integer> numberByEpisodeId = new HashMap<>();
+        for (MediaSubscriptionEpisode episode : episodeRepository.findBySubscriptionIdOrderByNumber(subscription.getId())) {
+            numberByEpisodeId.put(episode.getId(), episode.getNumber());
+        }
+        int removed = 0;
+        for (MediaSubscriptionEpisodeSource row : rows) {
+            String path = StringUtils.defaultString(row.getRelPath());
+            String fileName = path.substring(path.lastIndexOf('/') + 1);
+            if (fileName.isBlank()) {
+                continue;
+            }
+            int parsed = EXTRA.matcher(fileName).find() ? -1 : parseEpisode(fileName, subscription.getSeason());
+            Integer number = numberByEpisodeId.get(row.getEpisodeId());
+            if (parsed <= 0 || number == null || parsed != number) {
+                episodeSourceRepository.delete(row);
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            log.info("media subscription {} reconciled {} stale episode rows", subscription.getId(), removed);
+        }
+    }
+
     /** 订阅删除入口(delete() 在卸载/删行前调用):打取消标记并清内存态,进行中的巡检
      * 在下一道阶段检查点({@link #stopIfDeleted})收工。 */
     public void onDeleted(int subscriptionId) {
@@ -1386,6 +1431,7 @@ public class MediaSubscriptionCheckService {
         }
 
         // 新集判定基准:本轮任何写操作之前先快照"本地已有集"(集源行 LISTED/VERIFIED ∪)
+        reconcileEpisodeRows(subscription);
         Set<Integer> previous = liveEpisodeNumbers(subscription);
 
         // 失效确认:列目录失败先静默重试一次(瞬时抖动);仍失败再探测 AList 健康,
@@ -5965,6 +6011,13 @@ public class MediaSubscriptionCheckService {
             }
             return ep >= 1 && ep <= 9999 ? ep : -1; // SxxEyy 是显式集标,四位集号直接信(柯南 S01E1173)
         }
+        // 「第N集/第N期」同为显式集标,排在末号规则之前:综艺正片标题常拖长文案
+        // (「第2期上:告白夜来临～如益CP十指相扣」),文案里的数字(188男大/520告白)会盖过真集号
+        Matcher mark = EPISODE_MARK.matcher(base);
+        if (mark.find()) {
+            int ep = Integer.parseInt(mark.group(1));
+            return plausibleEpisodeNumber(ep) ? ep : -1;
+        }
         String cleaned = TECH_TAGS.matcher(base).replaceAll(" ");
         cleaned = DATE_STAMP.matcher(cleaned).replaceAll(" "); // 日期戳的月/日会被末号规则当成集号
         int episode = -1;
@@ -6417,7 +6470,18 @@ public class MediaSubscriptionCheckService {
             }
             scored.add(score(subscription, message, title, filter));
         }
-        scored.sort((a, b) -> Integer.compare(b.score, a.score));
+        // 同分平局按发布时间取新:追更场景「发布更新」本身就是质量信号,但文案打分看不见 ——
+        // 线上:同剧 TG 候选 note 全是裸剧名(无 4K/进度文案)整体同分,席位被数组序里更旧的
+        // 条目占走,发布 9/1 的最新全集进不了池、8/5 的反倒占席。
+        scored.sort((a, b) -> {
+            int byScore = Integer.compare(b.score, a.score);
+            if (byScore != 0) {
+                return byScore;
+            }
+            long at = a.message.getTime() == null ? 0 : a.message.getTime().toEpochMilli();
+            long bt = b.message.getTime() == null ? 0 : b.message.getTime().toEpochMilli();
+            return Long.compare(bt, at);
+        });
 
         // 分层配额:主网盘的打分领先是结构性的(主网盘+15、百度免会员+15、盘偏好+20/-10),
         // 全局 top-N 必被主网盘包圆,把 N 调大也一样 —— 排序问题要用配额解,不是用加量解。
@@ -6704,6 +6768,10 @@ public class MediaSubscriptionCheckService {
      */
     static final Map<String, Integer> WEIGHT_DEFAULTS = java.util.Collections.unmodifiableMap(java.util.Map.ofEntries(
             Map.entry("recency.recent", 30),   // 30 天内发布
+            Map.entry("recency.fresh", 20),    // 3 天内更新(叠加在 recent 之上):追更场景最新播出/发布的
+                                                // 资源与月内旧资源原同档同分(线上:9/1 更新到 9/2 播出内容
+                                                // 的全集与 8/5 的旧包都 +30),文案打分看不见时间差 —— 最新档
+                                                // 与 4K 文案(quality.uhd 25)基本等权,显著但不压倒
             Map.entry("recency.quarter", 15),  // 3 个月内
             Map.entry("recency.old", 5),       // 更早
             Map.entry("quality.uhd", 25),      // 4K/2160
@@ -6752,12 +6820,21 @@ public class MediaSubscriptionCheckService {
         int type = parseIntOr(StringUtils.defaultString(message.getType()), -1);
         Set<Integer> accountTypes = driveAccountTypes();
         Set<Integer> vipTypes = vipDriveTypes(accountTypes);
+        // 主盘判定(null 安全:无订阅上下文的 preview 走全局配置,与入池口径一致)
+        boolean mainDrive = type >= 0 && mainDrives(subscription).contains(DriveId.toDrive(type));
         if (message.getTime() != null) {
             Duration age = Duration.between(message.getTime(), Instant.now());
             if (age.toDays() <= 30) {
                 int w = weight(filter, "recency.recent");
                 result += w;
                 reasons.add("近期资源+" + w);
+                if (age.toHours() <= 72) {
+                    int fresh = weight(filter, "recency.fresh");
+                    result += fresh; // 3 天内更新的最新档叠加:发布/播出时间是追更最硬的质量信号,
+                    // 文案(4K/进度标注)只是代理 —— 线上「更0902」TG 条目 note 只有裸剧名,
+                    // 靠这一档才能与月内旧 4K 包拉开差距
+                    reasons.add("3天内更新+" + fresh);
+                }
             } else if (age.toDays() <= 90) {
                 int w = weight(filter, "recency.quarter");
                 result += w;
@@ -6791,9 +6868,11 @@ public class MediaSubscriptionCheckService {
                     int bonus = Math.max(weight(filter, "drive.prefer") - index * 5, 5);
                     result += bonus;
                     reasons.add("盘偏好+" + bonus);
-                } else {
+                } else if (!mainDrive) {
                     int w = weight(filter, "drive.outside");
-                    result += w; // 盘偏好之外的候选降权(不硬过滤,降级可用)
+                    result += w; // 盘偏好之外的候选降权(不硬过滤,降级可用);主盘豁免 —— 主盘
+                    // 优先级由 drive.main 单独声明,订阅偏好的存在不该净惩罚主盘候选(线上:主盘夸克
+                    // 被订阅偏好 [UC,123] 判 outside -10,与 main +15 对冲后仍比不配偏好时低 10 分)
                     reasons.add("偏好外盘" + w);
                 }
             } catch (NumberFormatException ignored) {
@@ -6810,7 +6889,7 @@ public class MediaSubscriptionCheckService {
                 reasons.add("VIP账号+" + vip);
             }
         }
-        if (subscription != null && type >= 0 && mainDrives(subscription).contains(DriveId.toDrive(type))) {
+        if (mainDrive) {
             int w = weight(filter, "drive.main"); // 主网盘候选优先入池(主网盘要维持完整覆盖,池里得先有该盘资源)
             result += w;
             reasons.add("主网盘+" + w);

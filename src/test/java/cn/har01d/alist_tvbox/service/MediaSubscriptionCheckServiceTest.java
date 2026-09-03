@@ -233,6 +233,64 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(20, service.parseEpisode("某剧.更新至20集", null));
     }
 
+    // ---------- 综艺期号回归(线上:心动的信号 第九季) ----------
+    // 正片标题拖长文案(「第2期上:告白夜来临～如益CP十指相扣」),文案数字(188男大=身高)
+    // 被末号规则当集号:第 3 期纯享解析成 188、先导片 60fps 解析成 60,假集号推高观测上限,
+    // missing 一路列到 188,补缺逐集空转、真资源与假缺口无交集被跳过探测。
+
+    @Test
+    void varietyEpisodeMarkAnchorsOverTrailingCopyNumbers() {
+        assertEquals(3, service.parseEpisode("2025-08-18 第3期上纯享：元气辣妹主动贴贴188男大.mkv", null));
+        assertEquals(2, service.parseEpisode("2026.08.10-第2期上：告白夜来临～如益CP十指相扣.mkv", null));
+        assertEquals(5, service.parseEpisode("2026.09.01 第5期下(1).mp4", null));
+        // 「更新至N集」不带「第」字,仍走末号规则,不受锚定影响
+        assertEquals(20, service.parseEpisode("某剧.更新至20集", null));
+    }
+
+    @Test
+    void fpsFrameRateIsNotAnEpisodeNumber() {
+        assertEquals(1, service.parseEpisode("剧名 第01集 2160p 50fps.mkv", null));
+        assertEquals(2, service.parseEpisode("2026.08.08 第02期 60fps 4K.mp4", null));
+    }
+
+    @Test
+    void varietyShareYieldsOnlyMainEpisodeNumbers() {
+        // 线上「心动的信号 第九季 更0902」分享全量文件名:正片(第N期上/中/下)只产集号,
+        // 陪看/纯享/加更/先导/花絮/彩蛋全剔,先导片的 60fps 不再产出 60
+        List<String> files = List.of(
+                "2026.07.31-先导片上.mp4", "2026.07.31-先导片下.mp4",
+                "2026.08.07-第1期陪看上.mp4", "2026.08.07-先导陪看上.mp4",
+                "2026.08.08-第1期陪看下.mp4", "2026.08.08-先导陪看下.mp4",
+                "2026.08.10-第2期上.mp4", "2026.08.10-第2期上纯享.mp4", "2026.08.10-第2期中.mp4",
+                "2026.08.10-第2期中纯享.mp4", "2026.08.11-第2期下.mp4", "2026.08.11-第2期下纯享.mp4",
+                "2026.08.13-第2期加更上.mp4", "2026.08.13-第2期加更下.mp4",
+                "2026.08.14-第2期陪看上.mp4", "2026.08.15-第2期陪看下.mp4",
+                "2026.08.16-花絮特辑.mp4",
+                "2026.08.17-第3期上.mp4", "2026.08.17-第3期上纯享.mp4", "2026.08.17-第3期中（上）.mp4",
+                "2026.08.17-第3期中（上）纯享.mp4", "2026.08.18-第3期下.mp4", "2026.08.18-第3期中（下）(1).mp4",
+                "2026.08.18-第3期中（下）.mp4", "2026.08.18-第3期中（下）纯享.mp4",
+                "2026.08.23-花絮特辑-4K.高码率.mp4", "2026.08.26-超前彩蛋-4K.高码率.mp4",
+                "2026.08.24-第4期上.mp4", "2026.08.24-第4期中（上）.mp4", "2026.08.27-第4期加更下.mp4",
+                "2026.08.27第4期加更上.mp4", "2026.08.28-第4期陪看上.mp4", "2026.08.28-第4期陪看中.mp4",
+                "2026.08.29-第4期陪看下.mp4", "2026.08.30花絮特辑-4K.高码率.mp4",
+                "2026.08.31-第5期上.mp4", "2026.08.31-第5期上纯享.mp4", "2026.08.31-第5期中上.mp4",
+                "2026.08.31-第5期中上纯享.mp4", "2026.09.01-第5期下(1).mp4", "2026.09.01-第5期下.mp4",
+                "2026.09.01-第5期中（下）.mp4", "2026.09.01-第5期中（下）纯享.mp4",
+                "2026.09.02-超前彩蛋-4K.高码率.mp4", "2026.09.02-第5期下纯享.mp4",
+                "20260812(超前彩蛋).mp4", "20260825(第4期下).mp4", "20260825(第4期中（下）).mp4");
+        String[] extras = {"先导", "陪看", "纯享", "加更", "花絮", "彩蛋"};
+        Set<Integer> episodes = new TreeSet<>();
+        for (String file : files) {
+            boolean extra = java.util.Arrays.stream(extras).anyMatch(file::contains);
+            int parsed = extra ? -1 : service.parseEpisode(file, 9);
+            if (!extra && parsed > 0) {
+                episodes.add(parsed);
+            }
+        }
+        // 该分享实缺第 1 期正片(只有第 1 期陪看),正片期号 2-5 全部干净识别
+        assertEquals(Set.of(2, 3, 4, 5), episodes);
+    }
+
     @Test
     void trailingNumber() {
         assertEquals(7, service.parseEpisode("剧名.E07.mkv", null));
@@ -644,6 +702,59 @@ class MediaSubscriptionCheckServiceTest {
 
         assertEquals(1, result.size());
         assertEquals("https://pan.quark.cn/s/ok", result.get(0).get("link"));
+    }
+
+    @Test
+    void previewFreshUpdateOutscoresMonthOldPeer() {
+        // 3 天内更新的最新档(recency.fresh 叠加在 recent 之上):同盘同文案的两条候选,
+        // 只差发布时间 —— 线上「更0902」(消息 9/1 深夜,内容更新到 9/2 播出)此前与 8/5
+        // 旧包同 +30 拉不开,时间必须成为显式加分项
+        Fixture fixture = new Fixture();
+        Message fresh = message("https://pan.quark.cn/s/fresh", "测试剧 全集");
+        Message stale = message("https://pan.quark.cn/s/stale", "测试剧 全集");
+        stale.setTime(Instant.now().minus(java.time.Duration.ofDays(10)));
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(List.of(fresh, stale));
+
+        List<Map<String, Object>> result = fixture.service.preview("测试剧", null, null);
+
+        Map<String, Object> freshRow = result.stream()
+                .filter(r -> "https://pan.quark.cn/s/fresh".equals(r.get("link"))).findFirst().orElseThrow();
+        Map<String, Object> staleRow = result.stream()
+                .filter(r -> "https://pan.quark.cn/s/stale".equals(r.get("link"))).findFirst().orElseThrow();
+        assertTrue(String.valueOf(freshRow.get("reasons")).contains("3天内更新"), String.valueOf(freshRow.get("reasons")));
+        assertFalse(String.valueOf(staleRow.get("reasons")).contains("3天内更新"), String.valueOf(staleRow.get("reasons")));
+        assertEquals(20, (int) freshRow.get("score") - (int) staleRow.get("score"),
+                "fresh 档应恰好拉大 20 分:" + freshRow.get("score") + " vs " + staleRow.get("score"));
+    }
+
+    @Test
+    void previewMainDriveExemptFromOutsidePenalty() {
+        // 订阅盘偏好 [UC,123] 与全局主盘 [百度,夸克] 冲突:主盘夸克不再吃「偏好外盘 -10」
+        //(此前与 drive.main +15 对冲后仍比不配偏好时低 10 分,订阅偏好的存在净惩罚主盘候选);
+        // 非主盘非偏好的盘照常降权,偏好语义对非主盘不变
+        Fixture fixture = new Fixture();
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES, "10,5")));
+        Mockito.when(fixture.settingRepository.findById(MediaSubscriptionCheckService.MSUB_EXTENDED_DRIVES))
+                .thenReturn(Optional.of(setting(MediaSubscriptionCheckService.MSUB_EXTENDED_DRIVES, "9")));
+        Mockito.when(fixture.telegramService.searchAggregated(Mockito.anyString(), Mockito.anyInt(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(List.of(
+                        message("https://pan.quark.cn/s/main", "测试剧 全集", "5"),
+                        message("https://cloud.189.cn/s/out", "测试剧 全集", "9")));
+        MediaSubscriptionFilter filter = new MediaSubscriptionFilter();
+        filter.setDriveTypes(List.of(7, 3));
+
+        List<Map<String, Object>> result = fixture.service.preview("测试剧", null, filter);
+
+        assertEquals(2, result.size());
+        Map<String, Object> quark = result.stream()
+                .filter(r -> "https://pan.quark.cn/s/main".equals(r.get("link"))).findFirst().orElseThrow();
+        Map<String, Object> tianyi = result.stream()
+                .filter(r -> "https://cloud.189.cn/s/out".equals(r.get("link"))).findFirst().orElseThrow();
+        assertFalse(String.valueOf(quark.get("reasons")).contains("偏好外盘"), String.valueOf(quark.get("reasons")));
+        assertTrue(String.valueOf(quark.get("reasons")).contains("主网盘"), String.valueOf(quark.get("reasons")));
+        assertTrue(String.valueOf(tianyi.get("reasons")).contains("偏好外盘"), String.valueOf(tianyi.get("reasons")));
     }
 
     private static MediaSubscriptionResource resource(String title) {
@@ -1789,11 +1900,11 @@ class MediaSubscriptionCheckServiceTest {
 
         ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
         Mockito.verify(fixture.resourceRepository, Mockito.times(2)).save(captor.capture());
-        // 共同底分:近期+30 4K+25 归属+15 = 70;主网盘(夸克/百度)+15,百度另有免会员+17(含夸克易和谐加成)
+        // 共同底分:近期30+3天内更新20 4K+25 归属+15 = 90;主网盘(夸克/百度)+15,百度另有免会员+17(含夸克易和谐加成)
         int quark = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/q")).findFirst().orElseThrow().getScore();
         int baidu = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/b")).findFirst().orElseThrow().getScore();
-        assertEquals(85, quark, "主网盘夸克 = 70 + 主网盘15");
-        assertEquals(102, baidu, "主网盘百度 = 70 + 主网盘15 + 免会员17");
+        assertEquals(105, quark, "主网盘夸克 = 90 + 主网盘15");
+        assertEquals(122, baidu, "主网盘百度 = 90 + 主网盘15 + 免会员17");
         assertTrue(captor.getAllValues().stream().noneMatch(r -> r.getLink().endsWith("/x")),
                 "未配置扩展网盘:非主网盘 115 不入候选池(默认只有主网盘的源)");
     }
@@ -1846,7 +1957,7 @@ class MediaSubscriptionCheckServiceTest {
         ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
         Mockito.verify(fixture.resourceRepository, Mockito.times(3)).save(captor.capture());
         int pan115 = captor.getAllValues().stream().filter(r -> r.getLink().endsWith("/x")).findFirst().orElseThrow().getScore();
-        assertEquals(60, pan115, "扩展盘 115 = 70 - 追更弱10(无主网盘加分)");
+        assertEquals(80, pan115, "扩展盘 115 = 90 - 追更弱10(无主网盘加分)");
     }
 
     private static Setting setting(String name, String value) {
@@ -1872,8 +1983,8 @@ class MediaSubscriptionCheckServiceTest {
 
         ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
         Mockito.verify(fixture.resourceRepository).save(captor.capture());
-        // 底分 = 近期30 + 归属30(权重表覆盖 15) ;4K 默认 25 被调没
-        assertEquals(60, captor.getValue().getScore(), "权重表覆盖打分:quality.uhd=0 不加分,match.title=30");
+        // 底分 = 近期30+3天内更新20 + 归属30(权重表覆盖 15) ;4K 默认 25 被调没
+        assertEquals(80, captor.getValue().getScore(), "权重表覆盖打分:quality.uhd=0 不加分,match.title=30");
         assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, captor.getValue().getState());
     }
 
