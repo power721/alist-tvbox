@@ -3571,7 +3571,7 @@ public class MediaSubscriptionCheckService {
      * (用户明确动作,只要求全局离线下载已配置,不限订阅 mode)。同步等待内完成即收割入账
      * (入账事件由 {@code registerOfflineResource} 发出);超时按 PENDING 等巡检 PENDING 感知
      * 收割,集号留空的行由 {@code settleManualPendingTask} 结算。重贴同一磁力 = urlHash
-     * COMPLETED 短路后再收割一次,可重试此前未入账的产物。
+     * COMPLETED 短路后再收割一次,可重试此前未入账的产物;FAILED 记忆不拦手动重试(用户明确动作)。
      *
      * @param episode 可选集号:填了用于 PENDING 结算关联,留空按产物文件名自动识别(整季/多集种子)
      */
@@ -3584,7 +3584,7 @@ public class MediaSubscriptionCheckService {
         if (StringUtils.isBlank(link)) {
             throw new cn.har01d.alist_tvbox.exception.BadRequestException("缺少磁力链接");
         }
-        cn.har01d.alist_tvbox.model.MagnetSubmitResult result = offlineDownloadService.submitMagnet(
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result = offlineDownloadService.submitMagnetRetryFailed(
                 link, id, episode, appProperties.getSubscription().getMagnetSubmitTimeoutSeconds());
         if (cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED.equals(result.status())) {
             Set<Integer> covered = harvestCompletedProduct(subscription, result.taskName());
@@ -3724,6 +3724,8 @@ public class MediaSubscriptionCheckService {
     /**
      * 扫描离线产物目录对账+收割:上轮超时任务/手动离线的产物按目录入账(产物路径是磁力行天然键)。
      * 已入账磁力行的产物在目录里消失(用户手删/网盘清理) → 退役,防幽灵行永远冒领集数。
+     * 未知产物的登记须过归属闸门({@link OfflineOwnership}):目录是配置账号全局共享的,
+     * 别的订阅/用户侧普通离线的产物不冒领。
      * @return 收割后仍缺的集号
      */
     private Set<Integer> harvestOfflineProducts(MediaSubscription subscription, Set<Integer> missing) {
@@ -3762,6 +3764,25 @@ public class MediaSubscriptionCheckService {
                 known.add(product);
             }
         }
+        // 归属闸门:未知产物须与该订阅的 PENDING 任务对得上号(按集号/手动行预测产物名),
+        // 离线目录是配置账号全局共享的 —— 别的订阅/用户侧普通离线的产物不冒领登记
+        Set<Integer> pendingEpisodes = new java.util.HashSet<>();
+        Set<String> manualProductNames = new java.util.HashSet<>();
+        boolean unnamedManualPending = false;
+        for (cn.har01d.alist_tvbox.entity.OfflineDownloadTask task
+                : offlineDownloadService.pendingTasks(subscription.getId())) {
+            if (task.getEpisode() != null) {
+                pendingEpisodes.add(task.getEpisode());
+            } else if (StringUtils.isNotBlank(task.getTaskName())) {
+                manualProductNames.add(task.getTaskName());
+            } else {
+                unnamedManualPending = true;
+            }
+        }
+        if (pendingEpisodes.isEmpty() && manualProductNames.isEmpty() && !unnamedManualPending) {
+            return remaining; // 该订阅无任何 PENDING 归属:未知产物一律不登记
+        }
+        OfflineOwnership ownership = new OfflineOwnership(pendingEpisodes, manualProductNames, unnamedManualPending);
         for (var entry : entries) {
             if (!present.contains(entry.getName())) {
                 continue; // 收割循环里 present 已过滤过空白/隐藏名
@@ -3770,12 +3791,28 @@ public class MediaSubscriptionCheckService {
                 continue; // 已入账
             }
             try {
-                remaining.removeAll(registerOfflineResource(subscription, entry, root));
+                remaining.removeAll(registerOfflineResource(subscription, entry, root, ownership));
             } catch (Exception e) {
                 log.warn("harvest offline product {} failed: {}", entry.getName(), e.getMessage());
             }
         }
         return remaining;
+    }
+
+    /** 收割归属闸门:未知产物覆盖的集号落在该订阅 PENDING 集号内,或产物名匹配手动行的预测名(ed2k 名/磁力 dn)。 */
+    private record OfflineOwnership(Set<Integer> pendingEpisodes, Set<String> manualProductNames,
+                                    boolean unnamedManualPending) {
+        boolean permits(String entryName, Set<Integer> covered) {
+            if (covered.stream().anyMatch(pendingEpisodes::contains)) {
+                return true;
+            }
+            for (String name : manualProductNames) {
+                if (name.equals(entryName) || entryName.startsWith(name) || name.startsWith(entryName)) {
+                    return true; // 网盘产物名与 dn/ed2k 名可能有一方带前后缀
+                }
+            }
+            return unnamedManualPending; // 无预测名的手动行(旧构建/dn 缺失):回退近似放行
+        }
     }
 
     /** 磁力行 link(offline:{产物名}) → 产物名。 */
@@ -3793,7 +3830,8 @@ public class MediaSubscriptionCheckService {
      * @return 本产物覆盖的集号(门禁不过为空)
      */
     private Set<Integer> registerOfflineResource(MediaSubscription subscription,
-                                                 cn.har01d.alist_tvbox.model.FsInfo entry, String root) {
+                                                 cn.har01d.alist_tvbox.model.FsInfo entry, String root,
+                                                 OfflineOwnership ownership) {
         String taskName = entry.getName();
         String link = "offline:" + taskName;
         boolean dir = entry.getType() == 1;
@@ -3829,6 +3867,10 @@ public class MediaSubscriptionCheckService {
                 || episodeNumbersForeign(subscription, files.keySet(), genres)
                 || episodeDurationForeign(metaRuntimeMinutes(subscription), files.values())) {
             log.info("offline product {} rejected by gates ({} files)", taskName, files.size());
+            return Set.of();
+        }
+        if (ownership != null && !ownership.permits(taskName, files.keySet())) {
+            log.info("offline product {} not owned by subscription {}, skip registration", taskName, subscription.getId());
             return Set.of();
         }
         resource.setState(MediaSubscriptionResource.STATE_MOUNTED);
@@ -4022,7 +4064,7 @@ public class MediaSubscriptionCheckService {
             if (entries != null) {
                 for (var entry : entries) {
                     if (taskName.equals(entry.getName())) {
-                        return registerOfflineResource(subscription, entry, root);
+                        return registerOfflineResource(subscription, entry, root, null); // 提交当场完成:归属确定,不走闸门
                     }
                 }
             }

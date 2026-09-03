@@ -184,6 +184,7 @@ class MediaSubscriptionMagnetFallbackTest {
         productListing.setFiles(List.of(file));
         when(aListService.listFiles(any(), org.mockito.ArgumentMatchers.eq(root + "/" + dir.getName()), anyInt(), anyInt(), anyBoolean()))
                 .thenReturn(productListing);
+        stubPendingEpisodeRow(3);
 
         service.magnetFallback(subscription(), Set.of(3), 5);
 
@@ -210,6 +211,7 @@ class MediaSubscriptionMagnetFallbackTest {
         rootListing.setFiles(List.of(file));
         when(aListService.listFiles(any(), org.mockito.ArgumentMatchers.eq(root), anyInt(), anyInt(), anyBoolean()))
                 .thenReturn(rootListing);
+        stubPendingEpisodeRow(5); // 归属闸门:单文件产物覆盖第 5 集,订阅 PENDING 也在第 5 集
 
         Set<Integer> remaining = invokeHarvest(subscription(), Set.of(5));
         assertTrue(remaining.isEmpty());
@@ -241,6 +243,7 @@ class MediaSubscriptionMagnetFallbackTest {
         productListing.setFiles(List.of(file));
         when(aListService.listFiles(any(), org.mockito.ArgumentMatchers.eq(root + "/" + dir.getName()), anyInt(), anyInt(), anyBoolean()))
                 .thenReturn(productListing);
+        stubPendingEpisodeRow(3);
 
         invokeHarvest(subscription(), Set.of(3));
 
@@ -293,9 +296,19 @@ class MediaSubscriptionMagnetFallbackTest {
         verify(resourceRepository, never()).save(any());
     }
 
+    /** 自动路径(episode 非空)PENDING 行桩:归属闸门的对账锚点。 */
+    private void stubPendingEpisodeRow(int episode) {
+        cn.har01d.alist_tvbox.entity.OfflineDownloadTask task =
+                new cn.har01d.alist_tvbox.entity.OfflineDownloadTask();
+        task.setAccountId(12);
+        task.setStatus("PENDING");
+        task.setSubscriptionId(9);
+        task.setEpisode(episode);
+        when(offlineDownloadService.pendingTasks(9)).thenReturn(List.of(task));
+    }
+
     /** 直调 harvest(magnetFallback 的收割半程):绕过提交阶段对磁力搜索/提交的依赖。 */
-    private Set<Integer> invokeHarvest(MediaSubscription subscription, Set<Integer> missing) {
-        try {
+    private Set<Integer> invokeHarvest(MediaSubscription subscription, Set<Integer> missing) {        try {
             var method = MediaSubscriptionCheckService.class.getDeclaredMethod("harvestOfflineProducts",
                     MediaSubscription.class, Set.class);
             method.setAccessible(true);

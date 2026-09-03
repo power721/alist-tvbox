@@ -393,6 +393,56 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
+    void submitMagnetRetryFailedResubmitsAfterFailure() {
+        // 手动补缺:FAILED 记忆不拦用户明确的重试 —— 重贴失败磁力重新提交,行按 urlHash 原地更新
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        OfflineDownloadTask failed = new OfflineDownloadTask();
+        failed.setId(71);
+        failed.setAccountId(12);
+        failed.setUrlHash("hash");
+        failed.setStatus("FAILED");
+        failed.setSubscriptionId(9);
+        failed.setEpisode(3);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(failed));
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any(), anyInt()))
+                .thenReturn(new OfflineDownloadHandler.TaskResult("重试产物", "hash", false));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnetRetryFailed("magnet:?xt=urn:btih:abc", 9, 3, 30);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.COMPLETED, result.status());
+        verify(pan115Handler).submitAndWait(any(), any(), any(), anyInt());
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("COMPLETED", captor.getValue().getStatus(), "原 FAILED 行更新为 COMPLETED");
+        assertEquals(71, captor.getValue().getId());
+    }
+
+    @Test
+    void submitMagnetPendingStoresPredictedProductName() {
+        // 超时 PENDING 行从链接预测产物名(ed2k 文件名段):收割归属对账与手动行结算的匹配锚点
+        DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
+        enableConfig(account);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(pan115Handler.submitAndWait(any(), any(), any(), anyInt()))
+                .thenThrow(new BadRequestException("离线下载任务未在30秒内完成"));
+
+        cn.har01d.alist_tvbox.model.MagnetSubmitResult result =
+                service.submitMagnetRetryFailed("ed2k://|file|测试剧合集.mkv|834000000|31D6CFE0D16AE931B73C59D7E0C089C0|/", 9, null, 30);
+
+        assertEquals(cn.har01d.alist_tvbox.model.MagnetSubmitResult.SUBMITTED, result.status());
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("PENDING", captor.getValue().getStatus());
+        assertEquals("测试剧合集.mkv", captor.getValue().getTaskName());
+    }
+
+    @Test
     void submitMagnetPassesWaitSecondsToHandler() {
         DriverAccount account = account(12, DriverType.PAN115, "3425588780152254335");
         enableConfig(account);
@@ -442,14 +492,15 @@ class OfflineDownloadServiceTest {
 
     @Test
     void settleManualPendingTaskCompletesNullEpisodeRow() {
-        // 手动磁力提交集号留空:episode=null 的 PENDING 行不按集结算,单独结算到收割产物
+        // 手动磁力提交集号留空:episode=null 的 PENDING 行不按集结算,按预测产物名精确匹配结算
         OfflineDownloadTask pending = new OfflineDownloadTask();
         pending.setId(57);
         pending.setAccountId(12);
         pending.setStatus("PENDING");
         pending.setSubscriptionId(9);
         pending.setEpisode(null);
-        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusOrderByUpdatedTimeDesc(9, "PENDING"))
+        pending.setTaskName("测试剧 - 第03集");
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(9, "PENDING", "测试剧 - 第03集"))
                 .thenReturn(Optional.of(pending));
         when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -464,12 +515,49 @@ class OfflineDownloadServiceTest {
 
     @Test
     void settleManualPendingTaskIsNoopWithoutRowOrAnchor() {
-        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusOrderByUpdatedTimeDesc(9, "PENDING"))
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(9, "PENDING", "产物"))
                 .thenReturn(Optional.empty());
         service.settleManualPendingTask(9, "产物", "/root/产物");
         service.settleManualPendingTask(null, "产物", "/root/产物");
         service.settleManualPendingTask(9, " ", "/root/产物"); // 产物名缺失不结算
         verify(offlineDownloadTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void settleManualPendingTaskDoesNotSettleNamedRowForForeignProduct() {
+        // 错配修复:别条磁力(自动路径)的产物结算时,带预测名的手动行对不上号不结算 ——
+        // 防自动产物冒名结算手动行,该行留待自己的产物收割
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(9, "PENDING", "自动产物"))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.findFirstManualPendingByNameLenient(9, "PENDING", "自动产物"))
+                .thenReturn(Optional.empty());
+        // 有预测名(不匹配)的手动行存在,但无名行不存在:两级回落都空,不落任何结算
+
+        service.settleManualPendingTask(9, "自动产物", "/root/自动产物");
+
+        verify(offlineDownloadTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void settleManualPendingTaskFallsBackToUnnamedRow() {
+        // 旧构建/dn 缺失的手动行无预测名:回退最新一条近似结算(原口径,防 pending 闸门永久占位)
+        OfflineDownloadTask pending = new OfflineDownloadTask();
+        pending.setId(58);
+        pending.setAccountId(12);
+        pending.setStatus("PENDING");
+        pending.setSubscriptionId(9);
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(9, "PENDING", "产物甲"))
+                .thenReturn(Optional.empty());
+        when(offlineDownloadTaskRepository.findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskNameIsNull(9, "PENDING"))
+                .thenReturn(Optional.of(pending));
+        when(offlineDownloadTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.settleManualPendingTask(9, "产物甲", "/root/产物甲");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("COMPLETED", captor.getValue().getStatus());
+        assertEquals(58, captor.getValue().getId());
     }
 
     @Test

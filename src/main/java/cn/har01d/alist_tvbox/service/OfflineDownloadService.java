@@ -204,6 +204,16 @@ public class OfflineDownloadService {
      * FAILED 也落行(带订阅/集号):试错同样消耗配额与网盘侧风控信任,且同磁力不再重试。
      */
     public MagnetSubmitResult submitMagnet(String url, Integer subscriptionId, Integer episode, int waitSeconds) {
+        return doSubmitMagnet(url, subscriptionId, episode, waitSeconds, false);
+    }
+
+    /** 手动补缺路径(用户明确动作):FAILED 记忆不拦重试 —— 重贴失败磁力=重新提交,行按 urlHash 原地更新。 */
+    public MagnetSubmitResult submitMagnetRetryFailed(String url, Integer subscriptionId, Integer episode, int waitSeconds) {
+        return doSubmitMagnet(url, subscriptionId, episode, waitSeconds, true);
+    }
+
+    private MagnetSubmitResult doSubmitMagnet(String url, Integer subscriptionId, Integer episode, int waitSeconds,
+                                              boolean retryFailed) {
         validateUrl(url);
         StoredConfig config = loadEnabledConfig();
         DriverAccount account = getAccount(config.accountId(), config.driverType());
@@ -218,7 +228,7 @@ public class OfflineDownloadService {
             if (STATUS_PENDING.equals(task.getStatus())) {
                 return MagnetSubmitResult.submitted("任务进行中,等待网盘下载");
             }
-            if (STATUS_FAILED.equals(task.getStatus())) {
+            if (STATUS_FAILED.equals(task.getStatus()) && !retryFailed) {
                 return MagnetSubmitResult.failed("该磁力此前提交失败,已跳过");
             }
         }
@@ -232,7 +242,7 @@ public class OfflineDownloadService {
             result = handler.submitAndWait(account, url, pathId, waitSeconds);
         } catch (BadRequestException e) {
             if (isTimeoutMessage(e.getMessage())) {
-                saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_PENDING, null, null, false);
+                saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_PENDING, predictProductName(url), null, false);
                 return MagnetSubmitResult.submitted("已提交,等待网盘下载");
             }
             saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_FAILED, null, null, false);
@@ -286,28 +296,66 @@ public class OfflineDownloadService {
         return offlineDownloadTaskRepository.existsBySubscriptionIdAndStatus(subscriptionId, STATUS_PENDING);
     }
 
+    /** 该订阅全部 PENDING 行:收割归属对账用(按集号/预测产物名匹配未知产物,防共享离线目录跨订阅冒领)。 */
+    public List<OfflineDownloadTask> pendingTasks(Integer subscriptionId) {
+        return offlineDownloadTaskRepository.findBySubscriptionIdAndStatus(subscriptionId, STATUS_PENDING);
+    }
+
     /**
      * 收割入账后结算手动路径(集号留空)的 PENDING 行:episode=null 的行不会被按集结算
      * ({@link #settlePendingTask} 按 episode 匹配),不结算会永久占住 pending 闸门。
-     * 结算到本次收割的产物(最新一条,近似一一对应);失败只记日志,不影响收割入账。
+     * 优先按预测产物名(PENDING 落行时从 ed2k/磁力 dn 存入的 taskName)精确/前缀匹配,
+     * 防自动路径产物错配结算别条磁力的手动行;无预测名的行(旧构建/dn 缺失)回退最新一条近似结算。
+     * 失败只记日志,不影响收割入账。
      */
     public void settleManualPendingTask(Integer subscriptionId, String taskName, String targetPath) {
         if (subscriptionId == null || StringUtils.isBlank(taskName)) {
             return;
         }
         try {
-            offlineDownloadTaskRepository
-                    .findFirstBySubscriptionIdAndEpisodeIsNullAndStatusOrderByUpdatedTimeDesc(subscriptionId, STATUS_PENDING)
-                    .ifPresent(task -> {
-                        task.setStatus(STATUS_COMPLETED);
-                        task.setTaskName(taskName);
-                        task.setTargetPath(StringUtils.defaultString(targetPath));
-                        task.setUpdatedTime(Instant.now());
-                        offlineDownloadTaskRepository.save(task);
-                        log.info("settled manual pending offline download task {} to product {}", task.getId(), taskName);
-                    });
+            Optional<OfflineDownloadTask> row = offlineDownloadTaskRepository
+                    .findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(subscriptionId, STATUS_PENDING, taskName);
+            if (row.isEmpty()) {
+                row = offlineDownloadTaskRepository.findFirstManualPendingByNameLenient(subscriptionId, STATUS_PENDING, taskName);
+            }
+            if (row.isEmpty()) {
+                row = offlineDownloadTaskRepository
+                        .findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskNameIsNull(subscriptionId, STATUS_PENDING);
+            }
+            row.ifPresent(task -> {
+                task.setStatus(STATUS_COMPLETED);
+                task.setTaskName(taskName);
+                task.setTargetPath(StringUtils.defaultString(targetPath));
+                task.setUpdatedTime(Instant.now());
+                offlineDownloadTaskRepository.save(task);
+                log.info("settled manual pending offline download task {} to product {}", task.getId(), taskName);
+            });
         } catch (Exception e) {
             log.warn("settle manual pending offline download task failed: {}", e.getMessage());
+        }
+    }
+
+    /** PENDING 行的产物名预测(ed2k 文件名段/磁力 dn= 解码):收割归属对账与手动行结算的匹配锚点;预测不出为 null。 */
+    private static String predictProductName(String url) {
+        String value = StringUtils.trimToEmpty(url);
+        if (StringUtils.startsWithIgnoreCase(value, "ed2k:")) {
+            String[] parts = value.split("\\|", 6);
+            if (parts.length >= 3 && "file".equals(parts[1]) && StringUtils.isNotBlank(parts[2])) {
+                return parts[2];
+            }
+            return null;
+        }
+        int dn = value.toLowerCase().indexOf("dn=");
+        if (dn < 0) {
+            return null;
+        }
+        String tail = value.substring(dn + 3);
+        int end = tail.indexOf('&');
+        try {
+            String decoded = java.net.URLDecoder.decode(end < 0 ? tail : tail.substring(0, end), StandardCharsets.UTF_8);
+            return StringUtils.trimToNull(decoded);
+        } catch (IllegalArgumentException e) {
+            return null; // 编码畸形:预测不出,收割结算回退近似口径
         }
     }
 

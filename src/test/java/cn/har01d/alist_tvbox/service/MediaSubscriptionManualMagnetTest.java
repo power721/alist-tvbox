@@ -150,7 +150,7 @@ class MediaSubscriptionManualMagnetTest {
     @Test
     void completedHarvestsProductAndReturnsEpisodes() {
         stubProductWithEpisode3();
-        when(offlineDownloadService.submitMagnet(anyString(), eq(9), any(), anyInt()))
+        when(offlineDownloadService.submitMagnetRetryFailed(anyString(), eq(9), any(), anyInt()))
                 .thenReturn(MagnetSubmitResult.completed("测试剧 - 第03集"));
 
         Map<String, Object> result = service.submitManualMagnet(1, 9, MAGNET, null);
@@ -174,7 +174,7 @@ class MediaSubscriptionManualMagnetTest {
         FsResponse rootListing = new FsResponse();
         rootListing.setFiles(List.of(dir));
         when(aListService.listFiles(any(), eq(ROOT), anyInt(), anyInt(), anyBoolean())).thenReturn(rootListing);
-        when(offlineDownloadService.submitMagnet(anyString(), eq(9), any(), anyInt()))
+        when(offlineDownloadService.submitMagnetRetryFailed(anyString(), eq(9), any(), anyInt()))
                 .thenReturn(MagnetSubmitResult.completed("不相干的剧 - 08"));
 
         Map<String, Object> result = service.submitManualMagnet(1, 9, MAGNET, 7);
@@ -186,7 +186,7 @@ class MediaSubscriptionManualMagnetTest {
 
     @Test
     void submittedRecordsEventWithManualWording() {
-        when(offlineDownloadService.submitMagnet(anyString(), eq(9), eq(3), anyInt()))
+        when(offlineDownloadService.submitMagnetRetryFailed(anyString(), eq(9), eq(3), anyInt()))
                 .thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         Map<String, Object> result = service.submitManualMagnet(1, 9, MAGNET, 3);
@@ -201,7 +201,7 @@ class MediaSubscriptionManualMagnetTest {
 
     @Test
     void failedPassesMessageThrough() {
-        when(offlineDownloadService.submitMagnet(anyString(), eq(9), any(), anyInt()))
+        when(offlineDownloadService.submitMagnetRetryFailed(anyString(), eq(9), any(), anyInt()))
                 .thenReturn(MagnetSubmitResult.failed("网盘拒绝:链接无效"));
 
         Map<String, Object> result = service.submitManualMagnet(1, 9, MAGNET, null);
@@ -218,13 +218,13 @@ class MediaSubscriptionManualMagnetTest {
         MediaSubscription follow = subscription();
         follow.setMode(MediaSubscription.MODE_FOLLOW);
         when(subscriptionRepository.findById(9)).thenReturn(Optional.of(follow));
-        when(offlineDownloadService.submitMagnet(anyString(), eq(9), any(), anyInt()))
+        when(offlineDownloadService.submitMagnetRetryFailed(anyString(), eq(9), any(), anyInt()))
                 .thenReturn(MagnetSubmitResult.submitted("已提交,等待网盘下载"));
 
         Map<String, Object> result = service.submitManualMagnet(1, 9, MAGNET, null);
 
         assertEquals("submitted", result.get("status"));
-        verify(offlineDownloadService).submitMagnet(eq(MAGNET), eq(9), any(), anyInt());
+        verify(offlineDownloadService).submitMagnetRetryFailed(eq(MAGNET), eq(9), any(), anyInt());
     }
 
     @Test
@@ -251,6 +251,7 @@ class MediaSubscriptionManualMagnetTest {
         // 手动路径 episode=null 的 PENDING 行不按集结算(settlePendingTask 按 episode 匹配),
         // 收割入账时须单独结算到本次产物,防 pending 闸门被永久占位
         stubProductWithEpisode3();
+        stubPendingManualRow(null); // 无预测名的手动行:归属闸门近似放行
 
         invokeHarvest(subscription(), Set.of(3));
 
@@ -258,13 +259,89 @@ class MediaSubscriptionManualMagnetTest {
                 ROOT + "/测试剧 - 第03集");
     }
 
+    @Test
+    void harvestRegistersProductMatchingManualRowPredictedName() {
+        // 手动 PENDING 行带预测产物名(dn/ed2k 名):产物名对上即归属本订阅,登记入账
+        stubProductWithEpisode3();
+        stubPendingManualRow("测试剧 - 第03集");
+
+        Set<Integer> remaining = invokeHarvest(subscription(), Set.of());
+
+        verify(offlineDownloadService).settleManualPendingTask(9, "测试剧 - 第03集",
+                ROOT + "/测试剧 - 第03集");
+        assertTrue(remaining.isEmpty());
+    }
+
+    @Test
+    void harvestSkipsUnknownProductWithoutPendingOwnership() {
+        // 归属闸门:该订阅没有任何 PENDING 行时,离线目录里的未知产物(别的订阅/用户侧离线)
+        // 不冒领登记 —— 过了标题/集号门禁也不行
+        stubProductWithEpisode3();
+
+        Set<Integer> remaining = invokeHarvest(subscription(), Set.of(3));
+
+        assertTrue(remaining.contains(3), "无归属的产物不入账,缺口维持");
+        verify(resourceRepository, org.mockito.Mockito.never()).save(any());
+        verify(offlineDownloadService, org.mockito.Mockito.never()).settleManualPendingTask(anyInt(), anyString(), anyString());
+    }
+
+    @Test
+    void harvestSkipsForeignProductWhenPendingEpisodesDisjoint() {
+        // PENDING 只有第 3 集:目录里另一部剧的第 5 集产物(过标题门禁的巧合形态)不冒领
+        FsInfo dir = new FsInfo();
+        dir.setName("测试剧 - 第05集");
+        dir.setType(1);
+        FsResponse rootListing = new FsResponse();
+        rootListing.setFiles(List.of(dir));
+        when(aListService.listFiles(any(), eq(ROOT), anyInt(), anyInt(), anyBoolean())).thenReturn(rootListing);
+        FsInfo file = new FsInfo();
+        file.setName("Show.S01E05.1080p.mkv");
+        file.setType(0);
+        file.setSize(800L * 1024 * 1024);
+        FsResponse productListing = new FsResponse();
+        productListing.setFiles(List.of(file));
+        when(aListService.listFiles(any(), eq(ROOT + "/" + dir.getName()), anyInt(), anyInt(), anyBoolean()))
+                .thenReturn(productListing);
+        stubPendingEpisodeRow(3);
+
+        Set<Integer> remaining = invokeHarvest(subscription(), Set.of(3));
+
+        assertTrue(remaining.contains(3), "覆盖集与 PENDING 集号不相交:不是本订阅的产物");
+        verify(resourceRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    /** 手动(episode=null)PENDING 行桩:taskName 非空=预测产物名,null=无预测名的近似形态。 */
+    private void stubPendingManualRow(String predictedName) {
+        cn.har01d.alist_tvbox.entity.OfflineDownloadTask task =
+                new cn.har01d.alist_tvbox.entity.OfflineDownloadTask();
+        task.setAccountId(12);
+        task.setStatus("PENDING");
+        task.setSubscriptionId(9);
+        task.setEpisode(null);
+        task.setTaskName(predictedName);
+        when(offlineDownloadService.pendingTasks(9)).thenReturn(List.of(task));
+    }
+
+    /** 自动路径(episode 非空)PENDING 行桩。 */
+    private void stubPendingEpisodeRow(int episode) {
+        cn.har01d.alist_tvbox.entity.OfflineDownloadTask task =
+                new cn.har01d.alist_tvbox.entity.OfflineDownloadTask();
+        task.setAccountId(12);
+        task.setStatus("PENDING");
+        task.setSubscriptionId(9);
+        task.setEpisode(episode);
+        when(offlineDownloadService.pendingTasks(9)).thenReturn(List.of(task));
+    }
+
     /** 直调收割(harvestOfflineProducts):绕过 doCheck 的重依赖。 */
-    private void invokeHarvest(MediaSubscription subscription, Set<Integer> missing) {
+    private Set<Integer> invokeHarvest(MediaSubscription subscription, Set<Integer> missing) {
         try {
             var method = MediaSubscriptionCheckService.class.getDeclaredMethod("harvestOfflineProducts",
                     MediaSubscription.class, Set.class);
             method.setAccessible(true);
-            method.invoke(service, subscription, missing);
+            @SuppressWarnings("unchecked")
+            Set<Integer> result = (Set<Integer>) method.invoke(service, subscription, missing);
+            return result;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }

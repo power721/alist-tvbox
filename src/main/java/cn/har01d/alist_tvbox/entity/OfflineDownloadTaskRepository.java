@@ -16,6 +16,24 @@ public interface OfflineDownloadTaskRepository extends JpaRepository<OfflineDown
     Optional<OfflineDownloadTask> findFirstBySubscriptionIdAndEpisodeIsNullAndStatusOrderByUpdatedTimeDesc(
             Integer subscriptionId, String status);
 
+    /** 收割归属对账用:该订阅全部 PENDING 行(按集号/预测产物名匹配未知产物)。 */
+    java.util.List<OfflineDownloadTask> findBySubscriptionIdAndStatus(Integer subscriptionId, String status);
+
+    /** 手动 PENDING 行按预测产物名结算(精确匹配优先)。 */
+    Optional<OfflineDownloadTask> findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskName(
+            Integer subscriptionId, String status, String taskName);
+
+    /** 手动 PENDING 行(无预测名)结算的近似回落。 */
+    Optional<OfflineDownloadTask> findFirstBySubscriptionIdAndEpisodeIsNullAndStatusAndTaskNameIsNull(
+            Integer subscriptionId, String status);
+
+    /** 手动 PENDING 行结算的前缀容错匹配(网盘产物名与 dn/ed2k 名可能有一方带前后缀)。 */
+    @org.springframework.data.jpa.repository.Query("select t from OfflineDownloadTask t"
+            + " where t.subscriptionId = :sid and t.episode is null and t.status = :status"
+            + " and t.taskName is not null and (t.taskName like concat(:name, '%') or :name like concat(t.taskName, '%'))"
+            + " order by t.updatedTime desc")
+    Optional<OfflineDownloadTask> findFirstManualPendingByNameLenient(Integer sid, String status, String name);
+
     /** 该订阅是否有未收割的 PENDING 离线任务(巡检 PENDING 感知收割的判定)。 */
     boolean existsBySubscriptionIdAndStatus(Integer subscriptionId, String status);
 
