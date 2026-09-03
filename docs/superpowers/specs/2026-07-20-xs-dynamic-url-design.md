@@ -7,7 +7,7 @@
 
 ## 1. 背景
 
-潇洒本地包的下载地址（single.json）与版本地址（version.txt）目前写死在 `FileDownloader.java:52-53`。上游换地址频繁——git 历史已改 3 次（`pizazz.s3.bitiful.net` → `9877.kstore.space` → `oss-v1.wangmeipo.cn/236`），每次都得发版。
+潇洒本地包的下载地址（single.json）与版本地址（version.txt）目前写死在 `FileDownloader.java:52-53`。上游换地址频繁——git 历史已改 3 次（`pizazz.s3.bitiful.net` → `9877.kstore.space` → `oss-v1.wangmeipo.cn/236`），每次都得发版。动态化后又迁移 1 次（2026-09-03：市场 json 回归 `9877.kstore.space`，zip 本体迁至 `pizazz.us.ci/单线路.zip`）——消费端零改动，仅生产端 `xs-version-sync.sh` 的 `XS_BASE` 更新。
 
 ## 2. 目标
 

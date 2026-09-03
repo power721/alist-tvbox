@@ -20,9 +20,12 @@
 set -euo pipefail
 
 # ===== 配置 =====
-XS_BASE="${XS_BASE:-https://oss-v1.wangmeipo.cn/236}"   # 上游基址（version.txt / single.json 所在目录）
+# 上游基址（version.txt / single.json 所在目录）。
+# 迁移史：pizazz.s3.bitiful.net → 9877.kstore.space → oss-v1.wangmeipo.cn/236
+#         → 2026-09-03 回归 9877.kstore.space（zip 本体另行迁移至 pizazz.us.ci/单线路.zip）
+XS_BASE="${XS_BASE:-https://9877.kstore.space}"
 USER_AGENT="okhttp/5.3.2"
-OUT_DIR="/var/www/alist"
+OUT_DIR="${OUT_DIR:-/var/www/alist}"
 XS_TXT="$OUT_DIR/xs.txt"                 # 产物：消费端读取的 single.json 地址
 VERSION_FILE="$OUT_DIR/xs.version.txt"   # 本地已知版本
 
