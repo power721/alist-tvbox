@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -81,5 +82,19 @@ class MagnetResolverTest {
     void rejectsTorrentWithoutUsableFiles() {
         assertTrue(MagnetResolver.parseTorrent("d4:infod4:name4:testee".getBytes(StandardCharsets.UTF_8), "abc").isEmpty());
         assertTrue(MagnetResolver.parseTorrent("i42e".getBytes(StandardCharsets.UTF_8), "abc").isEmpty());
+    }
+
+    @Test
+    void bencodeLookaheadRejectsErrorPages() {
+        // 镜像站返回 200+HTML(btcache.me SPA 首页线上形态):前置内容校验直接判非种子,
+        // 不让 Bencode 解码器抛"invalid bencode token at 0"混淆镜像故障与未收录
+        assertTrue(MagnetResolver.looksLikeBencode("d4:infod".getBytes(StandardCharsets.UTF_8)), "字典开头");
+        assertTrue(MagnetResolver.looksLikeBencode("l4:list".getBytes(StandardCharsets.UTF_8)), "列表开头");
+        assertTrue(MagnetResolver.looksLikeBencode("i42e".getBytes(StandardCharsets.UTF_8)), "整数开头");
+        assertTrue(MagnetResolver.looksLikeBencode("4:spam".getBytes(StandardCharsets.UTF_8)), "字节串长度前缀开头");
+        assertFalse(MagnetResolver.looksLikeBencode("<!DOCTYPE html>".getBytes(StandardCharsets.UTF_8)), "HTML 页");
+        assertFalse(MagnetResolver.looksLikeBencode("{\"error\":1}".getBytes(StandardCharsets.UTF_8)), "JSON 错误体");
+        assertFalse(MagnetResolver.looksLikeBencode(new byte[0]), "空体");
+        assertFalse(MagnetResolver.looksLikeBencode(null), "null");
     }
 }

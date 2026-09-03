@@ -3691,7 +3691,8 @@ public class MediaSubscriptionCheckService {
             info = null;
         }
         if (info == null) {
-            return Map.of("resolved", false, "message", "解析失败:种子镜像不可达或链接无效");
+            return Map.of("resolved", false, "message",
+                    "解析失败:公共种子镜像未收录该种子(冷门/新资源常见)或镜像不可达");
         }
         Integer season = subscription.getSeason();
         List<Map<String, Object>> files = new ArrayList<>();

@@ -29,10 +29,11 @@ import java.util.Optional;
 @Service
 public class MagnetResolver {
 
-    /** %s = 40 位大写 hex infohash。 */
+    /** %s = 40 位大写 hex infohash。btcache.me 已改 SPA(任何路径恒 200+HTML 首页),移除;
+     *  torrage.info 活着且正确 404 未收录(线上实测 2026-09-03)。 */
     private static final List<String> MIRRORS = List.of(
             "https://itorrents.org/torrent/%s.torrent",
-            "https://btcache.me/torrent/%s");
+            "https://torrage.info/torrent/%s.torrent");
 
     private static final long MAX_TORRENT_BYTES = 4L * 1024 * 1024; // 种子元数据上限,防畸形大响应
 
@@ -89,14 +90,20 @@ public class MagnetResolver {
 
     private Optional<MagnetInfo> fetch(String infoHash) {
         for (String template : MIRRORS) {
+            String url = String.format(template, infoHash.toUpperCase()); // 日志打实际 URL,别打 %s 模板误导排查
             try {
-                HttpRequest request = HttpRequest.newBuilder(URI.create(String.format(template, infoHash.toUpperCase())))
+                HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                         .timeout(Duration.ofSeconds(10))
                         .GET()
                         .build();
                 HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
                 byte[] body = response.body();
                 if (response.statusCode() != 200 || body == null || body.length == 0 || body.length > MAX_TORRENT_BYTES) {
+                    log.debug("magnet mirror {} no torrent for {}: status={}", url, infoHash, response.statusCode());
+                    continue;
+                }
+                if (!looksLikeBencode(body)) {
+                    log.debug("magnet mirror {} non-bencode body for {}: {} bytes", url, infoHash, body.length);
                     continue;
                 }
                 Optional<MagnetInfo> info = parseTorrent(body, infoHash);
@@ -104,11 +111,21 @@ public class MagnetResolver {
                     return info;
                 }
             } catch (Exception e) {
-                log.debug("magnet mirror {} failed for {}: {}", template, infoHash, e.getMessage());
+                log.debug("magnet mirror {} failed for {}: {}", url, infoHash, e.getMessage());
             }
         }
         log.info("magnet metadata unavailable for {}", infoHash);
         return Optional.empty();
+    }
+
+    /** bencode 顶层只可能是字典(d)/列表(l)/整数(i)/字节串(数字长度前缀)开头 —— HTML/JSON 错误页直接判非种子,
+     *  别让 Bencode 解码器抛"invalid bencode token at 0"混淆镜像故障与未收录。 */
+    static boolean looksLikeBencode(byte[] body) {
+        if (body == null || body.length == 0) {
+            return false;
+        }
+        byte first = body[0];
+        return first == 'd' || first == 'l' || first == 'i' || (first >= '0' && first <= '9');
     }
 
     static Optional<MagnetInfo> parseTorrent(byte[] body, String infoHash) {
