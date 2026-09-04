@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Device;
 import cn.har01d.alist_tvbox.entity.DeviceRepository;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.service.SettingService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
@@ -20,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -187,20 +190,24 @@ public class TvBoxController {
         return subscriptionService.subscription(token, id);
     }
 
-    @GetMapping("/open")
-    public Map<String, Object> open() throws IOException {
-        return subscriptionService.open();
-    }
-
-    @GetMapping("/open/{token}")
-    public Map<String, Object> open(@PathVariable String token) throws IOException {
-        subscriptionService.checkToken(token);
-        return subscriptionService.open();
-    }
-
     @GetMapping("/node/{token}/{file}")
     public String node(@PathVariable String token, @PathVariable String file) throws IOException {
         subscriptionService.checkToken(token);
+        return subscriptionService.node(file);
+    }
+
+    // 深路径文件分发(多级子目录):custom/spiders.json、custom/{spider}.js、lib/cat.js 等,
+    // 供 node bundle 的自定义爬虫加载器取清单与依赖;两段路径仍由上面的 {file} 映射接管
+    @GetMapping("/node/{token}/**")
+    public String nodeDeep(@PathVariable String token, HttpServletRequest request) throws IOException {
+        subscriptionService.checkToken(token);
+        String uri = request.getRequestURI();
+        int start = uri.indexOf("/node/") + "/node/".length();
+        int slash = uri.indexOf('/', start);
+        if (slash < 0) {
+            throw new NotFoundException();
+        }
+        String file = URLDecoder.decode(uri.substring(slash + 1), StandardCharsets.UTF_8);
         return subscriptionService.node(file);
     }
 

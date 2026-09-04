@@ -65,14 +65,10 @@
     </div>
 
     <el-row>
-      猫影视配置接口：
-      <a :href="openUrl" target="_blank">{{ openUrl }}</a>
-      <el-button size="small" style="margin-left: 8px" @click="copyUrl(openUrl)">复制</el-button>
-    </el-row>
-    <el-row>
       猫影视node配置接口：
       <a :href="nodeUrl" target="_blank">{{ nodeUrl2 }}</a>
       <el-button size="small" style="margin-left: 8px" @click="copyUrl(nodeUrl2)">复制</el-button>
+      <router-link to="/files" style="margin-left: 8px">管理猫源文件 →</router-link>
     </el-row>
     <el-row>
       PG包本地： {{ pgLocal }}
@@ -1144,7 +1140,6 @@ function withBasicAuth(base: string) {
   const prefix = basicAuthUser.value + ':' + basicAuthPass.value + '@'
   return base.replace('http://', 'http://' + prefix).replace('https://', 'https://' + prefix)
 }
-const openUrl = computed(() => withBasicAuth(currentUrl) + '/open' + token.value)
 const nodeUrl = computed(() => withBasicAuth(currentUrl) + '/node' + (token.value ? token.value : '/-') + '/index.config.js')
 const nodeUrl2 = computed(() => withBasicAuth(currentUrl) + '/node' + (token.value ? token.value : '/-') + '/index.js.md5')
 

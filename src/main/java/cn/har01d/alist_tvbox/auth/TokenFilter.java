@@ -81,26 +81,17 @@ public class TokenFilter extends OncePerRequestFilter {
             }
 
             String uri = request.getRequestURI();
-            if (uri.startsWith("/open") || uri.startsWith("/node") || uri.startsWith("/cat")) {
+            if (uri.startsWith("/node") || uri.startsWith("/cat")) {
                 String auth = request.getHeader("Authorization");
                 boolean ok = basicAuthCredentials != null && auth != null
                         && MessageDigest.isEqual(basicAuthCredentials.getBytes(StandardCharsets.UTF_8), auth.getBytes(StandardCharsets.UTF_8));
                 if (!ok) {
-                    // 猫影视接口带 vod token(/node/{token}/... /open/{token}):合法 token 即鉴权放行。
+                    // 猫影视接口带 vod token(/node/{token}/...):合法 token 即鉴权放行。
                     // 普通用户的 u- token 没有 basic auth 凭证(那是管理员全局凭证),控制器会再校验 token
                     if (hasValidVodTokenInPath(uri)) {
                         filterChain.doFilter(request, response);
                         return;
                     }
-                    response.setHeader("Www-Authenticate", "Basic realm=\"alist\"");
-                    response.sendError(401);
-                    return;
-                }
-                // /open 不带路径 token 时,配置渲染会走无上下文分支:回落全局首个订阅 token 并注入全局
-                // master 凭证(getCurrentOrFirstToken/credentialAliAccount)。basic 凭证已下发给 USER
-                //(猫影视客户端要求内嵌),token 模式下放行无 token 的 /open 等于向 USER 递管理员凭证。
-                // 关闭 token 模式的单用户形态维持原行为(basic 凭证即门槛);/node 路由本身强制 {token} 段
-                if (isTokenlessOpen(uri) && subscriptionService != null && subscriptionService.isTokenEnabled()) {
                     response.setHeader("Www-Authenticate", "Basic realm=\"alist\"");
                     response.sendError(401);
                     return;
@@ -149,14 +140,14 @@ public class TokenFilter extends OncePerRequestFilter {
     private static final Set<String> TOKEN_QUERY_DOWNLOAD_PATHS = Set.of(
             "/api/settings/export", "/api/settings/export-json",
             "/api/export-shares", "/api/logs/download", "/api/index-files/download",
-            "/api/static-files/download");
+            "/api/static-files/download", "/api/cat/download");
 
     // permitAll 的播放同步端点:令牌即鉴权,由 PlaybackSyncController 解析(playback_token ∪ session)
     private static final Set<String> PLAYBACK_SYNC_PATHS = Set.of(
             "/api/playback/event", "/api/playback/events", "/api/playback/changes", "/api/playback/sync");
 
     /**
-     * /node/{token}/... 与 /open/{token} 的路径第二段是 vod token:合法(共享 token 或 u- 用户 token)即放行。
+     * /node/{token}/... 的路径第二段是 vod token:合法(共享 token 或 u- 用户 token)即放行。
      * checkToken 同时会设置请求级 tenant/currentToken,控制器里会再走一遍,幂等。
      */
     private boolean hasValidVodTokenInPath(String uri) {
@@ -167,7 +158,7 @@ public class TokenFilter extends OncePerRequestFilter {
         if (parts.length < 3) {
             return false;
         }
-        if (!"node".equals(parts[1]) && !"open".equals(parts[1])) {
+        if (!"node".equals(parts[1])) {
             return false;
         }
         try {
@@ -176,11 +167,6 @@ public class TokenFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             return false;
         }
-    }
-
-    /** /open 不带路径 token 的形态(仅 "/open" 与 "/open/";/node 路由本身强制 {token}/{file} 段)。 */
-    private static boolean isTokenlessOpen(String uri) {
-        return "/open".equals(uri) || "/open/".equals(uri);
     }
 
     private String getToken(HttpServletRequest request) {

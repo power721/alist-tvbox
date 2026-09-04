@@ -87,33 +87,7 @@ class TokenFilterTest {
         assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
 
-    @Test
-    void openEndpointShouldRequireBasicAuth() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRequestURI("/open");
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        var chain = mock(jakarta.servlet.FilterChain.class);
 
-        tokenFilter.doFilter(request, response, chain);
-
-        assertEquals(401, response.getStatus());
-        assertEquals("Basic realm=\"alist\"", response.getHeader("Www-Authenticate"));
-        org.mockito.Mockito.verifyNoInteractions(chain);
-    }
-
-    @Test
-    void openEndpointShouldPassWithValidBasicAuth() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRequestURI("/open");
-        request.addHeader("Authorization", basic("catuser", "catpass"));
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        var chain = mock(jakarta.servlet.FilterChain.class);
-
-        tokenFilter.doFilter(request, response, chain);
-
-        assertEquals(200, response.getStatus());
-        verify(chain).doFilter(request, response);
-    }
 
     @Test
     void catEndpointShouldRejectWrongBasicAuth() throws Exception {
