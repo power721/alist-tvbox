@@ -10,6 +10,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
@@ -17,11 +18,13 @@ import java.util.regex.Pattern;
 /**
  * TMDB 访问线路:官方 api/image 域名国内直连不通,Setting tmdb_api_host / tmdb_image_host 可切换到反代镜像。
  * Worker 型镜像 API 与图片同域(只配 tmdb_api_host 即可);NAStool 型分开(tmdb.nastool.org 管 API、
- * img.nastool.org/t/p 管图床),需另配 tmdb_image_host。即读即用无缓存,改设置立即生效;
+ * img.nastool.org/t/p 管图床),需另配 tmdb_image_host。池按原值缓存、原值变化即重解析,改设置立即生效;
  * 未配置/非法值一律回落官方直连,行为与历史版本一致。
  *
  * 镜像池:两个 Setting 均支持逗号/分号/空白分隔多个镜像(免费 Worker 各有每日限额,轮询分摊额度),
  * 逐请求 round robin(API 与图片各自独立计数);单项值行为与历史版本完全一致。
+ * 池顺序在服务启动首次读取时随机打乱(预设池被大量实例共用,固定顺序轮询会让集中重启的流量全砸第一个
+ * Worker),同一原值存续期内不再重洗,保证轮询序列稳定。
  *
  * 凭证同此:Setting tmdb_api_key 支持两形态——v3 api key(32 位,拼 query)与 v4 read access
  * token(eyJ 开头 JWT,走 Authorization: Bearer,不落 URL/代理访问日志),按值自动识别。
@@ -40,6 +43,13 @@ public class TmdbEndpoint {
     private final SettingRepository settingRepository;
     private final AtomicInteger apiRotation = new AtomicInteger();
     private final AtomicInteger imageRotation = new AtomicInteger();
+    /** 池缓存:启动首读洗一次牌,原值不变复用(轮询序列稳定);hosts 不可变,防 imageHost 跟随池的删改透传进缓存。 */
+    private record Pool(String raw, List<String> hosts) {
+        static final Pool EMPTY = new Pool("", List.of());
+    }
+
+    private volatile Pool apiPoolCache = Pool.EMPTY;
+    private volatile Pool imagePoolCache = Pool.EMPTY;
 
     public TmdbEndpoint(SettingRepository settingRepository) {
         this.settingRepository = settingRepository;
@@ -47,7 +57,7 @@ public class TmdbEndpoint {
 
     /** API base(形如 https://api.themoviedb.org,不带 /3);池为空回落官方,多项时逐请求轮询。 */
     public String apiHost() {
-        List<String> pool = parsePool(readSetting(SETTING_NAME));
+        List<String> pool = cachedApiPool();
         return pool.isEmpty() ? OFFICIAL_API : next(pool, apiRotation);
     }
 
@@ -59,13 +69,40 @@ public class TmdbEndpoint {
      * 未单独配置图床时跟随 tmdb_api_host 池(Worker 同域反代 /t/p/),两者均未配置才回落官方;
      * 显式配官方 API 不构成镜像线路(官方图床国内不通,重写到它等于没救)。 */
     String imageHost() {
-        List<String> imagePool = parsePool(readSetting(SETTING_NAME_IMAGE));
+        List<String> imagePool = cachedImagePool();
         if (!imagePool.isEmpty()) {
             return next(imagePool, imageRotation);
         }
-        List<String> apiPool = parsePool(readSetting(SETTING_NAME));
+        List<String> apiPool = new ArrayList<>(cachedApiPool());
         apiPool.remove(OFFICIAL_API);
         return apiPool.isEmpty() ? null : next(apiPool, apiRotation);
+    }
+
+    /** 启动首读随机打乱顺序(不同实例从不同 worker 起步,分摊免费额度),原值变化重解析重洗;并发首读各洗各的,落缓存者胜,均为合法排列。 */
+    private List<String> cachedApiPool() {
+        String raw = readSetting(SETTING_NAME);
+        Pool cached = apiPoolCache;
+        if (!cached.raw().equals(raw)) {
+            cached = new Pool(raw, shuffledPool(raw));
+            apiPoolCache = cached;
+        }
+        return cached.hosts();
+    }
+
+    private List<String> cachedImagePool() {
+        String raw = readSetting(SETTING_NAME_IMAGE);
+        Pool cached = imagePoolCache;
+        if (!cached.raw().equals(raw)) {
+            cached = new Pool(raw, shuffledPool(raw));
+            imagePoolCache = cached;
+        }
+        return cached.hosts();
+    }
+
+    private static List<String> shuffledPool(String raw) {
+        List<String> pool = parsePool(raw);
+        Collections.shuffle(pool);
+        return List.copyOf(pool);
     }
 
     /** 官方图床(media.themoviedb.org 301→image.tmdb.org,两者国内均被墙,/images 代理的后端出网跳就是死在这)拉取前重写为镜像;

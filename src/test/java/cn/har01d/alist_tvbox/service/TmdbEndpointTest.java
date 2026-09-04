@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TmdbEndpointTest {
@@ -128,6 +129,34 @@ class TmdbEndpointTest {
         }
         assertEquals(3, counts.size());
         counts.values().forEach(count -> assertEquals(2, count)); // 均匀轮询:每个 worker 各 2 次
+    }
+
+    @Test
+    void shuffledOncePerStartupThenSequenceStaysStable() {
+        // 启动首读洗牌后序列固定:第一轮的顺序在后续轮次原样重复(防退化成每请求重洗=随机直取)
+        TmdbEndpoint endpoint = endpoint(POOL, null);
+        String[] firstCycle = new String[3];
+        for (int i = 0; i < 3; i++) {
+            firstCycle[i] = endpoint.apiHost();
+        }
+        assertEquals(3, java.util.Arrays.stream(firstCycle).distinct().count()); // 是排列,无遗漏无重复
+        for (int i = 0; i < 3; i++) {
+            assertEquals(firstCycle[i], endpoint.apiHost()); // 第二轮与第一轮同序
+        }
+    }
+
+    @Test
+    void poolRefreshesImmediatelyWhenSettingChanges() {
+        // 池按原值缓存,但改设置必须立即生效:单镜像 → 3 worker 池,后续请求即按新池轮询
+        TmdbEndpoint endpoint = endpoint(MIRROR, null);
+        assertEquals(MIRROR, endpoint.apiHost());
+        when(settingRepository.findById("tmdb_api_host"))
+                .thenReturn(Optional.of(setting("tmdb_api_host", POOL)));
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (int i = 0; i < 3; i++) {
+            seen.add(endpoint.apiHost());
+        }
+        assertEquals(3, seen.size());
     }
 
     @Test
