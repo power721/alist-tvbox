@@ -94,9 +94,6 @@ public class SubscriptionService {
     private static final String PLUGIN_RUN_MODE_PYTHON = "python";
     private static final String ATVP_RUNTIME_REVISION = "local-proxy-v1";
     private static final String AUTO_UPDATE_PG = "auto_update_pg";
-    // 盘搜系站点 key(网盘线路需后端转文件夹)
-    private static final Set<String> PAN_SEARCH_KEYS = Set.of("wogg", "muou", "ouge", "zhizhen", "erxiao",
-            "duoduo", "labi", "huban", "xiaoban", "shandian");
     private static final String AUTO_UPDATE_ZX = "auto_update_zx";
     private static final String AUTO_UPDATE_XS = "auto_update_xs";
     private static final String SYSTEM_PLAYBACK_TOKEN_NAME = "系统订阅同步";
@@ -542,34 +539,12 @@ public class SubscriptionService {
         return subscriptionRepository.findAll();
     }
 
-    public Map<String, Object> open() throws IOException {
-        Path path = Utils.getWebPath("cat", "config_open.json");
-        String json = Files.readString(path).replace("﻿", "");
-
-        Map<String, Object> config = objectMapper.readValue(json, Map.class);
-
-        path = Utils.getWebPath("cat", "my.json");
-        if (Files.exists(path)) {
-            try {
-                log.info("read {}", path);
-                String ext = Files.readString(path);
-                Map<String, Object> source = objectMapper.readValue(ext, Map.class);
-                mergeOpen(config, source);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-
-        addCatSites(config);
-
-        json = objectMapper.writeValueAsString(config);
-        json = replaceOpen(json);
-
-        return objectMapper.readValue(json, Map.class);
-    }
-
     public String node(String file) throws IOException {
         log.debug("load file {}", file);
+        // 深路径端点(/node/{token}/**)开放了子目录分发,统一拒绝穿越路径
+        if (!CatPackageService.isSafePath(file)) {
+            throw new NotFoundException("非法路径");
+        }
         if (file.contains("index.config.js")) {
             Path config = Utils.getWebPath("cat", "index.config.js");
             String json = Files.readString(config);
@@ -610,7 +585,7 @@ public class SubscriptionService {
         atvPaths.put("ATV_TG_WEB_PLAY_URL", "/play");
         atvPaths.put("ATV_PIAN_DAN_URL", "/pian-dan");
         atvPaths.put("ATV_LIVE_URL", "/live");
-        // 网盘解析后端(atv_pan 段),盘搜爬虫文件夹化的关键配置,只在 replaceOpen 有、这里漏过
+        // 网盘解析后端(atv_pan 段),盘搜爬虫文件夹化的关键配置
         String backendAddress = readHostAddress();
         json = json.replace("ATV_API_URL", backendAddress);
         json = json.replace("ATV_TOKEN", appProperties.isEnabledToken() ? getCurrentOrFirstToken() : "-");
@@ -672,189 +647,6 @@ public class SubscriptionService {
             .map(Setting::getValue)
             .map("true"::equalsIgnoreCase)
             .orElse(true);
-    }
-
-    private void addCatSites(Map<String, Object> config) {
-        List<Map<String, Object>> sites = getSites(config, "video");
-        String secret = appProperties.isEnabledToken() ? ("/" + getCurrentOrFirstToken()) : "";
-
-        // 本项目后端内置源,与 spring.jar 的 csp_* spider 同一套 L2 端点,由通用 atv_open.js 适配
-        addCatSite(sites, "atv-pian-dan", "🟢 片单", secret, "/pian-dan", null, null, Map.of("t", "0"), null, false, false);
-        addCatSite(sites, "atv-media", "🟢 追剧", secret, "/media", "/play", Map.of(), Map.of("t", "0"), null);
-        addCatSite(sites, "atv-tg-db", "🟢 TG豆瓣", secret, "/tg-db", "/play", Map.of(), Map.of("t", "0"), null);
-        addCatSite(sites, "atv-tgsc", "🟢 TG频道", secret, "/tgsc", "/play", Map.of(), Map.of("t", "0"), null);
-        addCatSite(sites, "atv-tg-web", "🟢 TG网页", secret, "/tg-search", "/play", Map.of(), Map.of("t", "0"), Map.of("web", "true"));
-        addCatSite(sites, "atv-tg-search", "🟢 TG搜索", secret, "/tg-search", "/play", Map.of(), Map.of("t", "0"), null);
-        addCatSite(sites, "atv-feiniu", "🟢 飞牛", secret, "/feiniu", "/feiniu-play", Map.of("t", "0"), Map.of("ids", "recommend"), null);
-        addCatSite(sites, "atv-emby", "🟢 Emby", secret, "/emby", "/emby-play", Map.of("t", "0"), Map.of("ids", "recommend"), null);
-        addCatSite(sites, "atv-jellyfin", "🟢 Jellyfin", secret, "/jellyfin", "/jellyfin-play", Map.of("t", "0"), Map.of("ids", "recommend"), null);
-        addCatSite(sites, "atv-pansou", "🟢 鱼佬盘搜", secret, "/pansou", "/play", Map.of(), Map.of("t", "0"), null);
-        addCatSite(sites, "atv-pansou-group", "🟢 盘搜分组", secret, "/pansou-group", "/play", Map.of(), Map.of("t", "0"), null);
-
-        Map<String, Object> site = new HashMap<>();
-        site.put("key", "bilibili");
-        site.put("name", "🟢 BiliBili");
-        site.put("type", 3);
-        site.put("api", "/cat/bilibili.js");
-        site.put("ext", "BILIBILI_EXT");
-        sites.add(0, site);
-
-        site = new HashMap<>();
-        site.put("key", "xiaoya-alist");
-        site.put("name", "🟢 AList");
-        site.put("type", 3);
-        site.put("api", "/cat/xiaoya_alist.js");
-        site.put("ext", "VOD_EXT");
-        sites.add(0, site);
-
-        site = new HashMap<>();
-        site.put("key", "xiaoya-tvbox");
-        site.put("name", "🟢 小雅TV");
-        site.put("type", 3);
-        site.put("api", "/cat/xiaoya.js");
-        site.put("ext", "VOD1_EXT");
-        sites.add(0, site);
-
-        // 盘搜系公开源的网盘线路转文件夹需要后端解析,注入 api/token(占位符在 replaceOpen 替换)
-        Map<String, Object> panExt = new HashMap<>();
-        panExt.put("api", "ATV_API_URL");
-        panExt.put("token", "ATV_TOKEN");
-        for (Map<String, Object> s : sites) {
-            String api = String.valueOf(s.get("api"));
-            if (PAN_SEARCH_KEYS.contains(s.get("key")) && api.contains("/cat/") && s.get("ext") == null) {
-                s.put("ext", panExt);
-            }
-        }
-
-        sites = getSites(config, "pan");
-        Map<String, Object> ext = new HashMap<>();
-        ext.put("name", "小雅");
-        ext.put("server", "ALIST_URL");
-        ext.put("startPage", "/");
-        ext.put("showAll", false);
-        ext.put("search", true);
-        ext.put("headers", Map.of("Authorization", "ALIST_TOKEN"));
-        if (!sites.isEmpty()) {
-            List<Map<String, Object>> list = (List<Map<String, Object>>) sites.get(0).get("ext");
-            if (list == null) {
-                list = new ArrayList<>();
-                sites.get(0).put("ext", list);
-            }
-            list.add(0, ext);
-        }
-    }
-
-    private void addCatSite(List<Map<String, Object>> sites, String key, String name, String secret,
-                            String apiPath, String playPath, Map<String, String> playParams,
-                            Map<String, String> homeVod, Map<String, String> query) {
-        addCatSite(sites, key, name, secret, apiPath, playPath, playParams, homeVod, query, true, true);
-    }
-
-    private void addCatSite(List<Map<String, Object>> sites, String key, String name, String secret,
-                            String apiPath, String playPath, Map<String, String> playParams,
-                            Map<String, String> homeVod, Map<String, String> query, boolean detail, boolean search) {
-        Map<String, Object> ext = new HashMap<>();
-        ext.put("api", readHostAddress(apiPath + secret));
-        if (playPath != null) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("from", "open");
-            params.putAll(playParams);
-            ext.put("play", readHostAddress(playPath + secret));
-            ext.put("params", params);
-        }
-        if (homeVod != null) {
-            ext.put("homeVod", homeVod);
-        }
-        if (query != null) {
-            ext.put("query", query);
-        }
-        if (!detail) {
-            ext.put("detail", false);
-        }
-        if (!search) {
-            ext.put("search", false);
-        }
-
-        Map<String, Object> site = new HashMap<>();
-        site.put("key", key);
-        site.put("name", name);
-        site.put("type", 3);
-        site.put("api", "/cat/atv_open.js");
-        site.put("ext", ext);
-        sites.add(0, site);
-    }
-
-    private String replaceOpen(String json) {
-        json = json.replace("./", "/cat/");
-        json = json.replace("assets://js/", "/cat/");
-        String secret = appProperties.isEnabledToken() ? ("/" + getCurrentOrFirstToken()) : "";
-        json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
-        json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
-        json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
-        json = json.replace("ALIST_URL", readAListAddress());
-        // 凭证注入按 token 归属:u- token 只注入本人账号凭证,全局 master 凭证不下发给普通用户
-        String ali = credentialAliAccount().map(Account::getRefreshToken).orElse("");
-        json = json.replace("ALI_TOKEN", ali);
-        json = json.replace("填入阿里token", ali);
-        json = json.replace("阿里token", ali);
-        String quarkCookie = credentialQuarkAccount().map(DriverAccount::getCookie).orElse("");
-        json = json.replace("夸克账号cookie", quarkCookie);
-        json = json.replace("夸克cookie", quarkCookie);
-        String token = siteRepository.findById(1).map(Site::getToken).orElse("");
-        json = json.replace("ALIST_TOKEN", token);
-        String address = readHostAddress();
-        json = json.replace("ATV_API_URL", address);
-        json = json.replace("ATV_TOKEN", appProperties.isEnabledToken() ? getCurrentOrFirstToken() : "-");
-        json = json.replace("DOCKER_ADDRESS", address);
-        json = json.replace("ATV_ADDRESS", address);
-        return json;
-    }
-
-    private void mergeOpen(Map<String, Object> config, Map<String, Object> source) {
-        log.info("merge cat config");
-        config.put("video", Map.of("sites", mergeOpen(getSites(config, "video"), getSites(source, "video"))));
-        config.put("read", Map.of("sites", mergeOpen(getSites(config, "read"), getSites(source, "read"))));
-        config.put("comic", Map.of("sites", mergeOpen(getSites(config, "comic"), getSites(source, "comic"))));
-        config.put("pan", Map.of("sites", mergeOpen(getSites(config, "pan"), getSites(source, "pan"))));
-        Object color = source.get("color");
-        if (color != null) {
-            config.put("color", color);
-        }
-        log.debug("{}", config);
-    }
-
-    private List<Map<String, Object>> getSites(Map<String, Object> config, String key) {
-        Map<String, Object> item = (Map<String, Object>) config.get(key);
-        if (item != null) {
-            try {
-                return (List<Map<String, Object>>) item.get("sites");
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-        return new ArrayList<>();
-    }
-
-    private List<Map<String, Object>> mergeOpen(List<Map<String, Object>> config, List<Map<String, Object>> source) {
-        List<Map<String, Object>> list = new ArrayList<>();
-        Map<Object, Map<String, Object>> map = new HashMap<>();
-
-        for (Map<String, Object> item : config) {
-            map.put(item.get("key"), item);
-        }
-
-        if (source != null) {
-            for (Map<String, Object> item : source) {
-                if (map.containsKey(item.get("key"))) {
-                    map.get(item.get("key")).putAll(item);
-                } else {
-                    list.add(item);
-                }
-            }
-        }
-
-        list.addAll(config);
-        return list;
     }
 
     public Map<String, Object> subscription(String token, String id) {

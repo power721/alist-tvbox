@@ -127,7 +127,62 @@
           </el-table-column>
         </el-table>
       </el-tab-pane>
+
+      <el-tab-pane label="猫源文件" name="cat">
+        <el-row justify="space-between" align="middle">
+          <div style="word-break: break-all">
+            猫影视node配置接口：
+            <a :href="catNodeUrl" target="_blank">{{ catNodeUrl }}</a>
+            <el-button size="small" style="margin-left: 4px" @click="copyText(catNodeUrl)">复制</el-button>
+          </div>
+          <div>
+            <el-button @click="loadCatFiles">刷新</el-button>
+            <el-button type="success" @click="catUploadVisible = true">上传猫源</el-button>
+          </div>
+        </el-row>
+        <div class="space"></div>
+
+        <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px">
+          <template #title>
+            <p>
+              <strong>自定义爬虫</strong>：单个爬虫 <code>.js</code> 上传后自动注册（内置源不受影响），在猫影视 App 内刷新配置即可见；<br>
+              <strong>依赖库</strong>：爬虫的 <code>./lib/…</code> 依赖打 zip 上传（条目以 <code>custom/</code> 或 <code>lib/</code> 开头）。
+            </p>
+          </template>
+        </el-alert>
+
+        <el-table :data="catFiles?.files ?? []" border style="width: 100%" v-loading="catLoading">
+          <el-table-column label="文件" min-width="300">
+            <template #default="scope">
+              <el-tag v-if="scope.row.path.startsWith('custom/')"
+                      size="small" type="success" style="margin-right: 4px">爬虫</el-tag>
+              {{ displayCatPath(scope.row.path) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="大小" width="110">
+            <template #default="scope">{{ formatSize(scope.row.size) }}</template>
+          </el-table-column>
+          <el-table-column label="修改时间" width="185">
+            <template #default="scope">{{ formatDate(scope.row.lastModified) }}</template>
+          </el-table-column>
+          <el-table-column fixed="right" label="操作" width="170">
+            <template #default="scope">
+              <el-button link type="primary" size="small" @click="previewCatFile(scope.row)">预览</el-button>
+              <el-button link type="success" size="small" @click="downloadCatFile(scope.row)">下载</el-button>
+              <el-button link type="danger" size="small" @click="deleteCatFile(scope.row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
     </el-tabs>
+
+    <el-dialog v-model="catPreviewVisible" :title="'预览 - ' + catPreviewName" fullscreen>
+      <el-input :model-value="catPreviewContent" type="textarea" :rows="36" readonly
+                style="font-family: monospace; font-size: 12px"/>
+      <template #footer>
+        <el-button @click="catPreviewVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
 
     <!-- Config file dialogs -->
     <el-dialog v-model="formVisible" :fullscreen="fullscreen" :title="dialogTitle">
@@ -213,6 +268,32 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="catUploadVisible" title="上传猫源" width="500px">
+      <el-upload
+        ref="catUploadRef"
+        :action="catUploadUrl"
+        :headers="uploadHeaders"
+        :data="catUploadData"
+        :on-success="handleCatUploadSuccess"
+        :on-error="handleCatUploadError"
+        multiple
+        drag
+      >
+        <el-icon style="font-size: 40px; color: #909399"><Upload/></el-icon>
+        <div>拖拽猫源文件或本地包 zip 到此处，或 <em>点击上传</em></div>
+      </el-upload>
+      <div style="margin-top: 10px">
+        <el-checkbox v-model="catAutoExtract" label="自动解压 ZIP 文件（依赖库 zip 必须勾选）"/>
+        <div style="margin-top: 8px">
+          <el-input v-model="catSpiderName" placeholder="自定义爬虫显示名（可选，上传单个 .js 爬虫时生效）"
+                    style="width: 100%" clearable/>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="catUploadVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="mkdirDialogVisible" title="新建文件夹" width="400px">
       <el-form @submit.prevent="confirmMkdir">
         <el-form-item label="文件夹名称">
@@ -282,7 +363,7 @@ import {computed, onMounted, ref} from 'vue'
 import axios from "axios"
 import clipBorad from "vue-clipboard3"
 import {Folder, Document, Upload} from '@element-plus/icons-vue'
-import {ElMessage} from 'element-plus'
+import {ElMessage, ElMessageBox} from 'element-plus'
 import type {UploadInstance} from 'element-plus'
 
 const currentUrl = window.location.origin
@@ -601,6 +682,129 @@ const confirmMove = () => {
   })
 }
 
+// ========== Cat custom spiders ==========
+interface CatFileEntry {
+  path: string
+  size: number
+  lastModified: number
+}
+
+interface CatUploadEntry {
+  path: string
+  overwritten: boolean
+}
+
+interface CatFilesResult {
+  files: CatFileEntry[]
+}
+
+const catFiles = ref<CatFilesResult | null>(null)
+const catLoading = ref(false)
+const catUploadVisible = ref(false)
+const catAutoExtract = ref(true)
+const catSpiderName = ref('')
+const catUploadRef = ref<UploadInstance>()
+const catUploadUrl = '/api/cat/upload'
+const catUploadData = computed<Record<string, any>>(() => {
+  const data: Record<string, any> = {autoExtract: catAutoExtract.value}
+  const name = catSpiderName.value.trim()
+  if (name) data.name = name
+  return data
+})
+
+const catNodeUrl = computed(() => {
+  const t = token.value ? token.value.substring(1) : '-'
+  // 猫影视客户端只接受 URL 内嵌 basic auth 的配置地址(同订阅页 nodeUrl 拼法)
+  return withBasicAuth(currentUrl) + '/node/' + t + '/index.config.js'
+})
+
+const basicAuthUser = ref('')
+const basicAuthPass = ref('')
+
+const withBasicAuth = (base: string) => {
+  if (!basicAuthUser.value && !basicAuthPass.value) return base
+  const prefix = basicAuthUser.value + ':' + basicAuthPass.value + '@'
+  return base.replace('http://', 'http://' + prefix).replace('https://', 'https://' + prefix)
+}
+
+const loadCatFiles = () => {
+  catLoading.value = true
+  axios.get<CatFilesResult>('/api/cat/files').then(({data}) => {
+    catFiles.value = data
+  }).finally(() => {
+    catLoading.value = false
+  })
+}
+
+const copyText = (text: string) => {
+  toClipboard(text).then(() => {
+    ElMessage.success('已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
+}
+
+// 列表展示去掉 custom/ 层级(该 tab 即 custom 目录视角);删除操作仍传完整 path
+const displayCatPath = (path: string) => path.startsWith('custom/') ? path.substring('custom/'.length) : path
+
+const handleCatUploadSuccess = (result: CatUploadEntry[] | any) => {
+  catUploadVisible.value = false
+  catUploadRef.value?.clearFiles()
+  catSpiderName.value = ''
+  const entries: CatUploadEntry[] = result?.entries ?? []
+  if (entries.length > 0) {
+    if (entries.some((e) => e.overwritten)) {
+      ElMessage.info(`已覆盖 ${entries.filter((e) => e.overwritten).length} 个文件`)
+    }
+    if (entries.some((e) => e.path.startsWith('custom/'))) {
+      ElMessage.success('已注册自定义爬虫，在猫影视 App 内刷新配置即可见（内置源不受影响）')
+    }
+  }
+  loadCatFiles()
+}
+
+const handleCatUploadError = () => {
+  ElMessage.error('上传失败（单个爬虫 .js 或含 custom//lib/ 条目的 zip；zip 请勾选自动解压）')
+}
+
+const deleteCatFile = (row: CatFileEntry) => {
+  ElMessageBox.confirm(`确定删除 ${row.path} 吗？该文件将被彻底移除。`, '删除猫源文件', {type: 'warning'})
+      .then(() => axios.delete('/api/cat/file', {params: {path: row.path}}))
+      .then(() => {
+        ElMessage.success('已删除')
+        loadCatFiles()
+      })
+      .catch(() => {
+      })
+}
+
+const catPreviewVisible = ref(false)
+const catPreviewName = ref('')
+const catPreviewContent = ref('')
+
+const previewCatFile = (row: CatFileEntry) => {
+  if (row.size > 1024 * 1024) {
+    ElMessage.warning('文件超过 1MB，请下载后查看')
+    return
+  }
+  axios.get('/api/cat/download', {
+    params: {path: row.path},
+    responseType: 'text',
+    transformResponse: [(data: any) => data]
+  }).then(({data}) => {
+    catPreviewName.value = displayCatPath(row.path)
+    catPreviewContent.value = String(data)
+    catPreviewVisible.value = true
+  }).catch(() => {
+    ElMessage.error('预览失败')
+  })
+}
+
+const downloadCatFile = (row: CatFileEntry) => {
+  window.open('/api/cat/download?path=' + encodeURIComponent(row.path)
+      + '&X-ACCESS-TOKEN=' + localStorage.getItem('token'), '_blank')
+}
+
 const formatSize = (bytes: number) => {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -618,8 +822,14 @@ onMounted(() => {
   axios.get('/api/token').then(({data}) => {
     token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
   })
+  axios.get('/api/basic-auth-credentials').then(({data}) => {
+    basicAuthUser.value = data.username || ''
+    basicAuthPass.value = data.password || ''
+  }).catch(() => {
+  })
   loadConfig()
   loadStatic()
+  loadCatFiles()
 })
 </script>
 

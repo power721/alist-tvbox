@@ -47,13 +47,6 @@ class TvBoxControllerTest {
                 .build();
     }
 
-    @Test
-    void openShouldReturnConfig() throws Exception {
-        when(subscriptionService.open()).thenReturn(Map.of("video", "x"));
-
-        mockMvc.perform(get("/open"))
-                .andExpect(status().isOk());
-    }
 
     @Test
     void m3u8ShouldReadIdQueryParameter() throws Exception {
