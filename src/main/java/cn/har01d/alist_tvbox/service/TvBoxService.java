@@ -1747,7 +1747,15 @@ public class TvBoxService {
         return best;
     }
 
-    public Subtitle getSubtitle(Site site, String path, String name) {
+    /** 播放条目用的字幕装配:元数据走 buildSubtitleMeta,URL 走服务端代理(构建零上游直链、不过期)。 */
+    private Subtitle buildSubtitleOption(Site site, String path, String best) {
+        Subtitle subtitle = buildSubtitleMeta(best);
+        subtitle.setUrl(buildProxyUrl(site, best, path));
+        return subtitle;
+    }
+
+    /** 在 path 目录内为 name 挑最佳同名外挂字幕文件;只读目录列表,返回文件名或 null。 */
+    public String findSubtitleName(Site site, String path, String name) {
         FsResponse fsResponse = aListService.listFiles(site, path, 1, 100);
         List<FsInfo> files = fsResponse.getFiles();
         List<String> names = files.stream().map(FsInfo::getName).filter(this::isMediaFile).collect(Collectors.toList());
@@ -1755,8 +1763,37 @@ public class TvBoxService {
         String suffix = Utils.getCommonSuffix(names, false);
         log.debug("{} {}", prefix, suffix);
         List<String> subtitles = files.stream().map(FsInfo::getName).filter(this::isSubtitleFormat).collect(Collectors.toList());
+        return findBestSubtitle(subtitles, name.replace(prefix, "").replace(suffix, ""));
+    }
 
-        String best = findBestSubtitle(subtitles, name.replace(prefix, "").replace(suffix, ""));
+    /** 字幕元数据(lang/name/format/ext)按文件名推断,与 getSubtitle 历史口径一致。 */
+    private Subtitle buildSubtitleMeta(String best) {
+        Subtitle subtitle = new Subtitle();
+        if (best.contains("chs")) {
+            subtitle.setLang("chs");
+            subtitle.setName("简体中文");
+        } else if (best.contains("cht")) {
+            subtitle.setLang("cht");
+            subtitle.setName("繁体中文");
+        } else if (best.contains("en")) {
+            subtitle.setLang("eng");
+            subtitle.setName("英文");
+        }
+        if (best.endsWith("ssa") || best.endsWith("ass")) {
+            // ExoPlayer 按声明的 mime 选字幕解析器:ass 误标 application/x-subrip 会被
+            // SubRipDecoder 解析失败,表现为可选轨但无字幕渲染(与播放端 TrackUtil 映射对齐)
+            subtitle.setFormat("text/x-ssa");
+        } else if (best.endsWith("vtt")) {
+            subtitle.setFormat("text/vtt");
+        } else if (best.endsWith("ttml")) {
+            subtitle.setFormat("application/ttml+xml");
+        }
+        subtitle.setExt(getExt(best));
+        return subtitle;
+    }
+
+    public Subtitle getSubtitle(Site site, String path, String name) {
+        String best = findSubtitleName(site, path, name);
         if (best == null) {
             return null;
         }
@@ -1764,27 +1801,7 @@ public class TvBoxService {
         FsDetail fsDetail = aListService.getFile(site, path + "/" + best);
         log.debug("FsDetail: {}", fsDetail);
         if (fsDetail != null) {
-            Subtitle subtitle = new Subtitle();
-            if (best.contains("chs")) {
-                subtitle.setLang("chs");
-                subtitle.setName("简体中文");
-            } else if (best.contains("cht")) {
-                subtitle.setLang("cht");
-                subtitle.setName("繁体中文");
-            } else if (best.contains("en")) {
-                subtitle.setLang("eng");
-                subtitle.setName("英文");
-            }
-            if (best.endsWith("ssa") || best.endsWith("ass")) {
-                // ExoPlayer 按声明的 mime 选字幕解析器:ass 误标 application/x-subrip 会被
-                // SubRipDecoder 解析失败,表现为可选轨但无字幕渲染(与播放端 TrackUtil 映射对齐)
-                subtitle.setFormat("text/x-ssa");
-            } else if (best.endsWith("vtt")) {
-                subtitle.setFormat("text/vtt");
-            } else if (best.endsWith("ttml")) {
-                subtitle.setFormat("application/ttml+xml");
-            }
-            subtitle.setExt(getExt(best));
+            Subtitle subtitle = buildSubtitleMeta(best);
             subtitle.setUrl(fixHttp(fsDetail.getRawUrl()));
             log.debug("subtitle: {}", subtitle);
             return subtitle;
@@ -1971,6 +1988,18 @@ public class TvBoxService {
                 video.setPath(path);
                 String url = buildProxyUrl(site, path, video);
                 video.setUrl(url);
+                if (isMediaFile(path) && ("web".equals(ac) || "gui".equals(ac))) {
+                    // 桌面客户端(gui)/网页(web)只拿到代理播放 URL,拿不到 /play 里的 subt/subs:
+                    // 这里把同目录最佳外挂字幕一并下发(代理 URL,与 /play getSub=true 同一套挑选逻辑)。
+                    try {
+                        String best = findSubtitleName(site, getParent(path), fsDetail.getName());
+                        if (best != null) {
+                            video.setSubs(List.of(buildSubtitleOption(site, fixPath(getParent(path) + "/" + best), best)));
+                        }
+                    } catch (Exception e) {
+                        log.debug("get subtitle failed: {}", path, e);
+                    }
+                }
                 movieDetail.getItems().add(video);
                 movieDetail.setVod_play_url(url);
                 movieDetail.setType(fsDetail.getType());
@@ -2246,6 +2275,11 @@ public class TvBoxService {
                 String prefix = Utils.getCommonPrefix(fileNames);
                 String suffix = Utils.getCommonSuffix(fileNames);
                 log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
+                // 桌面客户端(gui)/网页(web)的播放列表条目附带同目录字幕(代理 URL):
+                // 构建时零上游直链生成、链接不过期,客户端下载时经 302 取新直链。
+                List<String> subtitleNames = ("web".equals(ac) || "gui".equals(ac))
+                        ? fsResponse.getFiles().stream().map(FsInfo::getName).filter(this::isSubtitleFormat).toList()
+                        : List.of();
 
                 if (appProperties.isSort()) {
                     sort(fileNames);
@@ -2270,6 +2304,12 @@ public class TvBoxService {
                         item.setSize(map.get(name).getSize());
                         String url = buildProxyUrl(site, filepath, item);
                         item.setUrl(url);
+                        if (!subtitleNames.isEmpty()) {
+                            String best = findBestSubtitle(subtitleNames, name.replace(prefix, "").replace(suffix, ""));
+                            if (best != null) {
+                                item.setSubs(List.of(buildSubtitleOption(site, fixPath(path + "/" + folder + "/" + best), best)));
+                            }
+                        }
                         if ("detail".equals(ac)) {
                             urls.add(title + "$" + url);
                         } else {
