@@ -212,14 +212,14 @@
             <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">到官网获取 →</a>
           </span>
         </el-form-item>
-        <el-form-item label="TMDB 线路">
+        <el-form-item label="TMDB 代理">
           <el-select v-model="tmdbApiHost" style="width: 320px"
                     filterable allow-create default-first-option
                     placeholder="选择预设,或输入自定义 CF Worker 反代地址">
             <el-option v-for="opt in tmdbApiHostOptions" :key="opt.value" :label="opt.label" :value="opt.value"/>
           </el-select>
           <el-button type="primary" class="hint" @click="updateTmdbApiHost">更新</el-button>
-          <span class="hint" style="margin-left: 8px">国内直连官方不通时切换反代;Worker 轮询池分摊各 worker 每日限额,Worker 型 API 与封面同域,NAStool 型自动分开配置图床,立即生效;
+          <span class="hint" style="margin-left: 8px">可以手动输入代理地址，立即生效;多个地址逗号分隔自动轮询;
             <a href="/tmdb_proxy_worker.js" target="_blank" rel="noopener">自建 Worker 参考代码 →</a>
           </span>
         </el-form-item>
@@ -448,9 +448,9 @@ const tmdbApiKey = ref('')
 const tmdbApiHost = ref('')
 const tmdbApiHostOptions = [
   {label: '官方 API(直连)', value: ''},
-  {label: 'Worker 轮询池 - round robin 分摊每日限额(地址由服务端内置)', value: 'worker-pool'},
-  {label: 'itv666 代理(API + 封面同域)', value: 'http://tmdb.itv666.cc'},
-  {label: 'NAStool(API + 图床分线路,自动配置)', value: 'https://tmdb.nastool.org'},
+  {label: 'Worker 轮询池 - round robin', value: 'worker-pool'},
+  {label: 'itv666 代理', value: 'http://tmdb.itv666.cc'},
+  {label: 'NAStool 代理', value: 'https://tmdb.nastool.org'},
 ]
 const userAgent = ref('')
 const atvPass = ref('')
