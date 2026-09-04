@@ -218,8 +218,10 @@
                     placeholder="选择预设,或输入自定义 CF Worker 反代地址">
             <el-option v-for="opt in tmdbApiHostOptions" :key="opt.value" :label="opt.label" :value="opt.value"/>
           </el-select>
-          <el-button type="primary" @click="updateTmdbApiHost">更新</el-button>
-          <span class="hint" style="margin-left: 8px">国内直连官方不通时切换反代;Worker 轮询池分摊各 worker 每日限额,Worker 型 API 与封面同域,NAStool 型自动分开配置图床,立即生效</span>
+          <el-button type="primary" class="hint" @click="updateTmdbApiHost">更新</el-button>
+          <span class="hint" style="margin-left: 8px">国内直连官方不通时切换反代;Worker 轮询池分摊各 worker 每日限额,Worker 型 API 与封面同域,NAStool 型自动分开配置图床,立即生效;
+            <a href="/tmdb_proxy_worker.js" target="_blank" rel="noopener">自建 Worker 参考代码 →</a>
+          </span>
         </el-form-item>
         <el-form-item label="115分享本地索引" v-if="has115Account">
           <el-button type="primary" :loading="index115Loading" @click="updateIndex115">下载</el-button>

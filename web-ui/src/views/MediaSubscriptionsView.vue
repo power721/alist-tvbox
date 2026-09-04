@@ -729,7 +729,9 @@
                         placeholder="选择预设,或输入自定义 CF Worker 反代地址">
                 <el-option v-for="opt in tmdbApiHostOptions" :key="opt.value" :label="opt.label" :value="opt.value"/>
               </el-select>
-              <span class="sub-text">国内直连官方不通时切换反代;Worker 轮询池分摊各 worker 每日限额,Worker 型 API 与封面同域,NAStool 型自动分开配置图床(系统设置页同一配置);可直接输入自建 CF Worker 反代地址(https://... 开头),多个地址逗号分隔自动轮询</span>
+              <span class="sub-text">国内直连官方不通时切换反代;Worker 轮询池分摊各 worker 每日限额,Worker 型 API 与封面同域,NAStool 型自动分开配置图床(系统设置页同一配置);可直接输入自建 CF Worker 反代地址(https://... 开头),多个地址逗号分隔自动轮询;
+                <a href="/tmdb_proxy_worker.js" target="_blank" rel="noopener">自建 Worker 参考代码 →</a>
+              </span>
             </el-form-item>
           </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="盘链" name="panlian">
