@@ -139,9 +139,13 @@ public class MediaSubscriptionCheckService {
      * 里的 {@code 6.0}/{@code 8.2} 不在剥离范围,日期戳剥除(缺陷 10)不受影响。 */
     private static final Pattern TECH_TAGS = Pattern.compile(
             "(?i)(2160p|1080p|720p|480p|4k|8k|\\d{1,3}\\s*fps|h\\.?26[45]|x\\.?26[45]|hevc|avc|aac|dts|flac|ac3|truehd|10bit|8bit|sdr|hdr10?|dolby|dv|web-?dl|bdrip|blu-?ray|remux|[.\\-_ ]v\\d{1,2}(?![a-z0-9])|(?<!\\d)\\d\\.\\d(?!\\d)|国语|粤语|中字|简体|繁体|双语|字幕)");
-    /** 网盘限流/风控(非资源失效):百度 errno -62 = 验证次数过多;其余为通用限流措辞 */
+    /** 网盘限流/风控(非资源失效):百度 errno -62 = 验证次数过多,-19/-65 = 访问频率太快/操作频繁(IP 级,
+     * 与 -62 同族);其余为通用限流措辞。errno 数字必须用 ASCII 模式兜底:百度错误 JSON 的中文 show_msg
+     * 全量 \\uXXXX 转义(线上实证 {@code "show_msg":"\\u8bbf\\u95ee\\u9891\\u7387..."},即「访问频率太快
+     * 请稍后再试」),「请稍后/访问频繁」等中文词全部匹配不到转义串, errno -19 形态曾绕过限流判定
+     * 直接落入判死路径整源退役(4567 一晚 7 起连环误杀)。 */
     private static final Pattern THROTTLE_ERROR = Pattern.compile(
-            "(?i)errno\"?\\s*:\\s*-62|验证次数过多|请稍[后候]|访问频繁|操作频繁|too many (requests|attempts)|rate.?limit|\\b429\\b");
+            "(?i)errno\"?\\s*:\\s*(-62|-19|-65)|验证次数过多|请稍[后候]|访问频繁|操作频繁|too many (requests|attempts)|rate.?limit|\\b429\\b");
     /** 方括号段里的技术信号补充集(TECH_TAGS 之外):帧率/夸克转码模板名/体积标注/长数字 id/推广域名。
      *  线上形态 {@code [322155_maxplus_50fps_tv_6.45GB]}(夸克 4K 转码命名):模板 id 被拆成 3221+55,
      *  体积 6.45 的 45 会被末号规则当集号,三集各解析成 45/60/72;资源站推广水印
@@ -3043,6 +3047,14 @@ public class MediaSubscriptionCheckService {
                     log.warn("aux mount refresh skipped, share session expired: {}", resource.getMountPath());
                     continue;
                 }
+                if (isThrottleError(e.getMessage())) {
+                    // 盘级限流/风控(百度 -19/-62/-65 等)是 IP 级窗口态,资源本身活着:记盘退避,
+                    // 挂载原样保留,下轮再刷 —— 退役+拉黑会把最好的源烧成 90 天黑名单(线上:
+                    // 一晚连环撞 -19「访问频率太快」七个补缺挂载全部误判死链退役)
+                    throttleDrive(driveOf(resource));
+                    log.warn("aux mount refresh skipped, drive throttled: {}", resource.getMountPath());
+                    continue;
+                }
                 if (Boolean.TRUE.equals(quarkShareAlive(resource.getLink(), resource.getPassword()))) {
                     // 夸克游客探测证实分享活着:「分享地址已失效」是风控形态,挂载原样保留
                     log.warn("aux mount refresh skipped, quark share alive via guest probe: {}", resource.getMountPath());
@@ -5227,12 +5239,19 @@ public class MediaSubscriptionCheckService {
         }
     }
 
-    /** @return true = 命中会话过期/分享存活闸门(已推迟下轮),调用方不必再 scheduleNext */
+    /** @return true = 命中会话过期/限流/分享存活闸门(已推迟下轮),调用方不必再 scheduleNext */
     private boolean onInvalid(MediaSubscription subscription, String reason) {
         if (isSessionExpiredError(reason)) {
             // 百度 sekey 会话过期(errno -9)不是主源失效:分享与文件都活着,重验证可自愈 ——
             // 推迟下轮重试,不退役不拉黑(退役=RETIRED + 90 天黑名单,误杀好源)
             log.warn("subscription {} skipped: share session expired, retry later", subscription.getId());
+            subscription.setNextCheckTime(System.currentTimeMillis() + INVALID_RETRY_DELAY_MS);
+            return true;
+        }
+        if (isThrottleError(reason)) {
+            // 盘级限流/风控(百度 -19/-62/-65)是 IP 级窗口态,主路径调用方有预检,换源后的
+            // 列目录失败经此兜底 —— 同样推迟重试,不退役不拉黑
+            log.warn("subscription {} skipped: drive throttled, retry later", subscription.getId());
             subscription.setNextCheckTime(System.currentTimeMillis() + INVALID_RETRY_DELAY_MS);
             return true;
         }

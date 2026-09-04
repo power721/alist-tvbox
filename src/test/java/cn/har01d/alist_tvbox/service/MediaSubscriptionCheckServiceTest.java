@@ -2240,6 +2240,41 @@ class MediaSubscriptionCheckServiceTest {
     }
 
     @Test
+    void baiduRateLimitAuxMountNotRetired() {
+        // 线上事故(2026-09-04,4567 一晚 7 起):百度 IP 级风控 errno -19「访问频率太快」的中文
+        // show_msg 是 \\uXXXX 转义,「请稍后/访问频繁」等中文限流词全部匹配不到,errno 数字又无
+        // ASCII 模式 —— 补缺挂载刷新撞 -19 被当死链整源退役 + 90 天黑名单,而分享与文件都活着
+        // (用户反馈:资源很全、评分最高的分享被退役,游客实测列目录 errno=0)
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource aux = new MediaSubscriptionResource();
+        aux.setId(9);
+        aux.setSubscriptionId(1);
+        aux.setLink("https://pan.baidu.com/s/ratelimited");
+        aux.setType(10);
+        aux.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        aux.setShareId(7);
+        aux.setMountPath("/追剧/.sources/1-测试剧-补1");
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1)).thenReturn(List.of(aux));
+        Mockito.when(fixture.aListService.listFiles(Mockito.any(), Mockito.anyString(),
+                        Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+                .thenThrow(new IllegalStateException("{\"errno\":-19,\"show_msg\":"
+                        + "\"\\u8bbf\\u95ee\\u9891\\u7387\\u592a\\u5feb\\u5566\\uff0c\\u8bf7\\u7a0d\\u540e\\u518d\\u8bd5\"}"));
+
+        fixture.service.refreshAuxMounts(fixture.subscription);
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, aux.getState(), "盘级限流不退役");
+        Mockito.verify(fixture.shareService, Mockito.never()).deleteShare(Mockito.anyInt());
+        Mockito.verify(fixture.deadLinkRepository, Mockito.never()).save(Mockito.any());
+        assertTrue(MediaSubscriptionCheckService.isThrottleError(
+                "{\"errno\":-19,\"show_msg\":\"\\u8bbf\\u95ee\\u9891\\u7387\\u592a\\u5feb\\u5566\\uff0c\\u8bf7\\u7a0d\\u540e\\u518d\\u8bd5\"}"),
+                "errno -19 转义形态必须命中限流(中文词全转义,只有 ASCII errno 可识别)");
+        assertTrue(MediaSubscriptionCheckService.isThrottleError(
+                "{\"errno\":-65,\"show_msg\":\"\\u64cd\\u4f5c\\u9891\\u7e41\"}"), "errno -65 同族");
+        assertTrue(MediaSubscriptionCheckService.isThrottleError("访问频率太快,请稍后重试(errno=-19)"),
+                "驱动翻译后的明文案也要命中");
+    }
+
+    @Test
     void quarkRiskControlAuxMountNotRetired() {
         // 夸克「分享地址已失效」同路:游客探测证实分享活着时,补缺挂载原样保留
         // (本机实证:事件「补缺源失效已退役:早春晴朗(分享地址已失效)」,分享页实际可访问)
