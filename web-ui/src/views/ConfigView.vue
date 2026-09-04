@@ -447,9 +447,6 @@ const tmdbApiHost = ref('')
 const tmdbApiHostOptions = [
   {label: '官方 API - https://api.themoviedb.org', value: ''},
   {label: 'Worker 轮询池 - 3 个全用,round robin 分摊每日限额', value: 'https://tmdb.8866033.xyz,https://tmdb.swust-oj.workers.dev,https://tmdb.8866033.workers.dev'},
-  {label: 'Worker - https://tmdb.8866033.xyz', value: 'https://tmdb.8866033.xyz'},
-  {label: 'Worker - https://tmdb.swust-oj.workers.dev', value: 'https://tmdb.swust-oj.workers.dev'},
-  {label: 'Worker - https://tmdb.8866033.workers.dev', value: 'https://tmdb.8866033.workers.dev'},
   {label: 'NAStool - https://tmdb.nastool.org (API) + img.nastool.org (图床)', value: 'https://tmdb.nastool.org'},
 ]
 const userAgent = ref('')

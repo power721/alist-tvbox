@@ -342,7 +342,9 @@
           <template #default="scope">
             <el-button v-if="scope.row.state === 'CANDIDATE'" link type="primary" size="small"
                        @click="enableResource(scope.row)">启用</el-button>
-            <el-button v-else-if="scope.row.state === 'MOUNTED' && !scope.row.primary" link type="primary" size="small"
+            <!-- 转主源一步直达:候选行也要有(线上反馈"不缺的候补无法变主源"——此前只有已挂载补缺行才有此按钮,候选换主源得先启用再转两步,或用语义不直白的钉选) -->
+            <el-button v-if="scope.row.state === 'CANDIDATE' || (scope.row.state === 'MOUNTED' && !scope.row.primary)"
+                       link type="primary" size="small"
                        @click="activateResource(scope.row)">转主源</el-button>
             <el-button v-if="scope.row.pinned" link type="danger" size="small"
                        @click="unpinResource(scope.row)">取消钉选</el-button>
@@ -1357,9 +1359,6 @@ const panSouLinkCheckTypeOptions = [
 const tmdbApiHostOptions = [
   {label: '官方 API - https://api.themoviedb.org', value: ''},
   {label: 'Worker 轮询池 - 3 个全用,round robin 分摊每日限额', value: 'https://tmdb.8866033.xyz,https://tmdb.swust-oj.workers.dev,https://tmdb.8866033.workers.dev'},
-  {label: 'Worker - https://tmdb.8866033.xyz', value: 'https://tmdb.8866033.xyz'},
-  {label: 'Worker - https://tmdb.swust-oj.workers.dev', value: 'https://tmdb.swust-oj.workers.dev'},
-  {label: 'Worker - https://tmdb.8866033.workers.dev', value: 'https://tmdb.8866033.workers.dev'},
   {label: 'NAStool - https://tmdb.nastool.org (API) + img.nastool.org (图床)', value: 'https://tmdb.nastool.org'},
 ]
 const navigationVisible = ref(false)
