@@ -446,7 +446,7 @@ const tmdbApiKey = ref('')
 const tmdbApiHost = ref('')
 const tmdbApiHostOptions = [
   {label: '官方 API(直连)', value: ''},
-  {label: 'Worker 轮询池 - round robin 分摊每日限额', value: 'https://tmdb.8866033.xyz,https://tmdb.swust-oj.workers.dev,https://tmdb.8866033.workers.dev,https://tmdb.power348045.workers.dev,https://tmdb.harold348047.workers.dev,https://tmdb.ai-09b.workers.dev,https://tmdb.root-df0.workers.dev,https://tmdb.atv-8c1.workers.dev,https://tmdb.odd-math-a42b.workers.dev,https://tmdb.test-d2c.workers.dev,https://tmdb.code-a96.workers.dev,https://tmdb.claude-b79.workers.dev'},
+  {label: 'Worker 轮询池 - round robin 分摊每日限额(地址由服务端内置)', value: 'worker-pool'},
   {label: 'NAStool(API + 图床分线路,自动配置)', value: 'https://tmdb.nastool.org'},
 ]
 const userAgent = ref('')

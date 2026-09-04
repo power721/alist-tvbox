@@ -160,6 +160,34 @@ class TmdbEndpointTest {
     }
 
     @Test
+    void workerPoolSentinelResolvesToBackendBuiltinPool() {
+        // 前端预设只落哨兵值 worker-pool(地址不进前端 bundle),12 线路由后端内置并均匀轮询;图床未单独配置跟随同池
+        TmdbEndpoint endpoint = endpoint(TmdbEndpoint.WORKER_POOL_VALUE, null);
+        int size = TmdbEndpoint.BUILTIN_WORKER_POOL.size();
+        java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < size * 2; i++) {
+            counts.merge(endpoint.apiHost(), 1, Integer::sum);
+        }
+        assertEquals(size, counts.size());
+        counts.keySet().forEach(host -> assertTrue(TmdbEndpoint.BUILTIN_WORKER_POOL.contains(host)));
+        counts.values().forEach(count -> assertEquals(2, count)); // 均匀轮询:每线路各 2 次
+        assertTrue(endpoint.isMirrorEnabled());
+        String rewritten = endpoint.rewriteImage("https://image.tmdb.org/t/p/w500/p.jpg");
+        assertTrue(TmdbEndpoint.BUILTIN_WORKER_POOL.stream().anyMatch(rewritten::startsWith));
+        assertTrue(rewritten.endsWith("/t/p/w500/p.jpg"));
+    }
+
+    @Test
+    void workerPoolSentinelOnImageKeyEnablesImageMirrorOnly() {
+        // 图床键同样可用哨兵(Worker 同域反代 /t/p/),API 未配置仍官方直连
+        TmdbEndpoint endpoint = endpoint(null, TmdbEndpoint.WORKER_POOL_VALUE);
+        assertEquals(OFFICIAL, endpoint.apiHost());
+        assertTrue(endpoint.isMirrorEnabled());
+        String rewritten = endpoint.rewriteImage("https://image.tmdb.org/t/p/w500/p.jpg");
+        assertTrue(TmdbEndpoint.BUILTIN_WORKER_POOL.stream().anyMatch(rewritten::startsWith));
+    }
+
+    @Test
     void poolDropsInvalidAndDuplicateItems() {
         // 全角逗号分隔 + 非法项 + 重复项:只剩一个有效镜像时退化为单项直取
         TmdbEndpoint endpoint = endpoint("ftp://bad.example，" + MIRROR + "，" + MIRROR + " ,", null);

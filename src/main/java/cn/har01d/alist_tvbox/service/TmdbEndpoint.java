@@ -25,6 +25,8 @@ import java.util.regex.Pattern;
  * 逐请求 round robin(API 与图片各自独立计数);单项值行为与历史版本完全一致。
  * 池顺序在服务启动首次读取时随机打乱(预设池被大量实例共用,固定顺序轮询会让集中重启的流量全砸第一个
  * Worker),同一原值存续期内不再重洗,保证轮询序列稳定。
+ * 设置值 worker-pool = 后端内置 Worker 池(BUILTIN_WORKER_POOL):地址只存后端代码,前端预设只落哨兵值,
+ * 存量显式逗号串照旧按显式池轮询,行为不变。
  *
  * 凭证同此:Setting tmdb_api_key 支持两形态——v3 api key(32 位,拼 query)与 v4 read access
  * token(eyJ 开头 JWT,走 Authorization: Bearer,不落 URL/代理访问日志),按值自动识别。
@@ -35,6 +37,22 @@ public class TmdbEndpoint {
     public static final String SETTING_NAME = "tmdb_api_host";
     public static final String SETTING_NAME_IMAGE = "tmdb_image_host";
     public static final String SETTING_NAME_KEY = "tmdb_api_key";
+    /** tmdb_api_host/tmdb_image_host 的哨兵值:解析为内置 Worker 池,12 个地址只存后端,前端 bundle/设置值均不携带。 */
+    public static final String WORKER_POOL_VALUE = "worker-pool";
+    /** 内置 Worker 轮询池(免费额度分摊);启动首读即洗牌,此处书写顺序无关紧要。 */
+    static final List<String> BUILTIN_WORKER_POOL = List.of(
+            "https://tmdb.8866033.xyz",
+            "https://tmdb.swust-oj.workers.dev",
+            "https://tmdb.8866033.workers.dev",
+            "https://tmdb.power348045.workers.dev",
+            "https://tmdb.harold348047.workers.dev",
+            "https://tmdb.ai-09b.workers.dev",
+            "https://tmdb.root-df0.workers.dev",
+            "https://tmdb.atv-8c1.workers.dev",
+            "https://tmdb.odd-math-a42b.workers.dev",
+            "https://tmdb.test-d2c.workers.dev",
+            "https://tmdb.code-a96.workers.dev",
+            "https://tmdb.claude-b79.workers.dev");
     public static final String OFFICIAL_API = "https://api.themoviedb.org";
     private static final String MEDIA_HOST = "https://media.themoviedb.org";
     private static final String IMAGE_HOST = "https://image.tmdb.org";
@@ -100,7 +118,7 @@ public class TmdbEndpoint {
     }
 
     private static List<String> shuffledPool(String raw) {
-        List<String> pool = parsePool(raw);
+        List<String> pool = parsePool(WORKER_POOL_VALUE.equals(raw) ? String.join(",", BUILTIN_WORKER_POOL) : raw);
         Collections.shuffle(pool);
         return List.copyOf(pool);
     }
