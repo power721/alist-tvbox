@@ -556,8 +556,27 @@ public class SubscriptionService {
                 return Utils.md5(json);
             }
         }
+        if ("index.js".equals(file) || "index.js.md5".equals(file)) {
+            // 部分宿主(原版猫影视等)拉三件套但不把 index.config.js 传给 start(),
+            // bundle 内嵌默认配置里的 ATV_* 占位符必须由服务端注入真实地址,
+            // 否则自定义爬虫加载器拿不到后端地址(装载静默失败)。md5 同步动态计算。
+            var cached = indexJsCache.get();
+            long mtime = Files.getLastModifiedTime(Utils.getWebPath("cat", "index.js")).toMillis();
+            String host = readHostAddress();
+            if (cached == null || cached.mtime != mtime || !cached.host.equals(host)) {
+                String replaced = replaceLegacyConfig(Files.readString(Utils.getWebPath("cat", "index.js")));
+                cached = new IndexJsCache(mtime, host, replaced, Utils.md5(replaced));
+                indexJsCache.set(cached);
+            }
+            return "index.js".equals(file) ? cached.content : cached.md5;
+        }
         return Files.readString(Utils.getWebPath("cat", file));
     }
+
+    private record IndexJsCache(long mtime, String host, String content, String md5) {
+    }
+
+    private final java.util.concurrent.atomic.AtomicReference<IndexJsCache> indexJsCache = new java.util.concurrent.atomic.AtomicReference<>();
 
     private String replaceLegacyConfig(String json) {
         String secret = appProperties.isEnabledToken() ? ("/" + getCurrentOrFirstToken()) : "";
