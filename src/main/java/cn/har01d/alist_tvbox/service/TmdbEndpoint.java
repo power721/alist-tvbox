@@ -106,10 +106,14 @@ public class TmdbEndpoint {
         return url + (url.contains("?") ? "&" : "?") + "api_key=" + apiKey();
     }
 
-    /** Bearer 形态给 headers 加 Authorization;v3 形态原样返回(headers 传引用就地修改)。 */
+    /** Bearer 形态给 headers 加 Authorization;v3 形态加 X-TMDB-API-Key 头。
+     * 头与 query 双形态并存:官方与透传型 Worker 以 query 的 api_key 认证、忽略多余头;
+     * 严格型 Worker(power348045 变体)只认请求头、无视 query——单靠任一形态都会在另一类线路上 401。 */
     public HttpHeaders applyAuth(HttpHeaders headers) {
         if (isBearerToken()) {
             headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey());
+        } else {
+            headers.set("X-TMDB-API-Key", apiKey());
         }
         return headers;
     }

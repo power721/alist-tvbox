@@ -180,15 +180,18 @@ class TmdbEndpointTest {
     }
 
     @Test
-    void v3KeyGoesIntoQueryAndNoAuthHeader() {
+    void v3KeyGoesIntoQueryAndHeader() {
         TmdbEndpoint endpoint = endpointWithKey(V3_KEY);
         assertFalse(endpoint.isBearerToken());
         assertEquals("https://tmdb.example.workers.dev/3/search/tv?query=x&api_key=" + V3_KEY,
                 endpoint.appendApiKey("https://tmdb.example.workers.dev/3/search/tv?query=x"));
         assertEquals("https://tmdb.example.workers.dev/3/tv/1?api_key=" + V3_KEY,
                 endpoint.appendApiKey("https://tmdb.example.workers.dev/3/tv/1"));
-        assertNull(endpoint.applyAuth(new org.springframework.http.HttpHeaders())
-                .get(org.springframework.http.HttpHeaders.AUTHORIZATION));
+        org.springframework.http.HttpHeaders headers =
+                endpoint.applyAuth(new org.springframework.http.HttpHeaders());
+        // query 之外双带 X-TMDB-API-Key 头:严格型 Worker(power348045 变体)只认头,官方/透传型忽略多余头
+        assertNull(headers.get(org.springframework.http.HttpHeaders.AUTHORIZATION));
+        assertEquals(V3_KEY, headers.getFirst("X-TMDB-API-Key"));
     }
 
     @Test

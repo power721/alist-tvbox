@@ -1357,9 +1357,9 @@ const panSouLinkCheckTypeOptions = [
   {label: '123网盘', value: '123'},
 ]
 const tmdbApiHostOptions = [
-  {label: '官方 API - https://api.themoviedb.org', value: ''},
-  {label: 'Worker 轮询池 - 3 个全用,round robin 分摊每日限额', value: 'https://tmdb.8866033.xyz,https://tmdb.swust-oj.workers.dev,https://tmdb.8866033.workers.dev'},
-  {label: 'NAStool - https://tmdb.nastool.org (API) + img.nastool.org (图床)', value: 'https://tmdb.nastool.org'},
+  {label: '官方 API(直连)', value: ''},
+  {label: 'Worker 轮询池 - round robin 分摊每日限额', value: 'https://tmdb.8866033.xyz,https://tmdb.swust-oj.workers.dev,https://tmdb.8866033.workers.dev,https://tmdb.power348045.workers.dev,https://tmdb.harold348047.workers.dev,https://tmdb.ai-09b.workers.dev,https://tmdb.root-df0.workers.dev,https://tmdb.atv-8c1.workers.dev,https://tmdb.odd-math-a42b.workers.dev,https://tmdb.test-d2c.workers.dev,https://tmdb.code-a96.workers.dev,https://tmdb.claude-b79.workers.dev'},
+  {label: 'NAStool(API + 图床分线路,自动配置)', value: 'https://tmdb.nastool.org'},
 ]
 const navigationVisible = ref(false)
 const navCategories = ref<{ type_id: string, type_name: string }[]>([])
