@@ -67,6 +67,22 @@ class CatPackageServiceTest {
     }
 
     @Test
+    void uploadsChineseFilenameSpider() throws IOException {
+        // 生态分享的爬虫文件名常含中文/全角括号
+        CatUploadResult result = service.upload(file("次元成（猫源）.js", "var a=1;export{}".getBytes()), false);
+
+        assertThat(result.entries().get(0).path()).isEqualTo("custom/次元成（猫源）.js");
+        assertThat(webCat.resolve("custom/次元成（猫源）.js")).exists();
+        assertThat(webCat.resolve("custom/spiders.json")).content()
+                .contains("\"file\" : \"次元成（猫源）.js\"");
+
+        assertThat(service.requireFile("custom/次元成（猫源）.js")).exists();
+        // 空格文件名同样放行
+        service.upload(file("my spider.js", "x".getBytes()), false);
+        assertThat(webCat.resolve("custom/my spider.js")).exists();
+    }
+
+    @Test
     void undefinedNameFallsBackToKey() throws IOException {
         // el-upload 会把前端 undefined 序列化成字符串
         service.upload(file("demo_open.js", "var a=1;export{}".getBytes()), false, "undefined");
@@ -104,8 +120,6 @@ class CatPackageServiceTest {
         assertThatThrownBy(() -> service.upload(file("../evil.js", "x".getBytes()), false))
                 .isInstanceOf(BadRequestException.class);
         assertThatThrownBy(() -> service.upload(file("..", "x".getBytes()), false))
-                .isInstanceOf(BadRequestException.class);
-        assertThatThrownBy(() -> service.upload(file("包.js", "x".getBytes()), false))
                 .isInstanceOf(BadRequestException.class);
         // 整包替换已下线:三件套与任意根文件拒绝
         assertThatThrownBy(() -> service.upload(file("index.js", "x".getBytes()), false))

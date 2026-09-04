@@ -43,7 +43,6 @@ public class CatPackageService {
     static final String LIB_DIR = "lib/";
     static final String CUSTOM_MANIFEST = "custom/spiders.json";
 
-    private static final java.util.regex.Pattern SAFE_PATH = java.util.regex.Pattern.compile("^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$");
     private static final String[] LIST_DIRS = {CUSTOM_DIR, LIB_DIR};
 
     private final ObjectMapper objectMapper;
@@ -123,14 +122,20 @@ public class CatPackageService {
         return name;
     }
 
-    // SAFE_PATH 只约束字符集;还须逐段排除 "." / ".."(全由允许字符组成,正则拦不住的路径穿越)。
-    // 公开供 /node 深路径端点复用(任意层级子目录文件分发)。
+    // 黑名单校验(生态爬虫文件名常含中文/全角括号):拒路径分隔外的危险字符,
+    // 逐段拒绝空段与纯点段(..)。公开供 /node 深路径端点复用(任意层级子目录文件分发)。
     public static boolean isSafePath(String path) {
-        if (!SAFE_PATH.matcher(path).matches()) {
+        if (path == null || path.isEmpty() || path.length() > 400) {
             return false;
         }
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (c == '\\' || c < 0x20 || c == 0x7f) {
+                return false;
+            }
+        }
         for (String segment : path.split("/")) {
-            if (segment.chars().allMatch(c -> c == '.')) {
+            if (segment.isEmpty() || segment.length() > 200 || segment.chars().allMatch(c -> c == '.')) {
                 return false;
             }
         }
