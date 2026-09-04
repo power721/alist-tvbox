@@ -1533,6 +1533,9 @@ public class MediaSubscriptionCheckService {
             present = new TreeSet<>(files.keySet());
         }
         applyInventory(subscription, present, new ArrayList<>(addedSoFar));
+        // 通知是入队即试发(独立线程另行 findById 现算卡片),订阅行却要到本轮收尾才落库,中间还
+        // 隔着整段 fillGaps 网络探测 —— 不先存的话卡片状态行比新集事件落后一集(🆕第10集/头行第9集)。
+        saveUnlessDeleted(subscription.getId(), subscription);
         // 通知门槛(§11 / 验收场景 7):新集必须**取链验证通过**才通知,且仅通知已追平的用户
         notifyNewEpisodes(subscription, addedSoFar.stream().filter(e -> !brokenNew.contains(e)).toList(), present.size());
 
@@ -6199,6 +6202,8 @@ public class MediaSubscriptionCheckService {
 
         if (shouldAutoEnd(subscription, episodes.size()) && !MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
             subscription.setStatus(MediaSubscription.STATUS_ENDED);
+            // 已完结是推送事件,入队即试发的卡片读订阅行 —— 先落库再发事件,状态行才与事件同步
+            saveUnlessDeleted(subscription.getId(), subscription);
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ENDED, "已完结(共 " + episodes.size() + " 集)");
         }
     }
