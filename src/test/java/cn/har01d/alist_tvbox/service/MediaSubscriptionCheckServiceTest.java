@@ -3558,6 +3558,159 @@ class MediaSubscriptionCheckServiceTest {
                 "LISTED 行已补上缺口:GAP_FILLED 记录 107 起");
     }
 
+    // ---------- 缺集主源的完整性升级(线上反馈:金色 2026,缺集的当主源、不缺的停在候补上不去) ----------
+
+    @Test
+    void fillGapsUpgradesIncompletePrimaryToCompleteCandidate() {
+        // 主源活着但缺第 13 集:分数更高的完整候选(1-13 独力覆盖主源 1-12 ∪ 缺口)探测通过后
+        // 直接转正当主源,不再只挂补缺 —— 旧主源回候选池,缺口全消不再触发补搜
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(400);
+        primary.setSubscriptionId(1);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        primary.setShareId(5);
+        primary.setScore(93);
+        MediaSubscriptionResource complete = new MediaSubscriptionResource();
+        complete.setId(401);
+        complete.setSubscriptionId(1);
+        complete.setLink("https://pan.baidu.com/s/jinse");
+        complete.setTitle("测试剧 (2026)【13集全】【4K HDR】完结");
+        complete.setType(10);
+        complete.setScore(110);
+        complete.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(complete, primary));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(400), Mockito.anyCollection()))
+                .thenReturn(numbers(1, 12));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(401), Mockito.anyCollection()))
+                .thenReturn(numbers(1, 13));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(numbers(1, 12));
+        MediaSubscriptionCheckService spy = Mockito.spy(fixture.service);
+        Mockito.doReturn(MediaSubscriptionCheckService.ProbeOutcome.PROBED)
+                .when(spy).probeCandidateSafely(Mockito.any(), Mockito.any());
+        Mockito.doAnswer(invocation -> {
+            MediaSubscription sub = invocation.getArgument(0);
+            MediaSubscriptionResource upgraded = invocation.getArgument(1);
+            upgraded.setState(MediaSubscriptionResource.STATE_MOUNTED);
+            upgraded.setMountPath(sub.getMountPath());
+            primary.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+            primary.setMountPath(null);
+            primary.setShareId(null);
+            return null;
+        }).when(spy).activate(Mockito.any(), Mockito.any());
+
+        spy.fillGaps(fixture.subscription, new java.util.TreeSet<>(Set.of(13)));
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, complete.getState(), "完整候选直接转正当主源");
+        assertEquals("/追剧/1-测试剧", complete.getMountPath(), "转正 = 挂到订阅固定路径");
+        assertEquals(MediaSubscriptionResource.STATE_CANDIDATE, primary.getState(), "旧主源回候选池兜底");
+        Mockito.verify(spy).activate(fixture.subscription, complete);
+        Mockito.verify(spy, Mockito.never()).fillPool(Mockito.any(), Mockito.anyBoolean(), Mockito.any());
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository, Mockito.atLeastOnce()).save(events.capture());
+        assertTrue(events.getAllValues().stream().anyMatch(e ->
+                        MediaSubscriptionEvent.TYPE_SOURCE_REPLACED.equals(e.getType()) && e.getDetail().contains("更完整")),
+                "换源事件说明这是完整性升级而非失效换源");
+    }
+
+    @Test
+    void fillGapsKeepsPrimaryWhenCompleteCandidateScoredLower() {
+        // 分数编码画质/盘偏好:完整但分数更低的候选(90 < 93)不越权转正,仍走补缺挂载
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = gapUpgradePrimary(null);
+        MediaSubscriptionResource candidate = gapUpgradeCandidate(90);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(primary, candidate));
+        stubGapUpgradeCoverages(fixture, numbers(1, 13));
+        MediaSubscriptionCheckService spy = spyForGapUpgrade(fixture);
+        spy.fillGaps(fixture.subscription, new java.util.TreeSet<>(Set.of(13)));
+
+        Mockito.verify(spy, Mockito.never()).activate(Mockito.any(), Mockito.any());
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, candidate.getState(), "低分完整源挂补缺");
+        assertEquals("/追剧/.sources/1-测试剧-补1", candidate.getMountPath(), "补缺挂载走 .sources 内部目录");
+        assertEquals("/追剧/1-测试剧", primary.getMountPath(), "主源不动");
+    }
+
+    @Test
+    void fillGapsKeepsPinnedPrimaryEvenForCompleteCandidate() {
+        // 钉选主源是用户锁定:更优完整候选也不自动换,仍走补缺
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = gapUpgradePrimary(true);
+        MediaSubscriptionResource candidate = gapUpgradeCandidate(110);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(candidate, primary));
+        stubGapUpgradeCoverages(fixture, numbers(1, 13));
+        MediaSubscriptionCheckService spy = spyForGapUpgrade(fixture);
+        spy.fillGaps(fixture.subscription, new java.util.TreeSet<>(Set.of(13)));
+
+        Mockito.verify(spy, Mockito.never()).activate(Mockito.any(), Mockito.any());
+        assertEquals("/追剧/.sources/1-测试剧-补1", candidate.getMountPath(), "钉选压过自动判定,完整源挂补缺");
+        assertEquals("/追剧/1-测试剧", primary.getMountPath(), "钉选主源不动");
+    }
+
+    @Test
+    void fillGapsKeepsPrimaryWhenCandidateNotSuperset() {
+        // 候选只覆盖缺口附近(12-13)不含主源全集:转正会让第 1-11 集失去供流,只配补缺
+        Fixture fixture = new Fixture();
+        MediaSubscriptionResource primary = gapUpgradePrimary(null);
+        MediaSubscriptionResource candidate = gapUpgradeCandidate(110);
+        Mockito.when(fixture.resourceRepository.findBySubscriptionIdOrderByScoreDesc(1))
+                .thenReturn(List.of(candidate, primary));
+        stubGapUpgradeCoverages(fixture, List.of(12, 13));
+        MediaSubscriptionCheckService spy = spyForGapUpgrade(fixture);
+        spy.fillGaps(fixture.subscription, new java.util.TreeSet<>(Set.of(13)));
+
+        Mockito.verify(spy, Mockito.never()).activate(Mockito.any(), Mockito.any());
+        assertEquals("/追剧/.sources/1-测试剧-补1", candidate.getMountPath(), "非完整超集只做补缺挂载");
+        assertEquals("/追剧/1-测试剧", primary.getMountPath(), "主源不动");
+    }
+
+    private MediaSubscriptionResource gapUpgradePrimary(Boolean pinned) {
+        MediaSubscriptionResource primary = new MediaSubscriptionResource();
+        primary.setId(400);
+        primary.setSubscriptionId(1);
+        primary.setState(MediaSubscriptionResource.STATE_MOUNTED);
+        primary.setMountPath("/追剧/1-测试剧");
+        primary.setShareId(5);
+        primary.setScore(93);
+        primary.setPinned(pinned);
+        return primary;
+    }
+
+    private MediaSubscriptionResource gapUpgradeCandidate(int score) {
+        MediaSubscriptionResource candidate = new MediaSubscriptionResource();
+        candidate.setId(401);
+        candidate.setSubscriptionId(1);
+        candidate.setLink("https://pan.baidu.com/s/jinse");
+        candidate.setTitle("测试剧 (2026)【13集全】【4K HDR】完结");
+        candidate.setType(10);
+        candidate.setScore(score);
+        candidate.setState(MediaSubscriptionResource.STATE_CANDIDATE);
+        return candidate;
+    }
+
+    private void stubGapUpgradeCoverages(Fixture fixture, List<Integer> candidateCoverage) {
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(400), Mockito.anyCollection()))
+                .thenReturn(numbers(1, 12));
+        Mockito.when(fixture.episodeSourceRepository.findNumbersByResourceIdAndStatesIn(Mockito.eq(401), Mockito.anyCollection()))
+                .thenReturn(candidateCoverage);
+        Mockito.when(fixture.episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(1), Mockito.anyCollection()))
+                .thenReturn(numbers(1, 12));
+    }
+
+    private MediaSubscriptionCheckService spyForGapUpgrade(Fixture fixture) {
+        Share auxMount = new Share();
+        auxMount.setId(66);
+        Mockito.when(fixture.shareRepository.findByPath("/追剧/.sources/1-测试剧-补1")).thenReturn(auxMount);
+        MediaSubscriptionCheckService spy = Mockito.spy(fixture.service);
+        Mockito.doReturn(MediaSubscriptionCheckService.ProbeOutcome.PROBED)
+                .when(spy).probeCandidateSafely(Mockito.any(), Mockito.any());
+        return spy;
+    }
+
     // ---------- 手动启用候选:挂为补缺源,不动主源(回应"点启用就变成主源") ----------
 
     @Test

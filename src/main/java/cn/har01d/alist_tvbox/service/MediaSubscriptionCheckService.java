@@ -3641,7 +3641,12 @@ public class MediaSubscriptionCheckService {
                 continue;
             }
             probed++;
-            Set<Integer> useful = intersection(coverageOf(resource), missingStill);
+            Set<Integer> coverage = coverageOf(resource);
+            if (upgradePrimaryOverIncomplete(subscription, resource, coverage, missingStill)) {
+                missingStill.clear(); // 新主源是完整超集,缺口全消;换源簿记(旧主源回池/事件/转存排期)由 activate 处理
+                break;
+            }
+            Set<Integer> useful = intersection(coverage, missingStill);
             if (!useful.isEmpty()) {
                 try {
                     if (auxMounted < maxMounts || evictWeakestAuxMount(subscription, useful) != null) {
@@ -3668,6 +3673,54 @@ public class MediaSubscriptionCheckService {
                 fillPool(subscription, true, keyword);
             }
             magnetFallback(subscription, missingStill, round);
+        }
+    }
+
+    /**
+     * 缺集主源的完整性升级(线上反馈:缺集的当主源、不缺的永远停在候补也上不去):主源活着但本轮
+     * 仍有缺口时,分数不低于主源、且独力覆盖「主源已供集 ∪ 剩余缺口」(完整超集)的已探测候选
+     * 直接转正 —— 换上去的不止补缺,主源集数清单/固定挂载路径一步到位,旧主源由 activate 统一
+     * 回候选池兜底。钉选主源是用户锁定,跳过;分数低于主源的完整源仍走补缺挂载(画质/盘偏好
+     * 编码在分数里,不越权覆盖);单集源由 usableAsPrimary 挡在主源外。
+     * 转正失败(挂载/AList 侧炸)不炸补缺循环:探测已证明链接活着,回落到本轮补缺挂载兜底。
+     */
+    boolean upgradePrimaryOverIncomplete(MediaSubscription subscription, MediaSubscriptionResource resource,
+                                         Set<Integer> coverage, Set<Integer> missingStill) {
+        if (coverage.isEmpty() || missingStill.isEmpty()) {
+            return false;
+        }
+        MediaSubscriptionResource primary = primaryResource(subscription);
+        if (primary == null || primary.getId().equals(resource.getId())
+                || Boolean.TRUE.equals(primary.getPinned())) {
+            return false;
+        }
+        if (!usableAsPrimary(resource, liveEpisodeNumbers(subscription).size())) {
+            return false;
+        }
+        int candidateScore = resource.getScore() == null ? 0 : resource.getScore();
+        int primaryScore = primary.getScore() == null ? 0 : primary.getScore();
+        if (candidateScore < primaryScore) {
+            return false;
+        }
+        Set<Integer> primaryCoverage = coverageOf(primary);
+        Set<Integer> required = new TreeSet<>(primaryCoverage);
+        required.addAll(missingStill);
+        if (!coverage.containsAll(required)) {
+            return false; // 不是完整超集:只覆盖部分缺口,交给补缺挂载
+        }
+        try {
+            log.info("subscription {} upgrading incomplete primary {} (score {}, {} eps) to complete candidate {} (score {}, {} eps)",
+                    subscription.getId(), primary.getId(), primaryScore, primaryCoverage.size(),
+                    resource.getId(), candidateScore, coverage.size());
+            activate(subscription, resource);
+            clearTransientStreak(resource);
+            addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_REPLACED,
+                    "主源换为更完整源:" + StringUtils.defaultIfBlank(resource.getTitle(), resource.getLink())
+                            + "(" + coverage.size() + "集,原主源缺" + (required.size() - primaryCoverage.size()) + "集)");
+            return true;
+        } catch (Exception e) {
+            log.warn("upgrade primary to complete candidate {} failed: {}", resource.getId(), e.getMessage());
+            return false;
         }
     }
 
