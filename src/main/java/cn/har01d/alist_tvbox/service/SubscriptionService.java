@@ -545,6 +545,10 @@ public class SubscriptionService {
         if (!CatPackageService.isSafePath(file)) {
             throw new NotFoundException("非法路径");
         }
+        // bundle 装载器的心跳信标(?stage=xxx):落到文件会 404 并打 ERROR 栈,特判为合法端点
+        if ("custom/heartbeat".equals(file)) {
+            return "ok";
+        }
         if (file.contains("index.config.js")) {
             Path config = Utils.getWebPath("cat", "index.config.js");
             String json = Files.readString(config);
