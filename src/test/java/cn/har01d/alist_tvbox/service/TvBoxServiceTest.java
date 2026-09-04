@@ -439,4 +439,38 @@ class TvBoxServiceTest {
         org.junit.jupiter.api.Assertions.assertNotNull(result);
         org.junit.jupiter.api.Assertions.assertTrue(result.getList().isEmpty());
     }
+
+    @Test
+    void getSubtitleMarksAssFileAsSsaMimeType() {
+        // 播放端 MediaItemFactory 对非空 format 直用不嗅探:ass 误标 application/x-subrip
+        // 会被 ExoPlayer 的 SubRipDecoder 解析失败,表现为字幕轨可选但无字幕渲染
+        cn.har01d.alist_tvbox.entity.Site site = new cn.har01d.alist_tvbox.entity.Site();
+        String dir = "/叶卡捷琳娜大帝";
+        String video = "叶卡捷琳娜大帝.2014.S01E01.1080p.WEB-DL.H.264.mkv";
+        String sub = "叶卡捷琳娜大帝.2014.S01E01.1080p.WEB-DL.H.264.chs.ass";
+
+        cn.har01d.alist_tvbox.model.FsResponse listing = new cn.har01d.alist_tvbox.model.FsResponse();
+        cn.har01d.alist_tvbox.model.FsInfo videoInfo = new cn.har01d.alist_tvbox.model.FsInfo();
+        videoInfo.setName(video);
+        cn.har01d.alist_tvbox.model.FsInfo subInfo = new cn.har01d.alist_tvbox.model.FsInfo();
+        subInfo.setName(sub);
+        listing.setFiles(java.util.List.of(videoInfo, subInfo));
+        when(aListService.listFiles(site, dir, 1, 100)).thenReturn(listing);
+        when(appProperties.getFormats()).thenReturn(Set.of("mkv"));
+        when(appProperties.getSubtitles()).thenReturn(Set.of("srt", "ass", "vtt", "ttml"));
+
+        FsDetail subDetail = new FsDetail();
+        subDetail.setName(sub);
+        subDetail.setRawUrl("http://cdn.example/sub.chs.ass");
+        when(aListService.getFile(site, dir + "/" + sub)).thenReturn(subDetail);
+
+        cn.har01d.alist_tvbox.dto.Subtitle result = tvBoxService.getSubtitle(site, dir, video);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getFormat()).isEqualTo("text/x-ssa");
+        assertThat(result.getExt()).isEqualTo("ass");
+        assertThat(result.getLang()).isEqualTo("chs");
+        assertThat(result.getName()).isEqualTo("简体中文");
+        assertThat(result.getUrl()).isEqualTo("http://cdn.example/sub.chs.ass");
+    }
 }

@@ -1775,7 +1775,9 @@ public class TvBoxService {
                 subtitle.setLang("eng");
                 subtitle.setName("英文");
             }
-            if (best.endsWith("ssa")) {
+            if (best.endsWith("ssa") || best.endsWith("ass")) {
+                // ExoPlayer 按声明的 mime 选字幕解析器:ass 误标 application/x-subrip 会被
+                // SubRipDecoder 解析失败,表现为可选轨但无字幕渲染(与播放端 TrackUtil 映射对齐)
                 subtitle.setFormat("text/x-ssa");
             } else if (best.endsWith("vtt")) {
                 subtitle.setFormat("text/vtt");
