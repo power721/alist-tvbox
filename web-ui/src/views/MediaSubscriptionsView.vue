@@ -240,7 +240,7 @@
           <span class="sub-text" style="margin-left:8px">官方只给日期没给时刻的剧按 20:00 兜底;确认实际排播后手动校正,清空恢复自动</span>
         </el-form-item>
         <el-form-item label="更新日">
-          <el-select v-model="form.airWeekdays" multiple collapse-tags placeholder="不限制(按官方日程/巡检周期)" style="width: 240px">
+          <el-select v-model="form.airWeekdays" multiple placeholder="不限制(按官方日程/巡检周期)">
             <el-option v-for="(label, idx) in ['周一', '周二', '周三', '周四', '周五', '周六', '周日']"
                        :key="idx" :label="label" :value="idx + 1"/>
           </el-select>
