@@ -33,6 +33,9 @@ public class MediaSubscriptionRequest {
     private Integer checkIntervalHours;
     /** 手动播出时刻校正("HH:mm",空=自动;仅日期无时刻的剧按 20:00 兜底,可按实际排播改写) */
     private String customAirClock;
+    /** 手动更新日(ISO 周一=1..周日=7,空 = 清除):欧美周播剧/追番固定周几更新,官方日程缺失/
+     *  不可信时指定 —— 巡检只落配置周几的播出时刻 */
+    private java.util.List<Integer> airWeekdays;
     /** 主网盘覆盖(分享类型码,空 = 跟随全局 msub_main_drives) */
     private java.util.List<Integer> mainDrives;
     private MediaSubscriptionFilter filter;

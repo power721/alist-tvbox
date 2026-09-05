@@ -17,6 +17,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,8 +39,9 @@ public final class TelegramRenderer {
     private static final int CALENDAR_MAX_LINES = 40;
     /** 今明快捷跳转钮上限,超出只在正文里列。 */
     private static final int CALENDAR_MAX_SHORTCUTS = 6;
+    /** 播出/事件时间带周几(EE,中文短称"周六"):欧美剧/追番周播,周几才是更新心智锚点。 */
     private static final DateTimeFormatter TIME_FORMAT =
-            DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault());
+            DateTimeFormatter.ofPattern("MM-dd EE HH:mm", Locale.SIMPLIFIED_CHINESE).withZone(ZoneId.systemDefault());
     private static final DateTimeFormatter CLOCK_FORMAT =
             DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of(Constants.ZONE_ID));
 

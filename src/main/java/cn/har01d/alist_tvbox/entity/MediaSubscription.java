@@ -162,6 +162,16 @@ public class MediaSubscription {
     @Column(name = "custom_air_clock", length = 5)
     private String customAirClock;
 
+    /**
+     * 手动更新日(ISO 周一=1..周日=7 的 CSV,如 "2,4" = 周二/周四;空=不限制):欧美周播剧/追番
+     * 固定周几更新,官方日程缺失/不可信时用户显式指定 —— 巡检只落在配置周几的生效播出时刻
+     * (customAirClock 优先,默认 20:00)+15min,其余时间休眠;nextAirTime 同步接管为下一更新日
+     * (详情页「下集播出」/时间轴/播出前休眠同口径)。已播集有缺口时不死等(与官方日程路同语义);
+     * 完结剧不接管(完结周轻查继续)。
+     */
+    @Column(name = "air_weekdays", length = 13)
+    private String airWeekdays;
+
     /** 显式允许跨网盘转存(默认仅同盘:AList 秒传配置允许的方向除外) */
     @Column(name = "cross_drive")
     private boolean crossDrive;

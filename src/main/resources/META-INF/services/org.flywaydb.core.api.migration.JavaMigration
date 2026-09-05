@@ -42,3 +42,4 @@ db.migration.current.V47__MediaSubscriptionResourceFailKind
 db.migration.current.V48__MediaSubscriptionMagnetOffline
 db.migration.current.V49__OfflineDownloadTaskMagnetQuota
 db.migration.current.V50__MediaSubscriptionCustomKeywords
+db.migration.current.V51__MediaSubscriptionAirWeekdays

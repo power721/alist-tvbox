@@ -964,6 +964,96 @@ class MediaSubscriptionCheckServiceTest {
         assertClose(now + 6 * 3600_000L, subscription.getNextCheckTime(), "1h 内的档位不算,回常规间隔");
     }
 
+    // ---------- 手动更新日(airWeekdays):官方日程缺失/不可信时只在配置周几查 ----------
+
+    /** 北京时间固定时刻(2026-09 参照:09-09 周三、09-10 周四、09-16 下周三)。 */
+    private static long atBeijing(int year, int month, int day, int hour, int minute) {
+        return java.time.ZonedDateTime.of(year, month, day, hour, minute, 0, 0,
+                java.time.ZoneId.of(cn.har01d.alist_tvbox.util.Constants.ZONE_ID)).toInstant().toEpochMilli();
+    }
+
+    @Test
+    void nextManualAirSlotPicksNearestConfiguredDay() {
+        MediaSubscription subscription = subscription();
+        subscription.setAirWeekdays("2,4"); // 周二/周四
+        assertEquals(atBeijing(2026, 9, 10, 20, 0),
+                service.nextManualAirSlot(subscription, atBeijing(2026, 9, 9, 10, 0)),
+                "周三 10:00 → 最近的更新日是明天(周四)20:00");
+    }
+
+    @Test
+    void nextManualAirSlotTodayWhenClockAhead() {
+        MediaSubscription subscription = subscription();
+        subscription.setAirWeekdays("3"); // 周三
+        assertEquals(atBeijing(2026, 9, 9, 20, 0),
+                service.nextManualAirSlot(subscription, atBeijing(2026, 9, 9, 10, 0)),
+                "更新日当天、播出时刻未到 → 今天 20:00");
+    }
+
+    @Test
+    void nextManualAirSlotPastClockRollsToNextWeek() {
+        MediaSubscription subscription = subscription();
+        subscription.setAirWeekdays("3");
+        assertEquals(atBeijing(2026, 9, 16, 20, 0),
+                service.nextManualAirSlot(subscription, atBeijing(2026, 9, 9, 21, 0)),
+                "更新日当天 20:00 已过 → 下周三 20:00");
+    }
+
+    @Test
+    void nextManualAirSlotHonorsCustomClock() {
+        MediaSubscription subscription = subscription();
+        subscription.setAirWeekdays("2,4");
+        subscription.setCustomAirClock("00:30"); // 追番凌晨档
+        assertEquals(atBeijing(2026, 9, 10, 0, 30),
+                service.nextManualAirSlot(subscription, atBeijing(2026, 9, 9, 10, 0)));
+    }
+
+    @Test
+    void nextManualAirSlotEndedAndUnconfiguredReturnZero() {
+        MediaSubscription subscription = subscription();
+        assertEquals(0, service.nextManualAirSlot(subscription, System.currentTimeMillis()), "未配置返回 0");
+        subscription.setAirWeekdays("2");
+        subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        assertEquals(0, service.nextManualAirSlot(subscription, System.currentTimeMillis()), "完结剧不接管");
+    }
+
+    @Test
+    void scheduleNextManualWeekdaysTakesOverOfficialAir() {
+        MediaSubscription subscription = subscription();
+        subscription.setAirWeekdays("2,4");
+        long now = System.currentTimeMillis();
+        subscription.setNextAirTime(now + 5 * 3600_000L); // 官方日程落在非更新日:被手动更新日接管
+        service.scheduleNext(subscription);
+        long manualSlot = service.nextManualAirSlot(subscription, now);
+        assertEquals(manualSlot, subscription.getNextAirTime(), "nextAirTime 接管为下一更新日(详情页/时间轴同口径)");
+        assertEquals(manualSlot + 15 * 60_000L, subscription.getNextCheckTime(), "休眠到更新日播出时刻+15min");
+    }
+
+    @Test
+    void scheduleNextManualWeekdaysGapDoesNotWaitForUpdateDay() {
+        MediaSubscription subscription = subscription();
+        subscription.setAirWeekdays("1"); // 周一:远近随跑测时刻变,断言用 min 表达式稳健
+        long now = System.currentTimeMillis();
+        subscription.setOfficialEpisodes(10);
+        subscription.setCurrentEpisodes(9); // 已播集有缺口:不死等更新日
+        service.scheduleNext(subscription);
+        long manualSlot = service.nextManualAirSlot(subscription, now);
+        assertEquals(Math.min(now + 6 * 3600_000L, manualSlot + 15 * 60_000L), subscription.getNextCheckTime(),
+                "缺口按常规退避尽快补,但不睡穿更新日");
+    }
+
+    @Test
+    void scheduleNextManualWeekdaysEndedKeepsOfficialAir() {
+        MediaSubscription subscription = subscription();
+        subscription.setAirWeekdays("2");
+        subscription.setStatus(MediaSubscription.STATUS_ENDED);
+        long now = System.currentTimeMillis();
+        long officialAir = now + 5 * 3600_000L;
+        subscription.setNextAirTime(officialAir);
+        service.scheduleNext(subscription);
+        assertEquals(officialAir, subscription.getNextAirTime(), "完结剧不被更新日接管(周轻查继续)");
+    }
+
     // ---------- 完结剧凌晨档:巡检避开高峰期 ----------
 
     @Test

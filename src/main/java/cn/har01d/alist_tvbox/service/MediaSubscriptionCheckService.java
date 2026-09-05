@@ -7375,6 +7375,22 @@ public class MediaSubscriptionCheckService {
             subscription.setNextCheckTime(firstLook ? now + 30 * 60_000L : now + 3600_000L);
             return;
         }
+        // 手动更新日(airWeekdays 非空):欧美周播剧/追番固定周几更新,官方日程缺失/不可信时用户
+        // 显式指定"周二更新/周二周四更新" —— 巡检只落配置周几的生效播出时刻,其余时间休眠。
+        // 接管 nextAirTime(详情页「下集播出」/时间轴/播出前休眠全链同口径);官方日程与高峰档
+        // 兜底让位,也不用官方路的 24h 防长眠上限(那是防日程异常漏检,用户显式配置最长 7 天可信)
+        long manualSlot = nextManualAirSlot(subscription, now);
+        if (manualSlot > 0) {
+            subscription.setNextAirTime(manualSlot);
+            if (!behindAiredEpisodes(subscription, airedTarget(subscription, now))) {
+                subscription.setNextCheckTime(manualSlot + 15 * 60_000L);
+                return;
+            }
+            // 已播集有缺口(存量缺集/官方已播>本地):缺口不死等更新日(与官方路同语义),
+            // 但常规退避也不睡穿更新日(更新日当天该查的不能漏)
+            subscription.setNextCheckTime(Math.min(now + backoffInterval(subscription), manualSlot + 15 * 60_000L));
+            return;
+        }
         int hours = subscription.getCheckIntervalHours() != null && subscription.getCheckIntervalHours() > 0
                 ? subscription.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours();
         // 无更新退避 ×1.5/轮;追更中(官方 RETURNING)封顶收紧(重列主源零成本,不该隔一天才发现),
@@ -7402,6 +7418,68 @@ public class MediaSubscriptionCheckService {
         long slot = MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
                 ? nextNightCheckTime(now) : nextPrimeCheckTime(now);
         subscription.setNextCheckTime(slot > 0 ? Math.min(now + interval, slot) : now + interval);
+    }
+
+    /** 常规退避间隔(手动更新日的缺口分支与官方日程路共用):无更新 ×1.5/轮封顶 ×4,
+     *  追更中(RETURNING)封顶收紧,完结/无元数据 24h。 */
+    private long backoffInterval(MediaSubscription subscription) {
+        int hours = subscription.getCheckIntervalHours() != null && subscription.getCheckIntervalHours() > 0
+                ? subscription.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours();
+        int cap = MetadataDetails.STATUS_RETURNING.equals(subscription.getOfficialStatus())
+                ? appProperties.getSubscription().getReturningBackoffCapHours() : 24;
+        double factor = Math.min(Math.pow(1.5, Math.min(subscription.getStallCount(), 6)), 4);
+        return (long) (Math.min(hours * factor, cap) * 3600_000L);
+    }
+
+    /**
+     * 下一个手动更新日的播出时刻(epoch ms):{@code airWeekdays} 配置日里最近的未来周几,
+     * 时刻取生效播出时刻(customAirClock 优先,默认 20:00 与官方日程兜底同口径)。未配置/完结剧
+     * 返回 0(完结 = 不会再有更新,更新日语义失效,完结周轻查继续)。今天是更新日但时刻已过 →
+     * 下一个配置日(时刻刚过且有缺口的密集补缺已由播后短轮分支接走,落到这里 = 追平等下一轮)。
+     */
+    long nextManualAirSlot(MediaSubscription subscription, long now) {
+        if (MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())) {
+            return 0;
+        }
+        java.util.Set<Integer> weekdays = parseAirWeekdays(subscription.getAirWeekdays());
+        if (weekdays.isEmpty()) {
+            return 0;
+        }
+        String normalized = normalizeAirClock(subscription.getCustomAirClock());
+        LocalTime time = normalized != null ? LocalTime.parse(normalized) : LocalTime.of(20, 0);
+        ZoneId zone = ZoneId.of(Constants.ZONE_ID);
+        java.time.LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
+        for (int add = 0; add <= 7; add++) {
+            // add=7 兜底:唯一配置日=今天且时刻已过时,下周同日才是下一个更新日
+            java.time.LocalDate day = today.plusDays(add);
+            if (!weekdays.contains(day.getDayOfWeek().getValue())) {
+                continue;
+            }
+            long moment = day.atTime(time).atZone(zone).toInstant().toEpochMilli();
+            if (moment > now) {
+                return moment;
+            }
+        }
+        return 0;
+    }
+
+    /** 解析手动更新日(ISO 周一=1..周日=7 的 CSV 如 "2,4");未配置/全非法返回空集。 */
+    static java.util.Set<Integer> parseAirWeekdays(String csv) {
+        if (StringUtils.isBlank(csv)) {
+            return java.util.Set.of();
+        }
+        java.util.Set<Integer> days = new java.util.TreeSet<>();
+        for (String token : csv.split(",")) {
+            try {
+                int day = Integer.parseInt(token.trim());
+                if (day >= 1 && day <= 7) {
+                    days.add(day);
+                }
+            } catch (NumberFormatException ignored) {
+                // 脏 token 跳过,其余照常生效
+            }
+        }
+        return days;
     }
 
     /** 完结看完的每周轻查时刻:7 天后对齐到下一个凌晨档(nightCheckTimes 未配置回落裸 +7d)。 */

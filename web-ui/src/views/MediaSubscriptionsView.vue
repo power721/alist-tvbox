@@ -239,6 +239,13 @@
                           placeholder="自动(官方日程/平台桥接,默认 20:00)" clearable style="width: 160px"/>
           <span class="sub-text" style="margin-left:8px">官方只给日期没给时刻的剧按 20:00 兜底;确认实际排播后手动校正,清空恢复自动</span>
         </el-form-item>
+        <el-form-item label="更新日">
+          <el-select v-model="form.airWeekdays" multiple collapse-tags placeholder="不限制(按官方日程/巡检周期)" style="width: 240px">
+            <el-option v-for="(label, idx) in ['周一', '周二', '周三', '周四', '周五', '周六', '周日']"
+                       :key="idx" :label="label" :value="idx + 1"/>
+          </el-select>
+          <span class="sub-text" style="margin-left:8px">固定周几更新(欧美剧/追番):巡检只落在这些天的播出时刻,官方日程缺失/不准时用;清空恢复自动</span>
+        </el-form-item>
         <el-form-item label="主网盘(覆盖)">
           <el-select v-model="form.mainDrives" multiple clearable :placeholder="`跟随全局${globalMainDrivesLabel}`">
             <el-option v-for="drive in driveOptions" :key="drive.value" :label="driveLabel(drive)" :value="drive.value"/>
@@ -983,6 +990,7 @@ interface SubscriptionDto {
   stallCount: number
   checkIntervalHours: number | null
   customAirClock: string | null
+  airWeekdays: number[] | null
   nextCheckTime: number | null
   lastCheckTime: number | null
   resourceCount: number
@@ -1543,6 +1551,7 @@ const handleAdd = () => {
     magnetOffline: false,
     checkIntervalHours: 6,
     customAirClock: null,
+    airWeekdays: [] as number[],
     mainDrives: [] as number[],
     driveTypes: [],
     qualities: [],
@@ -1581,6 +1590,7 @@ const handleEdit = (row: SubscriptionDto) => {
     magnetOffline: !!row.magnetOffline,
     checkIntervalHours: row.checkIntervalHours ?? 6,
     customAirClock: row.customAirClock ?? null,
+    airWeekdays: row.airWeekdays || [],
     mainDrives: row.mainDrives || [],
     driveTypes: row.filter?.driveTypes || [],
     qualities: row.filter?.qualities || [],
@@ -1685,6 +1695,7 @@ const buildBody = () => ({
   magnetOffline: form.value.magnetOffline,
   checkIntervalHours: form.value.checkIntervalHours,
   customAirClock: form.value.customAirClock || '',
+  airWeekdays: [...new Set(form.value.airWeekdays || [])],
   mainDrives: [...new Set(form.value.mainDrives || [])].slice(0, 2),
   filter: {
     driveTypes: form.value.driveTypes,
@@ -2636,7 +2647,12 @@ const airedInSeason = (row: SubscriptionDto): number => (row.officialEpisodes ??
 const formatTime = (time: number | null) => {
   if (!time) return '-'
   // 与后端日程分桶同口径(北京时间):非东八区浏览器上避免「今天」格子与钟点互相矛盾
-  return new Date(time).toLocaleString('zh-CN', {hour12: false, timeZone: 'Asia/Shanghai'})
+  // 带周几(欧美剧/追番周播,「周六 04:00」一眼对上更新日);秒无信息量,去掉换列宽
+  return new Date(time).toLocaleString('zh-CN', {
+    hour12: false, timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    weekday: 'short', hour: '2-digit', minute: '2-digit',
+  })
 }
 
 const formatClock = (time: number) => {

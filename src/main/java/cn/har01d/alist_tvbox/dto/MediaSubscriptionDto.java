@@ -41,6 +41,8 @@ public class MediaSubscriptionDto {
     private Integer checkIntervalHours;
     /** 手动播出时刻校正("HH:mm",空=自动) */
     private String customAirClock;
+    /** 手动更新日(ISO 周一=1..周日=7,null/空 = 不限制:巡检只落配置周几的播出时刻) */
+    private List<Integer> airWeekdays;
     private Long nextCheckTime;
     private Long lastCheckTime;
     private int resourceCount;

@@ -69,6 +69,16 @@ public class MediaSubscriptionService {
     /** 订阅操作线路伪播放 id 前缀:msubstat-{subId}(订阅信息)/ msubcheck-{subId}(轻量检查更新)/
      *  msubinspect-{subId}(完整巡检,异步)/ msubunsub-{subId}(取消追剧),均 msg 回执。 */
     public static final String STAT_PLAY_PREFIX = "msubstat-";
+
+    private static final String[] WEEKDAYS = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
+
+    /** 播出时间文案「MM-dd 周X HH:mm」(北京时间):欧美剧/追番多为周播,周几才是更新心智锚点,裸日期难对应。 */
+    static String airTimeText(long epochMilli) {
+        java.time.ZonedDateTime time = java.time.Instant.ofEpochMilli(epochMilli)
+                .atZone(java.time.ZoneId.of(Constants.ZONE_ID));
+        return String.format("%02d-%02d %s %02d:%02d", time.getMonthValue(), time.getDayOfMonth(),
+                WEEKDAYS[time.getDayOfWeek().getValue() - 1], time.getHour(), time.getMinute());
+    }
     public static final String CHECK_PLAY_PREFIX = "msubcheck-";
     public static final String INSPECT_PLAY_PREFIX = "msubinspect-";
     public static final String UNSUBSCRIBE_SUB_PLAY_PREFIX = "msubunsub-";
@@ -233,6 +243,7 @@ public class MediaSubscriptionService {
         subscription.setCheckIntervalHours(request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0
                 ? request.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours());
         subscription.setCustomAirClock(requireAirClock(request.getCustomAirClock()));
+        subscription.setAirWeekdays(serializeAirWeekdays(request.getAirWeekdays()));
         subscription.setFilterConfig(serializeFilter(resolveFilter(uid, request.getFilter())));
         subscription.setMainDrives(serializeMainDrives(request.getMainDrives()));
         subscription.setStatus(MediaSubscription.STATUS_ACTIVE);
@@ -336,6 +347,11 @@ public class MediaSubscriptionService {
             subscription.setCustomAirClock(requireAirClock(request.getCustomAirClock()));
             // 立即重放改写 schedule/nextAirTime(元数据刷新 24h 节流,等下轮太迟)并按新时刻重排
             checkService.applyCustomAirClock(subscription);
+            checkService.scheduleNext(subscription);
+        }
+        if (request.getAirWeekdays() != null) {
+            // 更新日变更(空列表 = 清除,回归官方日程/常规调度):立即重排,下一个更新日 20:15 起查
+            subscription.setAirWeekdays(serializeAirWeekdays(request.getAirWeekdays()));
             checkService.scheduleNext(subscription);
         }
         if (request.getFilter() != null) {
@@ -1092,7 +1108,19 @@ public class MediaSubscriptionService {
                         + (StringUtils.isBlank(detail.getVod_content()) ? "" : "\n" + detail.getVod_content()));
             }
         }
+        // 下集播出置顶(评分行之上,完结剧无此行评分自然回顶):欧美剧/追番周播,「周六 04:00」一眼对上更新日
+        if (hasNextAir(subscription)) {
+            String line = "📅 下集播出:" + airTimeText(subscription.getNextAirTime());
+            detail.setVod_content(StringUtils.isBlank(detail.getVod_content())
+                    ? line : line + "\n" + detail.getVod_content());
+        }
         detail.setVod_remarks(remarks);
+    }
+
+    /** 有下集播出可展示:nextAirTime 非空且订阅未完结(暂停剧仍在播,播出信息照示)。 */
+    private static boolean hasNextAir(MediaSubscription subscription) {
+        return subscription.getNextAirTime() != null
+                && !MediaSubscription.STATUS_ENDED.equals(subscription.getStatus());
     }
 
     /** 订阅元数据快照(持久层零网络);无 provider/metaId 或读取失败返回 null。 */
@@ -1395,7 +1423,6 @@ public class MediaSubscriptionService {
     public List<Map<String, Object>> schedule(int uid) {
         java.time.ZoneId zone = java.time.ZoneId.of(Constants.ZONE_ID);
         java.time.LocalDate startDate = java.time.LocalDate.now(zone).minusDays(1);
-        String[] weekdays = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
         List<Map<String, Object>> days = new ArrayList<>();
         List<List<Map<String, Object>>> dayItems = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
@@ -1404,7 +1431,7 @@ public class MediaSubscriptionService {
                 case 0 -> "昨天";
                 case 1 -> "今天";
                 case 2 -> "明天";
-                default -> weekdays[date.getDayOfWeek().getValue() - 1];
+                default -> WEEKDAYS[date.getDayOfWeek().getValue() - 1];
             };
             Map<String, Object> day = new LinkedHashMap<>();
             day.put("label", label);
@@ -1874,6 +1901,15 @@ public class MediaSubscriptionService {
     public String subscriptionStatusText(int uid, int subId) {
         MediaSubscription subscription = getOwned(uid, subId);
         String text = displayName(subscription) + " · " + buildRemarks(subscription);
+        List<Integer> weekdays = List.copyOf(MediaSubscriptionCheckService.parseAirWeekdays(subscription.getAirWeekdays()));
+        if (!weekdays.isEmpty()) {
+            String joined = weekdays.stream().map(day -> WEEKDAYS[day - 1])
+                    .collect(java.util.stream.Collectors.joining("、"));
+            text += "\n更新日:" + joined;
+        }
+        if (hasNextAir(subscription)) {
+            text += "\n下集播出:" + airTimeText(subscription.getNextAirTime());
+        }
         String missing = missingEpisodesSummary(subscription);
         if (missing != null) {
             text += "\n" + missing;
@@ -2700,6 +2736,16 @@ public class MediaSubscriptionService {
     }
 
     /** 主网盘覆盖存储:去重取前 2 个分享类型码,逗号分隔;空 → null(跟随全局 msub_main_drives)。 */
+    /** 更新日序列化(ISO 周几 List → 升序 CSV);null/空/全非法 → null(未配置)。 */
+    static String serializeAirWeekdays(List<Integer> days) {
+        if (days == null || days.isEmpty()) {
+            return null;
+        }
+        String csv = days.stream().filter(day -> day != null && day >= 1 && day <= 7)
+                .distinct().sorted().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+        return csv.isEmpty() ? null : csv;
+    }
+
     static String serializeMainDrives(List<Integer> mainDrives) {
         if (mainDrives == null || mainDrives.isEmpty()) {
             return null;
@@ -3015,6 +3061,7 @@ public class MediaSubscriptionService {
         dto.setStallCount(subscription.getStallCount());
         dto.setCheckIntervalHours(subscription.getCheckIntervalHours());
         dto.setCustomAirClock(subscription.getCustomAirClock());
+        dto.setAirWeekdays(List.copyOf(MediaSubscriptionCheckService.parseAirWeekdays(subscription.getAirWeekdays())));
         dto.setNextCheckTime(subscription.getNextCheckTime());
         dto.setLastCheckTime(subscription.getLastCheckTime());
         dto.setCreatedTime(subscription.getCreatedTime());
