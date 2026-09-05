@@ -37,7 +37,7 @@ class MediaSubscriptionUpdateTransferTest {
     private final MediaSubscriptionTransferService transferService = Mockito.mock(MediaSubscriptionTransferService.class);
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             subscriptionRepository, resourceRepository, null, null, episodeSourceRepository, null, null, null, null, null, null,
-            checkService, transferService, null, new AppProperties(), new ObjectMapper(), null, null);
+            checkService, transferService, null, new AppProperties(), new ObjectMapper(), null, null, null);
 
     private MediaSubscription subscription(String mode, String accountIds) {
         MediaSubscription subscription = new MediaSubscription();

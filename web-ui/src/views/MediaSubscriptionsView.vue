@@ -663,6 +663,10 @@
               <el-switch v-model="notifyForm.botEnabled"/>
               <span class="sub-text" style="margin-left:8px">允许在 Telegram 里与 Bot 对话(查订阅/搜索/追剧/退订);只需收通知不需要对话时可关闭</span>
             </el-form-item>
+            <el-form-item v-if="store.admin" label="采集源兜底">
+              <el-switch v-model="notifyForm.collectionFallback"/>
+              <span class="sub-text" style="margin-left:8px">候选源均不可用时,播放前从采集站搜索并补齐缺失剧集(当前集+后3集,直链不改写追剧数据)</span>
+            </el-form-item>
             <el-form-item v-if="store.admin" label="完结归档(天)">
               <el-input-number v-model="notifyForm.archiveDays" :min="0" :max="3650"/>
               <span class="sub-text" style="margin-left:8px">完结 N 天后自动释放转存文件,0=关闭</span>
@@ -1342,6 +1346,7 @@ const notifyForm = ref({
   chatId: '',
   quietHours: '',
   botEnabled: true,
+  collectionFallback: false,
   doubanCookie: '',
   archiveDays: 0,
   magnetEpisodeQuota: 2,
@@ -2361,6 +2366,7 @@ const openNotify = () => {
     notifyForm.value.chatId = settings['msub_telegram_chat_id'] || ''
     notifyForm.value.quietHours = settings['msub_notify_quiet_hours'] || ''
     notifyForm.value.botEnabled = settings['msub_telegram_bot_enabled'] !== 'false'
+    notifyForm.value.collectionFallback = settings['msub_collection_fallback'] === 'true'
     notifyForm.value.doubanCookie = settings['douban_cookie'] || ''
     notifyForm.value.tmdbApiKey = settings['tmdb_api_key'] || ''
     notifyForm.value.tmdbApiHost = settings['tmdb_api_host'] || ''
@@ -2437,6 +2443,7 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'msub_telegram_chat_id', value: notifyForm.value.chatId}),
     axios.post('/api/settings', {name: 'msub_notify_quiet_hours', value: notifyForm.value.quietHours.trim()}),
     axios.post('/api/settings', {name: 'msub_telegram_bot_enabled', value: String(notifyForm.value.botEnabled)}),
+    axios.post('/api/settings', {name: 'msub_collection_fallback', value: String(notifyForm.value.collectionFallback)}),
     axios.post('/api/settings', {name: 'douban_cookie', value: notifyForm.value.doubanCookie}),
     axios.post('/api/settings', {name: 'tmdb_api_key', value: notifyForm.value.tmdbApiKey}),
     axios.post('/api/settings', {name: 'tmdb_api_host', value: notifyForm.value.tmdbApiHost}),

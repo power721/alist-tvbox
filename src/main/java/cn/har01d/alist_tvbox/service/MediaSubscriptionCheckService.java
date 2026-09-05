@@ -18,6 +18,7 @@ import cn.har01d.alist_tvbox.entity.IndexTemplate;
 import cn.har01d.alist_tvbox.entity.IndexTemplateRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisode;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallbackRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository;
@@ -299,6 +300,8 @@ public class MediaSubscriptionCheckService {
     private final MediaSubscriptionEventRepository eventRepository;
     private final MediaSubscriptionEpisodeRepository episodeRepository;
     private final MediaSubscriptionEpisodeSourceRepository episodeSourceRepository;
+    /** 采集源兜底覆盖层(可空:裸实例测试经兼容构造器注入 null)。 */
+    private final MediaSubscriptionEpisodeFallbackRepository episodeFallbackRepository;
     private final DeadLinkRepository deadLinkRepository;
     private final ShareRepository shareRepository;
     private final SiteRepository siteRepository;
@@ -457,7 +460,8 @@ public class MediaSubscriptionCheckService {
                                          ObjectProvider<MediaSubscriptionTransferService> transferServiceProvider,
                                          MediaSubscriptionNotificationService notificationService,
                                          DoubanSeasonAligner seasonAligner,
-                                         TencentSeasonAligner tencentSeasonAligner) {
+                                         TencentSeasonAligner tencentSeasonAligner,
+                                         MediaSubscriptionEpisodeFallbackRepository episodeFallbackRepository) {
         this.transferServiceProvider = transferServiceProvider;
         this.seasonAligner = seasonAligner;
         this.tencentSeasonAligner = tencentSeasonAligner;
@@ -467,6 +471,7 @@ public class MediaSubscriptionCheckService {
         this.eventRepository = eventRepository;
         this.episodeRepository = episodeRepository;
         this.episodeSourceRepository = episodeSourceRepository;
+        this.episodeFallbackRepository = episodeFallbackRepository;
         this.deadLinkRepository = deadLinkRepository;
         this.shareRepository = shareRepository;
         this.siteRepository = siteRepository;
@@ -532,7 +537,7 @@ public class MediaSubscriptionCheckService {
                 aListService, telegramService, wanouSearchService, panLianSearchService,
                 guanYingSearchService, woniuSearchService, panjuSearchService, null, null, null, null, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper,
-                fixedProvider(transferService), notificationService, null, null);
+                fixedProvider(transferService), notificationService, null, null, null);
     }
 
     private static ObjectProvider<MediaSubscriptionTransferService> fixedProvider(
@@ -580,7 +585,7 @@ public class MediaSubscriptionCheckService {
                 aListService, telegramService, wanouSearchService, panLianSearchService,
                 guanYingSearchService, woniuSearchService, panjuSearchService, null, null, null, null, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper, fixedProvider(null),
-                notificationService, null, null);
+                notificationService, null, null, null);
     }
 
     @PreDestroy
@@ -772,6 +777,10 @@ public class MediaSubscriptionCheckService {
                 .toList();
         episodeSourceRepository.deleteByResourceIdIn(resourceIds);
         episodeRepository.deleteBySubscriptionId(id);
+        // 兜底覆盖层行只按 (subscription, episode) 键、无季列:不清会让旧季直链在新季首轮搜索前冒领集号
+        if (episodeFallbackRepository != null) {
+            episodeFallbackRepository.deleteBySubscriptionId(id);
+        }
         resourceRepository.deleteBySubscriptionId(id);
         subscription.setShareId(null);
         subscription.setCoverUrl(null); // 封面/日程快照是旧季口径,清空让首轮巡检按新季重拉
@@ -2155,9 +2164,14 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 本地已有集 = 全部挂载资源集源行 LISTED/VERIFIED 的并集(可用性派生口径)。 */
-    Set<Integer> liveEpisodeNumbers(MediaSubscription subscription) {
+    public Set<Integer> liveEpisodeNumbers(MediaSubscription subscription) {
         return new TreeSet<>(episodeSourceRepository
                 .findNumbersBySubscriptionAndStatesIn(subscription.getId(), LIVE_STATES));
+    }
+
+    /** 按裸 id 取订阅(无归属校验,调用方自查 uid):采集兜底等 service 包外模块用。 */
+    public MediaSubscription subscriptionOf(int subscriptionId) {
+        return subscriptionRepository.findById(subscriptionId).orElse(null);
     }
 
     /** 某资源当前提供的集号(LIVE 行);探测覆盖快照的替代品。 */
@@ -2206,7 +2220,7 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 订阅元数据年份(门禁基准):provider 侧有缓存,取不到/未绑元数据返回 null(门禁关闭)。 */
-    Integer metaYear(MediaSubscription subscription) {
+    public Integer metaYear(MediaSubscription subscription) {
         MetadataDetails details = metaDetails(subscription);
         if (details == null) {
             return null;
@@ -2381,7 +2395,7 @@ public class MediaSubscriptionCheckService {
      * 与剧集体量相关,千集级长寿动漫可落后数十集(线上:柯南登记总 1212,网盘实际更至 1270)。
      * 官方总集数未知/无集号 → 放行。
      */
-    static boolean episodeNumbersForeign(MediaSubscription subscription, Collection<Integer> numbers) {
+    public static boolean episodeNumbersForeign(MediaSubscription subscription, Collection<Integer> numbers) {
         Integer total = subscription.getOfficialTotal();
         if (total == null || total <= 0 || numbers == null || numbers.isEmpty()) {
             return false;
@@ -6125,7 +6139,7 @@ public class MediaSubscriptionCheckService {
      * 集号必在标题最前,取首个 1-999 数字即返回——文件名走 {@link #parseEpisode} 的"末个数字"规则,
      * 但标题里集号后残留的年份/50fps 等未被 TECH_TAGS 覆盖的数字会盖过集号
      * (如 "S01E15.2026.2160p.50fps.WEB-DL.H.265.AAC.mkv" 剥前缀后解析成 50,15-17 集全部丢失)。 */
-    int parseEpisodeFromTitle(String title, Integer season) {
+    public int parseEpisodeFromTitle(String title, Integer season) {
         String base = title;
         int index = base.lastIndexOf('.');
         if (index > 0 && index < base.length() - 1 && base.substring(index + 1).matches("[a-zA-Z0-9]{1,5}")) {
@@ -7182,7 +7196,7 @@ public class MediaSubscriptionCheckService {
         names.add(trimmed);
     }
 
-    List<String> matchNames(MediaSubscription subscription) {
+    public List<String> matchNames(MediaSubscription subscription) {
         List<String> names = matchNames(subscription.getName(), subscription.getKeyword(), subscription.getAliases());
         // 自定义搜索词并入归属名单:自定义词召回的资源标题可能不含剧名本名(英文名/别名写法),
         // 不并入会被剧名门禁整条误杀 —— 搜索侧扩大召回面,匹配侧必须同步认识这些词
@@ -7218,7 +7232,7 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 归一化:小写、剥技术标签、非字母数字/汉字转空格、汉字间空格塌缩 —— 抵消 TG 标题的 .【】·等防审查写法。 */
-    static String normalizeForMatch(String text) {
+    public static String normalizeForMatch(String text) {
         if (text == null) {
             return "";
         }
@@ -7232,7 +7246,7 @@ public class MediaSubscriptionCheckService {
      * 标题归属匹配:候选资源标题是否属于本剧。归一化包含(剧名/搜索词/别名任一)为主;
      * 全部未命中时对中文名做编辑距离滑窗兜底(防审查变形字,如"蒼蘭訣"对"苍兰诀"差 2 字)。
      */
-    static boolean matchesTitle(List<String> names, String title) {
+    public static boolean matchesTitle(List<String> names, String title) {
         if (names == null || names.isEmpty()) {
             return true; // 无可用名称时不拦截,保持纯搜索召回
         }

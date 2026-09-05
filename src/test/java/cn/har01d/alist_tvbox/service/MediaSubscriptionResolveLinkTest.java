@@ -26,7 +26,7 @@ class MediaSubscriptionResolveLinkTest {
             Mockito.mock(MediaSubscriptionRepository.class),
             Mockito.mock(MediaSubscriptionResourceRepository.class),
             null, null, null, null, null, null, null, null, null, null, null, null,
-            new AppProperties(), new ObjectMapper(), null, null);
+            new AppProperties(), new ObjectMapper(), null, null, null);
 
     // ---------- 白名单判定 ----------
 

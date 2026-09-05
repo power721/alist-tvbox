@@ -36,7 +36,7 @@ class MediaSubscriptionCustomKeywordsTest {
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             subscriptionRepository, resourceRepository, null, null, episodeSourceRepository, preferenceRepository,
             null, null, null, null, null,
-            Mockito.mock(MediaSubscriptionCheckService.class), null, null, new AppProperties(), new ObjectMapper(), null, null);
+            Mockito.mock(MediaSubscriptionCheckService.class), null, null, new AppProperties(), new ObjectMapper(), null, null, null);
 
     MediaSubscriptionCustomKeywordsTest() {
         // create 的 resolveFilter 在请求未带 filter 时回落用户偏好

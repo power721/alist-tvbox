@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.entity.HistoryRepository;
 import cn.har01d.alist_tvbox.entity.IndexTemplateRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscription;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisode;
+import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallbackRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSourceRepository;
@@ -4382,6 +4383,31 @@ class MediaSubscriptionCheckServiceTest {
         ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
         Mockito.verify(fixture.eventRepository).save(events.capture());
         assertTrue(events.getValue().getDetail().contains("第3季"), "事件说明换季重置: " + events.getValue().getDetail());
+    }
+
+    @Test
+    void resetInventoryForSeasonClearsFallbackOverlay() {
+        // 覆盖层行只按 (subscription, episode) 键、无季列:换季重置不连带清,
+        // 旧季直链会在新季首轮搜索前经播放兜底冒领集号
+        MediaSubscriptionResourceRepository resourceRepository = Mockito.mock(MediaSubscriptionResourceRepository.class);
+        MediaSubscriptionEventRepository eventRepository = Mockito.mock(MediaSubscriptionEventRepository.class);
+        MediaSubscriptionEpisodeRepository episodeRepository = Mockito.mock(MediaSubscriptionEpisodeRepository.class);
+        MediaSubscriptionEpisodeSourceRepository episodeSourceRepository = Mockito.mock(MediaSubscriptionEpisodeSourceRepository.class);
+        MediaSubscriptionEpisodeFallbackRepository fallbackRepository = Mockito.mock(MediaSubscriptionEpisodeFallbackRepository.class);
+        MediaSubscriptionCheckService svc = new MediaSubscriptionCheckService(
+                null, resourceRepository, eventRepository, episodeRepository, episodeSourceRepository, null, null, null,
+                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
+                null, null, appProperties, new ObjectMapper(), null, null, null, null,
+                fallbackRepository
+                );
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setId(9);
+        Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(List.of());
+
+        svc.resetInventoryForSeason(subscription, 3);
+
+        Mockito.verify(fallbackRepository).deleteBySubscriptionId(9);
     }
 
     @Test

@@ -222,6 +222,16 @@ public class AppProperties {
         private int magnetCooldownHours = 24;
         /** 磁力兜底超时重查间隔(小时):SUBMITTED 任务网盘侧还在下载,到期前不再提交新磁力 */
         private int magnetPendingRecheckHours = 12;
+        /** 采集源兜底(部署级默认;用户开关走 Setting msub_collection_fallback):候选源全灭时
+         *  播放链路最后一级从 MacCMS 采集站(资源聚合精选 8 站)搜索直链补集「当前集+后3集」。
+         *  结果只落 msub_episode_fallback 覆盖层,不改写原始追剧数据 */
+        private boolean collectionFallbackEnabled = false;
+        /** 采集源兜底:8 站并行搜索/单站详情请求总超时(秒) */
+        private int collectionFallbackTimeoutSeconds = 10;
+        /** 采集源兜底:搜索无结果/匹配失败的负缓存(分钟),窗口内不重搜 */
+        private int collectionFallbackNegativeTtlMinutes = 30;
+        /** 采集源兜底:补集行 TTL(小时),过期出局重新采集(永不续期) */
+        private int collectionFallbackRowTtlHours = 72;
     }
 
     public static Map<String, Map<String, Object>> copyLocalProxyConfig(Map<String, Map<String, Object>> source) {
