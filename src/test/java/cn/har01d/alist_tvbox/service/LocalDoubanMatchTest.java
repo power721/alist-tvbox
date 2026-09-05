@@ -24,7 +24,7 @@ class LocalDoubanMatchTest {
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             null, null, null, null, null, null,
             movieRepository, null, null, null, null, null, null, null,
-            new AppProperties(), new ObjectMapper(), null, null);
+            new AppProperties(), new ObjectMapper(), null, null, null);
 
     private static Movie movie(int id, String name, Integer year) {
         Movie movie = new Movie();

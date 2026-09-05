@@ -40,7 +40,7 @@ class MediaSubscriptionSubtitleGateTest {
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             subscriptionRepository, resourceRepository, null, null, episodeSourceRepository,
             null, null, null, tvBoxService, null, metadataService, checkService, null, settingRepository,
-            new AppProperties(), new ObjectMapper(), null, null);
+            new AppProperties(), new ObjectMapper(), null, null, null);
 
     private final MediaSubscription subscription = subscription();
 

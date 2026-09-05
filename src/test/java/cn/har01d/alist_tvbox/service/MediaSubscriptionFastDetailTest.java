@@ -57,7 +57,7 @@ class MediaSubscriptionFastDetailTest {
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             subscriptionRepository, resourceRepository, null, episodeRepository, episodeSourceRepository,
             null, null, null, tvBoxService, null, metadataService, checkService, transferService, settingRepository,
-            new AppProperties(), new ObjectMapper(), proxyService, siteRepository);
+            new AppProperties(), new ObjectMapper(), proxyService, siteRepository, null);
 
     private final MediaSubscription subscription = subscription();
 

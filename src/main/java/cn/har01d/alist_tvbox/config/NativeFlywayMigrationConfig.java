@@ -45,6 +45,7 @@ import db.migration.current.V48__MediaSubscriptionMagnetOffline;
 import db.migration.current.V49__OfflineDownloadTaskMagnetQuota;
 import db.migration.current.V50__MediaSubscriptionCustomKeywords;
 import db.migration.current.V51__MediaSubscriptionAirWeekdays;
+import db.migration.current.V52__MediaSubscriptionEpisodeFallback;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -120,7 +121,8 @@ public class NativeFlywayMigrationConfig {
                     new V48__MediaSubscriptionMagnetOffline(),
                     new V49__OfflineDownloadTaskMagnetQuota(),
                     new V50__MediaSubscriptionCustomKeywords(),
-                    new V51__MediaSubscriptionAirWeekdays());
+                    new V51__MediaSubscriptionAirWeekdays(),
+                    new V52__MediaSubscriptionEpisodeFallback());
         };
     }
 }

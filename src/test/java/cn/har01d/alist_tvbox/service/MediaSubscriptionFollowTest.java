@@ -41,7 +41,7 @@ class MediaSubscriptionFollowTest {
     private final MediaSubscriptionCheckService checkService = Mockito.mock(MediaSubscriptionCheckService.class);
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             subscriptionRepository, resourceRepository, null, null, episodeSourceRepository, preferenceRepository, null, null, null, null, null,
-            checkService, null, null, new AppProperties(), new ObjectMapper(), null, null);
+            checkService, null, null, new AppProperties(), new ObjectMapper(), null, null, null);
 
     private MediaSubscription subscription() {
         MediaSubscription subscription = new MediaSubscription();
@@ -120,7 +120,7 @@ class MediaSubscriptionFollowTest {
                 Mockito.mock(MediaSubscriptionEpisodeRepository.class),
                 Mockito.mock(MediaSubscriptionEpisodeSourceRepository.class),
                 null, null, null, null, shareService, null, checkService, null, null,
-                new AppProperties(), new ObjectMapper(), null, null);
+                new AppProperties(), new ObjectMapper(), null, null, null);
         MediaSubscription subscription = subscription();
         subscription.setSeason(1);
         subscription.setShareId(5);
@@ -210,7 +210,7 @@ class MediaSubscriptionFollowTest {
                 Mockito.mock(MediaSubscriptionEpisodeRepository.class),
                 episodeSourceRepository, preferenceRepository, null, null, null,
                 shareService, null, checkService, null, null,
-                new AppProperties(), new ObjectMapper(), null, null);
+                new AppProperties(), new ObjectMapper(), null, null, null);
     }
 
     private cn.har01d.alist_tvbox.entity.Share quarkShare() {

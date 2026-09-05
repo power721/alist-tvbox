@@ -115,6 +115,7 @@ public class MediaSubscriptionService {
     private final ObjectMapper objectMapper;
     private final ProxyService proxyService;
     private final cn.har01d.alist_tvbox.entity.SiteRepository siteRepository;
+    private final cn.har01d.alist_tvbox.service.sitesearch.EpisodeFallbackService episodeFallbackService;
 
     public MediaSubscriptionService(MediaSubscriptionRepository subscriptionRepository,
                                     MediaSubscriptionResourceRepository resourceRepository,
@@ -133,7 +134,8 @@ public class MediaSubscriptionService {
                                     AppProperties appProperties,
                                     ObjectMapper objectMapper,
                                     ProxyService proxyService,
-                                    cn.har01d.alist_tvbox.entity.SiteRepository siteRepository) {
+                                    cn.har01d.alist_tvbox.entity.SiteRepository siteRepository,
+                                    cn.har01d.alist_tvbox.service.sitesearch.EpisodeFallbackService episodeFallbackService) {
         this.subscriptionRepository = subscriptionRepository;
         this.resourceRepository = resourceRepository;
         this.eventRepository = eventRepository;
@@ -152,6 +154,7 @@ public class MediaSubscriptionService {
         this.objectMapper = objectMapper;
         this.proxyService = proxyService;
         this.siteRepository = siteRepository;
+        this.episodeFallbackService = episodeFallbackService;
     }
 
     /** 订阅 token → 归属用户:凭证形态(u-{username}-{secret})验真或裸 u-{username} → 该用户;
@@ -474,6 +477,7 @@ public class MediaSubscriptionService {
         List<Integer> resourceIds = resources.stream().map(MediaSubscriptionResource::getId).toList();
         episodeSourceRepository.deleteByResourceIdIn(resourceIds);
         episodeRepository.deleteBySubscriptionId(id);
+        episodeFallbackService.deleteForSubscription(id); // 兜底覆盖层行 + 负缓存等内存态随行清理
         resourceRepository.deleteBySubscriptionId(id);
         eventRepository.deleteBySubscriptionId(id);
         subscriptionRepository.deleteById(id);
@@ -1699,6 +1703,19 @@ public class MediaSubscriptionService {
                 errors.add(path + ": " + e.getMessage());
                 checkService.recordPlayFailure(subscription, candidate);
             }
+        }
+        // 采集源兜底(播放链路最后一级):候选全灭(含零候选缺集 —— attempted 不涨)才介入,
+        // 开关关闭时零调用;补集只落覆盖层不改写本订阅数据,失败继续走既有巡检补救路径
+        try {
+            Map<String, Object> rescued = episodeFallbackService.resolveEpisodeFallback(subscription, episode, client, type);
+            if (rescued != null) {
+                episodeFallbackService.fillWindowAsync(uid, subscriptionId, episode);
+                kickPreheatAhead(uid, subscriptionId, episode);
+                return rescued;
+            }
+        } catch (Exception e) {
+            log.debug("collection fallback for subscription {} episode {} failed: {}",
+                    subscriptionId, episode, e.getMessage());
         }
         // 全部候选都播不了:播放期是信噪比最高的失效信号,不能只记个失败就完事——
         // 立刻异步补救(先查池换源,池空才搜索),否则用户重试多少次都是同一个死源。
