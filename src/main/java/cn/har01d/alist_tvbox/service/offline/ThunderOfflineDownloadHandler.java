@@ -21,7 +21,10 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Component
@@ -40,6 +43,8 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
     private static final String FILES_URL = API_BASE + "/files";
     private static final String TASKS_URL = API_BASE + "/tasks";
     private static final String ABOUT_URL = API_BASE + "/about";
+
+    private static final Pattern INFO_HASH_PATTERN = Pattern.compile("xt=urn:btih:([A-Za-z0-9]+)", Pattern.CASE_INSENSITIVE);
 
     private static final String[] ALGORITHMS = {
             "Cw4kArmKJ/aOiFTxnQ0ES+D4mbbrIUsFn",
@@ -114,7 +119,68 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
     @Override
     public TaskResult submitAndWait(DriverAccount account, String url, String folderId, int waitSeconds) {
         log.info("submitting thunder offline download: accountId={}, folderId={}", account.getId(), folderId);
+        String infoHash = extractInfoHash(url);
 
+        // 提交前按磁力 infohash/URL 对账网盘侧已有任务:同链接已建过任务时复用续查,
+        // 重复提交会在网盘侧重复建任务、白烧离线任务配额;失败残留任务连文件清掉后重建。
+        String taskId = reuseOrCreateTask(account, url, folderId, infoHash);
+
+        for (int i = 0; i < Math.max(1, waitSeconds); i++) {
+            ObjectNode found = getTask(account, taskId);
+            if (found != null) {
+                String phase = found.path("phase").asText("");
+                if ("PHASE_TYPE_COMPLETE".equals(phase)) {
+                    TaskResult result = buildTaskResult(found, infoHash);
+                    log.info("thunder task completed: taskId={}, name={}", taskId, result.taskName());
+                    sleepOneSecond();
+                    return result;
+                }
+                if ("PHASE_TYPE_ERROR".equals(phase)) {
+                    // 失败任务连文件一并清掉,部分下载的残文件滞留离线目录会被巡检误当产物
+                    deleteTaskQuietly(account, taskId, true);
+                    String message = found.path("message").asText("迅雷云盘离线下载任务失败");
+                    throw new BadRequestException("task failed: " + message);
+                }
+            }
+            sleepOneSecond();
+        }
+
+        throw new BadRequestException("迅雷云盘离线下载任务未在" + Math.max(1, waitSeconds) + "秒内完成");
+    }
+
+    /** 提交前对账:已存在同链接任务则复用(失败残留先连文件清理),否则新建任务。 */
+    private String reuseOrCreateTask(DriverAccount account, String url, String folderId, String infoHash) {
+        ObjectNode taskList;
+        try {
+            taskList = exchangeWithRetry(account,
+                    TASKS_URL + "?type=offline&limit=10000&page_token=",
+                    HttpMethod.GET, null);
+        } catch (BadRequestException | RestClientException e) {
+            log.info("skip thunder task reconciliation, create directly: {}", e.getMessage());
+            return createTask(account, url, folderId);
+        }
+        ArrayNode tasks = withArray(taskList, "tasks");
+        if (tasks != null) {
+            for (var item : tasks) {
+                ObjectNode task = (ObjectNode) item;
+                if (!matchesTask(task, url, infoHash)) {
+                    continue;
+                }
+                if ("PHASE_TYPE_ERROR".equals(task.path("phase").asText(""))) {
+                    deleteTaskQuietly(account, task.path("id").asText(""), true);
+                    continue;
+                }
+                String existingId = task.path("id").asText("");
+                if (StringUtils.isNotBlank(existingId)) {
+                    log.info("reuse existing thunder task {} (phase={})", existingId, task.path("phase").asText(""));
+                    return existingId;
+                }
+            }
+        }
+        return createTask(account, url, folderId);
+    }
+
+    private String createTask(DriverAccount account, String url, String folderId) {
         ObjectNode createBody = objectMapper.createObjectNode();
         createBody.put("kind", "drive#file");
         createBody.put("parent_id", folderId);
@@ -137,37 +203,77 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
             throw new BadRequestException("迅雷云盘创建离线下载任务失败");
         }
         log.info("thunder task created: taskId={}", taskId);
+        return taskId;
+    }
 
-        for (int i = 0; i < Math.max(1, waitSeconds); i++) {
-            ObjectNode taskList = exchangeWithRetry(account,
-                    TASKS_URL + "?type=offline&limit=10000&page_token=",
+    /** 定点查任务(task_ids=):单任务轮询不再每次拉全量任务列表;查不到回落全量对账。 */
+    private ObjectNode getTask(DriverAccount account, String taskId) {
+        try {
+            ObjectNode targeted = exchangeWithRetry(account,
+                    TASKS_URL + "?task_ids=" + taskId,
                     HttpMethod.GET, null);
-
-            ObjectNode found = findTaskInList(taskList, taskId);
+            ObjectNode found = findTaskInList(targeted, taskId);
             if (found != null) {
-                String phase = found.path("phase").asText("");
-                if ("PHASE_TYPE_COMPLETE".equals(phase)) {
-                    String name = found.path("file_name").asText("");
-                    if (StringUtils.isBlank(name)) {
-                        name = found.path("name").asText("");
-                    }
-                    if (StringUtils.isBlank(name)) {
-                        throw new BadRequestException("迅雷云盘离线下载任务成功但未返回名称");
-                    }
-                    boolean isFolder = "drive#folder".equals(found.path("reference_resource").path("kind").asText(""));
-                    log.info("thunder task completed: taskId={}, name={}", taskId, name);
-                    sleepOneSecond();
-                    return new TaskResult(name, "", isFolder);
-                }
-                if ("PHASE_TYPE_ERROR".equals(phase)) {
-                    String message = found.path("message").asText("迅雷云盘离线下载任务失败");
-                    throw new BadRequestException("task failed: " + message);
-                }
+                return found;
             }
-            sleepOneSecond();
+        } catch (BadRequestException | RestClientException e) {
+            log.debug("thunder targeted task query failed, fallback to list: {}", e.getMessage());
         }
+        ObjectNode taskList = exchangeWithRetry(account,
+                TASKS_URL + "?type=offline&limit=10000&page_token=",
+                HttpMethod.GET, null);
+        return findTaskInList(taskList, taskId);
+    }
 
-        throw new BadRequestException("迅雷云盘离线下载任务未在" + Math.max(1, waitSeconds) + "秒内完成");
+    /** 尽力而为清理任务记录:deleteFiles=true 时连已下载文件一并删除。失败只记日志。 */
+    private void deleteTaskQuietly(DriverAccount account, String taskId, boolean deleteFiles) {
+        if (StringUtils.isBlank(taskId)) {
+            return;
+        }
+        try {
+            exchangeWithRetry(account,
+                    TASKS_URL + "?task_ids=" + taskId + "&space=" + (deleteFiles ? "&delete_files=true" : ""),
+                    HttpMethod.DELETE, null);
+            log.info("thunder task {} deleted (deleteFiles={})", taskId, deleteFiles);
+        } catch (BadRequestException | RestClientException e) {
+            log.warn("failed to delete thunder task {}: {}", taskId, e.getMessage());
+        }
+    }
+
+    static TaskResult buildTaskResult(ObjectNode task, String infoHash) {
+        String name = task.path("file_name").asText("");
+        if (StringUtils.isBlank(name)) {
+            name = task.path("name").asText("");
+        }
+        if (StringUtils.isBlank(name)) {
+            throw new BadRequestException("迅雷云盘离线下载任务成功但未返回名称");
+        }
+        boolean isFolder = "drive#folder".equals(task.path("reference_resource").path("kind").asText(""));
+        return new TaskResult(name, infoHash, isFolder);
+    }
+
+    static boolean matchesTask(ObjectNode task, String url, String infoHash) {
+        String taskUrl = task.path("params").path("url").asText("");
+        if (StringUtils.isBlank(taskUrl) || StringUtils.isBlank(url)) {
+            return false;
+        }
+        if (taskUrl.trim().equals(url.trim())) {
+            return true;
+        }
+        String taskInfoHash = extractInfoHash(taskUrl);
+        return StringUtils.isNotBlank(infoHash) && infoHash.equalsIgnoreCase(taskInfoHash);
+    }
+
+    public static String extractInfoHash(String url) {
+        if (StringUtils.isBlank(url)) {
+            return "";
+        }
+        Matcher matcher = INFO_HASH_PATTERN.matcher(url);
+        if (!matcher.find()) {
+            return "";
+        }
+        String raw = matcher.group(1);
+        return raw.matches("[0-9A-Za-z]{32,40}") ? raw.toLowerCase(Locale.ROOT) : "";
     }
 
     @Override
