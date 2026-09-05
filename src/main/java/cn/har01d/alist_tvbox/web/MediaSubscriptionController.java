@@ -4,10 +4,12 @@ import cn.har01d.alist_tvbox.dto.MediaSubscriptionDto;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionEventDto;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionResourceDto;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionTransferService;
 import cn.har01d.alist_tvbox.service.PianDanService;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -56,6 +58,62 @@ public class MediaSubscriptionController {
                                  @RequestParam(required = false, defaultValue = "24") int size,
                                  @RequestParam Map<String, String> filters) {
         return pianDanService.list(t, "web", pg, size, filters);
+    }
+
+    /** 片单追更:条目媒体详情。tmdb:{tv|movie}:{id} 直取 TMDB 元数据;s:{标题}[@{年份}] 本地豆瓣库
+     *  富化(无匹配回落仅标题)。封面统一 /images 代理(与订阅详情抽屉同口径)。 */
+    @GetMapping("/navigation/detail")
+    public Object navigationDetail(@RequestParam String id) {
+        if (id.startsWith(PianDanService.TMDB_PREFIX)) {
+            String[] parts = id.split(":");
+            int tmdbId = -1;
+            if (parts.length >= 3) {
+                try {
+                    tmdbId = Integer.parseInt(parts[2]);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            if (tmdbId < 0) {
+                throw new BadRequestException("无效的片单条目: " + id);
+            }
+            MovieDetail source = pianDanService.tmdbDetail(parts[1], tmdbId);
+            if (source == null) {
+                throw new BadRequestException("片单条目信息获取失败: " + id);
+            }
+            MovieDetail detail = copyMovieDetail(source);
+            detail.setVod_pic(subscriptionService.proxiedCover(detail.getVod_pic()));
+            return detail;
+        }
+        if (id.startsWith("s:")) {
+            PianDanService.NameYear entry = PianDanService.parseSubjectId(id);
+            MovieDetail detail = subscriptionService.localDoubanDetail(entry.name(), entry.year());
+            if (detail == null) {
+                detail = new MovieDetail();
+                detail.setVod_name(entry.name());
+            }
+            detail.setVod_id(id);
+            detail.setVod_pic(subscriptionService.proxiedCover(detail.getVod_pic()));
+            return detail;
+        }
+        throw new BadRequestException("无效的片单条目: " + id);
+    }
+
+    /** tmdbDetail 命中共享缓存返回同一实例 —— 拷贝再改写,防缓存被污染。 */
+    private static MovieDetail copyMovieDetail(MovieDetail source) {
+        MovieDetail copy = new MovieDetail();
+        copy.setVod_id(source.getVod_id());
+        copy.setVod_name(source.getVod_name());
+        copy.setVod_pic(source.getVod_pic());
+        copy.setVod_year(source.getVod_year());
+        copy.setType_name(source.getType_name());
+        copy.setVod_remarks(source.getVod_remarks());
+        copy.setVod_director(source.getVod_director());
+        copy.setVod_actor(source.getVod_actor());
+        copy.setVod_area(source.getVod_area());
+        copy.setVod_lang(source.getVod_lang());
+        copy.setVod_content(source.getVod_content());
+        copy.setExt(source.getExt());
+        return copy;
     }
 
     @GetMapping

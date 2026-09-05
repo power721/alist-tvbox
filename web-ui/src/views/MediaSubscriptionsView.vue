@@ -914,10 +914,10 @@
       </div>
       <div class="nav-grid" v-loading="navLoading">
         <div v-for="item in navList" :key="item.vod_id" class="nav-card">
-          <el-image :src="item.vod_pic" fit="cover" class="nav-cover" lazy>
-            <template #error><div class="nav-cover nav-cover-placeholder">{{ (item.vod_name || '?').charAt(0) }}</div></template>
+          <el-image :src="item.vod_pic" fit="cover" class="nav-cover cover-click" lazy @click="showNavDetail(item)">
+            <template #error><div class="nav-cover nav-cover-placeholder cover-click" @click="showNavDetail(item)">{{ (item.vod_name || '?').charAt(0) }}</div></template>
           </el-image>
-          <div class="nav-title" :title="item.vod_name">{{ item.vod_name }}</div>
+          <div class="nav-title name-link" :title="item.vod_name" @click="showNavDetail(item)">{{ item.vod_name }}</div>
           <div class="nav-meta">
             <span v-if="item.vod_remarks">{{ item.vod_remarks }}</span>
             <span v-if="item.vod_year">{{ item.vod_year }}</span>
@@ -931,6 +931,43 @@
         <el-pagination background layout="prev, pager, next" :total="navTotal" :page-size="24"
                        :current-page="navPage" @current-change="onNavPageChange"/>
       </div>
+    </el-dialog>
+
+    <el-dialog v-model="navDetailVisible" title="媒体详情" width="680">
+      <div class="nav-detail" v-loading="navDetailLoading">
+        <template v-if="navDetail">
+          <el-image :src="navDetailPoster" fit="cover" class="nav-detail-poster">
+            <template #error>
+              <div class="nav-detail-poster cover-placeholder">{{ (navDetail.vod_name || '?').charAt(0) }}</div>
+            </template>
+          </el-image>
+          <div class="nav-detail-info">
+            <div class="nav-detail-title">
+              {{ navDetail.vod_name }}
+              <span v-if="navDetail.vod_year" class="sub-text">({{ navDetail.vod_year }})</span>
+            </div>
+            <div class="nav-detail-tags">
+              <el-tag v-for="genre in navDetailGenres" :key="genre" size="small" effect="plain">{{ genre }}</el-tag>
+              <el-tag v-if="navDetail.vod_remarks" size="small" type="warning">{{ navDetail.vod_remarks }}</el-tag>
+              <el-tag v-for="season in navDetailSeasons" :key="'s' + season" size="small" type="info">第{{ season }}季</el-tag>
+            </div>
+            <div v-if="navDetail.vod_director" class="sub-text">导演:{{ navDetail.vod_director }}</div>
+            <div v-if="navDetail.vod_actor" class="sub-text">演员:{{ navDetail.vod_actor }}</div>
+            <div v-if="navDetail.vod_area || navDetail.vod_lang" class="sub-text">
+              <template v-if="navDetail.vod_area">{{ navDetail.vod_area }}</template>
+              <template v-if="navDetail.vod_area && navDetail.vod_lang"> / </template>
+              <template v-if="navDetail.vod_lang">{{ navDetail.vod_lang }}</template>
+            </div>
+            <div v-if="navDetail.vod_content" class="nav-detail-overview">{{ navDetail.vod_content }}</div>
+            <div v-else class="sub-text">暂无简介,点击「追更」按标题订阅</div>
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="navDetailVisible = false">关闭</el-button>
+        <el-button v-if="navDetailItem && isNavSubscribed(navDetailItem)" disabled>已追更</el-button>
+        <el-button v-else type="primary" @click="navDetailSubscribe">追更</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -1386,6 +1423,42 @@ const navLoading = ref(false)
 const navSubscribed = ref<Set<string>>(new Set())
 /** 从片单追更打开新建对话框的条目:创建成功后标记"已追更",对话框关闭即解除 */
 const navPending = ref<any>(null)
+
+/** 片单条目媒体详情:打开即用榜单卡片数据垫底,后端详情(TMDB 直取/豆瓣本地库富化)回来整体替换 */
+const navDetailVisible = ref(false)
+const navDetailLoading = ref(false)
+const navDetail = ref<any>(null)
+const navDetailItem = ref<any>(null)
+let navDetailSeq = 0
+
+const navDetailPoster = computed(() => navDetail.value?.vod_pic || navDetailItem.value?.vod_pic || '')
+/** 类型(type_name)各源分隔符不一(TMDB " / "、豆瓣逗号),统一拆成 tag 列表 */
+const navDetailGenres = computed(() => {
+  const source = navDetail.value?.type_name || navDetailItem.value?.type_name || ''
+  return String(source).split(/[/,、]/).map((s: string) => s.trim()).filter(Boolean)
+})
+/** TMDB 剧集季号清单(ext 数组,已滤特典与未开播占位季);电影/豆瓣条目为空 */
+const navDetailSeasons = computed(() => Array.isArray(navDetail.value?.ext) ? navDetail.value.ext : [])
+
+const showNavDetail = (item: any) => {
+  navDetailItem.value = item
+  navDetail.value = {vod_name: item.vod_name, vod_pic: item.vod_pic, vod_year: item.vod_year,
+    type_name: item.type_name, vod_remarks: item.vod_remarks}
+  navDetailVisible.value = true
+  navDetailLoading.value = true
+  const my = ++navDetailSeq
+  axios.get('/api/media-subscriptions/navigation/detail', {params: {id: item.vod_id}}).then(response => {
+    if (my !== navDetailSeq) return
+    navDetail.value = response.data || null
+  }).catch(() => ElMessage.error('媒体详情加载失败')).finally(() => {
+    if (my === navDetailSeq) navDetailLoading.value = false
+  })
+}
+
+const navDetailSubscribe = () => {
+  navDetailVisible.value = false
+  if (navDetailItem.value) navSubscribe(navDetailItem.value)
+}
 
 onMounted(() => {
   loadAll()
@@ -3098,6 +3171,47 @@ const formatClock = (time: number) => {
   font-size: 12px;
   color: var(--el-text-color-secondary);
   min-height: 18px;
+}
+
+.nav-detail {
+  display: flex;
+  gap: 18px;
+  min-height: 260px;
+}
+
+.nav-detail-poster {
+  width: 180px;
+  aspect-ratio: 2 / 3;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: var(--el-fill-color);
+}
+
+.nav-detail-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.nav-detail-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.nav-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nav-detail-overview {
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 
 .nav-pager {

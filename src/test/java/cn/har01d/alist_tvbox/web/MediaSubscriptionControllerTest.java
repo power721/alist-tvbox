@@ -98,4 +98,73 @@ class MediaSubscriptionControllerTest {
         verify(pianDanService).list(eq("tmdb:discover_tv"), eq("web"), eq(2), eq(24),
                 eq(Map.of("t", "tmdb:discover_tv", "pg", "2", "with_origin_country", "JP")));
     }
+
+    @Test
+    void navigationDetailTmdbProxiesCoverWithoutPollutingCache() throws Exception {
+        MovieDetail cached = new MovieDetail();
+        cached.setVod_id("tmdb:tv:42");
+        cached.setVod_name("测试剧");
+        cached.setVod_pic("https://image.tmdb.org/t/p/w500/abc.jpg");
+        cached.setVod_content("剧情简介");
+        cached.setExt(List.of(1, 2));
+        when(pianDanService.tmdbDetail("tv", 42)).thenReturn(cached);
+        when(subscriptionService.proxiedCover(any())).thenAnswer(invocation -> {
+            String cover = invocation.getArgument(0);
+            if (cover == null || !cover.startsWith("http")) {
+                return cover;
+            }
+            return "/images?url=" + java.net.URLEncoder.encode(cover, java.nio.charset.StandardCharsets.UTF_8);
+        });
+
+        mockMvc.perform(get("/api/media-subscriptions/navigation/detail").param("id", "tmdb:tv:42"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vod_name").value("测试剧"))
+                .andExpect(jsonPath("$.vod_pic").value("/images?url=https%3A%2F%2Fimage.tmdb.org%2Ft%2Fp%2Fw500%2Fabc.jpg"))
+                .andExpect(jsonPath("$.vod_content").value("剧情简介"))
+                .andExpect(jsonPath("$.ext[0]").value(1))
+                .andExpect(jsonPath("$.ext[1]").value(2));
+
+        // 共享缓存实例不得被改写:tmdbDetail 命中缓存返回同一对象
+        org.junit.jupiter.api.Assertions.assertEquals("https://image.tmdb.org/t/p/w500/abc.jpg", cached.getVod_pic());
+    }
+
+    @Test
+    void navigationDetailDoubanLocalHit() throws Exception {
+        MovieDetail local = new MovieDetail();
+        local.setVod_name("测试剧");
+        local.setVod_pic("https://img9.doubanio.com/x.jpg");
+        local.setVod_director("导演甲");
+        local.setVod_actor("演员甲 / 演员乙");
+        when(subscriptionService.localDoubanDetail("测试剧", 2024)).thenReturn(local);
+        when(subscriptionService.proxiedCover("https://img9.doubanio.com/x.jpg"))
+                .thenReturn("/images?url=https%3A%2F%2Fimg9.doubanio.com%2Fx.jpg");
+
+        mockMvc.perform(get("/api/media-subscriptions/navigation/detail").param("id", "s:测试剧@2024"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vod_id").value("s:测试剧@2024"))
+                .andExpect(jsonPath("$.vod_name").value("测试剧"))
+                .andExpect(jsonPath("$.vod_pic").value("/images?url=https%3A%2F%2Fimg9.doubanio.com%2Fx.jpg"))
+                .andExpect(jsonPath("$.vod_director").value("导演甲"))
+                .andExpect(jsonPath("$.vod_actor").value("演员甲 / 演员乙"));
+    }
+
+    @Test
+    void navigationDetailDoubanLocalMissFallsBackToTitleOnly() throws Exception {
+        when(subscriptionService.localDoubanDetail("冷门剧", null)).thenReturn(null);
+
+        mockMvc.perform(get("/api/media-subscriptions/navigation/detail").param("id", "s:冷门剧"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vod_id").value("s:冷门剧"))
+                .andExpect(jsonPath("$.vod_name").value("冷门剧"))
+                .andExpect(jsonPath("$.vod_content").value(""));
+    }
+
+    @Test
+    void navigationDetailRejectsUnknownId() throws Exception {
+        mockMvc.perform(get("/api/media-subscriptions/navigation/detail").param("id", "msubep-1-2"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/media-subscriptions/navigation/detail").param("id", "tmdb:tv:notanumber"))
+                .andExpect(status().isBadRequest());
+    }
 }

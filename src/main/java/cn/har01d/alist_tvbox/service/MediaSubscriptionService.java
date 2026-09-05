@@ -1623,7 +1623,7 @@ public class MediaSubscriptionService {
     }
 
     /** web 端展示用封面走后端代理;/images 为 GET permitAll,浏览器直链可用。TVBox 端保持绝对地址。 */
-    private String proxiedCover(String cover) {
+    public String proxiedCover(String cover) {
         if (StringUtils.isBlank(cover) || !cover.startsWith("http")) {
             return cover;
         }
