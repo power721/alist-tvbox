@@ -290,10 +290,6 @@ public class DoubanService {
     }
 
     public String getRemoteVersion(Versions versions) {
-        if (!environment.matchesProfiles("xiaoya")) {
-            return "";
-        }
-
         try {
             String remote = restTemplate.getForObject("https://d.har01d.cn/movie_version", String.class).trim();
             versions.setMovie(remote);

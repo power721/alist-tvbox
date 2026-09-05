@@ -59,6 +59,9 @@ fi
 # 解压资源包（每次启动都检查）
 extract_resource_zips
 
+# 更新电影数据基线（每次启动都检查，与 xiaoya 模式同款）
+update_movie
+
 # 初始化 115 索引（仅当 /data/index115 不存在）
 seed_index115
 

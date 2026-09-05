@@ -54,6 +54,31 @@ extract_resource_zips() {
   fi
 }
 
+# 更新电影数据基线:比对镜像内 base_version 与 /data/atv/base_version,不同则解包 data.zip 重灌基线。
+# H2 由 spring.sql.init 执行解包后的 data.sql,MySQL/PostgreSQL 由应用内 MovieDataSeeder 播种。
+update_movie() {
+  if [ ! -f /data.zip ]; then
+    log_warn "data.zip not found, skipping movie baseline update"
+    return 0
+  fi
+
+  local LOCAL="0.0.0"
+  [ -f /data/atv/base_version ] && LOCAL=$(head -n1 /data/atv/base_version)
+
+  local REMOTE=$(head -n1 /base_version)
+  log_info "Movie base version: local=$LOCAL, remote=$REMOTE"
+
+  if [ "$LOCAL" != "$REMOTE" ]; then
+    log_info "Upgrading movie data"
+    unzip -q -o /data.zip -d /data/atv/
+    cp /base_version /data/atv/base_version
+    rm -f /data/atv/sql/*.sql
+    # 同时清掉已缓存的电影数据版本号:不清的话 downloadMovie 看到 movie_version == 远端就跳过下载,
+    # 被删的 sql diff 链永远不会重新拉回,基线与 diff 链之间的增量数据就丢了(线上 1317-1339 实证)
+    rm -f /data/atv/movie_version
+  fi
+}
+
 # 解压内置 115 索引，仅在用户数据目录不存在时初始化
 seed_index115() {
   if [ -d /data/index115 ]; then
