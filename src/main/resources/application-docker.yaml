@@ -4,6 +4,12 @@ spring:
     username: sa
     password: password
     driverClassName: org.h2.Driver
+  sql:
+    init:
+      # 电影数据基线由 init 脚本解包 data.zip 到 /data/atv/data.sql,这里负责灌库(与 xiaoya 模式同链路);
+      # 基线载入后应用侧会把 data.sql 中和为空操作,不再破坏性重灌。optional: 前缀防自定义入口绕过
+      # init 脚本时缺文件炸启动(此时基线缺位由增量 diff 兜底)。MySQL/PG 走 MovieDataSeeder,不受此配置影响
+      data-locations: optional:file:/data/atv/data.sql
 
 logging:
   file:

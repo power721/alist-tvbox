@@ -24,6 +24,7 @@ docker/scripts/
 ### 标准模式 (INSTALL=new/docker)
 - 使用 `init-alist.sh`
 - 精简版本，不包含 xiaoya 特定功能
+- 电影数据基线与增量同步已开放（`update_movie` 解包 `data.zip`，H2 走 `spring.sql.init`，MySQL/PG 走应用内 `MovieDataSeeder`）
 - 镜像：`alist-tvbox:latest`, `alist-tvbox:native`
 
 ### Xiaoya 模式 (INSTALL=xiaoya/hostmode)
