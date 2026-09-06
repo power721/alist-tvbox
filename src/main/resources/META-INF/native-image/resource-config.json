@@ -3,6 +3,7 @@
     "includes": [
       {"pattern": "ua.txt"},
       {"pattern": "shares.txt"},
+      {"pattern": "telemetry.properties"},
       {"pattern": "115_shares.txt"},
       {"pattern": "channels.json"},
       {"pattern": "channels.txt"},

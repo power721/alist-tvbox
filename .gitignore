@@ -67,3 +67,4 @@ musl-toolchain/
 /.claude/worktrees/
 default.conf
 /docs/security/
+telemetry.properties

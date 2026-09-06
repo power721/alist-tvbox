@@ -22,6 +22,15 @@ jobs:
         with:
           token: ${{ secrets.RELEASE_MODULE_TOKEN }}
 
+      - name: Set telemetry endpoint
+        env:
+          TELEMETRY_URL: ${{ secrets.TELEMETRY_URL }}
+        run: |
+          if [ -n "$TELEMETRY_URL" ]; then
+            mkdir -p src/main/resources
+            printf 'app.telemetry.url=%s\n' "$TELEMETRY_URL" > src/main/resources/telemetry.properties
+          fi
+
       - name: Setup node
         uses: actions/setup-node@v3
         with:
