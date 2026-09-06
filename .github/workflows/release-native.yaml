@@ -13,6 +13,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Prepare release
+        uses: Har01d/atv-build-tools/prepare-release@v1
+        with:
+          token: ${{ secrets.RELEASE_MODULE_TOKEN }}
+
       - name: Write tag version to file
         run: |
           echo "${{ github.ref_name }}" > app.version.txt
@@ -45,6 +50,9 @@ jobs:
 
       - name: Build with Maven
         run: mvn -B package --file pom.xml
+
+      - name: Verify release artifact
+        uses: Har01d/atv-build-tools/verify-release@v1
 
       - name: Extract Spring Boot layers
         working-directory: ./target
@@ -82,6 +90,11 @@ jobs:
         with:
           name: build-artifacts
 
+      - name: Prepare release
+        uses: Har01d/atv-build-tools/prepare-release@v1
+        with:
+          token: ${{ secrets.RELEASE_MODULE_TOKEN }}
+
       - name: setup graalvm
         uses: graalvm/setup-graalvm@v1
         with:
@@ -102,6 +115,9 @@ jobs:
           cd target
           tar zcvf atv.tar.gz atv
           ls -lh
+
+      - name: Verify release artifact
+        uses: Har01d/atv-build-tools/verify-release@v1
 
       - name: Upload native binary
         uses: actions/upload-artifact@v7

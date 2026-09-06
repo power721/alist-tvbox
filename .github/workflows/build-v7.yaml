@@ -9,6 +9,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Prepare release
+        uses: Har01d/atv-build-tools/prepare-release@v1
+        with:
+          token: ${{ secrets.RELEASE_MODULE_TOKEN }}
+
       - name: Setup node
         uses: actions/setup-node@v3
         with:
@@ -31,6 +37,10 @@ jobs:
           cache: 'maven'
       - name: Build with Maven
         run: mvn -B package --file pom.xml
+
+      - name: Verify release artifact
+        uses: Har01d/atv-build-tools/verify-release@v1
+
       - name: Extract Spring Boot layers
         working-directory: ./target
         run: java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract
