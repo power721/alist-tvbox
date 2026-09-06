@@ -168,6 +168,27 @@ class MediaSubscriptionFastDetailTest {
         assertEquals("第01集.mkv(1.46 GB)$1@101#第02集.mkv(1.46 GB)$1@102", groups[1]);
     }
 
+    @Test
+    void missingEpisodesAppearAsPlaceholdersInLogicalLine() {
+        // 官方已播 4 集,本地 LIVE 只有 1、2:第 3 集被覆盖层垫底、第 4 集是纯缺集
+        subscription.setOfficialEpisodes(4);
+        Mockito.when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(Mockito.eq(7), Mockito.anyCollection()))
+                .thenReturn(List.of(1, 2));
+        Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(7)).thenReturn(List.of(
+                resource(11, 5, "/追剧/7-测试剧", 100, MediaSubscriptionResource.STATE_MOUNTED)));
+        Mockito.when(episodeSourceRepository.findNumberAndSource(7)).thenReturn(rows(
+                new Object[]{1, row(11, "第01集.mkv", 1500 * MB, MediaSubscriptionEpisodeSource.STATE_LISTED)},
+                new Object[]{2, row(11, "第02集.mkv", 1500 * MB, MediaSubscriptionEpisodeSource.STATE_LISTED)}));
+        Mockito.when(episodeFallbackService.activeRows(7)).thenReturn(List.of(fallbackRow(3)));
+
+        MovieList result = service.contentDetail(1, 7, null, null);
+
+        String logical = result.getList().getFirst().getVod_play_url().split("\\$\\$\\$")[0];
+        // 真源条目原样;覆盖层垫底的第 3 集无标记;纯缺集第 4 集以(缺源)占位 —— 全部可点,不再整集隐身
+        assertEquals("01. 第1集(1.46 GB)$msubep-7-1#02. 第2集(1.46 GB)$msubep-7-2"
+                + "#03. 第3集$msubep-7-3#04. 第4集(缺源)$msubep-7-4", logical);
+    }
+
     private static cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback fallbackRow(int episode) {
         cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback row =
                 new cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback();

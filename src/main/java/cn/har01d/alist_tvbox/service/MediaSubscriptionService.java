@@ -969,6 +969,14 @@ public class MediaSubscriptionService {
             return null;
         }
         rewriteEpisodeTitles(subscription, merged, driveLines);
+        // 缺集占位(与巡检 computeMissing/网页缺集同口径,不受采集兜底开关影响):缺失集在逻辑线路
+        // 可见可点 —— 兜底开着则播放期同步救活,关着则如实报「暂无可用播放源」,不再整集隐身。
+        // 放在 rewriteEpisodeTitles 之后:标题改写器会重建条目文本,(缺源)标记不能被改掉;
+        // putIfAbsent 让真源/覆盖层条目优先,占位只补洞。
+        for (Integer episode : missingEpisodes(subscription)) {
+            merged.putIfAbsent(episode,
+                    logicalEpisodeTitle(episode, titles.get(episode), 0) + "(缺源)$msubep-" + id + '-' + episode);
+        }
         String[] lines = buildTvBoxPlayLines(id, merged, driveLines, Set.copyOf(checkService.mainDrives(subscription)));
         appendActionLine(lines, id);
         MovieDetail detail = new MovieDetail();
