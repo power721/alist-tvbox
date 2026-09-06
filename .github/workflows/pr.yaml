@@ -35,6 +35,8 @@ jobs:
       - name: Build web UI
         working-directory: ./web-ui
         run: npm run build
+        env:
+          VITE_TELEGRAM_INVITE_LINK: ${{ secrets.TELEGRAM_INVITE_LINK }}
 
       - name: setup graalvm
         uses: graalvm/setup-graalvm@v1

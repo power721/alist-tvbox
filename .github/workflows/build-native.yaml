@@ -21,6 +21,8 @@ jobs:
       - name: Build web UI
         working-directory: ./web-ui
         run: npm run build
+        env:
+          VITE_TELEGRAM_INVITE_LINK: ${{ secrets.TELEGRAM_INVITE_LINK }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx

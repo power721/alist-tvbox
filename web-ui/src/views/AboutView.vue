@@ -25,7 +25,7 @@
     </p>
     <p>
       Telegram：
-      <a href="https://t.me/+Vlgs24ZZxiM1Yzc1" target="_blank">https://t.me/alist_tvbox_group</a>
+      <a :href="telegramInviteLink" target="_blank">https://t.me/alist_tvbox_group</a>
     </p>
     <p>
       手动部署Docker版：
@@ -76,4 +76,5 @@
   </div>
 </template>
 <script setup lang="ts">
+const telegramInviteLink = import.meta.env.VITE_TELEGRAM_INVITE_LINK || 'https://t.me/alist_tvbox_group'
 </script>
