@@ -2747,7 +2747,7 @@ public class MediaSubscriptionCheckService {
      * 实时累推成功即持久化到资源行并记事件(后续轮次不再依赖外网)。
      */
     /** 分季订阅的季窗口上界(全剧连续集号空间):下一季起点-1;末季/表不可用返回 null(不夹)。 */
-    Integer seasonWindowEnd(MediaSubscription subscription) {
+    public Integer seasonWindowEnd(MediaSubscription subscription) {
         Integer start = subscription.getSeasonStartEpisode();
         Integer season = subscription.getSeason();
         if (start == null || start <= 1 || season == null) {

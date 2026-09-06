@@ -48,6 +48,8 @@ public class EpisodeFallbackService {
     /** 覆盖层行预检用的探测字节上限/超时,与 verifyStream 同参。 */
     private static final int PROBE_MAX_BYTES = 4096;
     private static final int PROBE_TIMEOUT_SECONDS = 8;
+    /** 同步播放最多解析的详情条目,避免候选详情串行阻塞播放请求。 */
+    private static final int MAX_DETAIL_CANDIDATES = 8;
 
     public static final String SETTING_KEY = "msub_collection_fallback";
 
@@ -109,6 +111,9 @@ public class EpisodeFallbackService {
         if (!enabled(subscription.getUid())) {
             return null;
         }
+        if (!isEpisodeInSeason(subscription, episode)) {
+            return null;
+        }
         long now = System.currentTimeMillis();
         // 1) 覆盖层快路径:ACTIVE 未过期行,探测缓存 URL
         MediaSubscriptionEpisodeFallback row = activeRow(subscription.getId(), episode, now);
@@ -158,7 +163,7 @@ public class EpisodeFallbackService {
                     if (!enabled(uid) || negative(subscriptionId, now)) {
                         return;
                     }
-                    searchAndFill(subscription, playedEpisode, now);
+                    searchAndFill(subscription, playedEpisode, now, true);
                 } catch (Exception e) {
                     log.debug("fill window for subscription {} failed: {}", subscriptionId, e.getMessage());
                 } finally {
@@ -185,10 +190,19 @@ public class EpisodeFallbackService {
     /** 覆盖层可用行(ACTIVE 且未过期):详情/集数清单展示用 —— 已采集垫底的缺集对用户可见可播,
      *  播放走 msubep 逻辑链接由 resolveEpisodeFallback 快路径供流。 */
     public List<MediaSubscriptionEpisodeFallback> activeRows(int subscriptionId) {
+        MediaSubscription subscription = checkService.subscriptionOf(subscriptionId);
+        if (subscription == null || !enabled(subscription.getUid())) {
+            return List.of();
+        }
         long now = System.currentTimeMillis();
+        Integer seasonEnd = checkService.seasonWindowEnd(subscription);
+        int seasonStart = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
+                ? subscription.getSeasonStartEpisode() : 1;
         return fallbackRepository.findBySubscriptionId(subscriptionId).stream()
                 .filter(r -> MediaSubscriptionEpisodeFallback.STATE_ACTIVE.equals(r.getState()))
                 .filter(r -> r.getExpiresAt() == null || r.getExpiresAt() > now)
+                .filter(r -> r.getEpisode() >= seasonStart
+                        && (seasonEnd == null || seasonEnd <= 0 || r.getEpisode() <= seasonEnd))
                 .toList();
     }
 
@@ -196,6 +210,11 @@ public class EpisodeFallbackService {
 
     /** 网关搜索 + 窗口映射 + 预检 + 批量落覆盖层;返回当前集播放结果(可能 null)。 */
     private Map<String, Object> searchAndFill(MediaSubscription subscription, int currentEpisode, long now) {
+        return searchAndFill(subscription, currentEpisode, now, false);
+    }
+
+    private Map<String, Object> searchAndFill(MediaSubscription subscription, int currentEpisode, long now,
+                                              boolean recheckSubscription) {
         Set<Integer> window = window(subscription, currentEpisode);
         if (window.isEmpty()) {
             return null;
@@ -212,7 +231,7 @@ public class EpisodeFallbackService {
         // 条目按 rank 已排序;优先选能覆盖整个缺口的单条目,不足才按集取第二条(避免 3 集来自 3 个版本)
         List<MediaSubscriptionEpisodeFallback> filled = new ArrayList<>();
         Set<Integer> remaining = new TreeSet<>(missing);
-        for (CollectionGateway.CollectionItem item : items) {
+        for (CollectionGateway.CollectionItem item : items.stream().limit(MAX_DETAIL_CANDIDATES).toList()) {
             if (remaining.isEmpty()) {
                 break;
             }
@@ -241,6 +260,12 @@ public class EpisodeFallbackService {
             negativeUntil.put(subscription.getId(), now + negativeTtlMs());
             return null;
         }
+        if (recheckSubscription) {
+            MediaSubscription currentSubscription = checkService.subscriptionOf(subscription.getId());
+            if (currentSubscription == null || currentSubscription.getUid() != subscription.getUid()) {
+                return null;
+            }
+        }
         fallbackRepository.saveAll(filled);
         log.info("collection fallback filled subscription {} episodes {} ({} rows)",
                 subscription.getId(), filled.stream().map(MediaSubscriptionEpisodeFallback::getEpisode).toList(),
@@ -266,14 +291,33 @@ public class EpisodeFallbackService {
     /** 当前集+后3集,且不超过官方总集数(没播出的集不该补)。 */
     private Set<Integer> window(MediaSubscription subscription, int currentEpisode) {
         int total = subscription.effectiveTotalEpisodes();
+        int seasonStart = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
+                ? subscription.getSeasonStartEpisode() : 1;
+        if (currentEpisode < seasonStart) {
+            return Set.of();
+        }
+        Integer seasonEnd = checkService.seasonWindowEnd(subscription);
         Set<Integer> window = new TreeSet<>();
         for (int episode = currentEpisode; episode <= currentEpisode + WINDOW_AHEAD; episode++) {
             if (total > 0 && episode > total) {
                 break;
             }
+            if (seasonEnd != null && seasonEnd > 0 && episode > seasonEnd) {
+                break;
+            }
             window.add(episode);
         }
         return window;
+    }
+
+    private boolean isEpisodeInSeason(MediaSubscription subscription, int episode) {
+        int seasonStart = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
+                ? subscription.getSeasonStartEpisode() : 1;
+        if (episode < seasonStart) {
+            return false;
+        }
+        Integer seasonEnd = checkService.seasonWindowEnd(subscription);
+        return seasonEnd == null || seasonEnd <= 0 || episode <= seasonEnd;
     }
 
     /** 覆盖层行播放期解析:先探测缓存直链;死了(或行残缺)回采集站重解析重建行。 */

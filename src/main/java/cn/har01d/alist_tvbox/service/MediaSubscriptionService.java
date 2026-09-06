@@ -2296,6 +2296,10 @@ public class MediaSubscriptionService {
             // 手动锁定总集数是未播占位的上界;观测真实文件不参与夹紧(与 computeMissing 同规)
             base = Math.max(totalCap, observedBase);
         }
+        Integer seasonWindowEnd = checkService == null ? null : checkService.seasonWindowEnd(subscription);
+        if (seasonWindowEnd != null && seasonWindowEnd > 0) {
+            base = Math.min(base, seasonWindowEnd);
+        }
         List<Map<String, Object>> result = new ArrayList<>();
         // 季起始集号下界:分季订阅对齐后本季从全剧第 N 集开始,季前旧集不属于本订阅(与 computeMissing 同规)
         int lower = subscription.getSeasonStartEpisode() != null && subscription.getSeasonStartEpisode() > 1
@@ -3181,6 +3185,10 @@ public class MediaSubscriptionService {
             projected = Math.min(projected, total);
         }
         base = Math.max(base, projected);
+        Integer seasonWindowEnd = checkService == null ? null : checkService.seasonWindowEnd(subscription);
+        if (seasonWindowEnd != null && seasonWindowEnd > 0) {
+            base = Math.min(base, seasonWindowEnd);
+        }
         if (base <= 0 || base > MAX_EPISODE_ROWS) {
             return List.of();
         }

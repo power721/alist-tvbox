@@ -101,7 +101,7 @@ public class TelemetryService {
             host = URI.create(reportUrl == null || reportUrl.isBlank() ? "http://x" : reportUrl).getHost();
         } catch (Exception ignored) {
         }
-        log.debug("telemetry state: enabled={} urlHost={} systemId={}", enabled, host,
+        log.debug("telemetry state: enabled={} urlHost={} systemId={}", telemetryEnabled(), host,
                 appProperties.getSystemId() != null);
     }
 
@@ -123,7 +123,7 @@ public class TelemetryService {
     }
 
     boolean shouldReport() {
-        if (!enabled || reportUrl == null || reportUrl.isBlank()) {
+        if (!telemetryEnabled() || reportUrl == null || reportUrl.isBlank()) {
             return false;
         }
         String systemId = appProperties.getSystemId();
@@ -153,13 +153,20 @@ public class TelemetryService {
         } catch (Exception e) {
             log.debug("telemetry report failed: {}", e.toString());
         } finally {
-            long now = System.currentTimeMillis();
-            settingRepository.save(new Setting(LAST_REPORT_KEY, String.valueOf(now)));
             if (ok) {
-                // 成功才记载荷:失败下轮(1h 后)载荷仍"变化"会自然重试
+                long now = System.currentTimeMillis();
+                settingRepository.save(new Setting(LAST_REPORT_KEY, String.valueOf(now)));
                 settingRepository.save(new Setting(LAST_PAYLOAD_KEY, buildPayload()));
+            } else if (settingRepository.findById(LAST_PAYLOAD_KEY).isEmpty()) {
+                // 首次上报尚无成功载荷时记录时间也不会抑制重试(payload 仍视为变化)。
+                settingRepository.save(new Setting(LAST_REPORT_KEY, String.valueOf(System.currentTimeMillis())));
             }
         }
+    }
+
+    private boolean telemetryEnabled() {
+        String override = environment.getProperty("ATV_TELEMETRY_ENABLED");
+        return override == null || override.isBlank() ? enabled : Boolean.parseBoolean(override.trim());
     }
 
     String buildPayload() {
