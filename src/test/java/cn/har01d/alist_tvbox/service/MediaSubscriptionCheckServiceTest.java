@@ -5377,6 +5377,55 @@ class MediaSubscriptionCheckServiceTest {
         Mockito.verifyNoInteractions(fixture.eventRepository);
     }
 
+    @Test
+    void preheatAheadMissingEpisodeInWindowTriggersRescue() {
+        Fixture fixture = new Fixture();
+        RowStore store = new RowStore();
+        installMountedResource(fixture, store);
+        AtomicInteger probed = new AtomicInteger();
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) -> {
+            probed.incrementAndGet();
+            return new StreamProbeClient.ProbeResult(206, "video/mp4", new byte[]{0x1A, 0x45});
+        });
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(rawUrlDetail());
+        // 第 4、6 集有行,第 5 集从未上架(线上:海贼王 837 集无任何源)—— 探测循环看不见它
+        store.addEpisodeAndRow(7, 4, MediaSubscriptionEpisodeSource.STATE_LISTED);
+        store.addEpisodeAndRow(7, 6, MediaSubscriptionEpisodeSource.STATE_LISTED);
+
+        fixture.service.preheatAhead(fixture.subscription, 3);
+
+        assertEquals(2, probed.get(), "只探测已有行的 4、6 两集");
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository, Mockito.atLeastOnce()).save(events.capture());
+        MediaSubscriptionEvent event = events.getAllValues().stream()
+                .filter(e -> e.getDetail().contains("缺集"))
+                .findFirst().orElseThrow(() -> new AssertionError("应写缺集补源事件,实际:" + events.getAllValues()));
+        assertEquals(MediaSubscriptionEvent.TYPE_GAP_FILLED, event.getType());
+        assertTrue(event.getDetail().contains("第5 集缺集"), event.getDetail());
+        // 播放上下文自愈不外发通知:notificationService 未注入,事件只落时间线(push=false 由实现保证)
+    }
+
+    @Test
+    void preheatAheadMissingRescueHonoursCooldown() {
+        Fixture fixture = new Fixture();
+        RowStore store = new RowStore();
+        installMountedResource(fixture, store);
+        fixture.service.setStreamProbeClient((url, userAgent, maxBytes, timeoutSeconds) ->
+                new StreamProbeClient.ProbeResult(206, "video/mp4", new byte[]{0x1A, 0x45}));
+        Mockito.when(fixture.aListService.getFile(Mockito.any(), Mockito.anyString())).thenReturn(rawUrlDetail());
+        store.addEpisodeAndRow(7, 4, MediaSubscriptionEpisodeSource.STATE_LISTED);
+        store.addEpisodeAndRow(7, 6, MediaSubscriptionEpisodeSource.STATE_LISTED);
+
+        fixture.service.preheatAhead(fixture.subscription, 3);
+        fixture.service.preheatAhead(fixture.subscription, 3); // 2h 冷却内:洞还在也不重复触发
+
+        // 只数缺集事件(首次 submitCheck 的后台巡检可能并发写别的事件,不参与断言)
+        ArgumentCaptor<MediaSubscriptionEvent> events = ArgumentCaptor.forClass(MediaSubscriptionEvent.class);
+        Mockito.verify(fixture.eventRepository, Mockito.atLeastOnce()).save(events.capture());
+        assertEquals(1, events.getAllValues().stream().filter(e -> e.getDetail().contains("缺集")).count(),
+                "冷却窗口内缺集事件只写一次");
+    }
+
     /** 挂载资源 + RowStore 内存库 + playCandidates 依赖的 findBySubscriptionAndNumber 派生查询。 */
     private static MediaSubscriptionResource installMountedResource(Fixture fixture, RowStore store) {
         MediaSubscriptionResource resource = new MediaSubscriptionResource();

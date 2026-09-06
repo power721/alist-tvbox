@@ -2614,6 +2614,7 @@ const matrixStateType = (state: string) => {
   if (state === 'VERIFIED' || state === 'TRANSFER') return 'success'
   if (state === 'FAILED') return 'danger'
   if (state === 'MISSING') return 'info'
+  if (state === 'FALLBACK') return 'primary'
   return 'warning' // LISTED:列得出、未验证
 }
 
@@ -2623,6 +2624,7 @@ const matrixStateLabel = (src: { state: string }) => {
     case 'FAILED': return '✗ 取链失败'
     case 'MISSING': return '文件已消失'
     case 'TRANSFER': return '已转存'
+    case 'FALLBACK': return '采集直链'
     default: return '未验证'
   }
 }

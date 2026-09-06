@@ -34,10 +34,12 @@ class MediaSubscriptionEpisodesTest {
     private final MediaSubscriptionEpisodeSourceRepository episodeSourceRepository =
             Mockito.mock(MediaSubscriptionEpisodeSourceRepository.class);
     private final MediaSubscriptionTransferService transferService = Mockito.mock(MediaSubscriptionTransferService.class);
+    private final cn.har01d.alist_tvbox.service.sitesearch.EpisodeFallbackService episodeFallbackService =
+            Mockito.mock(cn.har01d.alist_tvbox.service.sitesearch.EpisodeFallbackService.class);
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             subscriptionRepository, resourceRepository, null, null, episodeSourceRepository,
             null, null, null, null, null, null, null, transferService, null,
-            new AppProperties(), new ObjectMapper(), null, null, null);
+            new AppProperties(), new ObjectMapper(), null, null, episodeFallbackService);
 
     private MediaSubscription subscription() {
         MediaSubscription sub = new MediaSubscription();
@@ -93,6 +95,36 @@ class MediaSubscriptionEpisodesTest {
         resource.setMountPath("/追剧/.sources/7-测试剧-补1");
         resource.setTitle("补缺源");
         return resource;
+    }
+
+    @Test
+    void collectionFallbackOverlayShowsAsPlayableSource() {
+        MediaSubscription sub = subscription();
+        Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(7)).thenReturn(List.of());
+        Mockito.when(episodeSourceRepository.findNumberAndSource(7)).thenReturn(List.<Object[]>of(
+                new Object[]{1, sourceRow(21, "LISTED")}));
+        // 第 21 号资源不在池内(行被跳过):全清单只有第 3 集的采集兜底覆盖层行是「已有」
+        cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback overlay =
+                new cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback();
+        overlay.setSubscriptionId(7);
+        overlay.setEpisode(3);
+        overlay.setSiteId("feifan");
+        overlay.setResourceId("99");
+        overlay.setLine("非凡线路");
+        overlay.setState(cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback.STATE_ACTIVE);
+        overlay.setValidatedAt(System.currentTimeMillis());
+        Mockito.when(episodeFallbackService.activeRows(7)).thenReturn(List.of(overlay));
+
+        List<Map<String, Object>> rows = service.episodes(1, 7);
+
+        // 第 3 集呈现为已有(来源「采集兜底」),矩阵带 FALLBACK 状态行;第 2 集仍缺
+        Map<String, Object> overlayRow = rows.stream().filter(r -> r.get("episode").equals(3)).findFirst().orElseThrow();
+        assertTrue((boolean) overlayRow.get("present"));
+        assertEquals("采集兜底:非凡线路", overlayRow.get("source"));
+        List<Map<String, Object>> sources = (List<Map<String, Object>>) overlayRow.get("sources");
+        assertEquals("FALLBACK", sources.getFirst().get("state"));
+        Map<String, Object> missingRow = rows.stream().filter(r -> r.get("episode").equals(2)).findFirst().orElseThrow();
+        assertFalse((boolean) missingRow.get("present"));
     }
 
     private static MediaSubscriptionEpisodeSource sourceRow(int resourceId, String state) {

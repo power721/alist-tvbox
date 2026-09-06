@@ -3274,8 +3274,8 @@ public class MediaSubscriptionCheckService {
         if (limit == 0) {
             return;
         }
-        List<Integer> upcoming = episodeSourceRepository
-                .findNumbersBySubscriptionAndStatesIn(subscription.getId(), LIVE_STATES).stream()
+        Set<Integer> live = liveEpisodeNumbers(subscription);
+        List<Integer> upcoming = live.stream()
                 .filter(number -> number > playedEpisode)
                 .sorted()
                 .limit(limit)
@@ -3296,18 +3296,24 @@ public class MediaSubscriptionCheckService {
             }
             // TRANSIENT(限流/网络抖动)与 INCONCLUSIVE(403 防盗链等):不下结论,下个窗口再来
         }
-        rescueAheadDead(subscription, upcoming);
+        // 探测只看得见已有集源行;窗口内从未上架的缺集(LIVE 集号集合外的洞)一并交给补源,
+        // 否则用户播到缺集前洞一直隐身(线上:海贼王 837 集无任何源,播 836 后毫无动作)
+        List<Integer> missingAhead = computeMissing(subscription, live).stream()
+                .filter(number -> number > playedEpisode && number <= playedEpisode + limit)
+                .toList();
+        rescueAheadDead(subscription, upcoming, missingAhead);
     }
 
     /**
-     * 前瞻探测后存在已无任何可播候选的集(含被传染退役牵连的)→ 提交完整巡检补源(换源优先,池空才搜索)。
-     * 带 2h 冷却:探测每个限频窗口都跑,死集补源一次即入巡检的既有节奏,不重复烧搜索配额。
+     * 前瞻探测后存在已无任何可播候选的集(含被传染退役牵连的)或从未上架的缺集
+     * → 提交完整巡检补源(换源优先,池空才搜索)。
+     * 带 2h 冷却:探测每个限频窗口都跑,死集/缺集补源一次即入巡检的既有节奏,不重复烧搜索配额。
      */
-    private void rescueAheadDead(MediaSubscription subscription, List<Integer> upcoming) {
+    private void rescueAheadDead(MediaSubscription subscription, List<Integer> upcoming, List<Integer> missingAhead) {
         List<Integer> dead = upcoming.stream()
                 .filter(episode -> playCandidates(subscription, episode).isEmpty())
                 .toList();
-        if (dead.isEmpty()) {
+        if (dead.isEmpty() && missingAhead.isEmpty()) {
             return;
         }
         int id = subscription.getId();
@@ -3317,8 +3323,15 @@ public class MediaSubscriptionCheckService {
             return;
         }
         aheadRescueTime.put(id, now);
-        addEvent(id, MediaSubscriptionEvent.TYPE_ERROR,
-                "第" + joinNumbers(dead) + " 集链接验证失败(疑似被和谐),已自动补源");
+        if (!dead.isEmpty()) {
+            addEvent(id, MediaSubscriptionEvent.TYPE_ERROR,
+                    "第" + joinNumbers(new ArrayList<>(dead)) + " 集链接验证失败(疑似被和谐),已自动补源");
+        }
+        if (!missingAhead.isEmpty()) {
+            // 播放上下文的自愈动作,不外发通知(连播时每窗口一条会轰炸 TG);补上与否由后续 GAP_FILLED 事件说话
+            addEvent(id, MediaSubscriptionEvent.TYPE_GAP_FILLED,
+                    "第" + joinNumbers(new ArrayList<>(missingAhead)) + " 集缺集,已提前触发巡检补源", false);
+        }
         submitCheck(id);
     }
 

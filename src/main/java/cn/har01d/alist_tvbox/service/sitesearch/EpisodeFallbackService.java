@@ -182,6 +182,16 @@ public class EpisodeFallbackService {
         inFlight.remove(subscriptionId);
     }
 
+    /** 覆盖层可用行(ACTIVE 且未过期):详情/集数清单展示用 —— 已采集垫底的缺集对用户可见可播,
+     *  播放走 msubep 逻辑链接由 resolveEpisodeFallback 快路径供流。 */
+    public List<MediaSubscriptionEpisodeFallback> activeRows(int subscriptionId) {
+        long now = System.currentTimeMillis();
+        return fallbackRepository.findBySubscriptionId(subscriptionId).stream()
+                .filter(r -> MediaSubscriptionEpisodeFallback.STATE_ACTIVE.equals(r.getState()))
+                .filter(r -> r.getExpiresAt() == null || r.getExpiresAt() > now)
+                .toList();
+    }
+
     // ---------- 核心流程 ----------
 
     /** 网关搜索 + 窗口映射 + 预检 + 批量落覆盖层;返回当前集播放结果(可能 null)。 */

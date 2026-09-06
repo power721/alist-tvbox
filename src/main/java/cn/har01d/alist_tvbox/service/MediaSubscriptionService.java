@@ -954,6 +954,17 @@ public class MediaSubscriptionService {
             merged.put(episode, logicalEpisodeTitle(episode, titles.get(episode), sizeByEpisode.get(episode))
                     + "$msubep-" + id + '-' + episode);
         }
+        // 采集源兜底覆盖层并入:已垫底的缺集进逻辑线路可点可播(msubep 播放期走覆盖层快路径),
+        // 真源恢复后 putIfAbsent 让位 —— 覆盖层只补洞,不覆盖真源条目(裸实例测试可注入 null,同 CheckService 守卫)
+        List<cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback> overlayRows =
+                episodeFallbackService == null ? List.of() : episodeFallbackService.activeRows(id);
+        for (cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback row : overlayRows) {
+            if (row.getEpisode() <= 0) {
+                continue;
+            }
+            merged.putIfAbsent(row.getEpisode(), logicalEpisodeTitle(row.getEpisode(), titles.get(row.getEpisode()), 0)
+                    + "$msubep-" + id + '-' + row.getEpisode());
+        }
         if (merged.isEmpty()) {
             return null;
         }
@@ -1681,6 +1692,7 @@ public class MediaSubscriptionService {
             try {
                 Map<String, Object> result = tvBoxService.getPlayUrl(1, file.dir() + "/" + file.name(), getSub, client, type);
                 kickPreheatAhead(uid, subscriptionId, episode);
+                kickCollectionFallback(uid, subscriptionId, episode);
                 return result;
             } catch (Exception e) {
                 log.info("subscription {} episode {} via {} failed: {}", subscriptionId, episode, file.dir(), e.getMessage());
@@ -1697,6 +1709,7 @@ public class MediaSubscriptionService {
                 Map<String, Object> result = tvBoxService.getPlayUrl(1, path, getSub, client, type);
                 checkService.recordPlaySuccess(candidate.source());
                 kickPreheatAhead(uid, subscriptionId, episode);
+                kickCollectionFallback(uid, subscriptionId, episode);
                 return result;
             } catch (Exception e) {
                 log.info("subscription {} episode {} via {} failed: {}", subscriptionId, episode, path, e.getMessage());
@@ -1709,7 +1722,7 @@ public class MediaSubscriptionService {
         try {
             Map<String, Object> rescued = episodeFallbackService.resolveEpisodeFallback(subscription, episode, client, type);
             if (rescued != null) {
-                episodeFallbackService.fillWindowAsync(uid, subscriptionId, episode);
+                kickCollectionFallback(uid, subscriptionId, episode);
                 kickPreheatAhead(uid, subscriptionId, episode);
                 return rescued;
             }
@@ -1739,6 +1752,16 @@ public class MediaSubscriptionService {
             checkService.preheatAheadAsync(uid, subscriptionId, episode);
         } catch (Exception e) {
             log.debug("trigger preheat ahead for subscription {} failed: {}", subscriptionId, e.getMessage());
+        }
+    }
+
+    /** 播放成功后后台补齐「当前集+后3集」缺口的采集源覆盖层(类注释口径:当前集正常起播时补齐不阻塞)。
+     *  窗口无缺口时零开销(一次集号查询),开关/负缓存/10min 限频在 EpisodeFallbackService 内部自查。 */
+    private void kickCollectionFallback(int uid, int subscriptionId, int episode) {
+        try {
+            episodeFallbackService.fillWindowAsync(uid, subscriptionId, episode);
+        } catch (Exception e) {
+            log.debug("trigger collection fallback fill for subscription {} failed: {}", subscriptionId, e.getMessage());
         }
     }
 
@@ -2221,6 +2244,25 @@ public class MediaSubscriptionService {
                 matrix.computeIfAbsent(number, k -> new ArrayList<>()).add(item);
             }
         }
+        // 3) 采集源兜底覆盖层:已垫底的缺集呈现为「采集兜底」来源(ACTIVE 未过期;72h TTL 到期自然出局回缺失)
+        if (episodeFallbackService != null) {
+            for (cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback row : episodeFallbackService.activeRows(id)) {
+                int number = row.getEpisode();
+                if (number <= 0) {
+                    continue;
+                }
+                String label = "采集兜底:" + StringUtils.defaultIfBlank(row.getLine(), row.getSiteId());
+                sources.putIfAbsent(number, label);
+                Map<String, Object> item = new java.util.LinkedHashMap<>();
+                item.put("title", label);
+                item.put("drive", "");
+                item.put("state", "FALLBACK");
+                item.put("successCount", row.getValidatedAt() == null ? 0 : 1);
+                item.put("failCount", 0);
+                item.put("lastVerifiedTime", row.getValidatedAt());
+                matrix.computeIfAbsent(number, k -> new ArrayList<>()).add(item);
+            }
+        }
         if (!rowsSeen) {
             // 集源行完全未同步(首轮巡检前):退回 currentEpisodes 显示,避免页签全灰。
             // 行一旦存在就不再兜底 —— 主源失效/换源后 currentEpisodes 是旧值,
@@ -2252,7 +2294,7 @@ public class MediaSubscriptionService {
                 ? subscription.getSeasonStartEpisode() : 1;
         for (int i = lower; i <= Math.min(base, MAX_EPISODE_ROWS); i++) {
             String source = sources.get(i);
-            boolean present = source != null; // 可用性只认 LIVE 行;"源损坏"是展示文案,不是已有
+            boolean present = source != null; // 可用性 = LIVE 行 ∪ 采集兜底覆盖层;"源损坏"是展示文案,不是已有
             if (source == null && deadByEpisode.containsKey(i)) {
                 source = "源损坏(待补源)";
             }

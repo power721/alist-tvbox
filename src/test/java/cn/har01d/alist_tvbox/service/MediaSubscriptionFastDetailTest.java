@@ -52,12 +52,14 @@ class MediaSubscriptionFastDetailTest {
     private final MetadataService metadataService = Mockito.mock(MetadataService.class);
     private final ProxyService proxyService = Mockito.mock(ProxyService.class);
     private final SiteRepository siteRepository = Mockito.mock(SiteRepository.class);
+    private final cn.har01d.alist_tvbox.service.sitesearch.EpisodeFallbackService episodeFallbackService =
+            Mockito.mock(cn.har01d.alist_tvbox.service.sitesearch.EpisodeFallbackService.class);
     private final AtomicInteger pid = new AtomicInteger(100);
 
     private final MediaSubscriptionService service = new MediaSubscriptionService(
             subscriptionRepository, resourceRepository, null, episodeRepository, episodeSourceRepository,
             null, null, null, tvBoxService, null, metadataService, checkService, transferService, settingRepository,
-            new AppProperties(), new ObjectMapper(), proxyService, siteRepository, null);
+            new AppProperties(), new ObjectMapper(), proxyService, siteRepository, episodeFallbackService);
 
     private final MediaSubscription subscription = subscription();
 
@@ -144,6 +146,41 @@ class MediaSubscriptionFastDetailTest {
         assertFalse(detail.getVod_play_url().contains("msubep-7-4"));
         assertFalse(detail.getVod_play_url().contains("第05集"));
         assertEquals(1, result.getTotal());
+    }
+
+    @Test
+    void collectionFallbackOverlayJoinsLogicalLine() {
+        Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(7)).thenReturn(List.of(
+                resource(11, 5, "/追剧/7-测试剧", 100, MediaSubscriptionResource.STATE_MOUNTED)));
+        Mockito.when(episodeSourceRepository.findNumberAndSource(7)).thenReturn(rows(
+                new Object[]{1, row(11, "第01集.mkv", 1500 * MB, MediaSubscriptionEpisodeSource.STATE_LISTED)},
+                new Object[]{2, row(11, "第02集.mkv", 1500 * MB, MediaSubscriptionEpisodeSource.STATE_VERIFIED)}));
+        // activeRows 已按 ACTIVE+未过期过滤:第 2 集与真源重叠(真源优先)、第 3 集是采集垫底的洞
+        Mockito.when(episodeFallbackService.activeRows(7)).thenReturn(List.of(fallbackRow(2), fallbackRow(3)));
+
+        MovieList result = service.contentDetail(1, 7, null, null);
+
+        MovieDetail detail = result.getList().getFirst();
+        String[] groups = detail.getVod_play_url().split("\\$\\$\\$");
+        // 逻辑线路:真源条目带大小不被覆盖层顶替;缺集 3 由覆盖层补入(无大小),播放走 msubep 兜底快路径
+        assertEquals("01. 第1集(1.46 GB)$msubep-7-1#02. 第2集(1.46 GB)$msubep-7-2#03. 第3集$msubep-7-3", groups[0]);
+        // 盘线路只装真源物理文件,覆盖层直链不进盘线路
+        assertEquals("第01集.mkv(1.46 GB)$1@101#第02集.mkv(1.46 GB)$1@102", groups[1]);
+    }
+
+    private static cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback fallbackRow(int episode) {
+        cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback row =
+                new cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback();
+        row.setSubscriptionId(7);
+        row.setEpisode(episode);
+        row.setSiteId("feifan");
+        row.setResourceId("12345");
+        row.setLine("非凡线路");
+        row.setUrl("http://collect.example/" + episode + ".m3u8");
+        row.setState(cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback.STATE_ACTIVE);
+        row.setValidatedAt(System.currentTimeMillis());
+        row.setExpiresAt(System.currentTimeMillis() + 3600_000L);
+        return row;
     }
 
     @Test
