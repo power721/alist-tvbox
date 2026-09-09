@@ -27,12 +27,27 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class MediaLibraryControllerTest {
+
+    @org.junit.jupiter.api.Test
+    void subscribedRemarksIsIdempotentAndHealsAccumulation() {
+        // 线上形态:缓存对象被反复前缀(刷新一次多一个)
+        assertEquals("已追 8.2", cn.har01d.alist_tvbox.web.MediaLibraryController.subscribedRemarks("已追 已追 已追 已追 8.2", true));
+        // 幂等:归一值再标不变
+        assertEquals("已追 8.2", cn.har01d.alist_tvbox.web.MediaLibraryController.subscribedRemarks("已追 8.2", true));
+        // 未订阅:剥净历史标记(防跨 uid 缓存串标)
+        assertEquals("8.2", cn.har01d.alist_tvbox.web.MediaLibraryController.subscribedRemarks("已追 8.2", false));
+        assertEquals("", cn.har01d.alist_tvbox.web.MediaLibraryController.subscribedRemarks("已追", false));
+        assertEquals("已追", cn.har01d.alist_tvbox.web.MediaLibraryController.subscribedRemarks(null, true));
+        assertEquals("已追 豆瓣 8.0", cn.har01d.alist_tvbox.web.MediaLibraryController.subscribedRemarks("豆瓣 8.0", true));
+    }
+
     @Mock
     private SubscriptionService subscriptionService;
     @Mock
@@ -103,7 +118,7 @@ class MediaLibraryControllerTest {
         mockMvc.perform(get("/media/token-a").param("t", "tmdb:tv_popular"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.list[0].vod_id").value("tmdb:tv:42"))
-                .andExpect(jsonPath("$.list[0].vod_remarks").value("已追 "));
+                .andExpect(jsonPath("$.list[0].vod_remarks").value("已追"));
     }
 
     @Test
@@ -154,7 +169,7 @@ class MediaLibraryControllerTest {
         mockMvc.perform(get("/media/token-a").param("id", "s:showa"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.list[0].vod_name").value("showa"))
-                .andExpect(jsonPath("$.list[0].vod_remarks").value("已追 "))
+                .andExpect(jsonPath("$.list[0].vod_remarks").value("已追"))
                 .andExpect(jsonPath("$.list[0].vod_play_url")
                         .value("📄 媒体信息$msubinfo-" + encode("s:showa|showa")
                                 + "#🔍 全局搜索$msubsearch-" + encode("showa")

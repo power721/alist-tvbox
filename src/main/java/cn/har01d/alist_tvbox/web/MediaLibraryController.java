@@ -125,6 +125,20 @@ public class MediaLibraryController {
     /** 站内搜索:已订阅命中在前 + 片单 TMDB 全库(multi)在后 —— 没追过的剧/电影也能搜到,
      *  点进详情即片单条目(带「➕ 加入追剧」)。翻页只翻 TMDB 侧(已订阅命中固定在第一页);
      *  TMDB 结果里已追的带「已追」角标(与片单分类列表同口径),封面统一重建客户端可用地址。 */
+    /**
+     * 「已追」角标幂等归一:榜单列表/搜索结果可能是 pianDanService 缓存里的共享 MovieDetail
+     * 对象,直接前缀会跨请求累加(线上:已追 已追 已追…刷新一次多一个)、跨 uid 串标。
+     * 统一先剥净历史「已追」前缀段,再按当次订阅状态至多缀一次;回写归一值,重复请求幂等。
+     */
+    static String subscribedRemarks(String remarks, boolean subscribed) {
+        String base = StringUtils.defaultString(remarks).trim();
+        while (base.equals("已追") || base.startsWith("已追 ")) {
+            base = base.equals("已追") ? "" : base.substring("已追 ".length()).trim();
+        }
+        if (!subscribed) return base;
+        return base.isEmpty() ? "已追" : "已追 " + base;
+    }
+
     private MovieList searchAll(int uid, String wd, int pg) {
         List<MovieDetail> merged = new ArrayList<>();
         if (pg <= 1) {
@@ -133,9 +147,8 @@ public class MediaLibraryController {
         MovieList tmdb = pianDanService.search(wd, pg, 24);
         for (MovieDetail item : tmdb.getList()) {
             item.setVod_pic(mediaSubscriptionService.absoluteClientCover(item.getVod_pic()));
-            if (mediaSubscriptionService.isSubscribedTitle(uid, item.getVod_name())) {
-                item.setVod_remarks("已追 " + StringUtils.defaultString(item.getVod_remarks()));
-            }
+            item.setVod_remarks(subscribedRemarks(item.getVod_remarks(),
+                    mediaSubscriptionService.isSubscribedTitle(uid, item.getVod_name())));
             merged.add(item);
         }
         MovieList result = new MovieList();
@@ -158,9 +171,8 @@ public class MediaLibraryController {
         MovieList result = pianDanService.list(type, "web", pg, 24, filters);
         for (MovieDetail item : result.getList()) {
             item.setVod_pic(mediaSubscriptionService.absoluteClientCover(item.getVod_pic()));
-            if (mediaSubscriptionService.isSubscribedTitle(uid, item.getVod_name())) {
-                item.setVod_remarks("已追 " + StringUtils.defaultString(item.getVod_remarks()));
-            }
+            item.setVod_remarks(subscribedRemarks(item.getVod_remarks(),
+                    mediaSubscriptionService.isSubscribedTitle(uid, item.getVod_name())));
         }
         return result;
     }
@@ -228,9 +240,7 @@ public class MediaLibraryController {
         }
         boolean subscribed = mediaSubscriptionService.isSubscribedTitle(uid, detail.getVod_name());
         detail.setVod_pic(mediaSubscriptionService.absoluteClientCover(detail.getVod_pic()));
-        if (subscribed) {
-            detail.setVod_remarks("已追 " + StringUtils.defaultString(detail.getVod_remarks()));
-        }
+        detail.setVod_remarks(subscribedRemarks(detail.getVod_remarks(), subscribed));
         detail.setVod_play_from("片单");
         // 爬虫端拼 GET 参数不编码,标题里的空格/&/# 会截断请求 —— vodId 先按 form 编码;
         // OkHttp/服务端各解一次百分号序列后,PlayController 收到的即是原始 vodId。
