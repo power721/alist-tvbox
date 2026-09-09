@@ -2688,6 +2688,22 @@ class MediaSubscriptionCheckServiceTest {
                 MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException(
                         "{\"errno\":-9,\"expired_type\":0,\"show_msg\":\"提取码验证失败,请重试\"}")),
                 "百度 sekey 过期(errno -9)是瞬时态,不判死");
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.TRANSIENT,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException(
+                        "failed to list objs: 分享提取码验证失败,可能已被取消或会话过期(errno=-9)")),
+                "驱动翻译后的 -9 文案含「提取码验证失败」仍归会话过期瞬时态(「已被取消」非连续「已取消」不触 GONE)");
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException(
+                        "{\"errno\":105,\"err_msg\":\"\",\"request_id\":86755293159184387}")),
+                "百度 errno 105 = 分享页 404(分享不存在),裸 JSON 无中文词根,数字支判死");
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException(
+                        "failed to list objs: 分享不存在或文件已被删除(errno=105)")),
+                "驱动翻译后的 105 文案含「不存在」判死");
+        assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
+                MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException(
+                        "{\"errno\":-21,\"err_msg\":\"\",\"request_id\":1}")),
+                "百度 errno -21 = 分享已取消,裸 JSON 数字支兜底判死(旧驱动未翻译的 body)");
         assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,
                 MediaSubscriptionCheckService.classifyProbeFailure(new RuntimeException("failed get link: 参数错误")));
         assertEquals(MediaSubscriptionCheckService.ProbeFailure.GONE,

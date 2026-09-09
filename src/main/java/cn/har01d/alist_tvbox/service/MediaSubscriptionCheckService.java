@@ -162,12 +162,19 @@ public class MediaSubscriptionCheckService {
      * 英文词必须带词边界:百度分享错误 JSON 全量携带 {@code "expired_type":0} 字段(值 0 恰表示非过期),
      * 无边界 {@code expired} 会把会话过期(errno -9)误判死链,整源 RETIRED + 90 天黑名单(线上:
      * 分享在 App 里可正常访问,巡检列目录撞 -9 后主源被退役、订阅落 ERROR)。
+     * errno 数字支(-21/105)是 ASCII 兜底:百度死链错误 JSON 的 err_msg/show_msg 恒空或全
+     * \\uXXXX 转义,无中文词根可匹配(同 THROTTLE_ERROR 的 -19 教训);105 = 分享页 404
+     * (分享不存在,线上实证),-21 = 分享已取消,均为确定死链,旧驱动未翻译的裸 body 也能判死。
+     * 分类顺序保证 {@code "errno":-9} 先被 {@link #SESSION_EXPIRED_ERROR} 接走,不会落到这里。
      * 其余未识别错误一律按瞬时处理(见 {@link #classifyProbeFailure}) */
     private static final Pattern GONE_ERROR = Pattern.compile(
             "(?i)分享已?失效|链接错误|链接已?过期|提取码(错误|不正确)|密码(错误|不正确)|已取消|不存在|参数错误|"
-                    + "\\bobject not found\\b|\\bnot exist\\b|\\bexpired\\b|\\bcancel\\b|\\binvalid\\b");
+                    + "\\bobject not found\\b|\\bnot exist\\b|\\bexpired\\b|\\bcancel\\b|\\binvalid\\b"
+                    + "|errno\"?\\s*:\\s*(-21|105)");
     /** 百度分享会话票据过期(errno -9,sekey/BDCLND 失效,show_msg「提取码验证失败,请重试」):
-     * 瞬时态 —— PowerList 驱动清 Token 重验证即可自愈,分享、提取码与文件全部存活,绝不判死。 */
+     * 瞬时态 —— PowerList 驱动清 Token 重验证即可自愈。注意 -9 是<b>混合态</b>:分享页对已被
+     * 取消的分享同样返回 -9(线上实证「啊哦,你来晚了,分享的文件已经被取消了」),errno 单值
+     * 无法区分死活,故只归瞬时靠 streak 连击封顶兜底退役,绝不直接判死。 */
     private static final Pattern SESSION_EXPIRED_ERROR = Pattern.compile("(?i)errno\"?\\s*:\\s*-9|提取码验证失败");
 
     // ---------- 夸克分享游客存活验证(判死前的第二信源) ----------
