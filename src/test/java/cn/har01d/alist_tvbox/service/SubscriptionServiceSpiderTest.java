@@ -204,12 +204,12 @@ class SubscriptionServiceSpiderTest {
         Map<String, Object> config = service.subscription("", "http://up.example/config.json", "", null);
         Map<String, Object> atvHome = findSite(config, "atv_home");
         assertEquals("csp_WebHome", atvHome.get("api"));
-        assertEquals("http://atv.example/webhome/app.html?token=-&v=20", atvHome.get("homePage"));
+        assertEquals("http://atv.example/webhome/app.html?token=-&v=21", atvHome.get("homePage"));
         // 显式 jar(与其他内置源一致):防宿主不回落全局 spider 或全局位被覆盖
         assertEquals("http://atv.example/spring.jar", atvHome.get("jar"));
         // ext = base64(JSON)(与 csp_Media 等其它源一致;url + pt 播放同步专用令牌,测试桩下 pt 为空)
         String ext = new String(java.util.Base64.getDecoder().decode((String) atvHome.get("ext")));
-        assertTrue(ext.contains("\"url\":\"http://atv.example/webhome/app.html?token=-&v=20\""));
+        assertTrue(ext.contains("\"url\":\"http://atv.example/webhome/app.html?token=-&v=21\""));
         assertTrue(ext.contains("\"pt\":\"\""));
 
         // 普通端(未标记能力):同一形态

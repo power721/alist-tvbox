@@ -1474,7 +1474,7 @@ public class SubscriptionService {
         String homeToken = token.isBlank() ? "-" : token;
         // 绝对地址:多接口(@)拼接/反代场景下相对路径会解析错;token 供页面调 /media 数据
         // v= 页面版本:WebView 对 homePage URL 有缓存,页面改动必须 bump 强制重载
-        String pageUrl = readHostAddress("") + "/webhome/app.html?token=" + homeToken + "&v=20";
+        String pageUrl = readHostAddress("") + "/webhome/app.html?token=" + homeToken + "&v=21";
         // pt 内嵌页面 URL:页面可直接 fetch /api/playback/changes(同源+请求头),继续观看
         // 不再依赖 spider 桥/SDK 注入 —— 桥全挂也能出数据(桥兜底仍保留,双保险)
         if (StringUtils.isNotBlank(playbackToken)) {
