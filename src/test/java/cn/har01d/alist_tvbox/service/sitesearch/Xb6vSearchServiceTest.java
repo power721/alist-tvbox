@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -147,13 +148,13 @@ class Xb6vSearchServiceTest {
     }
 
     @Test
-    void searchFailureIsSilent() {
+    void searchFailureRethrowsForThrottle() {
         Xb6vSearchService service = new Xb6vSearchService(emptySettings(), props()) {
             @Override
             protected Resp http(Request request, Map<String, String> jar) throws IOException {
                 throw new IOException("timeout");
             }
         };
-        assertTrue(service.search("凡人修仙传").isEmpty());
+        assertThrows(IllegalStateException.class, () -> service.search("凡人修仙传"));
     }
 }

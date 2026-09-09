@@ -62,6 +62,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.time.Duration;
 
 @Slf4j
 @Service
@@ -119,7 +120,7 @@ public class DriverAccountService {
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
         this.offlineDownloadService = offlineDownloadService;
-        this.restTemplate = builder.build();
+        this.restTemplate = builder.connectTimeout(Duration.ofSeconds(10)).readTimeout(Duration.ofSeconds(30)).build();
         this.objectMapper = objectMapper;
         this.alistJdbcTemplate = alistJdbcTemplate;
     }
@@ -337,16 +338,20 @@ public class DriverAccountService {
         }
         account.setId(null);
         // 首个账号自动升 master 仅限全局账号:普通用户给未配置的盘型开首个个人账号不得抢占全局主账号位
-        if (driverAccountRepository.countByType(account.getType()) == 0 && account.getOwnerUid() == 0) {
+        boolean firstGlobal = driverAccountRepository.countByType(account.getType()) == 0 && account.getOwnerUid() == 0;
+        if (firstGlobal) {
             account.setMaster(true);
-        } else {
-            updateMaster(account);
         }
-        driverAccountRepository.save(account);
+        // 非 firstGlobal 路径须先 save 拿到 id 再 updateMaster:未落库时 getId() 为 null,
+        // updateMasterToken 的 IDX+getId() 拆箱 NPE,且此前 saveAll 已把同盘型全部账号 master=false 落库
+        DriverAccount saved = driverAccountRepository.save(account);
+        if (!firstGlobal) {
+            updateMaster(saved);
+        }
 
-        updateStorage(account);
+        updateStorage(saved);
 
-        return account;
+        return saved;
     }
 
     public void updateToken(Integer id, DriverAccount dto) {

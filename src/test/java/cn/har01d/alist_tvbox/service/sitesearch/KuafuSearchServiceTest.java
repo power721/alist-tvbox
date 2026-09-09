@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -254,13 +255,13 @@ class KuafuSearchServiceTest {
     }
 
     @Test
-    void searchFailureIsSilent() {
+    void searchFailureRethrowsForThrottle() {
         KuafuSearchService service = new KuafuSearchService(settings("https://www.kfzy.net", null), props()) {
             @Override
             protected Resp http(Request request) throws IOException {
                 throw new IOException("timeout");
             }
         };
-        assertTrue(service.search("凡人修仙传").isEmpty());
+        assertThrows(IllegalStateException.class, () -> service.search("凡人修仙传"));
     }
 }

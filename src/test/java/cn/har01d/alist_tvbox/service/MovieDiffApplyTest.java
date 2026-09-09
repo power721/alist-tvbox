@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -63,6 +64,8 @@ class MovieDiffApplyTest {
         Files.createDirectories(dataDir.resolve("atv").resolve("sql"));
         Files.createDirectories(dataDir.resolve("atv").resolve("json"));
         RestTemplateBuilder chained = mock(RestTemplateBuilder.class);
+        when(chained.connectTimeout(any(java.time.Duration.class))).thenReturn(chained);
+        when(chained.readTimeout(any(java.time.Duration.class))).thenReturn(chained);
         when(builder.defaultHeader(anyString(), anyString())).thenReturn(chained);
         when(chained.defaultHeader(anyString(), anyString())).thenReturn(chained);
         when(chained.build()).thenReturn(null);

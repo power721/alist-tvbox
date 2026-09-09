@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -247,13 +248,13 @@ class ZhenCangSearchServiceTest {
     }
 
     @Test
-    void searchFailureIsSilent() {
+    void searchFailureRethrowsForThrottle() {
         ZhenCangSearchService service = new ZhenCangSearchService(settings("wordpress_logged_in=t"), props()) {
             @Override
             protected Resp http(Request request, boolean followRedirects) throws IOException {
                 throw new IOException("timeout");
             }
         };
-        assertTrue(service.search("凡人修仙传").isEmpty());
+        assertThrows(IllegalStateException.class, () -> service.search("凡人修仙传"));
     }
 }

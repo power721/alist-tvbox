@@ -110,6 +110,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.time.Duration;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_CODE;
@@ -331,6 +332,8 @@ public class BiliBiliService {
                 .build();
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
+                .connectTimeout(Duration.ofSeconds(10))
+                .readTimeout(Duration.ofSeconds(30))
                 .build();
         this.objectMapper = objectMapper;
     }

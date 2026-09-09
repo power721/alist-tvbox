@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.live.service;
 
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.live.model.HuyaCategoryList;
 import cn.har01d.alist_tvbox.live.model.HuyaLiveRoom;
@@ -202,6 +203,9 @@ public class HuyaService implements LivePlatform {
     @Override
     public MovieList detail(String tid, String client) throws IOException {
         String[] parts = tid.split("\\$");
+        if (parts.length < 2) {
+            throw new BadRequestException("无效的直播间ID: " + tid);
+        }
         String id = parts[1];
         MovieList result = new MovieList();
         String url = "https://m.huya.com/" + id;

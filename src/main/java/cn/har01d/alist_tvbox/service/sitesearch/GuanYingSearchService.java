@@ -160,8 +160,10 @@ public class GuanYingSearchService {
             log.info("GuanYing search {} get {} results", keyword, result.size());
             return result;
         } catch (Exception e) {
+            // 上抛而非吞掉空表:聚合层 searchAsync 捕获后记 SearchSourceThrottle 退避并返空;
+            // 吞掉则死站被 recordSuccess 清零连击,退避闸门对站点源永不生效
             log.warn("guanying search [{}] failed: {}", keyword, e.getMessage());
-            return List.of();
+            throw e instanceof RuntimeException runtimeException ? runtimeException : new IllegalStateException(e);
         }
     }
 

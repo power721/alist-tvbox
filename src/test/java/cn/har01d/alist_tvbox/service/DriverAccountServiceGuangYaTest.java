@@ -49,6 +49,8 @@ class DriverAccountServiceGuangYaTest {
     @Test
     void createGuangYaAccountDefaultsFolderAndSavesStorage() {
         RestTemplateBuilder builder = mock(RestTemplateBuilder.class);
+        when(builder.connectTimeout(any(java.time.Duration.class))).thenReturn(builder);
+        when(builder.readTimeout(any(java.time.Duration.class))).thenReturn(builder);
         when(builder.build()).thenReturn(mock(RestTemplate.class));
         when(driverAccountRepository.existsByNameAndType("main", DriverType.GUANGYA)).thenReturn(false);
         when(driverAccountRepository.countByType(DriverType.GUANGYA)).thenReturn(0L);
@@ -81,6 +83,8 @@ class DriverAccountServiceGuangYaTest {
     @Test
     void createGuangYaAccountRequiresTokenData() {
         RestTemplateBuilder builder = mock(RestTemplateBuilder.class);
+        when(builder.connectTimeout(any(java.time.Duration.class))).thenReturn(builder);
+        when(builder.readTimeout(any(java.time.Duration.class))).thenReturn(builder);
         when(builder.build()).thenReturn(mock(RestTemplate.class));
         DriverAccountService service = new DriverAccountService(panAccountRepository, driverAccountRepository,
                 settingRepository, shareRepository, accountService, aListLocalService, offlineDownloadService,

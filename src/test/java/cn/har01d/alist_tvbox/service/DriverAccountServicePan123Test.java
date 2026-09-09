@@ -53,6 +53,8 @@ class DriverAccountServicePan123Test {
 
     private DriverAccountService newService(RestTemplate restTemplate) {
         RestTemplateBuilder builder = mock(RestTemplateBuilder.class);
+        when(builder.connectTimeout(any(java.time.Duration.class))).thenReturn(builder);
+        when(builder.readTimeout(any(java.time.Duration.class))).thenReturn(builder);
         when(builder.build()).thenReturn(restTemplate);
         return new DriverAccountService(panAccountRepository, driverAccountRepository,
                 settingRepository, shareRepository, accountService, aListLocalService, offlineDownloadService,

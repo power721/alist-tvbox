@@ -89,6 +89,8 @@ class ShareLinkTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.when(builder.connectTimeout(any(java.time.Duration.class))).thenReturn(builder);
+        Mockito.when(builder.readTimeout(any(java.time.Duration.class))).thenReturn(builder);
         Mockito.when(builder.rootUri(any())).thenReturn(builder);
         Mockito.when(builder.build()).thenReturn(restTemplate);
         shareService = new ShareService(appProperties, shareRepository, metaRepository, aliasRepository, settingRepository, siteRepository, accountRepository, driverAccountRepository, aListService, driverAccountService, accountService, aListLocalService, configFileService, pikPakService, offlineDownloadService

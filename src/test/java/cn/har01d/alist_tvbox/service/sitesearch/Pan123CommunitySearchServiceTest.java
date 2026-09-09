@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -222,7 +223,7 @@ class Pan123CommunitySearchServiceTest {
     }
 
     @Test
-    void searchFailureIsSilent() {
+    void searchFailureRethrowsForThrottle() {
         Pan123CommunitySearchService service =
                 new Pan123CommunitySearchService(settings("https://123panfx.com", null), props(), new ObjectMapper()) {
                     @Override
@@ -230,6 +231,6 @@ class Pan123CommunitySearchServiceTest {
                         throw new IOException("timeout");
                     }
                 };
-        assertTrue(service.search("凡人修仙传").isEmpty());
+        assertThrows(IllegalStateException.class, () -> service.search("凡人修仙传"));
     }
 }

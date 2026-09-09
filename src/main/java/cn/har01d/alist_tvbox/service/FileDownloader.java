@@ -218,6 +218,8 @@ public class FileDownloader {
             log.debug("download PG file {}", remoteVersion);
             String baseUrl = "https://github.com/power721/pg/releases/download/" + remoteVersion + "/pg." + remoteVersion + ".zip";
             List<String> urls = getDownloadUrls(baseUrl);
+            boolean success = false;
+            Exception lastError = null;
             for (String url : urls) {
                 try {
                     downloadFile(url, pgZip);
@@ -231,10 +233,16 @@ public class FileDownloader {
 
                     log.debug("save PG version: {}", remoteVersion);
                     saveVersion(pgVersionFile, remoteVersion);
+                    success = true;
                     break;
                 } catch (Exception e) {
                     log.warn("download pg {} failed", url, e);
+                    lastError = e;
                 }
+            }
+            if (!success) {
+                // 全部下载源失败必须上抛:吞掉则 executeWithRetry 捕不到异常,任务假成功且不再重试
+                throw new IOException("download PG " + remoteVersion + " failed from " + urls.size() + " urls", lastError);
             }
         }
 
@@ -257,6 +265,8 @@ public class FileDownloader {
             log.debug("download zx diff {}", remoteVersion);
             String baseUrl = "https://github.com/power721/ZX/releases/download/" + remoteVersion + "/zx" + remoteVersion + ".zip";
             List<String> urls = getDownloadUrls(baseUrl);
+            boolean success = false;
+            Exception lastError = null;
             for (String url : urls) {
                 try {
                     downloadFile(url, zxZip);
@@ -268,10 +278,16 @@ public class FileDownloader {
                     unzipFile(zxZip, zxWebDir);
 
                     saveVersion(zxVersionFile, remoteVersion);
+                    success = true;
                     break;
                 } catch (Exception e) {
                     log.warn("download zx {} failed", url, e);
+                    lastError = e;
                 }
+            }
+            if (!success) {
+                // 全部下载源失败必须上抛:吞掉则 executeWithRetry 捕不到异常,任务假成功且不再重试
+                throw new IOException("download ZX " + remoteVersion + " failed from " + urls.size() + " urls", lastError);
             }
         }
 
@@ -640,11 +656,18 @@ public class FileDownloader {
     private void unzipWithSystemCommand(Path zipFile, Path destDir) throws IOException, InterruptedException {
         log.info("Unzip by linux command: {}", zipFile);
         ProcessBuilder pb = new ProcessBuilder("unzip", "-o", zipFile.toString(), "-d", destDir.toString());
+        // unzip 把每个解压文件名打到 stdout,不排空超管道缓冲(~64KB)子进程就写阻塞、waitFor 永不返回;
+        // 单线程下载 executor 被卡死后所有 pg/zx/xs/movie 任务堆积 —— 文件名对我们无用,直接丢弃并加超时兜底
+        pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
         Process process = pb.start();
 
         String errorOutput = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
 
-        int exitCode = process.waitFor();
+        if (!process.waitFor(10, TimeUnit.MINUTES)) {
+            process.destroyForcibly();
+            throw new IOException("System unzip timeout: " + zipFile);
+        }
+        int exitCode = process.exitValue();
         if (exitCode != 0) {
             throw new IOException("System unzip failed with code " + exitCode + ": " + errorOutput);
         }

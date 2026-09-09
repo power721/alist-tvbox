@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
+import java.time.Duration;
 
 import static cn.har01d.alist_tvbox.util.Constants.ACCESS_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
@@ -112,8 +113,8 @@ public class AccountService {
         this.scheduler = scheduler;
         this.objectMapper = objectMapper;
         this.alistJdbcTemplate = alistJdbcTemplate;
-        this.aListClient = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
-        this.restTemplate = builder.build();
+        this.aListClient = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).connectTimeout(Duration.ofSeconds(10)).readTimeout(Duration.ofSeconds(60)).build();
+        this.restTemplate = builder.connectTimeout(Duration.ofSeconds(10)).readTimeout(Duration.ofSeconds(30)).build();
     }
 
     @PostConstruct
@@ -1199,6 +1200,8 @@ public class AccountService {
         if (account != null) {
             // 先清 AList 侧状态再删本地行:AList 失败(启动中/不可用)时行保留,删除可重试
             account.setShowMyAli(false);
+            // 删除路径强制走移除分支:主账号若保持 master,showMyAliWithAPI 尾部会把两个阿里 storage 重建+启用,本地行删掉后即成永久孤儿
+            account.setMaster(false);
             showMyAliWithAPI(account);
             accountRepository.deleteById(id);
         }

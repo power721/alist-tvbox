@@ -131,6 +131,8 @@ public class IndexService {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT1)
+                .connectTimeout(Duration.ofSeconds(10))
+                .readTimeout(Duration.ofSeconds(60))
                 .build();
         this.objectMapper = objectMapper;
         this.environment = environment;
@@ -331,7 +333,7 @@ public class IndexService {
             downloadZipFile(site, url, name);
         } else {
             log.info("download index file from {}", url);
-            FileUtils.copyURLToFile(new URL(url), file);
+            FileUtils.copyURLToFile(new URL(url), file, 10_000, 60_000);
         }
 
         return file.getAbsolutePath();
@@ -359,7 +361,7 @@ public class IndexService {
     private static String getRemoteTime(Site site, String url) {
         try {
             File file = Files.createTempFile(String.valueOf(site.getId()), ".info").toFile();
-            FileUtils.copyURLToFile(new URL(url), file);
+            FileUtils.copyURLToFile(new URL(url), file, 10_000, 60_000);
             return FileUtils.readFileToString(file, StandardCharsets.UTF_8);
         } catch (Exception e) {
             // ignore
@@ -369,7 +371,7 @@ public class IndexService {
 
     private static void downloadZipFile(Site site, String url, String name) throws IOException {
         File zipFile = new File(".cache/" + site.getId() + "/" + name);
-        FileUtils.copyURLToFile(new URL(url), zipFile);
+        FileUtils.copyURLToFile(new URL(url), zipFile, 10_000, 60_000);
         unzip(zipFile);
         Files.delete(zipFile.toPath());
     }

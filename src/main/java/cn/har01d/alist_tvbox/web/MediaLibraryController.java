@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.qq.tars.common.util.JSON;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -160,7 +161,8 @@ public class MediaLibraryController {
         return result;
     }
 
-    /** 片单分类条目列表:ac=web 走豆瓣封面代理,再统一重建客户端可用绝对地址;已订阅条目带「已追」角标。 */
+    /** 片单分类条目列表:ac=web 走豆瓣封面代理,再统一重建客户端可用绝对地址;已订阅条目带「已追」角标。
+     *  列表对象可能是 pianDanService 缓存里的共享 MovieDetail(pic 重建依赖当次请求 host),拷贝后再改写,防首请求者的 host 烤进缓存。 */
     private Object pianDanList(int uid, String type, int pg, Map<String, String> params) {
         Map<String, String> filters = new java.util.HashMap<>();
         params.forEach((key, value) -> {
@@ -169,11 +171,15 @@ public class MediaLibraryController {
             }
         });
         MovieList result = pianDanService.list(type, "web", pg, 24, filters);
+        List<MovieDetail> items = new ArrayList<>();
         for (MovieDetail item : result.getList()) {
-            item.setVod_pic(mediaSubscriptionService.absoluteClientCover(item.getVod_pic()));
-            item.setVod_remarks(subscribedRemarks(item.getVod_remarks(),
-                    mediaSubscriptionService.isSubscribedTitle(uid, item.getVod_name())));
+            MovieDetail copy = copyDetail(item);
+            copy.setVod_pic(mediaSubscriptionService.absoluteClientCover(copy.getVod_pic()));
+            copy.setVod_remarks(subscribedRemarks(copy.getVod_remarks(),
+                    mediaSubscriptionService.isSubscribedTitle(uid, copy.getVod_name())));
+            items.add(copy);
         }
+        result.setList(items);
         return result;
     }
 
@@ -184,15 +190,7 @@ public class MediaLibraryController {
             return null;
         }
         MovieDetail copy = new MovieDetail();
-        copy.setVod_id(source.getVod_id());
-        copy.setVod_name(source.getVod_name());
-        copy.setVod_pic(source.getVod_pic());
-        copy.setVod_year(source.getVod_year());
-        copy.setVod_actor(source.getVod_actor());
-        copy.setVod_content(source.getVod_content());
-        copy.setType_name(source.getType_name());
-        copy.setVod_remarks(source.getVod_remarks());
-        copy.setExt(source.getExt());
+        BeanUtils.copyProperties(source, copy);
         return copy;
     }
 

@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.live.service;
 
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -376,6 +377,9 @@ public class BilibiliService implements LivePlatform {
     @Override
     public MovieList detail(String tid, String client) throws IOException {
         String[] parts = tid.split("\\$");
+        if (parts.length < 2) {
+            throw new BadRequestException("无效的直播间ID: " + tid);
+        }
         String id = parts[1];
         MovieList result = new MovieList();
         // 关注刷新会对这两个接口产生持续请求,带上 buvid3/Referer(与 home 一致),避免裸请求被游客风控(-352)

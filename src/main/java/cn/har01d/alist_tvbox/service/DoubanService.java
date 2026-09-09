@@ -72,6 +72,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.time.Duration;
 
 import static cn.har01d.alist_tvbox.util.Constants.MOVIE_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
@@ -138,6 +139,8 @@ public class DoubanService {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
+                .connectTimeout(Duration.ofSeconds(10))
+                .readTimeout(Duration.ofSeconds(30))
                 .build();
         this.jdbcTemplate = jdbcTemplate;
         this.environment = environment;

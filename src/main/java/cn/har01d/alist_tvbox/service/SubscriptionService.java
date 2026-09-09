@@ -894,8 +894,11 @@ public class SubscriptionService {
     private void sortSites(Map<String, Object> config, String sort) {
         List<Map<String, String>> list = (List<Map<String, String>>) config.get("sites");
         if (StringUtils.isNotBlank(sort)) {
+            if (list == null) {
+                return;
+            }
             log.info("sort by filed {}", sort);
-            list.sort(Comparator.comparing(a -> a.get(sort)));
+            list.sort(Comparator.comparing(a -> String.valueOf(a.get(sort)), Comparator.nullsFirst(Comparator.naturalOrder())));
         } else {
             List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
             if (sites == null) {

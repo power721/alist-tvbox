@@ -25,6 +25,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.time.Duration;
 
 @Slf4j
 @Component
@@ -69,7 +70,7 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
                                          RestTemplateBuilder builder,
                                          ObjectMapper objectMapper) {
         this.driverAccountRepository = driverAccountRepository;
-        this.restTemplate = builder.build();
+        this.restTemplate = builder.connectTimeout(Duration.ofSeconds(10)).readTimeout(Duration.ofSeconds(30)).build();
         this.objectMapper = objectMapper;
     }
 

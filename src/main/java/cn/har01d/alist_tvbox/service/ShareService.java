@@ -163,7 +163,7 @@ public class ShareService {
         this.environment = environment;
         this.objectMapper = objectMapper;
         this.userService = userService;
-        this.restTemplate = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
+        this.restTemplate = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).connectTimeout(Duration.ofSeconds(10)).readTimeout(Duration.ofSeconds(60)).build();
     }
 
     @PostConstruct
@@ -1577,34 +1577,44 @@ public class ShareService {
         aListLocalService.validateAListStatus();
         for (Integer id : ids) {
             try {
-                shareRepository.deleteById(id);
+                // 先清 AList 侧再删本地行:AList 调用失败时本地行保留,可重试;反序在 AList 失败时留下无句柄的孤儿 storage
                 String token = accountService.login();
                 deleteStorage(id, token);
+                shareRepository.deleteById(id);
             } catch (Exception e) {
-                log.warn("{}", e.getMessage());
+                log.warn("delete share {} failed: {}", id, e.getMessage());
             }
         }
     }
 
     public void deleteShare(Integer id) {
         aListLocalService.validateAListStatus();
-        shareRepository.deleteById(id);
+        // 先清 AList 侧再删本地行:AList 调用失败时本地行保留,删除可重试(重删已消失的 storage 无副作用)
         String token = accountService.login();
         deleteStorage(id, token);
+        shareRepository.deleteById(id);
     }
 
     public int deleteShares(String drive) {
         Integer type = DriveId.toTypeOrNull(drive);
         List<Share> shares = type != null ? shareRepository.findByType(type) : shareRepository.findAll();
-        shareRepository.deleteAll(shares);
-        log.info("delete {} shares type: {}", shares.size(), type);
+        List<Share> removable = shares;
         if (aListLocalService.getStatus() != 0) {
+            // AList 在运行:逐条先清 AList 侧,失败的保留本地行待重试,只删已清理的
             String token = accountService.login();
+            removable = new ArrayList<>(shares.size());
             for (Share share : shares) {
-                deleteStorage(share.getId(), token);
+                try {
+                    deleteStorage(share.getId(), token);
+                    removable.add(share);
+                } catch (Exception e) {
+                    log.warn("delete storage {} failed, keep share row: {}", share.getId(), e.getMessage());
+                }
             }
         }
-        return shares.size();
+        shareRepository.deleteAll(removable);
+        log.info("delete {} shares type: {}", removable.size(), type);
+        return removable.size();
     }
 
     public void deleteStorage(Integer id, String token) {

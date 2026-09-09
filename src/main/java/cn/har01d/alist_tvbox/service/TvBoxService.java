@@ -1699,7 +1699,18 @@ public class TvBoxService {
     }
 
     public Map<String, Object> getPlayUrl(Integer siteId, Integer id, Integer index, boolean getSub, String client, String type) {
-        return getPlayUrl(siteId, id, cache.getIfPresent(id).get(index - 1), getSub, client, type);
+        List<String> paths = cache.getIfPresent(id);
+        if (paths == null || index == null || index < 1 || index > paths.size()) {
+            // 历史回放兜底:路径缓存容量 10 会被 LRU 逐出,按详情重建(播放条目 id-序号 契约不变)
+            Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
+            int sid = siteId != null ? siteId : (meta.getSiteId() != null ? meta.getSiteId() : 1);
+            getMovieDetail(siteService.getById(sid), meta);
+            paths = cache.getIfPresent(id);
+        }
+        if (paths == null || index == null || index < 1 || index > paths.size()) {
+            throw new NotFoundException();
+        }
+        return getPlayUrl(siteId, id, paths.get(index - 1), getSub, client, type);
     }
 
     public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub, String client, String type) {
@@ -2107,13 +2118,15 @@ public class TvBoxService {
         MovieList movieList = getPlaylist("detail", site, path);
         MovieDetail detail = movieList.getList().get(0);
         String[] folders = detail.getVod_play_from().split("\\$\\$\\$");
+        String[] groups = detail.getVod_play_url().split("\\$\\$\\$");
         int i = 0;
-        for (String folder : folders) {
-            String[] urls = detail.getVod_play_url().split("#");
+        for (int f = 0; f < folders.length; f++) {
+            // vod_play_url 是 源$$$源 结构,必须按 folder 对应分片切 #,整串切会把全部剧集在每个 folder 标签下重复输出
+            String[] urls = (f < groups.length ? groups[f] : "").split("#");
             for (String url : urls) {
                 if (i++ >= start) {
                     parts = url.split("\\$");
-                    list.add("#EXTINF:3600000," + detail.getVod_name() + " " + (folders.length > 1 ? folder + " " : "") + parts[0]);
+                    list.add("#EXTINF:3600000," + detail.getVod_name() + " " + (folders.length > 1 ? folders[f] + " " : "") + parts[0]);
                     list.add(parts[1]);
                 }
             }

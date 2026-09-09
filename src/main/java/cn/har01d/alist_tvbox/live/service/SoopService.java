@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.live.service;
 
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.tvbox.Category;
@@ -201,7 +202,11 @@ public class SoopService implements LivePlatform {
 
     @Override
     public MovieList detail(String tid, String client) throws IOException {
-        String bjId = tid.split("\\$")[1];
+        String[] parts = tid.split("\\$");
+        if (parts.length < 2) {
+            throw new BadRequestException("无效的直播间ID: " + tid);
+        }
+        String bjId = parts[1];
         MovieList result = new MovieList();
         MovieDetail detail = new MovieDetail();
         detail.setVod_id(tid);

@@ -81,7 +81,7 @@ public class Message {
 
     public Message(cn.har01d.alist_tvbox.dto.pansou.SearchResult message, Link link) {
         this.mid = message.getMessageId();
-        this.time = message.getDatetime();
+        this.time = message.getDatetime() == null ? Instant.now() : message.getDatetime();
         this.content = message.getContent();
         this.link = link.getUrl();
         this.type = parseType(link.getUrl());

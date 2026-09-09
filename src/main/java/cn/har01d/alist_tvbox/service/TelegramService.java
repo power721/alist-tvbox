@@ -784,11 +784,11 @@ public class TelegramService {
         }
 
         if (type.startsWith("suggestion_")) {
-            return getDoubanItems(type, ac, page, size, region);
+            return getDoubanItems(type, ac, page, size, region, key);
         }
 
         if (type.startsWith("hot_")) {
-            return getDoubanItems(type, ac, page, size, region);
+            return getDoubanItems(type, ac, page, size, region, key);
         }
 
         result = new MovieList();
@@ -939,8 +939,7 @@ public class TelegramService {
         return result;
     }
 
-    private MovieList getDoubanItems(String type, String ac, int page, int size, String region) {
-        String key = ac + "-" + type + "-" + page + "-" + StringUtils.defaultString(region);
+    private MovieList getDoubanItems(String type, String ac, int page, int size, String region, String cacheKey) {
         int start = (page - 1) * size;
         String url = "https://m.douban.com/rexxar/api/v2/subject/recent_hot/movie?limit=" + size + "&start=" + start;
         if (type.equals("hot_tv")) {
@@ -982,7 +981,7 @@ public class TelegramService {
         result.setTotal(total);
         result.setPagecount((total + size - 1) / size);
 
-        douban.put(key, result);
+        douban.put(cacheKey, result);
         log.debug("list result: {}", result);
         return result;
     }
@@ -997,7 +996,7 @@ public class TelegramService {
     }
 
     private static MovieDetail getMovieDetail(JsonNode item) {
-        double score = item.get("rating").get("value").asDouble();
+        double score = item.path("rating").path("value").asDouble(0);
         MovieDetail movieDetail = new MovieDetail();
         String title = item.get("title").asText();
         Integer year = parseYear(item.path("year").asText(item.path("card_subtitle").asText("")));
@@ -1010,7 +1009,7 @@ public class TelegramService {
             movieDetail.setVod_id(PianDanService.subjectId(title, year));
         }
         movieDetail.setVod_name(title);
-        movieDetail.setVod_pic(item.get("pic").get("normal").asText());
+        movieDetail.setVod_pic(item.path("pic").path("normal").asText(""));
         if (score > 0) {
             movieDetail.setVod_remarks(String.valueOf(score));
         }

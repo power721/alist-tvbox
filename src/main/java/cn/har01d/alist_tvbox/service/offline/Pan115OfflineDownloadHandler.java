@@ -26,6 +26,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.time.Duration;
 
 @Slf4j
 @Component
@@ -43,7 +44,7 @@ public class Pan115OfflineDownloadHandler implements OfflineDownloadHandler {
     private final ObjectMapper objectMapper;
 
     public Pan115OfflineDownloadHandler(RestTemplateBuilder builder, ObjectMapper objectMapper) {
-        this.restTemplate = builder.build();
+        this.restTemplate = builder.connectTimeout(Duration.ofSeconds(10)).readTimeout(Duration.ofSeconds(30)).build();
         this.objectMapper = objectMapper;
     }
 

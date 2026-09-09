@@ -260,7 +260,7 @@ public class TextUtils {
 
         int start = newName.indexOf('《');
         if (start > -1) {
-            int end = newName.indexOf('》', index + 1);
+            int end = newName.indexOf('》', start + 1);
             if (end > start) {
                 newName = newName.substring(start + 1, end);
             }
@@ -656,8 +656,8 @@ public class TextUtils {
                 .replace("+", " ")
                 .replace("Ⅰ", "第一季")
                 .replace("Ⅱ", "第二季")
-                .replace("II", "第二季")
                 .replace("III", "第三季")
+                .replace("II", "第二季")
                 .replace("Ⅲ", "第三季")
                 .replace("Ⅳ", "第四季")
                 .replace("Ⅴ", "第五季")
@@ -701,7 +701,8 @@ public class TextUtils {
                 newName = newName.replace("第" + text + "季", " 第" + text + "季");
             }
             String newNum = number2text(text);
-            newName = newName.replace(text, newNum);
+            // 只替换季名整体,防 String.replace 全文误伤(「300勇士 第3季」的 300 不能变「三00」)
+            newName = newName.replaceFirst(java.util.regex.Pattern.quote("第" + text + "季"), "第" + newNum + "季");
         } else {
             m = NUMBER2.matcher(newName);
             if (m.find()) {
@@ -714,7 +715,7 @@ public class TextUtils {
                 if (m.find()) {
                     String text = m.group(1);
                     String newNum = number2text(text.substring(1));
-                    newName = newName.replace(text, " 第" + newNum + "季");
+                    newName = newName.replaceFirst(java.util.regex.Pattern.quote(text), " 第" + newNum + "季");
                 }
             }
         }
@@ -813,7 +814,13 @@ public class TextUtils {
         if (text.isEmpty()) {
             return text;
         }
-        int num = Integer.parseInt(text);
+        int num;
+        try {
+            num = Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            // NUMBER 正则允许「第2.5季」小数形态,非整数直接原样返回,防 parseInt 崩掉调用链
+            return text;
+        }
         String newNum;
         if (num <= 10) {
             newNum = NUMBERS.get(num);
