@@ -1522,6 +1522,9 @@ public class SubscriptionService {
         // vod token(与页面 URL 同源同值):spider 桥经 /check-links/{token} 做网页盘检、
         // /pan-search/{token} 做网页盘搜后端 —— 空白(裸订阅)不下发,两端能力随之关闭
         ext.put("token", StringUtils.defaultString(token));
+        // 盘搜后端能力开关:服务端已配 pansou 上游才开(否则 /pan-search 是死基址,
+        // 不拦公开站流量也不注入基址,页面继续用自己的内置地址)
+        ext.put("panSearch", StringUtils.isNotBlank(appProperties.getPanSouUrl()));
         // 播放同步专用令牌(订阅 token 过不了 /api/playback 的 X-PlaySync-Token 鉴权):
         // spider fm.history 桥的兜底数据源 —— 服务端播放记录(跨设备继续观看)
         ext.put("pt", StringUtils.defaultString(playbackToken));

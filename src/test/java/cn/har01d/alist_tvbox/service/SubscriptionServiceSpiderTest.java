@@ -82,8 +82,10 @@ class SubscriptionServiceSpiderTest {
         assertEquals("http://atv.example/spring.jar", site.get("jar"));
         String pageExt = new String(java.util.Base64.getDecoder().decode((String) site.get("ext")));
         assertTrue(pageExt.contains("\"url\":\"http://atv.example/webhome/pages/电影库.html\""));
-        // 裸订阅(无 token)ext.token 空串:spider 侧盘检/盘搜后端随关闭
+        // 裸订阅(无 token)ext.token 空串:spider 侧盘检/盘搜后端随关闭;
+        // 未配 pansou 上游时能力开关 false(不注入死基址、不拦公开站)
         assertTrue(pageExt.contains("\"token\":\"\""));
+        assertTrue(pageExt.contains("\"panSearch\":false"));
         assertEquals(0, site.get("searchable"));
     }
 
@@ -104,6 +106,25 @@ class SubscriptionServiceSpiderTest {
         Map<String, Object> home = findSite(config, "atv_home");
         String homeExt = new String(java.util.Base64.getDecoder().decode((String) home.get("ext")));
         assertTrue(homeExt.contains("\"token\":\"tok9\""));
+    }
+
+    @Test
+    void webPageSiteEnablesPanSearchWhenUpstreamConfigured() throws Exception {
+        // 盘搜后端能力开关随 pansou 上游配置走;玩偶等第三方页零改动靠 fm.req 透明拦截享用
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        Plugin page = new Plugin();
+        page.setId(7);
+        page.setUrl("/static/webhome/pages/玩偶.html");
+        page.setName("玩偶盘链");
+        SubscriptionService service = newService("{}", mock(WebHomeService.class), List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("plugin-7", false, "玩偶盘链", "玩偶盘链", page)),
+                mock(PluginRepository.class), mock(HistoryRepository.class), appProperties);
+
+        Map<String, Object> config = service.subscription("tok9", "http://up.example/config.json", "", null);
+        String pageExt = new String(java.util.Base64.getDecoder().decode((String) findSite(config, "web_7").get("ext")));
+        assertTrue(pageExt.contains("\"token\":\"tok9\""));
+        assertTrue(pageExt.contains("\"panSearch\":true"));
     }
 
     @BeforeEach
@@ -293,6 +314,13 @@ class SubscriptionServiceSpiderTest {
     private SubscriptionService newService(String upstreamJson, WebHomeService webHomeService,
                                            List<SubscriptionSourceService.SubscriptionSourceRef> sources,
                                            PluginRepository pluginRepository, HistoryRepository historyRepository) {
+        return newService(upstreamJson, webHomeService, sources, pluginRepository, historyRepository, new AppProperties());
+    }
+
+    private SubscriptionService newService(String upstreamJson, WebHomeService webHomeService,
+                                           List<SubscriptionSourceService.SubscriptionSourceRef> sources,
+                                           PluginRepository pluginRepository, HistoryRepository historyRepository,
+                                           AppProperties appProperties) {
         SettingRepository settingRepository = mock(SettingRepository.class);
         when(settingRepository.findById(anyString())).thenAnswer(invocation -> {
             Object key = invocation.getArgument(0);
@@ -313,7 +341,7 @@ class SubscriptionServiceSpiderTest {
 
         SubscriptionService service = new SubscriptionService(
                 mock(Environment.class),
-                new AppProperties(),
+                appProperties,
                 new RestTemplateBuilder(),
                 objectMapper,
                 mock(JdbcTemplate.class),
