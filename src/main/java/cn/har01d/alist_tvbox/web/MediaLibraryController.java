@@ -250,8 +250,9 @@ public class MediaLibraryController {
         String encoded = java.net.URLEncoder.encode(payload, java.nio.charset.StandardCharsets.UTF_8);
         StringBuilder playUrl = new StringBuilder("📄 媒体信息$")
                 .append(MediaSubscriptionService.INFO_PLAY_PREFIX).append(encoded)
-                // 全局搜索:spider 本地拦截跳播放器搜索页(FongMi 系带 keyword 启动即全站自动搜),
-                // 载荷仅剧名,等价片单导航源的跳搜玩法,让片单条目无需切站即可全网找片
+                // 全局搜索:spider 本地拦截跳播放器搜索(优先 CollectActivity 带 keyword 启动即
+                // 全站聚合搜,OK影视 TV 的 SearchActivity 不读 extra 会丢词),载荷仅剧名,
+                // 等价片单导航源的跳搜玩法,让片单条目无需切站即可全网找片
                 .append("#🔍 全局搜索$")
                 .append(MediaSubscriptionService.SEARCH_PLAY_PREFIX)
                 .append(java.net.URLEncoder.encode(detail.getVod_name(), java.nio.charset.StandardCharsets.UTF_8));

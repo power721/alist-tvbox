@@ -64,7 +64,7 @@ WebHome 自定义首页站点,把 alist-tvbox 的订阅追更、片单、最近�
    - `fm.vodInline(payload)`:多集直链临时播放(适合网盘直列场景,`episodes[].resolve`
      支持按集懒解析)。
    - `fm.play(url, title, {headers})`:播 /p 代理直链(网盘代理地址)。
-   - `fm.search(keyword, {direct: true})`:跳原生全局搜索。
+   - `fm.search(keyword, {direct: true})`:跳原生全局搜索。(2026-09-09 现状:普通端优先跳 CollectActivity——OK影视 TV 的 SearchActivity 不读 extra 会丢词,详见网页开发指南)
    - `fm.history()`:本机最近观看(60 天),可做"继续观看"行。
    - `fm.ui.setChrome({mode: "edge"})`:首页融合模式(TV 映射 tv-full)。
    - `fm.pan.check/fm.device/fm.site/fm.config/fm.cache` 等辅助。

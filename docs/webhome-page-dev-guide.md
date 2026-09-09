@@ -58,7 +58,7 @@ ensureFm();
 | `req(url, opts)` | 网络请求,信封 `{ok,status,url,headers,body}`,opts: method/headers/body/responseType(text\|json)/timeout(秒) | 原生 | ✓ 桥内 OkHttp |
 | `res(url, {headers})` | 资源网关(防盗链图),同步返回地址 | 本地网关 | ✓ 客户端 `VideoStreamProxy /res/`(注入页面 UA/Referer 回源;magnet/data-uri/异常直通) |
 | `vod(siteKey, vodId, title, pic)` | 跳原生详情/播放 | 原生 | ✓ VideoActivity.start |
-| `search(keyword)` | 原生全局搜索 | 原生 | ✓ SearchActivity |
+| `search(keyword)` | 原生全局搜索(带词直达结果) | 原生 | ✓ 优先 CollectActivity(keyword extra 启动即全站聚合搜;OK影视 TV 的 SearchActivity 不读 extra 属丢词根因),SearchActivity(keyword/key)回落 |
 | `history()` | 最近观看 | 原生 | ✓ 反射→宿主库读→服务端播放记录三层 |
 | `play(url, title)` | 直链/`push://` 前缀播放 | playUrl | ✓ 转宿主 push_agent(剥 `push://`) |
 | `pan.play({type,url,password,title})` | 网盘直开 | 原生 | ✓ push_agent:提取码按约定嵌 URL(115 系 `password` 其余 `pwd`)→服务端 `/parse`→代理播放 |
@@ -109,6 +109,7 @@ ensureFm();
 | `sdk(...).xxx is not a function` | 宿主桥缺该方法面(对照上表;OK影视 端桩方法已尽量补齐) |
 | 页面拿到数据但"时好时坏" | 未监听 `fmsdk` 重初始化(桥注入晚于首跑) |
 | 玩偶类页面点击网盘只弹提示 | 已修:pan.play 走 push_agent;仍失败看宿主是否含 push_agent 站 |
+| 跳到搜索页但搜索词丢失 | 宿主 SearchActivity 不读 extra(OK影视 TV 形态);已改为优先跳 CollectActivity(带词启动即聚合搜) |
 | 防盗链图不显示 | 走 `fm.res(url,{headers})` 而非裸 `<img src>` |
 
 ## 参考
