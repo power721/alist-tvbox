@@ -642,6 +642,8 @@ AList别名管理
 | POST | `/api/pansou/check/links` | 检测分享链接有效性 |
 | POST | `/check-links` | 检测网盘链接有效性（无token） |
 | POST | `/check-links/{token}` | 检测网盘链接有效性（插件用，带token，disk_type可省略自动推断） |
+| POST | `/pan-search/{token}/api/search` | 网页盘搜透传（PanSou 契约，自定义网页源以本服务为 apiBase，上游与登录态由服务端承担） |
+| POST | `/pan-search/{token}/api/auth/login` | 网页盘搜登录透传（PanSou 契约） |
 | GET | `/pansou` | 盘搜API（无token） |
 | GET | `/pansou/{token}` | 盘搜API（带token） |
 | GET | `/pansou-group` | 按网盘分组的盘搜 API（无 token） |
@@ -686,6 +688,7 @@ Python爬虫插件管理
 | 方法 | 路径 | 描述 |
 |------|------|------|
 | GET | `/plugins/{token}/{id}.txt` | 获取插件内容 |
+| GET | `/plugin-preheat/{token}` | 爬虫插件密文预热清单（常用插件在前，客户端按清单预下载缓存） |
 
 ### PluginFilterController
 插件过滤器管理
