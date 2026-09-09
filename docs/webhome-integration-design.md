@@ -1,7 +1,12 @@
 # WebHome 首页站点集成设计(alist-tvbox × WebHomeTV/默影视)
 
 日期:2026-09-07
-状态:一期已实现(后端注入 + 首页页面 + 客户端能力探测,待真机验收)
+状态:**已演进为 csp_WebHome 单形态通吃(2026-09-09)** —— 能力探测/双形态方案已废弃:
+webhtv/fish 按 `homePage` 字段原生渲染,原版 FongMi/OK影视 由 spring.jar `csp_WebHome`
+弹 WebView 加载同一 URL 并注入对齐 webhtv 完整契约的 `window.fm` SDK(req/桥内 OkHttp、
+res/客户端本地代理、pan.play/push_agent 网盘直开、pan.check/服务端盘检、盘搜桥层透明拦截)。
+**页面开发/移植看 [webhome-page-dev-guide.md](webhome-page-dev-guide.md)**;本文保留
+一期设计过程与客户端契约考证。下述「客户端能力判定」章节为历史方案,仅存档。
 
 ## 客户端能力判定(实现定论)
 
