@@ -41,6 +41,7 @@
     background: rgba(255,255,255,0.06); color: #e8ecf3; font-size: 15px; outline: none;
   }
   .searchbox input:focus { border-color: #4f8cff; background: rgba(79,140,255,0.10); }
+  .searchbox input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
   .searchbox .btn {
     flex: 0 0 auto; margin-left: 10px; height: 40px; padding: 0 10px;
     border: none; border-radius: 20px; background: #2c4a8f; color: #fff;
@@ -266,7 +267,7 @@
   </div>
   <div class="searchrow">
     <div class="searchbox">
-      <input id="kw" type="text" placeholder="搜索影视 / 订阅…" autocomplete="off">
+      <input id="kw" type="search" inputmode="search" enterkeyhint="search" placeholder="搜索影视 / 订阅…" autocomplete="off">
       <button class="btn" id="search-btn" type="button">搜索</button>
       <button class="icon-btn" id="refresh-btn" type="button" title="刷新">↻ 刷新</button>
     </div>
@@ -891,9 +892,15 @@
   qs('search-btn').onclick = function () { doSearch(qs('kw').value); };
   qs('kw').addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter' || ev.keyCode === 13) { doSearch(qs('kw').value); }
-    /* 方向下放行冒泡:输入框内按下键回网格(其余键不冒泡,保持光标编辑) */
+    /* 方向下放行冒泡:输入框内按下键回网格;方向右在空框或光标已到末尾时放行
+     * (顶栏循环到搜索按钮,IME 输入态合成中的方向键不经过这里,不受影响) */
     if (ev.key === 'ArrowDown' || ev.keyCode === 20) return;
-    ev.stopPropagation(); /* 输入框内不触发全局方向导航 */
+    if (ev.key === 'ArrowRight' || ev.keyCode === 22) {
+      var len = this.value ? this.value.length : 0;
+      var pos0 = this.selectionStart, pos1 = this.selectionEnd;
+      if (!len || (pos0 === len && pos1 === len)) return;
+    }
+    ev.stopPropagation(); /* 其余键不冒泡,保持光标编辑 */
   });
   qs('refresh-btn').onclick = function () {
     if (fm && fm.reload) { fm.reload(); } else { location.reload(); }
