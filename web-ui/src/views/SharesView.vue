@@ -26,7 +26,8 @@
 
     <div class="page-card">
     <div class="table-scroll-wrapper">
-  <el-table :data="shares" v-loading="loading" border @selection-change="handleSelection" @sort-change="handleSort" style="width: 100%; min-width: 1200px">
+  <el-table :data="shares" v-loading="loading" border @selection-change="handleSelection" @sort-change="handleSort"
+            :default-sort="defaultSort" style="width: 100%; min-width: 1200px">
     <el-table-column type="selection" width="55" />
     <el-table-column prop="id" label="ID" width="70" sortable="custom" />
     <el-table-column prop="path" label="路径" sortable="custom">
@@ -473,11 +474,11 @@ const storage = ref<Storage>({
   status: '',
   addition: ''
 })
-const sort = ref('')
+const sort = ref(localStorage.getItem('share_sort') || '')
 const page = ref(1)
 const page1 = ref(1)
 const size = ref(20)
-const type = ref('-1')
+const type = ref(localStorage.getItem('share_type') || '-1')
 const size1 = ref(20)
 const total = ref(0)
 const total1 = ref(0)
@@ -541,6 +542,12 @@ const selectedFile = ref<UploadRawFile | null>(null)
 
 const hasContent = computed(() => sharesDto.value.content.trim().length > 0)
 const hasFile = computed(() => selectedFile.value !== null)
+
+// 恢复上次排序时,表头箭头也要跟上(default-sort 只在表格首次渲染生效,恢复场景恰好只用一次)
+const defaultSort = computed(() => {
+  const [prop, dir] = sort.value.split(',')
+  return dir ? { prop, order: dir === 'asc' ? 'ascending' : 'descending' } : {}
+})
 
 const handleAdd = () => {
   dialogTitle.value = '添加分享'
@@ -688,6 +695,7 @@ const getShareLink = (shareInfo: ShareInfo) => {
 }
 
 const filter = () => {
+  localStorage.setItem('share_type', type.value)
   loadShares(1)
 }
 
@@ -758,11 +766,8 @@ const refreshStorages = () => {
 
 const handleSizeChange = (value: number) => {
   size.value = value
-  page.value = 1
-  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&type=' + type.value).then(({ data }) => {
-    shares.value = data.content
-    total.value = data.totalElements
-  })
+  // 统一走 loadShares:此前这里手拼 URL 丢了 sort/keyword,改页大小后排序与搜索词会被清掉
+  loadShares(1)
 }
 
 const handleSize1Change = (value: number) => {
@@ -846,6 +851,7 @@ const handleSort = (data: { prop: string, order: any }) => {
   } else {
     sort.value = data.prop
   }
+  localStorage.setItem('share_sort', sort.value)
   loadShares(page.value)
 }
 
