@@ -568,7 +568,13 @@
 
   function moveHorizontal(delta) {
     if (!current) { focusFirst(); return; }
-    if (current.entry == null) { focusFirst(); return; }
+    if (current.entry == null) {
+      var ti = toolbarRecords.indexOf(current);
+      if (ti >= 0 && toolbarRecords.length) {
+        focusRecord(toolbarRecords[(ti + delta + toolbarRecords.length) % toolbarRecords.length]);
+      }
+      return;
+    }
     var cards = entryCards(current.entry);
     var idx = cards.indexOf(current.node);
     if (idx < 0) idx = 0;
@@ -583,8 +589,14 @@
   }
   function moveVertical(delta) {
     if (!current) { focusFirst(); return; }
+    if (current.entry == null) {
+      /* 顶栏工具组:向下回网格首行,向上到顶无事 */
+      if (delta > 0) focusFirst();
+      return;
+    }
     var pos = rowPosition(current);
     var nextPos = pos.row + delta;
+    if (nextPos < 0) { focusToolbar(); return; }
     while (nextPos >= 0 && nextPos < rowRegistry.length) {
       var entry = rowRegistry[nextPos];
       var cards = entryCards(entry);
@@ -626,6 +638,15 @@
   }
   /* buildRow 里 more 链接登记后回填 entry.more,供水平导航 */
   function attachMore(entry, record) { entry.more = record; }
+
+  /* ---------- 顶栏工具组(搜索框→搜索→刷新):网格之上的虚拟行 ----------
+   * 首行再向上聚焦于此;输入框内方向左右仍归光标编辑(见 kw 键处理),仅下键回网格 */
+  var toolbarRecords = [registerFocusable(qs('kw'), null, 0),
+    registerFocusable(qs('search-btn'), null, 1),
+    registerFocusable(qs('refresh-btn'), null, 2)];
+  function focusToolbar() {
+    if (toolbarRecords.length) focusRecord(toolbarRecords[0]);
+  }
 
   document.addEventListener('keydown', function (ev) {
     var key = ev.key;
@@ -870,6 +891,8 @@
   qs('search-btn').onclick = function () { doSearch(qs('kw').value); };
   qs('kw').addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter' || ev.keyCode === 13) { doSearch(qs('kw').value); }
+    /* 方向下放行冒泡:输入框内按下键回网格(其余键不冒泡,保持光标编辑) */
+    if (ev.key === 'ArrowDown' || ev.keyCode === 20) return;
     ev.stopPropagation(); /* 输入框内不触发全局方向导航 */
   });
   qs('refresh-btn').onclick = function () {
