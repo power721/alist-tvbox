@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
 import cn.har01d.alist_tvbox.service.PanLinkCheckService;
+import cn.har01d.alist_tvbox.service.PanSouClient;
 import cn.har01d.alist_tvbox.service.RemoteSearchService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 
@@ -26,13 +27,16 @@ public class RemoteSearchController {
     private final SubscriptionService subscriptionService;
     private final RemoteSearchService remoteSearchService;
     private final PanLinkCheckService panLinkCheckService;
+    private final PanSouClient panSouClient;
     private final ObjectMapper objectMapper;
 
     public RemoteSearchController(SubscriptionService subscriptionService, RemoteSearchService remoteSearchService,
-                                  PanLinkCheckService panLinkCheckService, ObjectMapper objectMapper) {
+                                  PanLinkCheckService panLinkCheckService, PanSouClient panSouClient,
+                                  ObjectMapper objectMapper) {
         this.subscriptionService = subscriptionService;
         this.remoteSearchService = remoteSearchService;
         this.panLinkCheckService = panLinkCheckService;
+        this.panSouClient = panSouClient;
         this.objectMapper = objectMapper;
     }
 
@@ -63,6 +67,21 @@ public class RemoteSearchController {
     @GetMapping("/pansou")
     public Object pansou(String id, String t, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg) {
         return pansou("", id, t, wd, title, pg);
+    }
+
+    // ── 网页盘搜后端化:移植页(玩偶/nostr)说 PanSou HTTP 契约({apiBase}/api/search 等),
+    //    apiBase 指向 /pan-search/{token} 即自托管 —— 上游与登录态由服务端配置(PanSouClient)承担 ──
+
+    @PostMapping("/pan-search/{token}/api/search")
+    public ObjectNode panSearch(@PathVariable String token, @RequestBody ObjectNode body) {
+        subscriptionService.checkToken(token);
+        return panSouClient.postJson("/api/search", body);
+    }
+
+    @PostMapping("/pan-search/{token}/api/auth/login")
+    public ObjectNode panSearchLogin(@PathVariable String token, @RequestBody ObjectNode body) {
+        subscriptionService.checkToken(token);
+        return panSouClient.postJson("/api/auth/login", body);
     }
 
     @GetMapping("/pansou/{token}")

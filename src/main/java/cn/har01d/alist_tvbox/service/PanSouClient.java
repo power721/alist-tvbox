@@ -130,6 +130,14 @@ public class PanSouClient {
         return restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), responseType).getBody();
     }
 
+    /**
+     * PanSou 契约透传(网页盘搜后端化):移植页(玩偶/nostr)以本服务为 apiBase,
+     * 同路径同体转发上游并附服务端登录态 —— 页面零改动即自托管,上游配额/凭证由服务端承担。
+     */
+    public ObjectNode postJson(String path, ObjectNode body) {
+        return post(appProperties.getPanSouUrl() + path, body, ObjectNode.class);
+    }
+
     /** TVBox 盘型代码 → PanSou cloud 名(搜索 cloud_types 与盘检 disk_type 共用);未知返回 null。 */
     public static String cloudType(String type) {
         if (type == null) {

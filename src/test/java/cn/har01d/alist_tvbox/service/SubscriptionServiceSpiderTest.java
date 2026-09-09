@@ -82,7 +82,28 @@ class SubscriptionServiceSpiderTest {
         assertEquals("http://atv.example/spring.jar", site.get("jar"));
         String pageExt = new String(java.util.Base64.getDecoder().decode((String) site.get("ext")));
         assertTrue(pageExt.contains("\"url\":\"http://atv.example/webhome/pages/电影库.html\""));
+        // 裸订阅(无 token)ext.token 空串:spider 侧盘检/盘搜后端随关闭
+        assertTrue(pageExt.contains("\"token\":\"\""));
         assertEquals(0, site.get("searchable"));
+    }
+
+    @Test
+    void webPageSiteEmbedsVodTokenForPanBackends() throws Exception {
+        // 盘检(/check-links)与盘搜后端(/pan-search)共用 ext.token,与页面 URL 同 token 空间
+        Plugin page = new Plugin();
+        page.setId(6);
+        page.setUrl("/static/webhome/pages/玩偶.html");
+        page.setName("玩偶盘链");
+        SubscriptionService service = newService("{}", mock(WebHomeService.class), List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("plugin-6", false, "玩偶盘链", "玩偶盘链", page),
+                WEB_HOME_SOURCE));
+
+        Map<String, Object> config = service.subscription("tok9", "http://up.example/config.json", "", null);
+        String pageExt = new String(java.util.Base64.getDecoder().decode((String) findSite(config, "web_6").get("ext")));
+        assertTrue(pageExt.contains("\"token\":\"tok9\""));
+        Map<String, Object> home = findSite(config, "atv_home");
+        String homeExt = new String(java.util.Base64.getDecoder().decode((String) home.get("ext")));
+        assertTrue(homeExt.contains("\"token\":\"tok9\""));
     }
 
     @BeforeEach

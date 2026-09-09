@@ -1442,7 +1442,7 @@ public class SubscriptionService {
                     Map<String, Object> site;
                     if (PluginService.isWebPagePlugin(source.plugin())) {
                         // 自定义网页源(webhome/pages/*.html):csp_WebHome 形态,非 spider 插件站点
-                        site = buildWebPageSite(source.plugin(), playbackToken);
+                        site = buildWebPageSite(source.plugin(), token, playbackToken);
                     } else {
                         site = buildPluginSite(source.plugin(), embedToken, secret,
                                 playbackToken, configUrl);
@@ -1480,7 +1480,7 @@ public class SubscriptionService {
         if (StringUtils.isNotBlank(playbackToken)) {
             pageUrl += "&pt=" + playbackToken;
         }
-        Map<String, Object> site = buildWebHomeLikeSite(WEB_HOME_KEY, name, pageUrl, playbackToken);
+        Map<String, Object> site = buildWebHomeLikeSite(WEB_HOME_KEY, name, pageUrl, token, playbackToken);
         log.debug("add WebHome site: token={}", homeToken);
         return site;
     }
@@ -1489,7 +1489,7 @@ public class SubscriptionService {
      * 自定义网页源站点(static/webhome/pages/*.html 自动注册,名称可在订阅源管理改):
      * 与内置影视首页同款 csp_WebHome 单形态;页面地址经 /webhome/** no-cache,无需版本号。
      */
-    private Map<String, Object> buildWebPageSite(Plugin plugin, String playbackToken) {
+    private Map<String, Object> buildWebPageSite(Plugin plugin, String token, String playbackToken) {
         String pageUrl = readHostAddress("") + PluginService.webPageUrl(plugin);
         if (StringUtils.isNotBlank(playbackToken)) {
             pageUrl += "?pt=" + playbackToken;
@@ -1497,13 +1497,14 @@ public class SubscriptionService {
         Map<String, Object> site = buildWebHomeLikeSite(
                 PluginService.webPageSiteKey(plugin),
                 StringUtils.defaultIfBlank(plugin.getName(), "网页"),
-                pageUrl, playbackToken);
+                pageUrl, token, playbackToken);
         log.debug("add web page site: {} -> {}", site.get("key"), pageUrl);
         return site;
     }
 
     /** csp_WebHome 站点公共字段(内置影视首页与自定义网页源共用)。 */
-    private Map<String, Object> buildWebHomeLikeSite(String key, String name, String pageUrl, String playbackToken) {
+    private Map<String, Object> buildWebHomeLikeSite(String key, String name, String pageUrl,
+                                                     String token, String playbackToken) {
         Map<String, Object> site = new HashMap<>();
         site.put("key", key);
         site.put("name", StringUtils.defaultIfBlank(name, "影视首页"));
@@ -1518,6 +1519,9 @@ public class SubscriptionService {
         site.put("jar", readHostAddress("") + "/spring.jar");
         Map<String, Object> ext = new HashMap<>();
         ext.put("url", pageUrl);
+        // vod token(与页面 URL 同源同值):spider 桥经 /check-links/{token} 做网页盘检、
+        // /pan-search/{token} 做网页盘搜后端 —— 空白(裸订阅)不下发,两端能力随之关闭
+        ext.put("token", StringUtils.defaultString(token));
         // 播放同步专用令牌(订阅 token 过不了 /api/playback 的 X-PlaySync-Token 鉴权):
         // spider fm.history 桥的兜底数据源 —— 服务端播放记录(跨设备继续观看)
         ext.put("pt", StringUtils.defaultString(playbackToken));
