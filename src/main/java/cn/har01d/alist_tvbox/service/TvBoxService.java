@@ -136,7 +136,7 @@ public class TvBoxService {
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final Cache<Integer, List<String>> cache = Caffeine.newBuilder()
-            .maximumSize(10)
+            .maximumSize(20)
             .build();
     private final Set<String> excludeNames = Set.of("国产剧", "欧美剧", "电视剧", "美剧", "短剧", "动漫", "国漫", "纪录片", "综艺", "电子书", "有声书", "有声小说", "电影", "电影合集", "动画电影", "欧美电影", "演唱会", "日韩剧", "每日更新", "temp", "合集1", "合集2", "合集3");
 
@@ -1702,7 +1702,7 @@ public class TvBoxService {
     public Map<String, Object> getPlayUrl(Integer siteId, Integer id, Integer index, boolean getSub, String client, String type) {
         List<String> paths = cache.getIfPresent(id);
         if (paths == null || index == null || index < 1 || index > paths.size()) {
-            // 历史回放兜底:路径缓存容量 10 会被 LRU 逐出,按详情重建(播放条目 id-序号 契约不变)
+            // 历史回放兜底:路径缓存容量 20 会被 LRU 逐出,按详情重建(播放条目 id-序号 契约不变)
             Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
             int sid = siteId != null ? siteId : (meta.getSiteId() != null ? meta.getSiteId() : 1);
             getMovieDetail(siteService.getById(sid), meta);
