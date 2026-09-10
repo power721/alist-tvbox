@@ -1241,12 +1241,15 @@ public class TvBoxService {
             List<Sort.Order> orders = new ArrayList<>();
             for (String item : sort.split(";")) {
                 parts = item.split(",");
+                if (parts.length < 2) {
+                    continue; // 脏 filter JSON(如 {"sort":"x"})无逗号分段,跳过该排序键别越界
+                }
                 Sort.Order order = parts[1].equals("asc") ? Sort.Order.asc(parts[0]) : Sort.Order.desc(parts[0]);
                 orders.add(order);
             }
-            pageable = PageRequest.of(page - 1, size, Sort.by(orders));
+            pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(orders));
         } else {
-            pageable = PageRequest.of(page - 1, size);
+            pageable = PageRequest.of(Math.max(0, page - 1), size);
         }
 
         AListAlias aListAlias = aliasRepository.findByPath(path);
@@ -1947,6 +1950,10 @@ public class TvBoxService {
         if (ID_PATH.matcher(path).matches()) {
             String[] ids = path.split("\\-");
             List<Meta> list = metaRepository.findAllById(Arrays.stream(ids).map(Integer::parseInt).collect(Collectors.toList()));
+            if (list.isEmpty()) {
+                // id 已被删除(历史记录回访):空列表 get(0) 越界
+                throw new NotFoundException();
+            }
             Meta meta = list.get(0);
             if (!tenantService.valid(meta.getPath())) {
                 return null;
@@ -2117,6 +2124,10 @@ public class TvBoxService {
         List<String> list = new ArrayList<>();
         list.add("#EXTM3U");
         MovieList movieList = getPlaylist("detail", site, path);
+        // 租户失效/空目录时 getPlaylist 可返回空,直接 get(0) 会 NPE
+        if (movieList == null || movieList.getList() == null || movieList.getList().isEmpty()) {
+            throw new NotFoundException();
+        }
         MovieDetail detail = movieList.getList().get(0);
         String[] folders = detail.getVod_play_from().split("\\$\\$\\$");
         String[] groups = detail.getVod_play_url().split("\\$\\$\\$");
@@ -2885,8 +2896,9 @@ public class TvBoxService {
                     .replaceQuery("")
                     .build()
                     .toUriString();
+            // localhost 无路径 URL 时 indexOf 返 -1,substring(0) 会拼出 proxy+原串垃圾地址
             int index = url.indexOf('/', 16);
-            url = proxy + url.substring(index + 1);
+            url = index >= 0 ? proxy + url.substring(index + 1) : proxy;
             log.debug("fixHttp: {}", url);
         }
 
@@ -3036,7 +3048,9 @@ public class TvBoxService {
         device.setId(99);
         device.setIp(buildTvUrl());
         device.setName("AList TvBox");
-        device.setUuid(settingService.get("system_id").getValue());
+        // system_id 行理论上 setup 时必建,但配置缺失时 get() 返 null 直接 NPE
+        var systemId = settingService.get("system_id");
+        device.setUuid(systemId == null ? "" : systemId.getValue());
         return device;
     }
 

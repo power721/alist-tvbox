@@ -144,6 +144,8 @@ public class PlaybackSyncService {
                 applyRecord(id, record, null, null);
             }
         }
+        // 每 tick 全量拉取看着重,但 trim 恒把表压在 ~SYNC_HISTORY_LIMIT 量级,扫描有界;
+        // 计数触发会让「单批灌 151 条裁到 100」的窗口语义破坏(测试即契约),保持逐次 trim
         trimHistory(id.uid(), id.syncScope());
     }
 

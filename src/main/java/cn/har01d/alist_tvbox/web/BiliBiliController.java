@@ -38,23 +38,27 @@ public class BiliBiliController {
     public Object api(String t, String ids, String wd,
                       boolean quick,
                       FilterDto filter,
+                      @RequestParam(name = "client", required = false) String clientParam,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request,
                       HttpServletResponse response) throws IOException {
-        return api("", t, ids, wd, quick, filter, pg, request, response);
+        return api("", t, ids, wd, quick, filter, clientParam, pg, request, response);
     }
 
     @GetMapping("/bilibili/{token}")
     public Object api(@PathVariable String token, String t, String ids, String wd,
                       boolean quick,
                       FilterDto filter,
+                      @RequestParam(name = "client", required = false) String clientParam,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request,
                       HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);
         response.setContentType("application/json");
 
-        String client = request.getHeader("X-CLIENT");
+        // 会话键优先取配置下发时烤进 URL 的一次性设备标识(?client=,共享 token 部署按下载隔离翻页会话),
+        // 老配置无该参数回落 X-CLIENT 头,再回落共享桶 —— 各端 B站翻页游标从此按设备分桶
+        String client = clientParam != null && !clientParam.isBlank() ? clientParam : request.getHeader("X-CLIENT");
         log.info("path: {}  folder: {}  keyword: {}  filter: {}  quick: {} page: {}", ids, t, wd, filter, quick, pg);
         Object result;
         if (ids != null && !ids.isEmpty()) {
@@ -64,11 +68,11 @@ public class BiliBiliController {
                 result = biliBiliService.getDetail(ids, client);
             }
         } else if (t != null && !t.isEmpty()) {
-            result = biliBiliService.getMovieList(t, filter, pg);
+            result = biliBiliService.getMovieList(t, filter, pg, client);
         } else if (wd != null && !wd.isEmpty()) {
-            result = biliBiliService.search(wd, filter.getSort(), filter.getDuration(), 0, quick);
+            result = biliBiliService.search(wd, filter.getSort(), filter.getDuration(), 0, quick, client);
         } else {
-            result = biliBiliService.getCategoryList();
+            result = biliBiliService.getCategoryList(client);
         }
         return result;
     }

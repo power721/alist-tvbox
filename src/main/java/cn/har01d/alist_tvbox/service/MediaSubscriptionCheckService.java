@@ -4813,9 +4813,18 @@ public class MediaSubscriptionCheckService {
     /** 主网盘:订阅级 main_drives 覆盖 > 全局 Setting msub_main_drives(均为逗号分隔分享类型码,取前 2)。
      * 巡检保证该盘完整剧集覆盖,播放列表固定出该盘线路。subscription 为 null 时只看全局(preview 无订阅上下文)。 */
     List<String> mainDrives(MediaSubscription subscription) {
+        return doMainDrives(subscription, settingRepository.findById(MSUB_MAIN_DRIVES).map(s -> s.getValue()).orElse(""));
+    }
+
+    /** 批量装配版:globalRaw 请求内取一次传入,消逐订阅 Setting 读。 */
+    List<String> mainDrives(MediaSubscription subscription, String globalMainDrivesRaw) {
+        return doMainDrives(subscription, globalMainDrivesRaw);
+    }
+
+    private List<String> doMainDrives(MediaSubscription subscription, String globalRaw) {
         String raw = subscription == null ? null : subscription.getMainDrives();
         if (StringUtils.isBlank(raw)) {
-            raw = settingRepository.findById(MSUB_MAIN_DRIVES).map(s -> s.getValue()).orElse("");
+            raw = globalRaw;
         }
         if (StringUtils.isBlank(raw)) {
             return List.of();
@@ -4851,8 +4860,17 @@ public class MediaSubscriptionCheckService {
     /** 候选盘白名单:主网盘 ∪ 扩展网盘。空 = 主/扩展均未配置,不限盘(兼容旧行为);
      * 配置了主网盘后白名单以外的盘不再入池/探测/换源/补线 —— 默认只有主网盘的源。 */
     Set<String> allowedCandidateDrives(MediaSubscription subscription) {
-        Set<String> allowed = new java.util.LinkedHashSet<>(mainDrives(subscription));
-        allowed.addAll(extendedDrives());
+        return doAllowedCandidateDrives(mainDrives(subscription), extendedDrives());
+    }
+
+    /** 批量装配版:extended/globalRaw 请求内取一次传入,消逐订阅 Setting 读。 */
+    Set<String> allowedCandidateDrives(MediaSubscription subscription, List<String> extended, String globalMainDrivesRaw) {
+        return doAllowedCandidateDrives(mainDrives(subscription, globalMainDrivesRaw), extended);
+    }
+
+    private Set<String> doAllowedCandidateDrives(List<String> main, List<String> extended) {
+        Set<String> allowed = new java.util.LinkedHashSet<>(main);
+        allowed.addAll(extended);
         return allowed;
     }
 

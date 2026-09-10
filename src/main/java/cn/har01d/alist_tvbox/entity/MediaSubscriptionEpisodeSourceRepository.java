@@ -46,6 +46,13 @@ public interface MediaSubscriptionEpisodeSourceRepository extends JpaRepository<
             + " where e.subscriptionId = ?1 and s.state in ?2 and r.state = 'MOUNTED'")
     List<Integer> findNumbersBySubscriptionAndStatesIn(int subscriptionId, Collection<String> states);
 
+    /** 批量版 {@link #findNumbersBySubscriptionAndStatesIn}:一次取回多订阅的 (订阅id, 集号) 投影,列表装配消 N+1。 */
+    @Query("select distinct e.subscriptionId, e.number from MediaSubscriptionEpisode e"
+            + " join MediaSubscriptionEpisodeSource s on s.episodeId = e.id"
+            + " join MediaSubscriptionResource r on s.resourceId = r.id"
+            + " where e.subscriptionId in ?1 and s.state in ?2 and r.state = 'MOUNTED'")
+    List<Object[]> findSubscriptionIdAndNumbersByStatesIn(Collection<Integer> subscriptionIds, Collection<String> states);
+
     /** 每个资源已记录的分集文件大小平均数(候选池"单集平均体积"列)。null fileSize 行不计入。 */
     @Query("select s.resourceId, avg(s.fileSize) from MediaSubscriptionEpisodeSource s"
             + " where s.resourceId in ?1 and s.fileSize is not null group by s.resourceId")

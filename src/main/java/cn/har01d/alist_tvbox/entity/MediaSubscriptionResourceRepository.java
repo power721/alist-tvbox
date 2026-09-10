@@ -9,6 +9,9 @@ import java.util.Optional;
 public interface MediaSubscriptionResourceRepository extends JpaRepository<MediaSubscriptionResource, Integer> {
     List<MediaSubscriptionResource> findBySubscriptionIdOrderByScoreDesc(int subscriptionId);
 
+    /** 批量版:多订阅资源一次取回(列表装配消 N+1,排序由调用方按 score 降序补齐)。 */
+    List<MediaSubscriptionResource> findBySubscriptionIdIn(java.util.Collection<Integer> subscriptionIds);
+
     /** 共享挂载守卫:该 share 是否仍被其它订阅的资源行引用。 */
     boolean existsByShareIdAndSubscriptionIdNot(Integer shareId, Integer subscriptionId);
 

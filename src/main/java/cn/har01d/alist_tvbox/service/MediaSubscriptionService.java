@@ -15,6 +15,7 @@ import cn.har01d.alist_tvbox.entity.MediaSubscription;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisode;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeSource;
+import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEvent;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionEventRepository;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionRepository;
@@ -44,6 +45,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -192,7 +194,9 @@ public class MediaSubscriptionService {
                 checkService.prewarmCoverAsync(subscription);
             }
         }
-        return subscriptions.stream().map(this::toDto).toList();
+        // 批量装配:逐订阅 toDto 是每条 4-6 次查询+Setting 读(百级订阅=单请求数百查询),一次 IN 预取按订阅分组
+        ListBatchContext ctx = loadBatchContext(subscriptions);
+        return subscriptions.stream().map(s -> toDto(s, ctx)).toList();
     }
 
     @Transactional
@@ -3076,13 +3080,20 @@ public class MediaSubscriptionService {
      * 快照由巡检 refreshMetadata / 异步预热(prewarmCoverAsync)回填。
      */
     private String coverOf(MediaSubscription subscription) {
+        return coverOf(subscription, null);
+    }
+
+    /** @param ctx 列表批量上下文(null=单条现查)。 */
+    private String coverOf(MediaSubscription subscription, ListBatchContext ctx) {
         if (StringUtils.isNotBlank(subscription.getCoverUrl())) {
             return subscription.getCoverUrl();
         }
         if (subscription.getDoubanId() != null) {
-            var movie = movieRepository.findById(subscription.getDoubanId()).orElse(null);
-            if (movie != null && StringUtils.isNotBlank(movie.getCover())) {
-                return movie.getCover();
+            String cover = ctx != null
+                    ? ctx.coverByDoubanId().get(subscription.getDoubanId())
+                    : movieRepository.findById(subscription.getDoubanId()).map(Movie::getCover).orElse(null);
+            if (StringUtils.isNotBlank(cover)) {
+                return cover;
             }
         }
         return Constants.ALIST_PIC;
@@ -3213,7 +3224,51 @@ public class MediaSubscriptionService {
         return split.isEmpty() ? null : String.join("\n", split);
     }
 
+    /** 列表批量装配上下文:一次 IN 查询按订阅分组,消 toDto 逐订阅 N+1(百级订阅单请求可省数百次查询)。 */
+    private record ListBatchContext(
+            Map<Integer, List<MediaSubscriptionResource>> resourcesBySub,
+            Map<Integer, Set<Integer>> presentBySub,
+            Map<Integer, String> coverByDoubanId,
+            String globalMainDrivesRaw,
+            List<String> extendedDrives) {}
+
+    private ListBatchContext loadBatchContext(List<MediaSubscription> subscriptions) {
+        if (subscriptions.isEmpty()) {
+            return new ListBatchContext(Map.of(), Map.of(), Map.of(), "", List.of());
+        }
+        List<Integer> ids = subscriptions.stream().map(MediaSubscription::getId).toList();
+        Map<Integer, List<MediaSubscriptionResource>> resourcesBySub = new HashMap<>();
+        for (MediaSubscriptionResource r : resourceRepository.findBySubscriptionIdIn(ids)) {
+            resourcesBySub.computeIfAbsent(r.getSubscriptionId(), k -> new ArrayList<>()).add(r);
+        }
+        // 与单条 findBySubscriptionIdOrderByScoreDesc 同序(score 降序,null 兜底)
+        resourcesBySub.values().forEach(list -> list.sort(Comparator
+                .comparing(MediaSubscriptionResource::getScore, Comparator.nullsLast(Comparator.reverseOrder()))));
+        Map<Integer, Set<Integer>> presentBySub = new HashMap<>();
+        for (Object[] row : episodeSourceRepository.findSubscriptionIdAndNumbersByStatesIn(ids, LIVE_EPISODE_STATES)) {
+            presentBySub.computeIfAbsent((Integer) row[0], k -> new HashSet<>()).add((Integer) row[1]);
+        }
+        Map<Integer, String> coverByDoubanId = new HashMap<>();
+        List<Integer> doubanIds = subscriptions.stream().map(MediaSubscription::getDoubanId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        if (!doubanIds.isEmpty()) {
+            for (Movie movie : movieRepository.findAllById(doubanIds)) {
+                if (StringUtils.isNotBlank(movie.getCover())) {
+                    coverByDoubanId.put(movie.getId(), movie.getCover());
+                }
+            }
+        }
+        String globalRaw = settingRepository.findById(MediaSubscriptionCheckService.MSUB_MAIN_DRIVES)
+                .map(Setting::getValue).orElse("");
+        return new ListBatchContext(resourcesBySub, presentBySub, coverByDoubanId, globalRaw, checkService.extendedDrives());
+    }
+
     MediaSubscriptionDto toDto(MediaSubscription subscription) {
+        return toDto(subscription, null);
+    }
+
+    /** @param ctx 列表批量装配上下文(null=单条路径,逐项现查)。 */
+    MediaSubscriptionDto toDto(MediaSubscription subscription, ListBatchContext ctx) {
         MediaSubscriptionDto dto = new MediaSubscriptionDto();
         dto.setId(subscription.getId());
         dto.setName(subscription.getName());
@@ -3228,7 +3283,7 @@ public class MediaSubscriptionService {
         dto.setOfficialTotal(subscription.getOfficialTotal());
         dto.setOfficialStatus(subscription.getOfficialStatus());
         dto.setNextAirTime(subscription.getNextAirTime());
-        String cover = coverOf(subscription);
+        String cover = coverOf(subscription, ctx);
         dto.setCover(Constants.ALIST_PIC.equals(cover) ? null : proxiedCover(cover));
         dto.setMode(subscription.getMode());
         dto.setAccountId(subscription.getAccountId());
@@ -3242,7 +3297,7 @@ public class MediaSubscriptionService {
         dto.setManualTotalEpisodes(subscription.getManualTotalEpisodes());
         dto.setCurrentEpisodes(subscription.getCurrentEpisodes());
         dto.setMaxEpisode(subscription.getMaxEpisode());
-        dto.setMissingEpisodes(missingEpisodes(subscription));
+        dto.setMissingEpisodes(missingEpisodes(subscription, ctx));
         dto.setStallCount(subscription.getStallCount());
         dto.setCheckIntervalHours(subscription.getCheckIntervalHours());
         dto.setCustomAirClock(subscription.getCustomAirClock());
@@ -3250,8 +3305,12 @@ public class MediaSubscriptionService {
         dto.setNextCheckTime(subscription.getNextCheckTime());
         dto.setLastCheckTime(subscription.getLastCheckTime());
         dto.setCreatedTime(subscription.getCreatedTime());
-        List<MediaSubscriptionResource> resources = resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId());
-        Set<String> allowedDrives = checkService.allowedCandidateDrives(subscription); // 与候选源抽屉同口径
+        List<MediaSubscriptionResource> resources = ctx != null
+                ? ctx.resourcesBySub().getOrDefault(subscription.getId(), List.of())
+                : resourceRepository.findBySubscriptionIdOrderByScoreDesc(subscription.getId());
+        Set<String> allowedDrives = ctx != null
+                ? checkService.allowedCandidateDrives(subscription, ctx.extendedDrives(), ctx.globalMainDrivesRaw())
+                : checkService.allowedCandidateDrives(subscription); // 与候选源抽屉同口径
         dto.setResourceCount((int) resources.stream()
                 .filter(r -> MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
                         || MediaSubscriptionCheckService.driveAllowed(allowedDrives,
@@ -3277,11 +3336,18 @@ public class MediaSubscriptionService {
     }
 
     private List<Integer> missingEpisodes(MediaSubscription subscription) {
+        return missingEpisodes(subscription, null);
+    }
+
+    /** @param ctx 列表批量上下文(null=单条现查)。 */
+    private List<Integer> missingEpisodes(MediaSubscription subscription, ListBatchContext ctx) {
         // 与巡检 computeMissing 同口径:官方已播/期望/观测最大集号取大为范围 ——
         // 只认 expectedEpisodes 时,未配期望的长番(柯南 expected=null)永远拿不到缺口提示
-        Set<Integer> present = episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(subscription.getId(),
-                LIVE_EPISODE_STATES)
-                .stream().collect(java.util.stream.Collectors.toSet());
+        Set<Integer> present = ctx != null
+                ? new java.util.HashSet<>(ctx.presentBySub().getOrDefault(subscription.getId(), java.util.Set.of()))
+                : episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(subscription.getId(),
+                        LIVE_EPISODE_STATES)
+                        .stream().collect(java.util.stream.Collectors.toSet());
         if (present.isEmpty() && subscription.getCurrentEpisodes() != null) {
             for (int i = 1; i <= subscription.getCurrentEpisodes(); i++) {
                 present.add(i);

@@ -511,14 +511,18 @@ public class IndexService {
                 context.getTime().clear();
                 path = customize(context, indexRequest, path);
                 stopWatch.start("index " + path);
-                var shareInfo = getShareInfo(site, path);
-                if (shareInfo != null) {
-                    index(context, shareInfo, shareInfo.getFileId(), path, 0);
-                } else {
-                    index(context, path, 0);
+                try {
+                    var shareInfo = getShareInfo(site, path);
+                    if (shareInfo != null) {
+                        index(context, shareInfo, shareInfo.getFileId(), path, 0);
+                    } else {
+                        index(context, path, 0);
+                    }
+                    handleUpdateTime(path, context.getTime());
+                } finally {
+                    // 路径异常跳出若不 stop,下一轮 start 抛 IllegalStateException 掩盖原始异常
+                    stopWatch.stop();
                 }
-                handleUpdateTime(path, context.getTime());
-                stopWatch.stop();
                 log.info("{} {}", path, context.stats.indexed - total);
                 total = context.stats.indexed;
             }

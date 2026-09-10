@@ -78,16 +78,20 @@ public class GuangyapanOfflineDownloadHandler implements OfflineDownloadHandler 
     }
 
     private String findFolder(DriverAccount account, String parentId, String name) {
-        ObjectNode listBody = objectMapper.createObjectNode();
-        listBody.put("parentId", parentId);
-        listBody.put("page", 0);
-        listBody.put("pageSize", 100);
-        listBody.put("orderBy", 0);
-        listBody.put("sortType", 0);
-        ObjectNode list = exchangeWithRetry(account, FILE_LIST_URL, HttpMethod.POST, listBody);
-        log.info("findFolder response for parentId={}: {}", parentId, list);
-        ArrayNode items = withArray(list, "data", "list");
-        if (items != null) {
+        // 单页 100 条:目录超 100 时找不到会重复建 offline 目录 —— 翻页找,页未满即止(上限 10 页)
+        for (int page = 0; page < 10; page++) {
+            ObjectNode listBody = objectMapper.createObjectNode();
+            listBody.put("parentId", parentId);
+            listBody.put("page", page);
+            listBody.put("pageSize", 100);
+            listBody.put("orderBy", 0);
+            listBody.put("sortType", 0);
+            ObjectNode list = exchangeWithRetry(account, FILE_LIST_URL, HttpMethod.POST, listBody);
+            log.debug("findFolder response for parentId={} page={}", parentId, page);
+            ArrayNode items = withArray(list, "data", "list");
+            if (items == null || items.isEmpty()) {
+                return "";
+            }
             for (var item : items) {
                 if (name.equals(item.path("fileName").asText("")) && item.path("resType").asInt(0) != 1) {
                     String id = item.path("fileId").asText("");
@@ -95,6 +99,9 @@ public class GuangyapanOfflineDownloadHandler implements OfflineDownloadHandler 
                         return id;
                     }
                 }
+            }
+            if (items.size() < 100) {
+                return "";
             }
         }
         return "";
@@ -122,12 +129,20 @@ public class GuangyapanOfflineDownloadHandler implements OfflineDownloadHandler 
         log.info("guangyapan task created: taskId={}", taskId);
 
         for (int i = 0; i < Math.max(1, waitSeconds); i++) {
-            ObjectNode taskListBody = objectMapper.createObjectNode();
-            taskListBody.put("pageSize", 100);
-            taskListBody.putArray("status").add(0).add(1).add(2).add(5);
-            ObjectNode taskList = exchangeWithRetry(account, LIST_TASK_URL, HttpMethod.POST, taskListBody);
-
-            ObjectNode task = findTaskInList(taskList, taskId);
+            // 任务超 100 条时单页找不到会白轮询到超时(任务明明已完成)—— 翻页找,页未满即止
+            ObjectNode task = null;
+            for (int page = 0; page < 5 && task == null; page++) {
+                ObjectNode taskListBody = objectMapper.createObjectNode();
+                taskListBody.put("page", page);
+                taskListBody.put("pageSize", 100);
+                taskListBody.putArray("status").add(0).add(1).add(2).add(5);
+                ObjectNode taskList = exchangeWithRetry(account, LIST_TASK_URL, HttpMethod.POST, taskListBody);
+                task = findTaskInList(taskList, taskId);
+                ArrayNode pageItems = withArray(taskList, "data", "list");
+                if (pageItems == null || pageItems.size() < 100) {
+                    break;
+                }
+            }
             if (task != null) {
                 int status = task.path("status").asInt(-1);
                 if (status == 2) {

@@ -38,8 +38,8 @@ public class TextUtils {
     // 新增：编码和音视频格式
     private static final Pattern AV_FORMAT = Pattern.compile("\\.(HEVC|H265|H264|x265|x264|AVC|AV1|VP9|VC-1|mp4|mkv|MPEG-2|Xvid)", Pattern.CASE_INSENSITIVE);
     private static final Pattern AUDIO_FORMAT = Pattern.compile("(DTS|DDP|DD\\+|AC3|AAC|FLAC|MP3|Opus|Atmos|TrueHD)([.\\s]?\\d+\\.?\\d*)?", Pattern.CASE_INSENSITIVE);
-    // 新增：分辨率标签
-    private static final Pattern RESOLUTION = Pattern.compile("\\.?(\\d{3,4}p|4K|2K|8K|UHD|FHD|QHD|SDR|HDR10|HDR|HD\\+?|Dolby\\s*Vision|DoVi)", Pattern.CASE_INSENSITIVE);
+    // 新增：分辨率标签(首尾词边界:防 1024K 内嵌 4K、SDRip 误伤 SDR 等)
+    private static final Pattern RESOLUTION = Pattern.compile("(?<![A-Za-z0-9])\\.?(\\d{3,4}p|4K|2K|8K|UHD|FHD|QHD|SDR|HDR10|HDR|HD\\+?|Dolby\\s*Vision|DoVi)(?![A-Za-z0-9])", Pattern.CASE_INSENSITIVE);
     // 新增：发布组和字幕组
     private static final Pattern RELEASE_GROUP = Pattern.compile("\\[([^]]+(字幕组|发布组|制作|Subs|Rip))]");
     // 行首装饰性符号：空白、间隔号(U+00B7/U+0387/U+30FB)、不可见变体选择符(U+FE0F/U+FE0E)、
@@ -686,7 +686,7 @@ public class TextUtils {
                 .replaceAll(" \\d{4}", " ")
                 .replaceAll("\\s*全\\d+集", " ")
                 .replaceAll("第?\\d-\\d+([季部])", " ")
-                .replaceAll(".([季部])全", " ")
+                .replaceAll("\\.([季部])全", " ")
                 .replaceAll("[0-9.]+GB", " ")
                 .replaceAll("豆瓣评分：?[0-9.]+", " ")
                 .replaceAll("豆瓣\\d\\.\\d", " ")

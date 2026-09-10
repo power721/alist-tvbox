@@ -642,7 +642,10 @@ public class SubscriptionService {
         }
         json = json.replace("VOD_URL", readHostAddress("/vod" + secret));
         json = json.replace("VOD1_URL", readHostAddress("/vod1" + secret));
-        json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret));
+        // B站 api URL 烤入一次性设备标识:token 是共享的(亲友同链),翻页会话按"下载配置的设备"隔离;
+        // query 参数形态 —— 个别客户端若拼接丢参,只是回落共享桶(软失败),协议无破坏
+        String biliDeviceKey = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret) + "?client=" + biliDeviceKey);
         json = json.replace("YOUTUBE_URL", readHostAddress("/youtube" + secret));
         json = json.replace("EMBY_URL", readHostAddress("/emby" + secret));
         // 凭证注入按 token 归属:u- token 只注入本人账号凭证,全局 master 凭证不下发给普通用户

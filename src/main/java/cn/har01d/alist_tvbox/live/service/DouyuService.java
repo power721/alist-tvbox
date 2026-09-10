@@ -267,12 +267,27 @@ public class DouyuService implements LivePlatform {
             log.debug("douyu room {} has no stream data (offline or sign failed)", id);
             return;
         }
-        for (var cdn : stream.getCdnsWithName()) {
+        var cdns = stream.getCdnsWithName();
+        List<cn.har01d.alist_tvbox.live.model.DouyuLiveStream.BitRate> rates =
+                stream.getMultirates() != null ? stream.getMultirates() : java.util.Collections.emptyList();
+        for (int c = 0; c < cdns.size(); c++) {
+            var cdn = cdns.get(c);
             List<String> urls = new ArrayList<>();
-            for (var bitRate : stream.getMultirates()) {
-                String playUrlItem = getPlayUrl(id, dataUse, bitRate.getRate(), cdn.getCdn());
+            if (c == 0) {
+                // 默认线路取全清晰度,其余线路只取一路(最高档):整页 CDN×清晰度 串行 POST 是斗鱼详情
+                // 打开慢的主体(10~30 次请求),砍到 清晰度数+线路数 次;播放器拿单 URL 本就自适应清晰度
+                for (var bitRate : rates) {
+                    String playUrlItem = getPlayUrl(id, dataUse, bitRate.getRate(), cdn.getCdn());
+                    if (StringUtils.isNotBlank(playUrlItem)) {
+                        urls.add(bitRate.getName() + "$" + playUrlItem);
+                    }
+                }
+            } else {
+                int rate = rates.isEmpty() ? -1 : rates.get(0).getRate();
+                String name = rates.isEmpty() ? "自动" : rates.get(0).getName();
+                String playUrlItem = getPlayUrl(id, dataUse, rate, cdn.getCdn());
                 if (StringUtils.isNotBlank(playUrlItem)) {
-                    urls.add(bitRate.getName() + "$" + playUrlItem);
+                    urls.add(name + "$" + playUrlItem);
                 }
             }
             if (!urls.isEmpty()) {
