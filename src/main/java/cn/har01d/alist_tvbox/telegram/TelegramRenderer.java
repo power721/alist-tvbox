@@ -680,7 +680,18 @@ public final class TelegramRenderer {
             return s;
         }
         int cut = s.lastIndexOf("\n", MAX_TEXT_LENGTH - 2);
-        return (cut > 0 ? s.substring(0, cut) : s.substring(0, MAX_TEXT_LENGTH - 2)) + "…";
+        String head = cut > 0 ? s.substring(0, cut) : s.substring(0, MAX_TEXT_LENGTH - 2);
+        // 兜底截断可能切在已转义实体(&amp;→&am)或标签中间,parse_mode=HTML 直接 400 整条消息发不出去 —— 剥掉残尾
+        int lastSemi = head.lastIndexOf('&');
+        if (lastSemi >= 0 && head.indexOf(';', lastSemi) < 0) {
+            int lt = head.lastIndexOf('<');
+            if (lt > lastSemi) {
+                head = head.substring(0, Math.max(lastSemi, lt));
+            } else {
+                head = head.substring(0, lastSemi);
+            }
+        }
+        return head + "…";
     }
 
     /**

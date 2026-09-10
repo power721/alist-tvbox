@@ -1103,7 +1103,8 @@ public class DoubanService {
                 try {
                     Thread.sleep(2000L);
                 } catch (InterruptedException e) {
-                    Thread.interrupted();
+                    // 恢复中断标志:Thread.interrupted() 只读+清除,刮削线程从此无法被停止
+                    Thread.currentThread().interrupt();
                 }
             }
 

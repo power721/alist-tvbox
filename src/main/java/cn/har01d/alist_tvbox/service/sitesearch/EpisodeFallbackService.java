@@ -323,14 +323,17 @@ public class EpisodeFallbackService {
     /** 覆盖层行播放期解析:先探测缓存直链;死了(或行残缺)回采集站重解析重建行。 */
     private String probeOrRebuild(MediaSubscription subscription, MediaSubscriptionEpisodeFallback row, long now) {
         if (StringUtils.isNotBlank(row.getUrl())) {
-            if (probeUrl(row.getUrl()) == ProbeVerdict.VERIFIED) {
+            // 与落库口径一致(failed 才跳过、瞬时/无结论放行):只有确证死链才判死标 FAILED;
+            // 403 防盗链/探测超时等 NO_VERDICT 场景按非 VERIFIED 即死会把落库放行的好链反复作废
+            // (重建探测同样无结论 → 快路径永久失效),维持行原样返回,播放期自然纠偏
+            if (probeUrl(row.getUrl()) == ProbeVerdict.FAILED) {
+                row.setState(MediaSubscriptionEpisodeFallback.STATE_FAILED);
+                fallbackRepository.save(row);
+            } else {
                 row.setValidatedAt(now);
                 fallbackRepository.save(row);
                 return row.getUrl();
             }
-            // 缓存死链:标 FAILED,尝试重解析
-            row.setState(MediaSubscriptionEpisodeFallback.STATE_FAILED);
-            fallbackRepository.save(row);
         }
         try {
             CollectionGateway.CollectionItem item = new CollectionGateway.CollectionItem(
@@ -340,7 +343,7 @@ public class EpisodeFallbackService {
                 return null;
             }
             String url = playlist.episodes().get(row.getEpisode());
-            if (url == null || probeUrl(url) != ProbeVerdict.VERIFIED) {
+            if (url == null || probeUrl(url) == ProbeVerdict.FAILED) {
                 return null;
             }
             row.setUrl(url);

@@ -598,7 +598,13 @@ public class PluginService {
 
     private String readFileBackedContent(String url) {
         String relative = StringUtils.removeStart(url, STATIC_URL_PREFIX);
-        Path file = Utils.getWebPath("static").resolve(relative).normalize();
+        Path base = Utils.getWebPath("static");
+        Path file = base.resolve(relative).normalize();
+        // plugin.url 来自 DB,导入外部分享的备份可写入 /static/../../ 形态 —— 目录包含校验,
+        // 否则 refresh + 公开端点 /plugins/{token}/{id}.txt 组成任意文件读外传链
+        if (!file.startsWith(base)) {
+            throw new BadRequestException("插件路径越界: " + relative);
+        }
         try {
             return Files.readString(file);
         } catch (IOException e) {
@@ -624,7 +630,8 @@ public class PluginService {
         } catch (Exception ignored) {
         }
         String raw = source.substring(source.lastIndexOf('/') + 1);
-        String decoded = URLDecoder.decode(raw, StandardCharsets.UTF_8);
+        // URLDecoder 是 query 语义会把 + 解成空格,path 段的 + 是字面字符 —— 先转义保住
+        String decoded = URLDecoder.decode(raw.replace("+", "%2B"), StandardCharsets.UTF_8);
         int dot = decoded.lastIndexOf('.');
         return dot > 0 ? decoded.substring(0, dot) : decoded;
     }

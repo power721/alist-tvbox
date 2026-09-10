@@ -112,24 +112,24 @@ public class SettingService {
         appProperties.setTgSearchApiKey(settingRepository.findById("tg_search_api_key").map(Setting::getValue).orElse(""));
         appProperties.setPanCheckUrl(settingRepository.findById("pan_check_url").map(Setting::getValue).orElse(""));
         appProperties.setPanCheckTimeoutMs(settingRepository.findById("pan_check_timeout_ms").map(Setting::getValue)
-                .filter(StringUtils::isNotBlank).map(v -> Integer.parseInt(v.trim())).orElse(null));
+                .filter(StringUtils::isNotBlank).map(v -> parseIntOrNull("pan_check_timeout_ms", v)).orElse(null));
         appProperties.setPanSouUrl(settingRepository.findById("pan_sou_url").map(Setting::getValue).orElse(""));
         appProperties.setPanSouSource(settingRepository.findById("pan_sou_source").map(Setting::getValue).orElse("all"));
         appProperties.setPanSouChannels(settingRepository.findById("pan_sou_channels").map(Setting::getValue).map(this::normalizePanSouChannels).orElse("custom"));
         appProperties.setPanSouUsername(settingRepository.findById("pan_sou_username").map(Setting::getValue).orElse(""));
         appProperties.setPanSouPassword(settingRepository.findById("pan_sou_password").map(Setting::getValue).orElse(""));
         appProperties.setPanSouLinkCheckEnabled(settingRepository.findById("pan_sou_link_check_enabled").map(Setting::getValue).orElse("").equals("true"));
-        appProperties.setPanSouLinkCheckMaxCount(settingRepository.findById("pan_sou_link_check_max_count").map(Setting::getValue).map(Integer::parseInt).orElse(300));
+        appProperties.setPanSouLinkCheckMaxCount(settingRepository.findById("pan_sou_link_check_max_count").map(Setting::getValue).map(v -> parseIntOrDefault("pan_sou_link_check_max_count", v, 300)).orElse(300));
         appProperties.setPanSouLinkCheckTypes(parseList(settingRepository.findById("pan_sou_link_check_types").map(Setting::getValue).orElse("")));
         appProperties.setPanSouConc(settingRepository.findById("pan_sou_conc").map(Setting::getValue)
-                .filter(StringUtils::isNotBlank).map(v -> Integer.parseInt(v.trim())).orElse(null));
+                .filter(StringUtils::isNotBlank).map(v -> parseIntOrNull("pan_sou_conc", v)).orElse(null));
         appProperties.setPanSouRefresh(settingRepository.findById("pan_sou_refresh").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setPanSouRes(settingRepository.findById("pan_sou_res").map(Setting::getValue).filter(StringUtils::isNotBlank).orElse("merge"));
         appProperties.setPanSouFilterInclude(parseList(settingRepository.findById("pan_sou_filter_include").map(Setting::getValue).orElse("")));
         appProperties.setPanSouFilterExclude(parseList(settingRepository.findById("pan_sou_filter_exclude").map(Setting::getValue).orElse("")));
         appProperties.setTgSortField(settingRepository.findById("tg_sort_field").map(Setting::getValue).orElse("time"));
-        appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(72));
-        appProperties.setValidateSharesInterval(settingRepository.findById("validateSharesInterval").map(Setting::getValue).map(Integer::parseInt).orElse(4));
+        appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(v -> parseIntOrDefault("temp_share_expiration", v, 72)).orElse(72));
+        appProperties.setValidateSharesInterval(settingRepository.findById("validateSharesInterval").map(Setting::getValue).map(v -> parseIntOrDefault("validateSharesInterval", v, 4)).orElse(4));
         appProperties.setLocalProxyConfig(loadLocalProxyConfig());
         appProperties.setDanmakuConfig(loadDanmakuConfig());
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
@@ -159,7 +159,7 @@ public class SettingService {
         if (StringUtils.isBlank(value)) {
             settingRepository.save(new Setting("tg_timeout", String.valueOf(appProperties.getTgTimeout())));
         } else {
-            appProperties.setTgTimeout(Integer.parseInt(value));
+            appProperties.setTgTimeout(parseIntOrDefault("tg_timeout", value, appProperties.getTgTimeout()));
         }
         value = settingRepository.findById("search_excluded_paths").map(Setting::getValue).orElse("");
         String old = "/电视剧/韩国,/电视剧/英国,/电视剧/港台,/电视剧/泰剧,/电视剧/欧美,/电视剧/日本,/电视剧/新加坡,/电视剧/中国/七米蓝";
@@ -176,9 +176,39 @@ public class SettingService {
         if (!settingRepository.existsById("api_key")) {
             generateApiKey();
         }
+        Utils.setTrustedProxies(Arrays.stream(settingRepository.findById("trusted_proxies").map(Setting::getValue).orElse("").split(","))
+                .map(String::trim).filter(StringUtils::isNotBlank).collect(Collectors.toSet()));
         initBasicAuthCredentials();
         appProperties.setSystemId(value);
         log.info("system id: {}", value);
+    }
+
+    /** 启动装配用:脏配置回退默认值并告警 —— 单条配置写坏不该 brick 整个启动(启动失败连修复入口都没有)。 */
+    private int parseIntOrDefault(String key, String value, int defaultValue) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            log.warn("setting {} has invalid number '{}', fallback to {}", key, value, defaultValue);
+            return defaultValue;
+        }
+    }
+
+    private Integer parseIntOrNull(String key, String value) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            log.warn("setting {} has invalid number '{}', ignored", key, value);
+            return null;
+        }
+    }
+
+    /** 配置更新用:非数字直接 400,不落库不 500。 */
+    private int requireInt(String key, String value) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new BadRequestException("配置 " + key + " 必须是数字: " + value);
+        }
     }
 
     private List<String> parseList(String value) {
@@ -253,7 +283,7 @@ public class SettingService {
     }
 
     @Scheduled(cron = "0 0 6 * * *")
-    public File backupDatabase() {
+    public synchronized File backupDatabase() {
         if (environment.matchesProfiles("mysql")) {
             return null;
         }
@@ -275,22 +305,26 @@ public class SettingService {
                     .collect(Collectors.joining(", "));
 
             log.info("backup database tables: {}", tableList);
-            File dir = new File("/tmp");
-            File sqlFile = new File(dir, "script.sql");
+            // 固定 /tmp/script.sql:定时与手动并发写同一路径产出交错损坏;且全库明文(含 basic-auth 密码)残留磁盘 —— 用随机临时文件并 finally 删除
+            File sqlFile = Files.createTempFile("atv-backup-", ".sql").toFile();
 
-            jdbcTemplate.execute("SCRIPT TO '" + sqlFile.getAbsolutePath() + "' TABLE " + tableList);
+            try {
+                jdbcTemplate.execute("SCRIPT TO '" + sqlFile.getAbsolutePath() + "' TABLE " + tableList);
 
-            File out = Utils.getDataPath(
-                    "backup",
-                    backupFilename("database-")
-            ).toFile();
+                File out = Utils.getDataPath(
+                        "backup",
+                        backupFilename("database-")
+                ).toFile();
 
-            try (FileOutputStream fos = new FileOutputStream(out);
-                 ZipOutputStream zipOut = new ZipOutputStream(fos)) {
-                Utils.zipFile(sqlFile, sqlFile.getName(), zipOut);
+                try (FileOutputStream fos = new FileOutputStream(out);
+                     ZipOutputStream zipOut = new ZipOutputStream(fos)) {
+                    Utils.zipFile(sqlFile, sqlFile.getName(), zipOut);
+                }
+                cleanBackups();
+                return out;
+            } finally {
+                Files.deleteIfExists(sqlFile.toPath());
             }
-            cleanBackups();
-            return out;
         } catch (Exception e) {
             log.warn("backup database failed", e);
         }
@@ -474,10 +508,10 @@ public class SettingService {
             appProperties.setPlaybackSyncScope(StringUtils.isBlank(setting.getValue()) ? "token" : setting.getValue());
         }
         if ("temp_share_expiration".equals(setting.getName())) {
-            appProperties.setTempShareExpiration(Integer.parseInt(setting.getValue()));
+            appProperties.setTempShareExpiration(requireInt("temp_share_expiration", setting.getValue()));
         }
         if ("validateSharesInterval".equals(setting.getName())) {
-            appProperties.setValidateSharesInterval(Integer.parseInt(setting.getValue()));
+            appProperties.setValidateSharesInterval(requireInt("validateSharesInterval", setting.getValue()));
         }
         if ("tg_drivers".equals(setting.getName())) {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_DRIVERS : setting.getValue();
@@ -491,7 +525,12 @@ public class SettingService {
             appProperties.setTgDriverOrder(Arrays.stream(value.split(",")).toList());
         }
         if ("tg_timeout".equals(setting.getName())) {
-            appProperties.setTgTimeout(Integer.parseInt(setting.getValue()));
+            appProperties.setTgTimeout(requireInt("tg_timeout", setting.getValue()));
+        }
+        if ("trusted_proxies".equals(setting.getName())) {
+            // 信任反代列表:仅这些地址的请求才采信 X-Forwarded-For(逗号分隔,支持 192.168./* 前缀)
+            Utils.setTrustedProxies(Arrays.stream(setting.getValue().split(","))
+                    .map(String::trim).filter(StringUtils::isNotBlank).collect(Collectors.toSet()));
         }
         if ("tg_search".equals(setting.getName())) {
             if (setting.getValue().endsWith("/")) {
@@ -531,7 +570,7 @@ public class SettingService {
             if (StringUtils.isBlank(setting.getValue())) {
                 appProperties.setPanCheckTimeoutMs(null);
             } else {
-                appProperties.setPanCheckTimeoutMs(Math.max(0, Integer.parseInt(setting.getValue().trim())));
+                appProperties.setPanCheckTimeoutMs(Math.max(0, requireInt("pan_check_timeout_ms", setting.getValue())));
             }
         }
         if ("pan_sou_source".equals(setting.getName())) {
@@ -552,7 +591,7 @@ public class SettingService {
             appProperties.setPanSouLinkCheckEnabled("true".equals(setting.getValue()));
         }
         if ("pan_sou_link_check_max_count".equals(setting.getName())) {
-            int value = Math.max(0, Integer.parseInt(setting.getValue()));
+            int value = Math.max(0, requireInt("pan_sou_link_check_max_count", setting.getValue()));
             setting.setValue(String.valueOf(value));
             appProperties.setPanSouLinkCheckMaxCount(value);
         }
@@ -566,7 +605,7 @@ public class SettingService {
             if (StringUtils.isBlank(setting.getValue())) {
                 appProperties.setPanSouConc(null);
             } else {
-                appProperties.setPanSouConc(Math.max(0, Integer.parseInt(setting.getValue().trim())));
+                appProperties.setPanSouConc(Math.max(0, requireInt("pan_sou_conc", setting.getValue())));
             }
         }
         if ("pan_sou_refresh".equals(setting.getName())) {

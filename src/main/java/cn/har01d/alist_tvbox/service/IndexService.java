@@ -59,6 +59,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -361,8 +362,12 @@ public class IndexService {
     private static String getRemoteTime(Site site, String url) {
         try {
             File file = Files.createTempFile(String.valueOf(site.getId()), ".info").toFile();
-            FileUtils.copyURLToFile(new URL(url), file, 10_000, 60_000);
-            return FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+            try {
+                FileUtils.copyURLToFile(new URL(url), file, 10_000, 60_000);
+                return FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+            } finally {
+                Files.deleteIfExists(file.toPath());
+            }
         } catch (Exception e) {
             // ignore
         }
@@ -434,7 +439,7 @@ public class IndexService {
         List<IndexTemplate> list = indexTemplateRepository.findByScheduledTrue();
         log.debug("auto index: {}", list.size());
         for (IndexTemplate template : list) {
-            if (template.getScheduleTime() != null && template.getScheduleTime().contains(hour)) {
+            if (template.getScheduleTime() != null && Arrays.asList(template.getScheduleTime().split("\\|")).contains(hour)) {
                 try {
                     log.info("auto index for template: {}", template.getId());
                     IndexRequest indexRequest = objectMapper.readValue(template.getData(), IndexRequest.class);

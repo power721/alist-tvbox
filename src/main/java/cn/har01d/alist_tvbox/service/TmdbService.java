@@ -247,7 +247,7 @@ public class TmdbService {
                 db.setYear(movie.getYear());
                 db.setName(movie.getName());
                 if (StringUtils.isNotBlank(movie.getDbScore())) {
-                    db.setScore((int) (Double.parseDouble(movie.getDbScore()) * 10));
+                    db.setScore((int) (parseScoreSafe(movie.getDbScore()) * 10));
                 }
                 metaRepository.save(db);
                 log.info("update TMDB meta {}", db.getId());
@@ -603,7 +603,7 @@ public class TmdbService {
         meta.setYear(movie.getYear());
         meta.setName(movie.getName());
         if (StringUtils.isNotBlank(movie.getScore())) {
-            meta.setScore((int) (Double.parseDouble(movie.getScore()) * 10));
+            meta.setScore((int) (parseScoreSafe(movie.getScore()) * 10));
         }
     }
 
@@ -709,6 +709,18 @@ public class TmdbService {
 
     public Tmdb search(String type, String name, Integer year, boolean match) {
         return search(type, name, Objects.toString(year, ""), match);
+    }
+
+    /** 库内评分可能是占位符等非数值:直接 parseDouble 会中断删除/绑定流程。 */
+    private static double parseScoreSafe(String value) {
+        if (StringUtils.isBlank(value)) {
+            return 0;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /** 全局限流:锁内等待并写回醒来后的真实时刻(旧实现记 sleep 前时刻,两请求实际相隔 1ms 速率翻倍,且无锁并发穿透)。 */

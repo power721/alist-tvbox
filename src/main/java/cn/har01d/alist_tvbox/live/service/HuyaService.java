@@ -260,11 +260,17 @@ public class HuyaService implements LivePlatform {
     }
 
     private void parseUrls(MovieDetail movieDetail, String html, String client) throws IOException {
-        int start = html.indexOf("window.HNF_GLOBAL_INIT = ") + 25;
+        int marker = html.indexOf("window.HNF_GLOBAL_INIT = ");
+        if (marker < 0) {
+            // indexOf==-1 时 +25 得 24,start>0 恒真,垃圾子串进 Jackson 直接抛 —— 标记缺失按无流处理
+            log.debug("HNF_GLOBAL_INIT marker missing, no stream info");
+            return;
+        }
+        int start = marker + 25;
         int end = html.indexOf("</script>", start);
         List<String> playFrom = new ArrayList<>();
         List<String> playUrl = new ArrayList<>();
-        if (start > 0 && end > start) {
+        if (end > start) {
             String uid = getUid(13, 10);
             String json = html.substring(start, end);
             start = json.indexOf("vBitRateInfo");
@@ -273,7 +279,7 @@ public class HuyaService implements LivePlatform {
             log.trace("vBitRateInfo: {}", "{" + json.substring(start, end) + "}");
             HuyaLiveRoom.BitRateInfoList vBitRateInfo = objectMapper.readValue("{" + json.substring(start, end) + "}", HuyaLiveRoom.BitRateInfoList.class);
 
-            JsonNode streams = objectMapper.readTree(json).get("roomInfo").get("tLiveInfo").get("tLiveStreamInfo").get("vStreamInfo").get("value");
+            JsonNode streams = objectMapper.readTree(json).path("roomInfo").path("tLiveInfo").path("tLiveStreamInfo").path("vStreamInfo").path("value");
             int i = 1;
             for (JsonNode stream : streams) {
                 String cdn = stream.get("sCdnType").asText();

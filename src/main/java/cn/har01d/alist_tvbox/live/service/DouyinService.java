@@ -527,11 +527,20 @@ public class DouyinService implements LivePlatform {
             }
 
             JsonNode root = objectMapper.readTree(body);
-            JsonNode dataList = root.path("data");
-            if (dataList.isArray() && !dataList.isEmpty()) {
+            JsonNode data = root.path("data");
+            // enter 接口 data 为对象形态(data.room/data.user);兼容历史数组形态(data[0]=room)。
+            // 旧代码只认数组,对象形态恒 false → API 路径每次白打一次签名请求仍走 HTML,apiSkip 恢复机制失效
+            if (data.isObject() && data.path("room").isObject()) {
                 clearApiSkip();
                 var result = objectMapper.createObjectNode();
-                result.set("room", dataList.get(0));
+                result.set("room", data.path("room"));
+                result.set("user", data.path("user"));
+                return result;
+            }
+            if (data.isArray() && !data.isEmpty()) {
+                clearApiSkip();
+                var result = objectMapper.createObjectNode();
+                result.set("room", data.get(0));
                 result.set("user", root.path("data").path("user"));
                 return result;
             }

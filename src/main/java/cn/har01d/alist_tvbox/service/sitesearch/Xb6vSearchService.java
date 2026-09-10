@@ -75,7 +75,7 @@ public class Xb6vSearchService {
         String host = SiteSearchSupport.normalizeHost(
                 SiteSearchSupport.setting(settingRepository, HOST_SETTING), DEFAULT_HOST);
         long deadline = System.currentTimeMillis()
-                + appProperties.getSubscription().getXb6vTimeoutSeconds() * 1000L;
+                + Math.max(5, appProperties.getSubscription().getXb6vTimeoutSeconds()) * 1000L;
         Map<String, String> jar = new LinkedHashMap<>();
         try {
             List<Card> cards = parseCards(searchHtml(host, keyword.trim(), jar));

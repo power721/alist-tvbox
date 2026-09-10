@@ -111,7 +111,7 @@ public class ZhenCangSearchService {
             return List.of();
         }
         long deadline = System.currentTimeMillis()
-                + appProperties.getSubscription().getZencangTimeoutSeconds() * 1000L;
+                + Math.max(5, appProperties.getSubscription().getZencangTimeoutSeconds()) * 1000L;
         try {
             List<Card> cards = parseCards(getHtml(host, searchUrl(host, keyword.trim()), cookie));
             List<Message> result = new ArrayList<>();

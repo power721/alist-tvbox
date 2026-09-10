@@ -1408,6 +1408,8 @@ public class SubscriptionService {
         // 配置里嵌入的 token 一律升级为凭证形态:spider 拿它调 /vod、tokenm 等,
         // 裸 u-{username} 可猜测,凭证明文下发只认带密钥形态
         String embedToken = token.startsWith(USER_TOKEN_PREFIX) ? secret : token;
+        // 启用的过滤器循环外取一次:逐插件调 buildPluginFilters 会 N 个插件 N 次同一全表查询
+        List<PluginFilter> enabledFilters = null;
         for (SubscriptionSourceService.SubscriptionSourceRef source : subscriptionSourceService.findEnabledSources()) {
             try {
                 if (source.builtin()) {
@@ -1447,8 +1449,11 @@ public class SubscriptionService {
                         // 自定义网页源(webhome/pages/*.html):csp_WebHome 形态,非 spider 插件站点
                         site = buildWebPageSite(source.plugin(), token, playbackToken);
                     } else {
+                        if (enabledFilters == null) {
+                            enabledFilters = pluginFilterRepository.findByEnabledTrueOrderBySortOrderAscIdAsc();
+                        }
                         site = buildPluginSite(source.plugin(), embedToken, secret,
-                                playbackToken, configUrl);
+                                playbackToken, configUrl, enabledFilters);
                     }
                     site.put("order", order);
                     String overrideKey = (String) site.get("key");
@@ -1814,7 +1819,8 @@ public class SubscriptionService {
     }
 
     private Map<String, Object> buildPluginSite(Plugin plugin, String token, String secret,
-                                                String playbackToken, String configUrl) throws JsonProcessingException {
+                                                String playbackToken, String configUrl,
+                                                List<PluginFilter> enabledFilters) throws JsonProcessingException {
         Map<String, Object> site = new HashMap<>();
         site.put("filterable", 1);
         site.put("quickSearch", 1);
@@ -1845,7 +1851,7 @@ public class SubscriptionService {
         map.put("playbackToken", playbackToken);
         map.put("playbackConfigUrl", configUrl);
         // 每个插件站点只下发与自己作用域匹配的过滤器
-        List<Map<String, Object>> filters = buildPluginFilters(plugin);
+        List<Map<String, Object>> filters = buildPluginFilters(plugin, enabledFilters);
         if (!filters.isEmpty()) {
             map.put("filters", filters);
         }
@@ -1855,11 +1861,11 @@ public class SubscriptionService {
         return site;
     }
 
-    private List<Map<String, Object>> buildPluginFilters(Plugin plugin) {
+    private List<Map<String, Object>> buildPluginFilters(Plugin plugin, List<PluginFilter> enabledFilters) {
         List<Map<String, Object>> filters = new ArrayList<>();
         String token = getCurrentOrFirstToken();
         String address = readHostAddress("");
-        for (PluginFilter filter : pluginFilterRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()) {
+        for (PluginFilter filter : enabledFilters) {
             if (!isPluginFilterInScope(filter, plugin)) {
                 continue;
             }

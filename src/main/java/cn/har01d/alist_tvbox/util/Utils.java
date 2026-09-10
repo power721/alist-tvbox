@@ -34,11 +34,13 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -75,7 +77,9 @@ public final class Utils {
         try {
             var resource = new ClassPathResource("ua.txt");
             String lines = resource.getContentAsString(StandardCharsets.UTF_8);
-            userAgents.addAll(Arrays.asList(lines.split("\n")));
+            // 文件可能是 CRLF 行尾,残留 \r 会进 UA 头
+            userAgents.addAll(Arrays.asList(lines.replace("\r", "").split("\n")));
+            userAgents.removeIf(String::isBlank);
             log.info("Read {} user agents", userAgents.size());
         } catch (IOException e) {
             log.warn("read user agents failed: ", e);
@@ -159,7 +163,7 @@ public final class Utils {
     public static String md5(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
-            md.update(input.getBytes());
+            md.update(input.getBytes(StandardCharsets.UTF_8));
             byte[] digest = md.digest();
             return DatatypeConverter.printHexBinary(digest).toLowerCase();
         } catch (Exception e) {
@@ -276,16 +280,19 @@ public final class Utils {
                 log.warn("Blocked link-local/metadata URL: {}", url);
                 return false;
             }
-            // 解析为 InetAddress,拦截所有 loopback/link-local/wildcard 变体
-            // (含 IPv4-mapped IPv6、[::1]、[fe80::] 等字符串匹配漏掉的情况)
+            // 解析为 InetAddress,拦截所有 loopback/link-local/wildcard/私网(site-local 10.x/172.16-31/192.168.x,
+            // 含 Docker 网段与宿主网关)变体 —— 未认证图片/字幕代理可回读内网 HTTP 全文,必须连私网一起拦
             try {
                 InetAddress addr = InetAddress.getByName(host);
-                if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isAnyLocalAddress()) {
-                    log.warn("Blocked loopback/link-local/wildcard IP: {} -> {}", url, addr.getHostAddress());
+                if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isAnyLocalAddress()
+                        || addr.isSiteLocalAddress() || addr.isMulticastAddress()) {
+                    log.warn("Blocked loopback/link-local/private/multicast IP: {} -> {}", url, addr.getHostAddress());
                     return false;
                 }
             } catch (UnknownHostException e) {
-                // 无法解析(可能是内网本地名),放行;请求时若仍无法解析会自然失败
+                // 无法解析即拒绝:此前放行 + 二次解析存在 DNS rebinding 窗口,域名可被解析到私网
+                log.warn("Blocked unresolvable host: {}", url);
+                return false;
             }
             return true;
         } catch (URISyntaxException e) {
@@ -336,16 +343,25 @@ public final class Utils {
         try {
             ProcessBuilder builder = new ProcessBuilder();
             builder.command("sqlite3", Utils.getAListPath("data/data.db"), sql);
+            // stderr 丢弃 + 限时等待:只排 stdout 时 stderr 撑满管道缓冲会互相死锁,waitFor 无限等同样可挂死
+            builder.redirectError(ProcessBuilder.Redirect.DISCARD);
             Process process = builder.start();
-            BufferedReader reader =
-                    new BufferedReader(new InputStreamReader(process.getInputStream()));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line);
-                sb.append(System.getProperty("line.separator"));
+            String output;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line);
+                    sb.append(System.getProperty("line.separator"));
+                }
+                output = sb.toString().trim();
             }
-            return sb.toString().trim();
+            if (!process.waitFor(30, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                log.warn("sqlite3 query timeout: {}", sql);
+                return "";
+            }
+            return output;
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -509,7 +525,41 @@ public final class Utils {
         }
     }
 
+    /** 信任的反代地址(精确 IP 或 192.168./* 前缀):remoteAddr 命中时才采信 XFF 等转发头。
+     *  默认空 = 放行(兼容大量反代部署用户:默认不信会让所有用户共享限速桶、日志只见反代 IP);
+     *  需要收口时显式配置 trusted_proxies,配置后仅列表内地址的转发头被采信,其余一律用 TCP 对端地址。 */
+    private static volatile Set<String> trustedProxies = Set.of();
+
+    public static void setTrustedProxies(Set<String> proxies) {
+        trustedProxies = proxies == null ? Set.of() : proxies;
+    }
+
+    private static boolean isTrustedProxy(String ip) {
+        if (trustedProxies.isEmpty()) {
+            // 未配置信任列表:维持历来行为,采信转发头
+            return true;
+        }
+        if (ip == null) {
+            return false;
+        }
+        for (String entry : trustedProxies) {
+            if (entry.equals(ip)) {
+                return true;
+            }
+            if (entry.endsWith("/*") && ip.startsWith(entry.substring(0, entry.length() - 1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static String getClientIp(HttpServletRequest request) {
+        String remote = request.getRemoteAddr();
+        if (!isTrustedProxy(remote)) {
+            // 直连或未配置信任反代:X-Forwarded-For 等头全部可伪造,一律以 TCP 对端地址为准
+            return remote;
+        }
+
         String ip = request.getHeader("X-Forwarded-For");
 
         if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
@@ -525,7 +575,7 @@ public final class Utils {
             ip = request.getHeader("HTTP_X_FORWARDED_FOR");
         }
         if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
+            ip = remote;
         }
 
         // In case of multiple IPs (comma-separated), take the first one

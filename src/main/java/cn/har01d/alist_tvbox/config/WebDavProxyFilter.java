@@ -71,7 +71,7 @@ public class WebDavProxyFilter implements Filter {
                 copyResponse(backendResponse, httpResponse);
             }
         } catch (Exception e) {
-            logger.warn("WebDAV proxy error: {}", e.getMessage());
+            logger.warn("WebDAV proxy error", e);
             try {
                 httpResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             } catch (Exception ex) {
@@ -154,20 +154,39 @@ public class WebDavProxyFilter implements Filter {
     }
 
     private RequestBody createRequestBody(HttpServletRequest request) throws IOException {
-        if (request.getContentLength() <= 0 ||
-                "GET".equalsIgnoreCase(request.getMethod()) ||
-                "HEAD".equalsIgnoreCase(request.getMethod())) {
+        if ("GET".equalsIgnoreCase(request.getMethod()) ||
+                "HEAD".equalsIgnoreCase(request.getMethod()) ||
+                request.getContentLengthLong() == 0) {
             return null;
         }
 
-        byte[] content = request.getInputStream().readAllBytes();
+        long length = request.getContentLengthLong();
         MediaType mediaType = MediaType.parse(
                 request.getContentType() != null ?
                         request.getContentType() :
                         "application/octet-stream"
         );
 
-        return RequestBody.create(content, mediaType);
+        // 大文件 PUT 不再全量 readAllBytes 进堆(视频级请求体直接 OOM):servlet 输入流直通 OkHttp sink,
+        // 已知 Content-Length 用定长,未知(-1,chunked)由 OkHttp 自动分块 —— 顺带修复旧代码把 -1 当无 body 丢弃的问题
+        return new RequestBody() {
+            @Override
+            public MediaType contentType() {
+                return mediaType;
+            }
+
+            @Override
+            public long contentLength() {
+                return length;
+            }
+
+            @Override
+            public void writeTo(okio.BufferedSink sink) throws IOException {
+                try (var in = request.getInputStream()) {
+                    in.transferTo(sink.outputStream());
+                }
+            }
+        };
     }
 
     private void handleOptionsResponse(HttpServletResponse httpResponse) {

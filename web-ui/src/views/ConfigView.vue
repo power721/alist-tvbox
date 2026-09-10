@@ -264,6 +264,15 @@
           <el-input v-model="quarkDeviceId" style="width: 300px" type="text"/>
           <el-button type="primary" class="hint" @click="updateQuarkDeviceId">更新</el-button>
         </el-form-item>
+        <el-form-item label="信任反代">
+          <el-input v-model="trustedProxies" style="width: 300px" type="text"
+                    placeholder="留空=始终采信转发头;配置后仅列表内地址的转发头被采信"/>
+          <el-button type="primary" class="hint" @click="updateTrustedProxies">更新</el-button>
+          <div class="hint" style="width: 100%">
+            逗号分隔的反代地址(精确 IP 或 192.168.50./* 前缀)。留空维持默认:始终采信 X-Forwarded-For;
+            配置后其它来源的请求一律按 TCP 对端地址记客户端 IP(登录限速/日志/播放同步按此口径)。
+          </div>
+        </el-form-item>
         <el-form-item label="Cookie地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
             阿里 Token
@@ -464,6 +473,7 @@ const tmdbApiHostOptions = [
   {label: 'NAStool 代理', value: 'https://tmdb.nastool.org'},
 ]
 const userAgent = ref('')
+const trustedProxies = ref('')
 const atvPass = ref('')
 const apiKey = ref('')
 const basicAuthUser = ref('')
@@ -585,6 +595,12 @@ const setUserAgent = () => {
 const updateUserAgent = (value: string) => {
   axios.post('/api/settings', {name: 'user_agent', value: value}).then(({data}) => {
     userAgent.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateTrustedProxies = () => {
+  axios.post('/api/settings', {name: 'trusted_proxies', value: trustedProxies.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -780,6 +796,7 @@ onMounted(() => {
     tmdbApiKey.value = data.tmdb_api_key
     tmdbApiHost.value = data.tmdb_api_host || ''
     userAgent.value = data.user_agent
+    trustedProxies.value = data.trusted_proxies || ''
     autoCheckin.value = data.auto_checkin === 'true'
     aListRestart.value = data.alist_restart_required === 'true'
     replaceAliToken.value = data.replace_ali_token === 'true'

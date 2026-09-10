@@ -112,6 +112,8 @@ class MediaLibraryControllerTest {
         item.setVod_pic("https://image.tmdb.org/t/p/w500/x.jpg");
         source.getList().add(item);
         when(pianDanService.list(eq("tmdb:tv_popular"), eq("web"), eq(1), eq(24), anyMap())).thenReturn(source);
+        when(mediaSubscriptionService.subscriptionsOf(7)).thenReturn(java.util.List.of());
+        when(mediaSubscriptionService.isSubscribedTitle(org.mockito.ArgumentMatchers.eq(7), org.mockito.ArgumentMatchers.eq("测试剧"), org.mockito.ArgumentMatchers.anyList())).thenReturn(true);
         when(mediaSubscriptionService.isSubscribedTitle(7, "测试剧")).thenReturn(true);
         when(mediaSubscriptionService.absoluteClientCover(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -226,6 +228,8 @@ class MediaLibraryControllerTest {
         tmdb.getList().add(item);
         when(pianDanService.search("测试", 1, 24)).thenReturn(tmdb);
         when(mediaSubscriptionService.contentList(eq(7), isNull(), eq("测试"))).thenReturn(new MovieList());
+        when(mediaSubscriptionService.subscriptionsOf(7)).thenReturn(java.util.List.of());
+        when(mediaSubscriptionService.isSubscribedTitle(org.mockito.ArgumentMatchers.eq(7), org.mockito.ArgumentMatchers.eq("测试剧"), org.mockito.ArgumentMatchers.anyList())).thenReturn(true);
         when(mediaSubscriptionService.isSubscribedTitle(7, "测试剧")).thenReturn(true);
         when(mediaSubscriptionService.absoluteClientCover("https://image.tmdb.org/t/p/w500/x.jpg")).thenReturn("/images?url=x.jpg");
 

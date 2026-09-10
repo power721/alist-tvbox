@@ -34,7 +34,11 @@ public class TelegramHttp {
     private final SettingService settingService;
     /** 测试固定桩:非空时恒返回该实例(不读设置、不重建)。 */
     private final RestTemplate fixed;
-    private final Map<Duration, RestTemplate> cache = new ConcurrentHashMap<>();
+    /** 键含 proxy:线程 B 读旧 proxy → 线程 A 完成热切换 → B 才 computeIfAbsent 时,纯 timeout 键会把旧代理实例
+     *  灌回缓存且 snapshot 已追平永不重建(代理热切换静默失效);复合键下旧条目只残留不复发。 */
+    private record CacheKey(Duration timeout, String proxy) {}
+
+    private final Map<CacheKey, RestTemplate> cache = new ConcurrentHashMap<>();
     private volatile String proxySnapshot;
 
     @Autowired
@@ -65,7 +69,7 @@ public class TelegramHttp {
                 }
             }
         }
-        return cache.computeIfAbsent(readTimeout, timeout -> metadataHttp.create(timeout, proxy));
+        return cache.computeIfAbsent(new CacheKey(readTimeout, proxy), k -> metadataHttp.create(k.timeout(), k.proxy()));
     }
 
     /** 设置读取失败(如库瞬时不可用)按上次快照,别让轮询线程因设置源抖动断流。 */

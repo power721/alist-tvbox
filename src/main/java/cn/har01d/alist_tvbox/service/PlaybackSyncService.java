@@ -106,8 +106,12 @@ public class PlaybackSyncService {
         }
         PlaybackToken pt = tokenRepository.findByToken(token).orElse(null);
         if (pt != null) {
-            pt.setLastUsedAt(System.currentTimeMillis());
-            tokenRepository.save(pt);
+            // 采样写 lastUsedAt:进度 tick 秒级高频,每次校验都 UPDATE 是写放大;5 分钟一跳足够观测活性
+            long now = System.currentTimeMillis();
+            if (now - pt.getLastUsedAt() > 300_000) {
+                pt.setLastUsedAt(now);
+                tokenRepository.save(pt);
+            }
             return new TokenIdentity(pt.getUid(), pt.getSyncScope());
         }
         try {

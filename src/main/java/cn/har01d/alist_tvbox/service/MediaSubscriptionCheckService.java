@@ -211,7 +211,13 @@ public class MediaSubscriptionCheckService {
         if (!code.find()) {
             return null;
         }
-        int c = Integer.parseInt(code.group(1));
+        int c;
+        try {
+            c = Integer.parseInt(code.group(1));
+        } catch (NumberFormatException e) {
+            // 响应里 code 为超长数字等脏形态:无结论返回 null,别把整轮巡检炸进 ERROR
+            return null;
+        }
         if (c == 0 && body.contains("\"stoken\":\"")) {
             return Boolean.TRUE;
         }
@@ -949,6 +955,8 @@ public class MediaSubscriptionCheckService {
         lastPoolSearch.remove(subscriptionId);
         mainDriveSearchTime.remove(subscriptionId);
         driveLineKickTime.remove(subscriptionId);
+        magnetCooldown.remove(subscriptionId);
+        magnetCandidates.remove(subscriptionId);
         preheatAheadTime.remove(subscriptionId);
         aheadRescueTime.remove(subscriptionId);
         if (resourceIds != null) {
@@ -982,7 +990,14 @@ public class MediaSubscriptionCheckService {
         if (subscription == null || subscription.getUid() != uid) {
             throw new cn.har01d.alist_tvbox.exception.BadRequestException("订阅不存在: " + id);
         }
-        executor.submit(() -> check(id));
+        executor.submit(() -> {
+            try {
+                check(id);
+            } catch (Exception e) {
+                // check 主体有 catch,但尾部 saveUnlessDeleted 再抛(DB 抖动)会被 Future 静默吞掉且无日志
+                log.warn("manual check {} failed: {}", id, e.getMessage(), e);
+            }
+        });
     }
 
     /**
@@ -1225,10 +1240,12 @@ public class MediaSubscriptionCheckService {
             try {
                 // 锁内取新实体:排队期间 doCheck/手动刷新可能已整行保存,旧实体再 save 会回滚覆盖
                 MediaSubscription current = subscriptionRepository.findById(id).orElse(null);
-                if (current == null) {
+                // resource 同理锁内重取:排队期间并发巡检写过该行(pinned/score/state),旧实体再 save 会回滚
+                MediaSubscriptionResource fresh = resourceRepository.findById(resourceId).orElse(null);
+                if (current == null || fresh == null) {
                     return;
                 }
-                activate(current, resource);
+                activate(current, fresh);
                 if (stopIfDeleted(id)) {
                     return;
                 }
@@ -1279,10 +1296,12 @@ public class MediaSubscriptionCheckService {
             try {
                 // 锁内取新实体:排队期间 doCheck/手动刷新可能已整行保存,旧实体再 save 会回滚覆盖
                 MediaSubscription current = subscriptionRepository.findById(id).orElse(null);
-                if (current == null) {
+                // resource 同理锁内重取:排队期间并发巡检写过该行,旧实体再 save 会回滚这些字段
+                MediaSubscriptionResource fresh = resourceRepository.findById(resourceId).orElse(null);
+                if (current == null || fresh == null) {
                     return;
                 }
-                mountCandidate(current, resource);
+                mountCandidate(current, fresh);
             } finally {
                 inFlight.remove(id);
             }
@@ -4406,6 +4425,7 @@ public class MediaSubscriptionCheckService {
         EpisodeSizePolicy policy = episodeSizePolicy(subscription);
         MediaSubscriptionPoolFilter global = poolFilterFor(subscription);
         MediaSubscriptionFilter filter = parseFilter(subscription);
+        int attempts = 0;
         for (cn.har01d.alist_tvbox.dto.tg.Message message : magnets) {
             if (message == null || !isOfflineLink(message.getLink())) {
                 continue;
@@ -4418,6 +4438,12 @@ public class MediaSubscriptionCheckService {
             if (!names.isEmpty() && !matchesTitle(names, title)) {
                 continue;
             }
+            // 每候选提交同步等待最长 30s:全部被网盘拒绝时逐个试会把共享 check 池阻塞数分钟 —— 尝试上限兜底
+            if (attempts >= 3) {
+                log.info("magnet submit attempts reached cap for subscription {} episode {}", subscription.getId(), episode);
+                return false;
+            }
+            attempts++;
             // 磁力解析:文件列表级预筛(真实体积+集号命中+文件名排除词);失败降级 dn 名口径
             cn.har01d.alist_tvbox.service.magnet.MagnetResolver.MagnetInfo info =
                     magnetResolver == null ? null : magnetResolver.resolve(message.getLink()).orElse(null);
@@ -6462,13 +6488,17 @@ public class MediaSubscriptionCheckService {
      * 段内含技术信号才剔;写了显式集号({@code [第05集 1080P]})或纯内容段({@code [01]})保留。
      * fixName 剥公共后缀会把 {@code GB].mkv} 吃掉留下未闭合尾段({@code ...tv_6.72}),同样按信号剔到 '[' 为止。
      */
+    /** 列目录热路径(每文件名×每次列举)调用:预编译,别每次重新 compile。 */
+    private static final java.util.regex.Pattern TECH_BRACKETS =
+            java.util.regex.Pattern.compile("[\\[【]([^\\[\\]【】]*)[\\]】]?");
+
     static String stripTechBrackets(String name) {
         if (name == null || (name.indexOf('[') < 0 && name.indexOf('【') < 0)) {
             return name;
         }
         StringBuilder result = new StringBuilder();
         int last = 0;
-        Matcher matcher = java.util.regex.Pattern.compile("[\\[【]([^\\[\\]【】]*)[\\]】]?").matcher(name);
+        Matcher matcher = TECH_BRACKETS.matcher(name);
         while (matcher.find()) {
             result.append(name, last, matcher.start());
             if (!isTechSegment(matcher.group(1))) {
@@ -6659,7 +6689,11 @@ public class MediaSubscriptionCheckService {
             log.info("{} search skipped for [{}] (source backoff)", source, keyword);
             return CompletableFuture.completedFuture(List.of());
         }
+        // 超时从提交起算:并发巡检×多关键词补搜时共享池排队深,排队中的源未发一包即超时 ——
+        // 排队超时不该记源失败(误伤源信誉退避),只有真正开始执行后到点才算源超时
+        java.util.concurrent.atomic.AtomicBoolean executionStarted = new java.util.concurrent.atomic.AtomicBoolean(false);
         return CompletableFuture.<List<Message>>supplyAsync(() -> {
+            executionStarted.set(true);
             try {
                 List<Message> messages = task.get();
                 if (respectBackoff && searchSourceThrottle != null) {
@@ -6676,12 +6710,16 @@ public class MediaSubscriptionCheckService {
         }, searchExecutor)
                 .orTimeout(90, TimeUnit.SECONDS)
                 .exceptionally(e -> {
-                    // 90s 硬顶到点(源内部超时失效):按超时记退避;底层任务迟到返回的成功会被
-                    // recordSuccess 抵消一次计数 —— 罕见且只影响连击数,可接受
-                    if (respectBackoff && searchSourceThrottle != null) {
-                        searchSourceThrottle.recordFailure(source, e);
+                    // 90s 硬顶到点(源内部超时失效):执行中到点按超时记退避,排队中被掐不记;
+                    // 底层任务迟到返回的成功会被 recordSuccess 抵消一次计数 —— 罕见且只影响连击数,可接受
+                    if (executionStarted.get()) {
+                        if (respectBackoff && searchSourceThrottle != null) {
+                            searchSourceThrottle.recordFailure(source, e);
+                        }
+                        log.warn("{} search timed out for [{}] (execution)", source, keyword);
+                    } else {
+                        log.info("{} search timed out while queued for [{}] (no failure recorded)", source, keyword);
                     }
-                    log.warn("{} search timed out for [{}]", source, keyword);
                     return List.<Message>of();
                 });
     }
@@ -7356,8 +7394,17 @@ public class MediaSubscriptionCheckService {
                 || subscription.getCurrentEpisodes() == null || subscription.getCurrentEpisodes() < expected;
     }
 
-    /** 系统已配置的网盘账号类型集合(账号全局,与订阅归属用户无关)。DriverType 枚举 → 分享类型码。 */
+    /** 系统已配置的网盘账号类型集合(账号全局,与订阅归属用户无关)。DriverType 枚举 → 分享类型码。
+     *  60s 短缓存:score() 每条搜索消息都要这份集合,无缓存即每次 2×findAll+Setting 读(百条结果=数百次冗余查询)。 */
+    private volatile long accountTypesCacheTime;
+    private volatile Set<Integer> accountTypesCache;
+
     private Set<Integer> driveAccountTypes() {
+        long now = System.currentTimeMillis();
+        Set<Integer> cached = accountTypesCache;
+        if (cached != null && now - accountTypesCacheTime < 60_000) {
+            return cached;
+        }
         Set<Integer> types = new java.util.HashSet<>();
         try {
             driverAccountRepository.findAll().forEach(account -> {
@@ -7369,6 +7416,8 @@ public class MediaSubscriptionCheckService {
         } catch (Exception e) {
             log.debug("load accounts failed: {}", e.getMessage());
         }
+        accountTypesCache = java.util.Collections.unmodifiableSet(types);
+        accountTypesCacheTime = now;
         return types;
     }
 

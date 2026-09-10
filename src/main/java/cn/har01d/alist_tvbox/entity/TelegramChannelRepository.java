@@ -9,4 +9,6 @@ public interface TelegramChannelRepository extends JpaRepository<TelegramChannel
     List<TelegramChannel> findByWebAccessTrue(Sort sort);
 
     List<TelegramChannel> findByEnabledTrue(Sort sort);
+
+    TelegramChannel findByUsername(String username);
 }

@@ -74,12 +74,14 @@ import cn.har01d.alist_tvbox.util.BiliCookieRefreshUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
@@ -304,6 +306,11 @@ public class BiliBiliService {
     private final LoadingCache<String, BiliBiliInfo> cache = Caffeine.newBuilder()
             .maximumSize(10)
             .build(this::getInfo);
+    /** 已删/失效视频的负缓存:getInfo 失败时抛 NotFoundException(loader 返 null 不落 Caffeine),短 TTL 防重试风暴。 */
+    private final Cache<String, Boolean> infoMissCache = Caffeine.newBuilder()
+            .expireAfterWrite(5, java.util.concurrent.TimeUnit.MINUTES)
+            .maximumSize(500)
+            .build();
     private MovieDetail searchPlaylist;
     private String keyword = "";
     private int searchPage;
@@ -312,9 +319,9 @@ public class BiliBiliService {
 
     private List<String> feedOffsets = new ArrayList<>(); // 动态列表
     private List<String> chanOffsets = new ArrayList<>(); // 频道列表
-    private String imgKey;
-    private String subKey;
-    private LocalDate keyTime;
+    private volatile String imgKey;
+    private volatile String subKey;
+    private volatile LocalDate keyTime;
 
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
@@ -853,7 +860,7 @@ public class BiliBiliService {
             getLoginStatus();
         }
         MovieList result = new MovieList();
-        if (mid == BiliBiliUtils.getMid()) {
+        if (mid != null && mid == BiliBiliUtils.getMid()) {
             return result;
         }
 
@@ -899,7 +906,7 @@ public class BiliBiliService {
             getLoginStatus();
         }
         MovieList result = new MovieList();
-        if (mid == BiliBiliUtils.getMid()) {
+        if (mid != null && mid == BiliBiliUtils.getMid()) {
             return result;
         }
 
@@ -940,7 +947,7 @@ public class BiliBiliService {
             getLoginStatus();
         }
         MovieList result = new MovieList();
-        if (mid == BiliBiliUtils.getMid()) {
+        if (mid != null && mid == BiliBiliUtils.getMid()) {
             return result;
         }
 
@@ -968,7 +975,7 @@ public class BiliBiliService {
             getLoginStatus();
         }
         MovieList result = new MovieList();
-        if (mid == BiliBiliUtils.getMid()) {
+        if (mid != null && mid == BiliBiliUtils.getMid()) {
             return result;
         }
 
@@ -996,7 +1003,7 @@ public class BiliBiliService {
             getLoginStatus();
         }
         MovieList result = new MovieList();
-        if (mid == BiliBiliUtils.getMid()) {
+        if (mid != null && mid == BiliBiliUtils.getMid()) {
             return result;
         }
 
@@ -1023,7 +1030,7 @@ public class BiliBiliService {
         if (mid == null) {
             getLoginStatus();
         }
-        if (mid == BiliBiliUtils.getMid()) {
+        if (mid != null && mid == BiliBiliUtils.getMid()) {
             return new FavItems();
         }
 
@@ -1040,7 +1047,7 @@ public class BiliBiliService {
             getLoginStatus();
         }
         MovieList result = new MovieList();
-        if (mid == BiliBiliUtils.getMid()) {
+        if (mid != null && mid == BiliBiliUtils.getMid()) {
             return result;
         }
 
@@ -1568,6 +1575,12 @@ public class BiliBiliService {
             cursors = new ArrayList<>();
             cursors.add(new BiliBiliHistoryResult.Cursor());
         }
+        if (page - 1 < 0 || page - 1 >= cursors.size()) {
+            // 直达高页码(服务重启后游标列表为空/深链跳页):回退第 1 页重建游标
+            page = 1;
+            cursors = new ArrayList<>();
+            cursors.add(new BiliBiliHistoryResult.Cursor());
+        }
         BiliBiliHistoryResult.Cursor cursor = cursors.get(page - 1);
         String url = String.format(HISTORY_API, cursor.getMax(), cursor.getViewAt());
         HttpEntity<Void> entity = buildHttpEntity(null);
@@ -1842,14 +1855,19 @@ public class BiliBiliService {
         if (bvid.startsWith("av")) {
             bvid = BiliBiliUtils.av2bv(Long.parseLong(bvid.substring(2)));
         }
+        // 负缓存:Caffeine loader 返 null 不落缓存,已删视频每请求都重打 INFO_API(重试风暴) —— 短 TTL 直接抛 404
+        if (infoMissCache.getIfPresent(bvid) != null) {
+            throw new NotFoundException("视频不存在或已删除: " + bvid);
+        }
         BiliBiliInfoResponse infoResponse = restTemplate.getForObject(INFO_API + bvid, BiliBiliInfoResponse.class);
         log.debug("get info {} : {}", INFO_API + bvid, infoResponse);
         if (infoResponse.getCode() == 0) {
             return infoResponse.getData();
         } else {
             log.warn("get BiliBili video info failed: {}", infoResponse.getMessage());
+            infoMissCache.put(bvid, Boolean.TRUE);
         }
-        return null;
+        throw new NotFoundException("视频不存在或已删除: " + bvid);
     }
 
     private String getToken(long aid, long cid, String cookie) {
@@ -2244,6 +2262,11 @@ public class BiliBiliService {
             chanOffsets = new ArrayList<>();
             chanOffsets.add("");
         }
+        if (page - 1 < 0 || page - 1 >= chanOffsets.size()) {
+            page = 1;
+            chanOffsets = new ArrayList<>();
+            chanOffsets.add("");
+        }
         MovieList result = new MovieList();
         if (chanOffsets.get(page - 1) == null) {
             return result;
@@ -2278,6 +2301,11 @@ public class BiliBiliService {
 
     private MovieList getFeeds(int page) {
         if (page == 1) {
+            feedOffsets = new ArrayList<>();
+            feedOffsets.add("");
+        }
+        if (page - 1 < 0 || page - 1 >= feedOffsets.size()) {
+            page = 1;
             feedOffsets = new ArrayList<>();
             feedOffsets.add("");
         }
@@ -2445,6 +2473,11 @@ public class BiliBiliService {
         if (StringUtils.isBlank(sort)) {
             sort = "new";
         }
+        if (page - 1 < 0 || page - 1 >= channelOffsets.size()) {
+            page = 1;
+            channelOffsets = new ArrayList<>();
+            channelOffsets.add("");
+        }
         MovieList result = new MovieList();
         if (channelOffsets.get(page - 1) == null) {
             return result;
@@ -2501,6 +2534,14 @@ public class BiliBiliService {
             page = Integer.parseInt(parts[3]);
         }
 
+        if (page - 1 < 0 || page - 1 >= channelOffsets.size()) {
+            // 重启后列表为空(只在 getChannel 初始化):历史记录直达高页码会越界,回退第 1 页
+            log.debug("channel offsets missing for page {}, fallback to page 1", page);
+            page = 1;
+            if (channelOffsets.isEmpty()) {
+                channelOffsets.add("");
+            }
+        }
         HttpEntity<Void> entity = buildHttpEntity(null);
         String url = String.format(CHANNEL_API, id, sort, channelOffsets.get(page - 1));
         ResponseEntity<BiliBiliChannelResponse> response = restTemplate1.exchange(url, HttpMethod.GET, entity, BiliBiliChannelResponse.class);

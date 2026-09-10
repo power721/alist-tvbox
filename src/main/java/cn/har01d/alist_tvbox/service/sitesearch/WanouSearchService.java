@@ -162,7 +162,7 @@ public class WanouSearchService {
             futures.add(executor.submit(() -> searchSite(site, kw)));
         }
 
-        long deadline = System.currentTimeMillis() + appProperties.getSubscription().getWanouTimeoutSeconds() * 1000L;
+        long deadline = System.currentTimeMillis() + Math.max(5, appProperties.getSubscription().getWanouTimeoutSeconds()) * 1000L;
         List<Message> result = new ArrayList<>();
         Set<String> seenLinks = new HashSet<>();
         boolean cancelled = false;

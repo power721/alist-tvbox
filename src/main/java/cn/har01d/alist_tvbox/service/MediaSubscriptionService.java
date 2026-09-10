@@ -882,10 +882,20 @@ public class MediaSubscriptionService {
         return null;
     }
 
+    /** 用户全部订阅(创建时间倒序):控制器/批量判定每请求取一次快照,避免逐条全量拉取。 */
+    public List<MediaSubscription> subscriptionsOf(int uid) {
+        return subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid);
+    }
+
     /** 片单条目是否已在追:标题语义匹配(「末日地堡 第三季」命中 web 订的「末日地堡」S3)。 */
     public boolean isSubscribedTitle(int uid, String title) {
+        return isSubscribedTitle(uid, title, subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid));
+    }
+
+    /** 批量判定:列表/搜索每页 24 条逐条调单参版会 24 次全量拉订阅表 —— 取一次快照逐条匹配。 */
+    public boolean isSubscribedTitle(int uid, String title, List<MediaSubscription> subscriptions) {
         String bareName = TextUtils.stripSeasonSuffix(title);
-        return subscriptionRepository.findByUidOrderByCreatedTimeDesc(uid).stream()
+        return subscriptions.stream()
                 .anyMatch(s -> matchesTitle(s, bareName, TextUtils.parseTitleSeason(title)));
     }
 

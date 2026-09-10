@@ -2,7 +2,10 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.sync.*;
 import cn.har01d.alist_tvbox.exception.VersionMismatchException;
+import cn.har01d.alist_tvbox.service.RateLimiter;
 import cn.har01d.alist_tvbox.service.sync.SyncService;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
@@ -19,9 +22,11 @@ import java.util.Map;
 @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
 public class SyncController {
     private final SyncService syncService;
+    private final RateLimiter rateLimiter;
 
-    public SyncController(SyncService syncService) {
+    public SyncController(SyncService syncService, RateLimiter rateLimiter) {
         this.syncService = syncService;
+        this.rateLimiter = rateLimiter;
     }
 
     /**
@@ -30,7 +35,11 @@ public class SyncController {
      */
     @PreAuthorize("permitAll()")
     @GetMapping("/validate")
-    public ResponseEntity<Map<String, Object>> validate(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<Map<String, Object>> validate(@RequestHeader("Authorization") String authHeader,
+                                                        HttpServletRequest request) {
+        // Basic 凭证暴力破解面:与登录同款限速锁(此端点此前完全无限速)
+        String rateKey = "sync-validate:" + Utils.getClientIp(request);
+        rateLimiter.checkLocked(rateKey);
         try {
             if (authHeader == null || !authHeader.startsWith("Basic ")) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -53,8 +62,10 @@ public class SyncController {
             boolean valid = syncService.validateCredentials(username, password);
 
             if (valid) {
+                rateLimiter.reset(rateKey);
                 return ResponseEntity.ok(Map.of("success", true, "message", "验证成功"));
             } else {
+                rateLimiter.recordFailure(rateKey);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("success", false, "message", "用户名或密码错误"));
             }

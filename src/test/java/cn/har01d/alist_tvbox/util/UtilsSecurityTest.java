@@ -46,8 +46,9 @@ class UtilsSecurityTest {
 
     @Test
     void shouldAllowPublicHttpUrls() {
-        assertTrue(Utils.isSafeExternalUrl("https://example.com/img.png"));
-        assertTrue(Utils.isSafeExternalUrl("http://img.doubanio.com/x.jpg"));
+        // 用字面公网 IP:校验会真实解析域名,测试环境无 DNS 时域名用例会误报
+        assertTrue(Utils.isSafeExternalUrl("https://93.184.216.34/img.png"));
+        assertTrue(Utils.isSafeExternalUrl("http://8.8.8.8/x.jpg"));
     }
 
     @Test

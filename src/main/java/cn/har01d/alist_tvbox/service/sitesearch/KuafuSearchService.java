@@ -120,10 +120,10 @@ public class KuafuSearchService {
                 SiteSearchSupport.setting(settingRepository, HOST_SETTING), DEFAULT_HOST);
         String cookie = SiteSearchSupport.setting(settingRepository, COOKIE_SETTING).trim();
         long deadline = System.currentTimeMillis()
-                + appProperties.getSubscription().getKuafuTimeoutSeconds() * 1000L;
+                + Math.max(5, appProperties.getSubscription().getKuafuTimeoutSeconds()) * 1000L;
         try {
             List<Card> cards = parseCards(getHtml(host, host + "/search-"
-                    + URLEncoder.encode(keyword.trim(), StandardCharsets.UTF_8) + "-1.htm", cookie));
+                    + URLEncoder.encode(keyword.trim(), StandardCharsets.UTF_8).replace("+", "%20") + "-1.htm", cookie));
             List<Message> result = new ArrayList<>();
             Set<String> seen = new HashSet<>();
             int details = 0;

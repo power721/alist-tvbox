@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.live.service;
 
+import org.apache.commons.lang3.StringUtils;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.live.model.DouyuCategoryResponse;
 import cn.har01d.alist_tvbox.live.model.DouyuRoomResponse;
@@ -261,14 +262,23 @@ public class DouyuService implements LivePlatform {
 
         DouyuStreamResponse douyuStreamResponse = objectMapper.readValue(response.getBody(), DouyuStreamResponse.class);
         var stream = douyuStreamResponse.getData();
+        // 未开播/签名失败返回错误 JSON 无 data:无流即不出线路(此前 getCdnsWithName 直接 NPE,detail 500)
+        if (stream == null || stream.getCdnsWithName() == null || stream.getCdnsWithName().isEmpty()) {
+            log.debug("douyu room {} has no stream data (offline or sign failed)", id);
+            return;
+        }
         for (var cdn : stream.getCdnsWithName()) {
-            playFrom.add(cdn.getName());
             List<String> urls = new ArrayList<>();
             for (var bitRate : stream.getMultirates()) {
-                url = getPlayUrl(id, dataUse, bitRate.getRate(), cdn.getCdn());
-                urls.add(bitRate.getName() + "$" + url);
+                String playUrlItem = getPlayUrl(id, dataUse, bitRate.getRate(), cdn.getCdn());
+                if (StringUtils.isNotBlank(playUrlItem)) {
+                    urls.add(bitRate.getName() + "$" + playUrlItem);
+                }
             }
-            playUrl.add(String.join("#", urls));
+            if (!urls.isEmpty()) {
+                playFrom.add(cdn.getName());
+                playUrl.add(String.join("#", urls));
+            }
         }
 
         movieDetail.setVod_play_from(String.join("$$$", playFrom));
@@ -290,6 +300,10 @@ public class DouyuService implements LivePlatform {
         );
 
         ObjectNode data = (ObjectNode) response.getBody().get("data");
+        if (data == null || data.path("rtmp_url").isMissingNode() || data.path("rtmp_live").isMissingNode()) {
+            // 该清晰度无流(错误响应无 data):返回空串让调用方跳过此条目,不让整次 detail 崩掉
+            return "";
+        }
         String rtmpUrl = data.get("rtmp_url").asText();
         String rtmpLive = data.get("rtmp_live").asText();
         rtmpLive = StringEscapeUtils.unescapeHtml4(rtmpLive);

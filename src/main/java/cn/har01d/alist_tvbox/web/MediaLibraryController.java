@@ -146,10 +146,12 @@ public class MediaLibraryController {
             merged.addAll(mediaSubscriptionService.contentList(uid, null, wd).getList());
         }
         MovieList tmdb = pianDanService.search(wd, pg, 24);
+        // 「已追」匹配用订阅快照:逐条调单参版每条都是一次订阅表全量拉取
+        var subscriptions = mediaSubscriptionService.subscriptionsOf(uid);
         for (MovieDetail item : tmdb.getList()) {
             item.setVod_pic(mediaSubscriptionService.absoluteClientCover(item.getVod_pic()));
             item.setVod_remarks(subscribedRemarks(item.getVod_remarks(),
-                    mediaSubscriptionService.isSubscribedTitle(uid, item.getVod_name())));
+                    mediaSubscriptionService.isSubscribedTitle(uid, item.getVod_name(), subscriptions)));
             merged.add(item);
         }
         MovieList result = new MovieList();
@@ -172,11 +174,12 @@ public class MediaLibraryController {
         });
         MovieList result = pianDanService.list(type, "web", pg, 24, filters);
         List<MovieDetail> items = new ArrayList<>();
+        var subscriptions = mediaSubscriptionService.subscriptionsOf(uid);
         for (MovieDetail item : result.getList()) {
             MovieDetail copy = copyDetail(item);
             copy.setVod_pic(mediaSubscriptionService.absoluteClientCover(copy.getVod_pic()));
             copy.setVod_remarks(subscribedRemarks(copy.getVod_remarks(),
-                    mediaSubscriptionService.isSubscribedTitle(uid, copy.getVod_name())));
+                    mediaSubscriptionService.isSubscribedTitle(uid, copy.getVod_name(), subscriptions)));
             items.add(copy);
         }
         result.setList(items);

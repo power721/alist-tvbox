@@ -31,6 +31,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,8 +50,8 @@ import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 public class BilibiliService implements LivePlatform {
     /** 推荐流正常至少返回 10+ 条,低于该阈值视为源质量不足,继续尝试兜底链。 */
     private static final int MIN_RECOMMEND_ROOMS = 10;
-    private final Map<String, String> userMap = new HashMap<>();
-    private final Map<String, List<BilibiliCategory>> categoryMap = new HashMap<>();
+    private final Map<String, String> userMap = new ConcurrentHashMap<>();
+    private final Map<String, List<BilibiliCategory>> categoryMap = new ConcurrentHashMap<>();
     private final RestTemplate restTemplate;
     private final AppProperties appProperties;
     private final SettingRepository settingRepository;
@@ -245,7 +246,13 @@ public class BilibiliService implements LivePlatform {
             }
 
             String id = parts[1];
-            for (var item : categoryMap.get(id)) {
+            // 未知/失效分类 id:get 返 null 直接遍历 NPE —— 回退构造一次,仍无则空列表
+            List<BilibiliCategory> items = categoryMap.get(id);
+            if (items == null) {
+                category();
+                items = categoryMap.getOrDefault(id, List.of());
+            }
+            for (var item : items) {
                 MovieDetail detail = new MovieDetail();
                 detail.setVod_id(tid + "-" + item.getId());
                 detail.setVod_name(item.getName());

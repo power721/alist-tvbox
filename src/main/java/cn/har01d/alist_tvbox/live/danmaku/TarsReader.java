@@ -165,8 +165,14 @@ final class TarsReader {
             case TYPE_STRING4 -> readInt4();
             default -> throw new IllegalStateException("tars string type mismatch: " + hd.type);
         };
-        String s = new String(data, pos, len, StandardCharsets.UTF_8);
-        pos += len;
+        String s = "";
+        // 长度字段来自网络帧,超大 size 直接 new byte[] 是 OOM Error(上层 catch Exception 接不住),越界则数组异常 —— 读前校验
+        if (len >= 0 && pos + len <= data.length) {
+            s = new String(data, pos, len, StandardCharsets.UTF_8);
+            pos += len;
+        } else {
+            throw new IllegalStateException("tars string length out of bounds: " + len);
+        }
         return s;
     }
 
@@ -183,6 +189,10 @@ final class TarsReader {
         Head inner = new Head();
         readHead(inner);
         int size = readIntTag0();
+        if (size < 0 || pos + size > data.length) {
+            // 恶意/损坏帧的长度字段可指定的 OOM Error 接不住,负数 NegativeArraySizeException 也不该裸抛
+            throw new IllegalStateException("tars bytes length out of bounds: " + size);
+        }
         byte[] bytes = new byte[size];
         System.arraycopy(data, pos, bytes, 0, size);
         pos += size;
