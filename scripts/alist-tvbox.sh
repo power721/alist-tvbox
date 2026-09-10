@@ -686,6 +686,7 @@ config_db_apply() {
   local container_name=$(get_container_name)
   echo -e "${CYAN}使用新数据库配置重建容器 $container_name ...${NC}"
   ensure_external_db_sql_init_disabled
+  preserve_www_static "$container_name"
   docker stop "$container_name" 2>/dev/null || true
   docker rm "$container_name" 2>/dev/null || true
   start_container
@@ -1123,7 +1124,7 @@ remove_opposite_container() {
 
   if docker ps -a --format '{{.Names}}' | grep -q "^${opposite_name}\$"; then
     echo -e "${YELLOW}正在移除容器 ${opposite_name}...${NC}"
-    docker rm -f "$opposite_name" >/dev/null
+    remove_container_safely "$opposite_name"
   fi
 }
 
@@ -1212,6 +1213,34 @@ migrate_www_static() {
     echo -e "${RED}静态文件迁移失败：请手动从卷 $volume 复制到 $target${NC}"
     return 1
   fi
+}
+
+# 删除容器前抢救容器可写层里的 /www/static。
+# 当 /www/static 未被任何挂载(volume/bind)覆盖时（容器由旧版脚本/compose/手动 docker run 创建），
+# 网页上传的 py 等静态文件只存在于容器可写层，docker rm 即随容器销毁。
+# 复制到 ${CONFIG[BASE_DIR]}/www-static（新容器的挂载点），同名文件以容器内版本覆盖。
+preserve_www_static() {
+  local name="$1"
+  [[ -n "$name" ]] || return 0
+  docker ps -a --format '{{.Names}}' | grep -q "^${name}\$" || return 0
+
+  local mounted
+  mounted="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/www/static"}}yes{{end}}{{end}}' "$name" 2>/dev/null || true)"
+  [[ "$mounted" == "yes" ]] && return 0
+
+  local target="${CONFIG[BASE_DIR]}/www-static"
+  mkdir -p "$target" 2>/dev/null || return 0
+  if docker cp "$name:/www/static/." "$target/" >/dev/null 2>&1; then
+    echo -e "${GREEN}已把容器 $name 内 /www/static（含网页上传的文件）保存到 $target，防止重建容器时丢失${NC}"
+  fi
+}
+
+# 删除容器：先抢救可写层里的 /www/static，再 docker rm -f。
+remove_container_safely() {
+  local name="$1"
+  [[ -n "$name" ]] || return 0
+  preserve_www_static "$name"
+  docker rm -f "$name" >/dev/null
 }
 
 # 启动容器
@@ -1575,7 +1604,7 @@ install_container() {
 
   if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
     echo -e "${YELLOW}正在移除现有容器...${NC}"
-    docker rm -f "$container_name" >/dev/null
+    remove_container_safely "$container_name"
   fi
 
   start_container
@@ -1640,7 +1669,7 @@ replace_container() {
   container_name=$(get_container_name)
   if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
     echo -e "${YELLOW}正在重建容器...${NC}"
-    docker rm -f "$container_name" >/dev/null
+    remove_container_safely "$container_name"
   else
     echo -e "${GREEN}正在启动容器...${NC}"
   fi
@@ -1761,13 +1790,13 @@ show_image_menu() {
     # 删除对立容器
     if docker ps -a --format '{{.Names}}' | grep -q "^${opposite_name}\$"; then
       echo -e "${YELLOW}正在移除对立容器 ${opposite_name}...${NC}"
-      docker rm -f "$opposite_name" >/dev/null
+      remove_container_safely "$opposite_name"
     fi
 
     # 如果容器存在，则停止并删除
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
       echo -e "${YELLOW}正在停止并删除旧容器...${NC}"
-      docker rm -f "$container_name" >/dev/null
+      remove_container_safely "$container_name"
     fi
 
     # 拉取最新镜像
@@ -1914,6 +1943,15 @@ add_custom_mount() {
 
   # 基本格式验证
   if [[ "$mount_config" =~ ^[^:]+:[^:]+(:ro|:rw)?$ ]]; then
+    # 内置挂载目的地清单：自定义挂载追加在内置挂载之后，目的地相同时会覆盖内置挂载
+    # （docker run 对同一目的地取后一个 -v），数据位置将与默认不同，提前提醒。
+    local dest="${mount_config#*:}"; dest="${dest%%:*}"
+    case "$dest" in
+      /data|/www|/www/static|/www/cat|/opt/alist/data)
+        echo -e "${YELLOW}警告: 容器目录 ${dest} 与脚本内置挂载重叠，将以这条自定义挂载为准，"
+        echo -e "         网页上传的文件将保存到你指定的主机目录而非默认数据目录!${NC}"
+        ;;
+    esac
     mkdir -p "${CONFIG[BASE_DIR]}" 2>/dev/null || {
       echo -e "${RED}无法创建数据目录 (权限不足)${NC}"
       sleep 1
@@ -1988,7 +2026,7 @@ recreate_existing_container() {
     local was_running=$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null)
 
     # 停止并删除现有容器
-    docker rm -f "$container_name" >/dev/null
+    remove_container_safely "$container_name"
 
     # 重新创建容器；原来是停止状态时，创建后恢复为停止状态。
     start_container
@@ -3242,7 +3280,7 @@ auto_repair() {
       case "$yn" in
         [Yy]*)
           echo -e "${YELLOW}正在重建容器...${NC}"
-          docker rm -f "$container_name" >/dev/null
+          remove_container_safely "$container_name"
           start_container
           echo -e "${GREEN}✓ 容器已重建并启动${NC}"
           echo -e "${CYAN}等待服务初始化...${NC}"
@@ -3590,7 +3628,7 @@ interactive_mode() {
           read -p "确认卸载容器? (y/N): " confirm
           if [[ "$confirm" =~ ^[Yy]$ ]]; then
             echo "正在卸载容器..."
-            docker rm -f "$container_name"
+            remove_container_safely "$container_name"
             echo -e "${GREEN}容器已卸载${NC}"
             echo -e "${CYAN}数据目录已保留，如需删除请手动清理${NC}"
           else
@@ -3702,6 +3740,7 @@ cli_mode() {
       }
       ;;
     uninstall)
+      preserve_www_static "$container_name"
       docker rm -f "$container_name" || {
         echo -e "${RED}容器不存在${NC}"
       }
