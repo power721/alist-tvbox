@@ -85,6 +85,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -2306,46 +2307,50 @@ public class TvBoxService {
                     sort(fileNames);
                 }
 
-                int index = 0;
-                List<String> urls = new ArrayList<>();
-                for (String name : fileNames) {
-                    String filepath = fixPath(path + "/" + folder + "/" + name);
-                    String title = fixName(name, prefix, suffix) + "(" + Utils.byte2size(map.get(name).getSize()) + ")";
-                    if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                        Video item = new Video();
-                        item.setName(name);
-                        if ("gui".equals(ac) && StringUtils.isNotBlank(folder)) {
-                            item.setTitle(folder + " - " + title);
-                        } else {
-                            item.setTitle(title);
-                        }
-                        item.setPath(filepath);
-                        item.setTime(map.get(name).getModified());
-                        item.setDuration(map.get(name).getDuration());
-                        item.setSize(map.get(name).getSize());
-                        String url = buildProxyUrl(site, filepath, item);
-                        item.setUrl(url);
-                        if (!subtitleNames.isEmpty()) {
-                            String best = findBestSubtitle(subtitleNames, name.replace(prefix, "").replace(suffix, ""));
-                            if (best != null) {
-                                item.setSubs(List.of(buildSubtitleOption(site, fixPath(path + "/" + folder + "/" + best), best)));
+                // 同目录国语/粤语多音轨混排时按语言拆成独立播放线路;单语言目录仍是单线路,行为不变
+                Map<String, List<String>> audioGroups = groupByAudioLanguage(fileNames);
+                for (var group : audioGroups.entrySet()) {
+                    int index = 0;
+                    List<String> urls = new ArrayList<>();
+                    for (String name : group.getValue()) {
+                        String filepath = fixPath(path + "/" + folder + "/" + name);
+                        String title = fixName(name, prefix, suffix) + "(" + Utils.byte2size(map.get(name).getSize()) + ")";
+                        if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
+                            Video item = new Video();
+                            item.setName(name);
+                            if ("gui".equals(ac) && StringUtils.isNotBlank(folder)) {
+                                item.setTitle(folder + " - " + title);
+                            } else {
+                                item.setTitle(title);
                             }
-                        }
-                        if ("detail".equals(ac)) {
-                            urls.add(title + "$" + url);
+                            item.setPath(filepath);
+                            item.setTime(map.get(name).getModified());
+                            item.setDuration(map.get(name).getDuration());
+                            item.setSize(map.get(name).getSize());
+                            String url = buildProxyUrl(site, filepath, item);
+                            item.setUrl(url);
+                            if (!subtitleNames.isEmpty()) {
+                                String best = findBestSubtitle(subtitleNames, name.replace(prefix, "").replace(suffix, ""));
+                                if (best != null) {
+                                    item.setSubs(List.of(buildSubtitleOption(site, fixPath(path + "/" + folder + "/" + best), best)));
+                                }
+                            }
+                            if ("detail".equals(ac)) {
+                                urls.add(title + "$" + url);
+                            } else {
+                                result.getItems().add(item);
+                            }
                         } else {
-                            result.getItems().add(item);
+                            String url = buildPlayUrl(site, source, index++, filepath);
+                            urls.add(title + "$" + url);
                         }
-                    } else {
-                        String url = buildPlayUrl(site, source, index++, filepath);
-                        urls.add(title + "$" + url);
                     }
-                }
-                source++;
 
-                if (!urls.isEmpty()) {
-                    result.getFiles().add(String.join("#", urls));
-                    result.getFolders().add(fixSourceName(parent + "/" + folder));
+                    if (!urls.isEmpty()) {
+                        result.getFiles().add(String.join("#", urls));
+                        result.getFolders().add(audioSourceName(parent, folder, group.getKey()));
+                    }
+                    source++;
                 }
 
                 // 同 folders:嵌套版本目录(HQ.DV/SDR)兼容性差的靠后
@@ -2379,6 +2384,41 @@ public class TvBoxService {
             name = name.substring(0, name.length() - 1);
         }
         return name;
+    }
+
+    /** 文件名音轨归类:国语/國語标国语,粤语/粵語标粤语;两者都含(国粤双语单文件)或都不含归未标注组。 */
+    private static String audioLanguageOf(String name) {
+        boolean mandarin = name.contains("国语") || name.contains("國語");
+        boolean cantonese = name.contains("粤语") || name.contains("粵語");
+        if (mandarin == cantonese) {
+            return "";
+        }
+        return mandarin ? "国语" : "粤语";
+    }
+
+    /** 按音轨语言分组,保序:未标注、国语、粤语;仅一组时收敛回单组,线路名不带语言后缀保持原行为。 */
+    private static Map<String, List<String>> groupByAudioLanguage(List<String> fileNames) {
+        Map<String, List<String>> groups = new LinkedHashMap<>();
+        groups.put("", new ArrayList<>());
+        groups.put("国语", new ArrayList<>());
+        groups.put("粤语", new ArrayList<>());
+        for (String name : fileNames) {
+            groups.get(audioLanguageOf(name)).add(name);
+        }
+        groups.values().removeIf(List::isEmpty);
+        if (groups.size() <= 1) {
+            return Map.of("", fileNames);
+        }
+        return groups;
+    }
+
+    /** 语言线路名:根目录文件直接用语言名,嵌套目录在文件夹名后加后缀(如 HQ.DV-国语);未标注组沿用原名。 */
+    private static String audioSourceName(String parent, String folder, String lang) {
+        String base = fixSourceName(parent + "/" + folder);
+        if (lang.isEmpty()) {
+            return base;
+        }
+        return "视频".equals(base) ? lang : base + "-" + lang;
     }
 
     private static void sort(List<String> fileNames) {
