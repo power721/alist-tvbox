@@ -16,6 +16,9 @@ import java.util.Set;
 @ConfigurationProperties("app")
 public class AppProperties {
     private boolean hostmode;
+    // 镜像级小雅信号:xiaoya/host profile 的 application-*.yaml 置 true(小雅系镜像 CMD 恒激活),
+    // 与站点表的 xiaoya 标志(用户级,网页可改)互补,共同构成豆瓣 meta 数据集门禁
+    private boolean xiaoya;
     private boolean supportDash;
     private boolean heartbeat;
     private boolean sort;

@@ -16,4 +16,6 @@ public interface SiteRepository extends JpaRepository<Site, Integer> {
     boolean existsByName(String name);
 
     boolean existsByUrl(String url);
+
+    boolean existsByXiaoyaTrue();
 }

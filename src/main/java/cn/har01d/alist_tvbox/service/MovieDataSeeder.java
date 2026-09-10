@@ -44,15 +44,18 @@ public class MovieDataSeeder implements ApplicationRunner {
     private final JdbcTemplate jdbcTemplate;
     private final MovieRepository movieRepository;
     private final SettingRepository settingRepository;
+    private final SiteService siteService;
 
     public MovieDataSeeder(Environment environment,
                            JdbcTemplate jdbcTemplate,
                            MovieRepository movieRepository,
-                           SettingRepository settingRepository) {
+                           SettingRepository settingRepository,
+                           SiteService siteService) {
         this.environment = environment;
         this.jdbcTemplate = jdbcTemplate;
         this.movieRepository = movieRepository;
         this.settingRepository = settingRepository;
+        this.siteService = siteService;
     }
 
     @Override
@@ -74,10 +77,16 @@ public class MovieDataSeeder implements ApplicationRunner {
 
     private void seed(Path file, H2SqlConverter.Dialect dialect) {
         try {
+            // 无小雅数据布局(纯净版)过滤 META 语句:数据集 meta 路径(/电影 …)只在小雅分享布局
+            // 在位时真实存在,落库即幽灵搜索结果;MOVIE 行与路径无关照常 seed。
+            boolean keepMetas = siteService.hasXiaoyaData();
             List<String> lines = Files.readAllLines(file);
             List<String> batch = new ArrayList<>(BATCH_SIZE);
             int applied = 0;
             for (String line : lines) {
+                if (!keepMetas && H2SqlConverter.isMetaStatement(line)) {
+                    continue;
+                }
                 String sql = H2SqlConverter.convert(line, dialect);
                 if (sql == null) {
                     continue;

@@ -121,6 +121,15 @@ public final class H2SqlConverter {
         return sql;
     }
 
+    /**
+     * Whether the raw H2-export line targets the {@code META} table. Callers gate
+     * dataset meta rows on deployments without xiaoya share data: their paths
+     * ({@code /电影}, {@code /每日更新} …) only exist under the xiaoya mount layout.
+     */
+    public static boolean isMetaStatement(String line) {
+        return line != null && line.contains("\"PUBLIC\".\"META\"");
+    }
+
     private static String convertInsert(String line, Dialect dialect) {
         String transformed = transformLiterals(line, dialect);
         Matcher m = INSERT_TABLE.matcher(transformed);

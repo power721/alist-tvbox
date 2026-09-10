@@ -50,6 +50,8 @@ class MovieDiffApplyTest {
     @Mock
     private SettingRepository settingRepository;
     @Mock
+    private SiteService siteService;
+    @Mock
     private JdbcTemplate jdbcTemplate;
     @Mock
     private Environment environment;
@@ -61,7 +63,6 @@ class MovieDiffApplyTest {
     @BeforeEach
     void setUp() throws Exception {
         System.setProperty("atv.data.dir", dataDir.toString());
-        Files.createDirectories(dataDir.resolve("atv").resolve("sql"));
         Files.createDirectories(dataDir.resolve("atv").resolve("json"));
         RestTemplateBuilder chained = mock(RestTemplateBuilder.class);
         when(chained.connectTimeout(any(java.time.Duration.class))).thenReturn(chained);
@@ -70,9 +71,11 @@ class MovieDiffApplyTest {
         when(chained.defaultHeader(anyString(), anyString())).thenReturn(chained);
         when(chained.build()).thenReturn(null);
         service = new DoubanService(mock(cn.har01d.alist_tvbox.config.AppProperties.class), metaRepository,
-                movieRepository, aliasRepository, settingRepository, mock(SiteService.class),
+                movieRepository, aliasRepository, settingRepository, siteService,
                 mock(TaskService.class), mock(FileDownloader.class),
                 builder, jdbcTemplate, environment);
+        // 存量语义默认按小雅部署(小雅数据布局在位):META 行照常应用;纯净版门禁测试逐个覆写
+        org.mockito.Mockito.lenient().when(siteService.hasXiaoyaData()).thenReturn(true);
         // movie_diff 无记录 → attempts null(执行),queryForObject 不会被调用到 SUCCESS 分支
         org.mockito.Mockito.lenient().when(jdbcTemplate.queryForList(anyString(), eq(Integer.class), anyString()))
                 .thenReturn(Collections.emptyList());
@@ -87,24 +90,27 @@ class MovieDiffApplyTest {
         System.clearProperty("atv.data.dir");
     }
 
-    private void writeSql(String name, String content) throws Exception {
-        Files.writeString(dataDir.resolve("atv").resolve("sql").resolve(name), content);
-    }
-
     @Test
     void appliesPendingFilesAndStampsVersion() throws Exception {
-        writeSql("1000.1.sql", "DELETE FROM x;\nINSERT INTO x VALUES(1);\n");
-        writeSql("1001.2.sql", "DELETE FROM y;\n");
+        writeJson("1000.1.json", """
+                {"movieDeletes":[1],"metaDeletes":[2]}
+                """);
+        writeJson("1001.2.json", """
+                {"movieUpserts":[{"id":36406417,"name":"师兄太稳健","year":2026}]}
+                """);
 
         java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
         method.setAccessible(true);
         method.invoke(service);
 
-        // 两个文件各执行一轮成功:每条语句一次 execute,版本推进到最后一个文件
-        verify(jdbcTemplate, times(3)).execute(anyString());
+        // 两个文件各执行一轮成功,版本推进到最后一个文件;sql 路径已移除,不再有任何 execute
+        verify(jdbcTemplate, never()).execute(anyString());
+        verify(movieRepository).deleteAllById(List.of(1));
+        verify(metaRepository).deleteAllById(List.of(2));
+        verify(movieRepository).saveAll(org.mockito.ArgumentMatchers.anyList());
         verify(settingRepository).save(org.mockito.ArgumentMatchers.argThat(s ->
                 "movie_version".equals(s.getName()) && "1001.2".equals(s.getValue())));
-        // 每文件一条 SUCCESS 记录
+        // 每文件一条 SUCCESS 记录(1000.1 含 meta 删除共 2 行,1001.2 仅 movie upsert 1 行)
         verify(jdbcTemplate, times(2)).update(eq("DELETE FROM movie_diff WHERE version = ?"), anyString());
         verify(jdbcTemplate).update(eq("INSERT INTO movie_diff (version, status, statements, failed, attempts, updated_time) "
                 + "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"),
@@ -116,15 +122,19 @@ class MovieDiffApplyTest {
 
     @Test
     void retriesFailedFileUpToLimitWithoutStampingVersion() throws Exception {
-        writeSql("1002.3.sql", "BAD STATEMENT;\n");
-        org.mockito.Mockito.doThrow(new RuntimeException("syntax")).when(jdbcTemplate).execute(anyString());
+        writeJson("1002.3.json", """
+                {"movieUpserts":[{"id":36406417,"name":"师兄太稳健","year":2026}]}
+                """);
+        // 非确定性异常(锁竞争类)→ 整文件重放至多 3 次
+        org.mockito.Mockito.doThrow(new RuntimeException("lock timeout"))
+                .when(movieRepository).saveAll(org.mockito.ArgumentMatchers.anyList());
 
         java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
         method.setAccessible(true);
         method.invoke(service);
 
-        // 3 次尝试 × 1 条语句
-        verify(jdbcTemplate, times(3)).execute(anyString());
+        // 3 次尝试 × 1 轮 saveAll
+        verify(movieRepository, times(3)).saveAll(org.mockito.ArgumentMatchers.anyList());
         verify(jdbcTemplate).update(eq("INSERT INTO movie_diff (version, status, statements, failed, attempts, updated_time) "
                 + "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"),
                 eq("1002.3"), eq("FAILED"), eq(0), eq(1), eq(3));
@@ -133,7 +143,9 @@ class MovieDiffApplyTest {
 
     @Test
     void skipsSuccessfulFiles() throws Exception {
-        writeSql("1003.4.sql", "DELETE FROM x;\n");
+        writeJson("1003.4.json", """
+                {"movieDeletes":[1]}
+                """);
         when(jdbcTemplate.queryForList(anyString(), eq(Integer.class), anyString()))
                 .thenReturn(List.of(1));                       // attempts=1
         when(jdbcTemplate.queryForObject(anyString(), eq(String.class), anyString()))
@@ -143,6 +155,8 @@ class MovieDiffApplyTest {
         method.setAccessible(true);
         method.invoke(service);
 
+        verify(movieRepository, never()).deleteAllById(any());
+        verify(movieRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
         verify(jdbcTemplate, never()).execute(anyString());
         verify(settingRepository, never()).save(org.mockito.ArgumentMatchers.any(Setting.class));
     }
@@ -306,25 +320,61 @@ class MovieDiffApplyTest {
         verify(settingRepository, never()).save(org.mockito.ArgumentMatchers.any(Setting.class));
     }
 
+    private void writeJson(String name, String content) throws Exception {
+        Files.writeString(dataDir.resolve("atv").resolve("json").resolve(name), content);
+    }
+
+    // ── 纯净版门禁:无 xiaoya 站点时数据集 meta 行是幽灵路径(/vod1 type=0 搜索直接查 meta 表)──
+
     @Test
-    void deterministicSqlLineFailureSkipsRetry() throws Exception {
-        writeSql("1012.3.sql", "INSERT INTO x VALUES(1);\n");
-        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"))
-                .when(jdbcTemplate).execute(anyString());
+    void cleanDeploymentSkipsMetaRowsInJsonDiff() throws Exception {
+        when(siteService.hasXiaoyaData()).thenReturn(false);
+        writeJson("1020.1.json", """
+                {"movieUpserts":[{"id":36406417,"name":"师兄太稳健","year":2026}],
+                 "metaUpserts":[{"id":9,"path":"/电影/师兄太稳健","name":"师兄太稳健","movieId":36406417}],
+                 "metaDeletes":[8]}
+                """);
 
         java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("applyPendingDiffFiles");
         method.setAccessible(true);
         method.invoke(service);
 
-        // 确定性 SQL 失败整文件只跑一轮(对比:未分类异常 retriesFailedFileUpToLimit 跑满 3 轮)
-        verify(jdbcTemplate, times(1)).execute(anyString());
+        // MOVIE 行照常(元数据与路径无关),META 增删全跳过,版本照常推进
+        verify(movieRepository).saveAll(org.mockito.ArgumentMatchers.anyList());
+        verify(metaRepository, never()).deleteAllById(any());
+        verify(jdbcTemplate, never()).update(org.mockito.ArgumentMatchers.argThat(
+                        (org.mockito.ArgumentMatcher<String>) sql -> sql.startsWith("INSERT INTO meta") || sql.startsWith("UPDATE meta SET")),
+                org.mockito.ArgumentMatchers.<Object[]>any());
+        verify(settingRepository).save(org.mockito.ArgumentMatchers.argThat(s2 ->
+                "movie_version".equals(s2.getName()) && "1020.1".equals(s2.getValue())));
+        // 记账只含实际应用的 1 行(movieUpserts)
         verify(jdbcTemplate).update(eq("INSERT INTO movie_diff (version, status, statements, failed, attempts, updated_time) "
                 + "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"),
-                eq("1012.3"), eq("FAILED"), eq(0), eq(1), eq(1));
+                eq("1020.1"), eq("SUCCESS"), eq(1), eq(0), eq(1));
     }
 
-    private void writeJson(String name, String content) throws Exception {
-        Files.writeString(dataDir.resolve("atv").resolve("json").resolve(name), content);
+    @Test
+    void cleanDeploymentDeletesDatasetMetasOnStartup() throws Exception {
+        when(siteService.hasXiaoyaData()).thenReturn(false);
+        when(jdbcTemplate.update("DELETE FROM meta WHERE id < 500000")).thenReturn(42);
+
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("cleanupDatasetMetas");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        // 存量幽灵行按数据集 id 上界清理(< 500000;本地生成行从 500000 起)
+        verify(jdbcTemplate).update("DELETE FROM meta WHERE id < 500000");
+    }
+
+    @Test
+    void xiaoyaDeploymentKeepsDatasetMetas() throws Exception {
+        java.lang.reflect.Method method = DoubanService.class.getDeclaredMethod("cleanupDatasetMetas");
+        method.setAccessible(true);
+        method.invoke(service);
+
+        // 小雅数据布局在位(setUp 默认 true)→ 不清理,小雅部署零变化
+        verify(jdbcTemplate, never()).update(org.mockito.ArgumentMatchers.argThat(
+                (org.mockito.ArgumentMatcher<String>) sql -> sql.startsWith("DELETE FROM meta")));
     }
 
     @Test

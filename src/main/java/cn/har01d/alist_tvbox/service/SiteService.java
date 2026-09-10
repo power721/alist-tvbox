@@ -218,6 +218,17 @@ public class SiteService {
         return siteRepository.findById(id).orElseThrow(() -> new NotFoundException("站点不存在"));
     }
 
+    /**
+     * 小雅数据布局是否在位 —— 豆瓣 meta 数据集门禁信号(数据集 meta 行的路径只在小雅挂载布局下真实存在)。
+     * 双信号取或:①镜像级 app.xiaoya(xiaoya/host profile,小雅系镜像恒 true,纯净镜像恒 false);
+     * ②用户级站点表 xiaoya 标志(网页可改,纯净镜像用户自挂小雅数据后勾选即生效,改错自行负责)。
+     * 镜像级信号兜住「纯净卷被小雅镜像复用」形态:SiteService 只在站点表为空时建站,
+     * 复用卷的「本地」无标志站点不会被改回,单看站点标志会让门禁在小雅镜像上持续误开。
+     */
+    public boolean hasXiaoyaData() {
+        return appProperties.isXiaoya() || siteRepository.existsByXiaoyaTrue();
+    }
+
     public Site getByName(String name) {
         return siteRepository.findByName(name).orElseThrow(() -> new NotFoundException("站点不存在"));
     }

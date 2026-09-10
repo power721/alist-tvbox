@@ -80,7 +80,6 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 @Slf4j
 @Service
 public class DoubanService {
-    private static final int BATCH_SIZE = 1000;
     /** diff 文件失败重试上限(整个文件重放,DELETE+INSERT 幂等)。 */
     private static final int MAX_DIFF_ATTEMPTS = 3;
     private static final String DIFF_SUCCESS = "SUCCESS";
@@ -94,6 +93,9 @@ public class DoubanService {
     // matches a whole string that is only a season marker (第一季, 第3季, Season 1, S01)
     private static final Pattern SEASON_ONLY = Pattern.compile("^第[0-9一二三四五六七八九十百零两]+季$|^Season\\s+\\d{1,2}$|^S\\d{1,2}$|^SE\\d{1,2}$");
     private static final String DB_PREFIX = "https://movie.douban.com/subject/";
+    /** 数据集 meta 行 id 上界(与 fixMetaId 的本地生成起点互补):id 低于它的 meta 行只能来自数据集,
+     * 本地生成行(TMDB scrape/手动添加)经 table generator 恒从 500000 起。 */
+    private static final int DATASET_META_ID_LIMIT = 500_000;
     private static final String[] tokens = new String[]{"导演:", "编剧:", "主演:", "类型:", "制片国家/地区:", "语言:", "上映日期:",
             "片长:", "又名:", "IMDb链接:", "官方网站:", "官方小站:", "首播:", "季数:", "集数:", "单集片长:"};
 
@@ -196,6 +198,7 @@ public class DoubanService {
         neutralizeBaseDataScript();
 
         fixMetaId();
+        cleanupDatasetMetas();
         runCmd();
         // 重试预算按「进程生命周期」计:重启即清零 FAILED 行的 attempts,让升级后的构建能补放
         // 此前 3/3 卡死的版本(线上 1341.1923/1342.2033);持续失败的文件每启动最多再试 3 次,开销有界。
@@ -206,7 +209,8 @@ public class DoubanService {
         }
         // 开机自检:补放 movie_diff 无记录(历史缺口/新文件)或 FAILED 未达重试上限的 diff 文件。
         // 表启用前放过的文件也没有记录 → 首次开机会整体重放一遍(DELETE+INSERT 幂等),顺带修复历史缺口。
-        if (Files.exists(Utils.getDataPath("atv", "sql"))) {
+        // 只认 json diff(sql 目录仅作存量部署的触发信号,内容不再导入)。
+        if (Files.exists(Utils.getDataPath("atv", "json")) || Files.exists(Utils.getDataPath("atv", "sql"))) {
             executor.execute(this::applyPendingDiffFiles);
         }
     }
@@ -264,11 +268,32 @@ public class DoubanService {
         log.info("fix meta id");
         String table = "id_generator";
         try {
-            jdbcTemplate.execute("UPDATE " + table + " SET NEXT_ID = 500000 WHERE ENTITY_NAME = 'meta'");
+            jdbcTemplate.execute("UPDATE " + table + " SET NEXT_ID = " + DATASET_META_ID_LIMIT + " WHERE ENTITY_NAME = 'meta'");
         } catch (Exception e) {
-            jdbcTemplate.execute("INSERT INTO " + table + " VALUES ('meta', 500000)");
+            jdbcTemplate.execute("INSERT INTO " + table + " VALUES ('meta', " + DATASET_META_ID_LIMIT + ")");
         }
         settingRepository.save(new Setting("fix_meta_id", "true"));
+    }
+
+    /**
+     * 数据集 meta 行的路径(/电影、/每日更新 …)只在小雅分享布局在位时真实存在;纯净版没有这些
+     * 挂载,落到本地就是幽灵路径 —— /vod1 type=0 搜索直接查 meta 表,会返回不可播放的条目
+     * (1.75.0 豆瓣数据全模式灌库引入)。无小雅数据布局(见 {@link SiteService#hasXiaoyaData()})
+     * 时删除数据集 meta 行(id 均低于 {@link #DATASET_META_ID_LIMIT},本地生成行不受影响),
+     * 基线(H2 sql.init/MySQL PG Seeder)与增量 diff 在各自入口也按同一信号过滤,此清理兜住已污染的存量库。
+     */
+    private void cleanupDatasetMetas() {
+        try {
+            if (siteService.hasXiaoyaData()) {
+                return;
+            }
+            int deleted = jdbcTemplate.update("DELETE FROM meta WHERE id < " + DATASET_META_ID_LIMIT);
+            if (deleted > 0) {
+                log.info("deleted {} dataset meta rows: no xiaoya site, paths unreachable", deleted);
+            }
+        } catch (Exception e) {
+            log.warn("cleanup dataset meta rows failed", e);
+        }
     }
 
     public int fixUnique() {
@@ -344,20 +369,17 @@ public class DoubanService {
         }
     }
 
-    /** 应用待执行的 diff 文件:movie_diff 表为「已应用」事实来源 —— 无记录(新文件或历史缺口)、
-     *  或 FAILED 且尝试不足 {@link #MAX_DIFF_ATTEMPTS} 才执行,SUCCESS 跳过。同一版本 json/sql 并存时
-     *  JSON 优先(方言无关、JPA 落库);按版本升序,成功推进版本号。 */
+    /** 应用待执行的 json diff 文件:movie_diff 表为「已应用」事实来源 —— 无记录(新文件或历史缺口)、
+     *  或 FAILED 且尝试不足 {@link #MAX_DIFF_ATTEMPTS} 才执行,SUCCESS 跳过;按版本升序,成功推进版本号。
+     *  只支持 json 格式,sql diff 不再导入(存量 atv/sql/ 内容忽略)。 */
     private void applyPendingDiffFiles() {
         Map<Double, Path> jsonFiles = diffFiles("json", ".json");
-        Map<Double, Path> sqlFiles = diffFiles("sql", ".sql");
-        TreeSet<Double> versions = new TreeSet<>(jsonFiles.keySet());
-        versions.addAll(sqlFiles.keySet());
-        for (Double version : versions) {
+        for (Double version : new TreeSet<>(jsonFiles.keySet())) {
             String name = String.valueOf(version);
             if (!needsApply(name)) {
                 continue;
             }
-            applyDiff(name, jsonFiles.get(version), sqlFiles.get(version));
+            applyDiff(name, jsonFiles.get(version));
         }
     }
 
@@ -424,7 +446,7 @@ public class DoubanService {
         return name.substring(0, index);
     }
 
-    private void applyDiff(String version, Path json, Path sql) {
+    private void applyDiff(String version, Path json) {
         Integer previous = diffAttempts(version);
         int attempts = previous == null ? 0 : previous;
         int applied = 0;
@@ -436,7 +458,7 @@ public class DoubanService {
             attempts++;
             boolean retryable = false;
             try {
-                DiffResult result = json != null ? applyJsonDiff(json) : executeSqlFile(sql);
+                DiffResult result = applyJsonDiff(json);
                 applied = result.applied();
                 failed = result.failed();
                 retryable = result.retryable();
@@ -467,8 +489,7 @@ public class DoubanService {
         recordDiff(version, success, applied, failed, attempts);
         if (success) {
             settingRepository.save(new Setting(MOVIE_VERSION, version));
-            log.info("movie data upgraded: {} ({} rows, {} attempts, {})", version, applied, attempts,
-                    json != null ? "json" : "sql");
+            log.info("movie data upgraded: {} ({} rows, {} attempts, json)", version, applied, attempts);
         } else {
             log.warn("movie data {} still failed after {} attempts ({} ok, {} failed), version not stamped",
                     version, attempts, applied, failed);
@@ -498,16 +519,18 @@ public class DoubanService {
     }
 
     /** JSON diff(json/{version}.json)应用:按 id 删除,MOVIE 行经 JPA upsert,META 行全原生 INSERT/UPDATE
-     *  (免 @SQLRestriction/关联代理解析,方言无关);任何异常上抛由重试循环按整文件重放。 */
+     *  (免 @SQLRestriction/关联代理解析,方言无关);任何异常上抛由重试循环按整文件重放。
+     *  无小雅数据布局(纯净版)跳过 META 增删:路径不可达,落库即幽灵搜索结果;MOVIE 行与路径无关照常应用。 */
     private DiffResult applyJsonDiff(Path file) throws IOException {
         MovieDiffPayload payload =
                 objectMapper.readValue(file.toFile(), cn.har01d.alist_tvbox.dto.MovieDiffPayload.class);
+        boolean keepMetas = siteService.hasXiaoyaData();
         int rows = 0;
         if (payload.movieDeletes() != null && !payload.movieDeletes().isEmpty()) {
             movieRepository.deleteAllById(payload.movieDeletes());
             rows += payload.movieDeletes().size();
         }
-        if (payload.metaDeletes() != null && !payload.metaDeletes().isEmpty()) {
+        if (keepMetas && payload.metaDeletes() != null && !payload.metaDeletes().isEmpty()) {
             metaRepository.deleteAllById(payload.metaDeletes());
             rows += payload.metaDeletes().size();
         }
@@ -515,7 +538,7 @@ public class DoubanService {
             upsertMovies(payload.movieUpserts());
             rows += payload.movieUpserts().size();
         }
-        if (payload.metaUpserts() != null && !payload.metaUpserts().isEmpty()) {
+        if (keepMetas && payload.metaUpserts() != null && !payload.metaUpserts().isEmpty()) {
             upsertMetas(payload.metaUpserts());
             rows += payload.metaUpserts().size();
         }
@@ -589,86 +612,6 @@ public class DoubanService {
     /** "year" 在 H2 导出的表里是小写带引号列,MySQL 需反引号,与 H2SqlConverter 的列清单同规。 */
     private String yearColumn() {
         return H2SqlConverter.detect(environment) == H2SqlConverter.Dialect.MYSQL ? "`year`" : "\"year\"";
-    }
-
-    /** 执行单个 SQL diff 文件(旧格式回落);逐条失败降级记录,不中断其它语句。 */
-    private DiffResult executeSqlFile(Path file) {
-        int applied = 0;
-        int failed = 0;
-        boolean retryable = false;
-        try {
-            H2SqlConverter.Dialect dialect = H2SqlConverter.detect(environment);
-            List<String> lines = Files.readAllLines(file);
-            if (dialect == H2SqlConverter.Dialect.H2) {
-                for (String line : lines) {
-                    try {
-                        jdbcTemplate.execute(line);
-                        applied++;
-                    } catch (Exception e) {
-                        failed++;
-                        retryable |= !isDeterministicFailure(e);
-                        log.warn("execute sql failed: {}", line.length() > 120 ? line.substring(0, 120) + "..." : line, e);
-                    }
-                }
-            } else {
-                // diff files are H2 dialect (U& escapes, "PUBLIC" identifiers) — convert
-                // each statement to the target dialect and apply in batches, falling back
-                // to per-statement execution so one bad line never aborts the whole file.
-                List<String> batch = new ArrayList<>(BATCH_SIZE);
-                for (String line : lines) {
-                    String sql = H2SqlConverter.convert(line, dialect);
-                    if (sql == null) {
-                        continue;
-                    }
-                    batch.add(sql);
-                    if (batch.size() >= BATCH_SIZE) {
-                        int size = batch.size();
-                        int[] result = executeBatch(batch);
-                        applied += size - result[0];
-                        failed += result[0];
-                        retryable |= result[1] > 0;
-                    }
-                }
-                int size = batch.size();
-                int[] result = executeBatch(batch);
-                applied += size - result[0];
-                failed += result[0];
-                retryable |= result[1] > 0;
-            }
-        } catch (Exception e) {
-            // 文件读失败不能记 0 失败 —— 否则被当 SUCCESS 盖版本号,该文件永久跳过
-            failed++;
-            retryable = !isDeterministicFailure(e);
-            log.warn("execute sql file failed: {}", file, e);
-        }
-        return new DiffResult(applied, failed, retryable);
-    }
-
-    /** 批量执行,失败降级逐条;返回 [失败条数, 其中瞬态失败条数](瞬态>0 才值得整文件重放)。 */
-    private int[] executeBatch(List<String> batch) {
-        if (batch.isEmpty()) {
-            return new int[]{0, 0};
-        }
-        try {
-            jdbcTemplate.batchUpdate(batch.toArray(new String[0]));
-            batch.clear();
-            return new int[]{0, 0};
-        } catch (Exception e) {
-            log.debug("batch update failed, falling back to per-statement execution", e);
-            int failed = 0;
-            int transientCount = 0;
-            for (String sql : batch) {
-                try {
-                    jdbcTemplate.execute(sql);
-                } catch (Exception ex) {
-                    failed++;
-                    transientCount += isDeterministicFailure(ex) ? 0 : 1;
-                    log.warn("execute sql failed: {}", sql.length() > 120 ? sql.substring(0, 120) + "..." : sql, ex);
-                }
-            }
-            batch.clear();
-            return new int[]{failed, transientCount};
-        }
     }
 
     public String getAppRemoteVersion() {

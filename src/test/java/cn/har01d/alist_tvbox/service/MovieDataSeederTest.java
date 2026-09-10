@@ -41,6 +41,7 @@ class MovieDataSeederTest {
 
     @Mock MovieRepository movieRepository;
     @Mock SettingRepository settingRepository;
+    @Mock SiteService siteService;
     @Mock JdbcTemplate jdbcTemplate;
     @Mock Environment environment;
 
@@ -70,7 +71,7 @@ class MovieDataSeederTest {
     }
 
     private MovieDataSeeder newSeeder() {
-        return new MovieDataSeeder(environment, jdbcTemplate, movieRepository, settingRepository);
+        return new MovieDataSeeder(environment, jdbcTemplate, movieRepository, settingRepository, siteService);
     }
 
     @Test
@@ -134,5 +135,26 @@ class MovieDataSeederTest {
 
         verify(jdbcTemplate, atLeastOnce()).batchUpdate(any(String[].class));
         verify(settingRepository, never()).save(any(Setting.class));
+    }
+
+    @Test
+    void cleanDeploymentSkipsMetaStatements() throws Exception {
+        when(environment.getProperty("spring.datasource.jdbc-url")).thenReturn("jdbc:mysql://localhost:3306/atv");
+        when(movieRepository.count()).thenReturn(0L);
+        when(jdbcTemplate.batchUpdate(any(String[].class))).thenReturn(new int[]{1});
+        when(siteService.hasXiaoyaData()).thenReturn(false);
+        String metaLine = "INSERT INTO \"PUBLIC\".\"META\" VALUES(100, FALSE, '师兄太稳健', '/电影/师兄太稳健', "
+                + "70, 1, NULL, NULL, NULL, NULL, NULL, 2026, 36406417);";
+        writeFile("data.sql", MOVIE_LINE + "\n" + metaLine + "\n");
+
+        newSeeder().run(new DefaultApplicationArguments());
+
+        // 纯净版(无小雅数据布局):META 语句被过滤,MOVIE 语句照常 seed
+        ArgumentCaptor<String[]> captor = ArgumentCaptor.forClass(String[].class);
+        verify(jdbcTemplate, atLeastOnce()).batchUpdate(captor.capture());
+        List<String> sqls = Arrays.stream(captor.getAllValues().toArray(new String[0][]))
+                .flatMap(Arrays::stream).toList();
+        assertEquals(1, sqls.size(), "META line must be skipped: " + sqls);
+        assertTrue(sqls.get(0).startsWith("INSERT INTO movie"), sqls.get(0));
     }
 }
