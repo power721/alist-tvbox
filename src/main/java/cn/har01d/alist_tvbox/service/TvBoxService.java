@@ -1457,19 +1457,24 @@ public class TvBoxService {
         }
         String url = null;
         String name = getNameFromPath(path);
-        String fullPath = path;
         if (isMediaFile(path)) {
             log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path);
         } else {
+            // 目录播放 = 播放目录内第一个媒体文件:fullPath 此前算了没用,下游仍按目录取 raw_url 恒空(半接线)
             FsResponse fsResponse = aListService.listFiles(site, path, 1, 100);
+            boolean found = false;
             for (FsInfo fsInfo : fsResponse.getFiles()) {
                 if (fsInfo.getType() != 1 && isMediaFormat(fsInfo.getName())) {
                     name = fsInfo.getName();
-                    fullPath = fixPath(path + "/" + name);
+                    path = fixPath(path + "/" + name);
+                    found = true;
                     break;
                 }
             }
-            log.info("get play url -- site {}:{}  path: {}", site.getId(), site.getName(), fullPath);
+            if (!found) {
+                throw new BadRequestException("目录中无可播放的媒体文件: " + path);
+            }
+            log.info("get play url -- site {}:{}  path: {}", site.getId(), site.getName(), path);
         }
 
         Map<String, Object> result = new HashMap<>();

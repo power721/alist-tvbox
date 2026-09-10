@@ -1681,21 +1681,12 @@ public class BiliBiliService {
         BiliBiliInfo info = cache.get(bvid);
         MovieDetail movieDetail = getMovieDetail(info, client, true);
 
-        try {
-            String url = String.format(RELATED_API, bvid);
-            HttpEntity<Void> entity = buildHttpEntity(null);
-            ResponseEntity<BiliBiliRelatedResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliRelatedResponse.class);
-            List<BiliBiliInfo> list = response.getBody().getData();
-            log.debug("related videos: {} {}", url, list);
-            if (!list.isEmpty()) {
-                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$相关视频");
-                String related = list.stream().map(e -> buildTitle(e, client) + "$" + e.getAid() + "-" + e.getCid()).collect(Collectors.joining("#"));
-                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + related);
-            }
-        } catch (Exception e) {
-            log.warn("get related videos failed", e);
-        }
-
+        // 相关视频与 UP 主列表并发拉取(原 view→related→UP 串行三连发是详情打开慢的主体);
+        // 两个块都改写 movieDetail 的播放字段,并发只拉数据、装配回主线程串行做,防丢更新
+        final String bvidKey = bvid;
+        java.util.concurrent.CompletableFuture<List<BiliBiliInfo>> relatedFuture =
+                java.util.concurrent.CompletableFuture.supplyAsync(() -> fetchRelatedList(bvidKey));
+        String upPlayUrl = null;
         if (info.getOwner() != null) {
             if ("com.fongmi.android.tv".equals(client)) {
                 long id = info.getOwner().getMid();
@@ -1703,15 +1694,18 @@ public class BiliBiliService {
                 String owner = String.format("[a=cr:{\"id\":\"up:%d\",\"name\":\"%s\"}/]%s[/a]", id, name, name);
                 movieDetail.setVod_director(owner);
             }
+            upPlayUrl = fetchUpPlayUrl(info.getOwner().getMid(), client);
+        }
 
-            try {
-                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid(), client);
-                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
-                String others = movieList.getList().get(0).getVod_play_url();
-                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
-            } catch (Exception e) {
-                log.warn("get UP playlist failed", e);
-            }
+        List<BiliBiliInfo> list = relatedFuture.join();
+        if (list != null && !list.isEmpty()) {
+            movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$相关视频");
+            String related = list.stream().map(e -> buildTitle(e, client) + "$" + e.getAid() + "-" + e.getCid()).collect(Collectors.joining("#"));
+            movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + related);
+        }
+        if (upPlayUrl != null) {
+            movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
+            movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + upPlayUrl);
         }
 
         MovieList result = new MovieList();
@@ -1720,6 +1714,30 @@ public class BiliBiliService {
         result.setLimit(result.getList().size());
         log.debug("--- detail --- {}", result);
         return result;
+    }
+
+    private List<BiliBiliInfo> fetchRelatedList(String bvid) {
+        try {
+            String url = String.format(RELATED_API, bvid);
+            HttpEntity<Void> entity = buildHttpEntity(null);
+            ResponseEntity<BiliBiliRelatedResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliRelatedResponse.class);
+            List<BiliBiliInfo> list = response.getBody().getData();
+            log.debug("related videos: {} {}", url, list);
+            return list == null ? List.of() : list;
+        } catch (Exception e) {
+            log.warn("get related videos failed", e);
+            return List.of();
+        }
+    }
+
+    private String fetchUpPlayUrl(long ownerMid, String client) {
+        try {
+            MovieList movieList = getUpPlaylist("up$" + ownerMid, client);
+            return movieList.getList().isEmpty() ? null : movieList.getList().get(0).getVod_play_url();
+        } catch (Exception e) {
+            log.warn("get UP playlist failed", e);
+            return null;
+        }
     }
 
     private MovieList getBangumi(String tid) {
