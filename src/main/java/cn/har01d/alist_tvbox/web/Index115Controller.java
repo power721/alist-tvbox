@@ -36,4 +36,11 @@ public class Index115Controller {
         index115Service.update();
         return Map.of("status", "accepted");
     }
+
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PostMapping("/force")
+    public Map<String, String> forceUpdate() {
+        index115Service.update(true);
+        return Map.of("status", "accepted");
+    }
 }

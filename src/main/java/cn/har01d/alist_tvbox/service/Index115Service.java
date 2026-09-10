@@ -60,10 +60,17 @@ public class Index115Service {
         }
         String remote = ref.shareCode();
         boolean hasUpdate = !local.equals(remote);
+        if (!hasUpdate && !hasLocalData()) {
+            return new Index115CheckResult(true, true, local, remote, null);
+        }
         return new Index115CheckResult(true, hasUpdate, local, remote, null);
     }
 
     public void update() {
+        update(false);
+    }
+
+    public void update(boolean force) {
         if (taskService.isTaskRunning(TaskType.DOWNLOAD)) {
             throw new BadRequestException("115索引更新任务进行中");
         }
@@ -76,7 +83,7 @@ public class Index115Service {
                 return;
             }
             String last = settingRepository.findById(SHARE_CODE_KEY).map(Setting::getValue).orElse("");
-            if (last.equals(ref.shareCode())) {
+            if (!force && last.equals(ref.shareCode()) && hasLocalData()) {
                 taskService.completeTask(task.getId(), "已是最新 " + ref.shareCode(), null);
                 return;
             }
@@ -103,5 +110,11 @@ public class Index115Service {
         }
         s.setValue(shareCode);
         settingRepository.save(s);
+    }
+
+    // 版本号存在 Setting 表而数据在 /data/index115,重装后可能只剩版本号,须以数据文件为准
+    private boolean hasLocalData() {
+        java.io.File db = Utils.getDataPath("index115", "index.db").toFile();
+        return db.isFile() && db.length() > 0;
     }
 }

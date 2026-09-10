@@ -234,6 +234,7 @@
         </el-form-item>
         <el-form-item label="115分享本地索引" v-if="has115Account">
           <el-button type="primary" :loading="index115Loading" @click="updateIndex115">下载</el-button>
+          <el-button :loading="index115ForceLoading" @click="forceUpdateIndex115">强制更新</el-button>
           <el-tag v-if="index115Checking" type="info" style="margin-left: 8px">检查中</el-tag>
           <el-tag v-else-if="index115Check.error" type="danger" style="margin-left: 8px">检查失败</el-tag>
           <el-tag v-else-if="index115Check.hasUpdate" type="warning" style="margin-left: 8px">有更新</el-tag>
@@ -436,6 +437,7 @@ const autoCheckin = ref(false)
 const dialogVisible = ref(false)
 const has115Account = ref(false)
 const index115Loading = ref(false)
+const index115ForceLoading = ref(false)
 const index115Checking = ref(false)
 const index115Check = ref<{hasAccount: boolean, hasUpdate: boolean, localVersion: string, remoteVersion: string, error: string | null}>({hasAccount: false, hasUpdate: false, localVersion: '', remoteVersion: '', error: null})
 const changelog = ref('')
@@ -742,6 +744,17 @@ const updateIndex115 = () => {
     ElMessage.error('115索引更新失败：' + (e?.response?.data?.message || e.message))
   }).finally(() => {
     index115Loading.value = false
+  })
+}
+
+const forceUpdateIndex115 = () => {
+  index115ForceLoading.value = true
+  axios.post('/api/index115/force').then(() => {
+    ElMessage.success('115索引强制更新完成')
+  }).catch((e) => {
+    ElMessage.error('115索引强制更新失败：' + (e?.response?.data?.message || e.message))
+  }).finally(() => {
+    index115ForceLoading.value = false
   })
 }
 

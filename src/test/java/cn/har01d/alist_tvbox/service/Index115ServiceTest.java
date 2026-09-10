@@ -9,13 +9,17 @@ import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -39,16 +43,32 @@ class Index115ServiceTest {
 
     private Task task;
 
+    @TempDir
+    Path dataDir;
+
     @BeforeEach
     void setup() {
         task = new Task();
         task.setId(7);
         lenient().when(taskService.addIndex115Task()).thenReturn(task);
         lenient().when(taskService.isTaskRunning(TaskType.DOWNLOAD)).thenReturn(false);
+        System.setProperty("atv.data.dir", dataDir.toString());
+    }
+
+    @AfterEach
+    void clearDataDir() {
+        System.clearProperty("atv.data.dir");
+    }
+
+    private void writeIndexDb() throws IOException {
+        Path dir = dataDir.resolve("index115");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("index.db"), "sqlite");
     }
 
     @Test
     void skipsWhenShareCodeUnchanged() throws Exception {
+        writeIndexDb();
         when(versionClient.fetch()).thenReturn(new Index115ShareRef("sw1", "6666"));
         when(settingRepository.findById("index115.share_code")).thenReturn(Optional.of(setting("sw1")));
 
@@ -56,6 +76,33 @@ class Index115ServiceTest {
 
         verify(downloader, never()).download(anyString(), anyString(), any());
         verify(taskService).completeTask(eq(7), contains("已是最新"), any());
+    }
+
+    @Test
+    void redownloadsWhenDataMissingDespiteSameShareCode() throws Exception {
+        when(versionClient.fetch()).thenReturn(new Index115ShareRef("sw1", "6666"));
+        when(settingRepository.findById("index115.share_code")).thenReturn(Optional.of(setting("sw1")));
+
+        service.update();
+
+        verify(downloader).download(eq("sw1"), eq("6666"), any(Path.class));
+        verify(extractor).extractAndSwap(any(Path.class), any(Path.class));
+        verify(settingRepository).save(argThat(s -> "sw1".equals(s.getValue())));
+        verify(taskService).completeTask(eq(7), contains("sw1"), any());
+    }
+
+    @Test
+    void forceUpdateDownloadsDespiteSameShareCodeAndDataPresent() throws Exception {
+        writeIndexDb();
+        when(versionClient.fetch()).thenReturn(new Index115ShareRef("sw1", "6666"));
+        when(settingRepository.findById("index115.share_code")).thenReturn(Optional.of(setting("sw1")));
+
+        service.update(true);
+
+        verify(downloader).download(eq("sw1"), eq("6666"), any(Path.class));
+        verify(extractor).extractAndSwap(any(Path.class), any(Path.class));
+        verify(settingRepository).save(argThat(s -> "sw1".equals(s.getValue())));
+        verify(taskService).completeTask(eq(7), contains("sw1"), any());
     }
 
     @Test
@@ -117,7 +164,8 @@ class Index115ServiceTest {
     }
 
     @Test
-    void checkNoUpdateWhenLocalEqualsRemote() {
+    void checkNoUpdateWhenLocalEqualsRemote() throws IOException {
+        writeIndexDb();
         when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.of(new DriverAccount()));
         when(versionClient.fetch()).thenReturn(new Index115ShareRef("sw1", "6666"));
         when(settingRepository.findById("index115.share_code")).thenReturn(Optional.of(setting("sw1")));
@@ -129,6 +177,34 @@ class Index115ServiceTest {
         assertEquals("sw1", result.localVersion());
         assertEquals("sw1", result.remoteVersion());
         assertNull(result.error());
+    }
+
+    @Test
+    void checkHasUpdateWhenDataMissingDespiteSameVersion() {
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.of(new DriverAccount()));
+        when(versionClient.fetch()).thenReturn(new Index115ShareRef("sw1", "6666"));
+        when(settingRepository.findById("index115.share_code")).thenReturn(Optional.of(setting("sw1")));
+
+        Index115CheckResult result = service.check();
+
+        assertTrue(result.hasAccount());
+        assertTrue(result.hasUpdate());
+        assertEquals("sw1", result.localVersion());
+        assertEquals("sw1", result.remoteVersion());
+    }
+
+    @Test
+    void checkHasUpdateWhenIndexDbEmpty() throws IOException {
+        Path dir = dataDir.resolve("index115");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("index.db"), "");
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.of(new DriverAccount()));
+        when(versionClient.fetch()).thenReturn(new Index115ShareRef("sw1", "6666"));
+        when(settingRepository.findById("index115.share_code")).thenReturn(Optional.of(setting("sw1")));
+
+        Index115CheckResult result = service.check();
+
+        assertTrue(result.hasUpdate());
     }
 
     @Test
