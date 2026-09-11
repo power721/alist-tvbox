@@ -832,13 +832,15 @@ public class ShareService {
                 : accountRepository.findFirstByOwnerUidOrderByIdAsc(uid);
         ali.ifPresent(account -> {
             // access token 都是 2h TTL、调度按天刷,下发前按需续期(过期才刷,防频控);
-            // 开放域 token 给 xs jar 等开放平台客户端用(openFile 列表),消费域给 user/get 校验
+            // 开放域 token 给 xs jar 等开放平台客户端用(openFile 列表),消费域给 user/get 校验;
+            // nick_name 是 xs jar aliyun.txt 的 homeContent 登录门判定字段(空则客户端播种哑值)
             accountService.ensureFreshAccessTokens(account);
             ObjectNode node = result.putObject("ali");
             node.put("refresh_token", account.getRefreshToken());
             node.put("access_token", account.getAccessToken());
             node.put("open_refresh_token", account.getOpenToken());
             node.put("open_access_token", account.getOpenAccessToken());
+            node.put("nick_name", account.getNickname() == null ? "" : account.getNickname());
         });
 
         putToken(result, "139", account(DriverType.PAN139, uid).map(DriverAccount::getToken).orElse("").trim());
