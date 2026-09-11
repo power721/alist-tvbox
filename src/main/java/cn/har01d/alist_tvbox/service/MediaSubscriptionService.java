@@ -978,15 +978,27 @@ public class MediaSubscriptionService {
      * TVBox 请求(空 ac)走集源行索引直装配(见 {@link #fastDetail});web/TG(非空 ac)与快路径兜底走旧实时列举。 */
     public MovieList contentDetail(int uid, int id, String ac, String title) {
         MediaSubscription subscription = getOwned(uid, id);
-        if (StringUtils.isBlank(subscription.getMountPath()) || subscription.getShareId() == null) {
-            MovieList result = new MovieList();
-            MovieDetail detail = new MovieDetail();
-            applySubscriptionMetadata(detail, subscription);
-            detail.setVod_remarks("尚未找到可用资源");
-            result.getList().add(detail);
-            result.setTotal(1);
-            result.setLimit(1);
-            return result;
+        boolean primaryMounted = StringUtils.isNotBlank(subscription.getMountPath())
+                && subscription.getShareId() != null;
+        if (!primaryMounted) {
+            // 零主源订阅:占位闸门只挡「连一条挂载线路都没有」的真空形态 —— 手动路径资源/补缺挂载
+            // 的集源行同样能装配详情,此前无条件占位把可用行全挡在门外(#1071 线上反馈:全新豆瓣
+            // 订阅加了网盘目录,app 仍「尚未找到可用资源」)。旧路径列举需要主挂载路径,零主源
+            // 只有快路径一条路,装配不出内容(行全失效)再回落占位。
+            boolean hasMountedLine = resourceRepository.findBySubscriptionIdOrderByScoreDesc(id).stream()
+                    .anyMatch(r -> MediaSubscriptionResource.STATE_MOUNTED.equals(r.getState())
+                            && StringUtils.isNotBlank(r.getMountPath()));
+            if (hasMountedLine) {
+                try {
+                    MovieList fast = fastDetail(subscription);
+                    if (fast != null) {
+                        return fast;
+                    }
+                } catch (Exception e) {
+                    log.debug("fast detail for subscription {} failed: {}", id, e.getMessage());
+                }
+            }
+            return noResourceDetail(subscription);
         }
         if (StringUtils.isBlank(ac)) {
             try {
@@ -999,6 +1011,18 @@ public class MediaSubscriptionService {
             }
         }
         return legacyDetail(subscription, ac, title);
+    }
+
+    /** 无可用资源占位详情:零主源且无挂载线路(真空订阅)/快路径装配不出内容时的兜底展示。 */
+    private MovieList noResourceDetail(MediaSubscription subscription) {
+        MovieList result = new MovieList();
+        MovieDetail detail = new MovieDetail();
+        applySubscriptionMetadata(detail, subscription);
+        detail.setVod_remarks("尚未找到可用资源");
+        result.getList().add(detail);
+        result.setTotal(1);
+        result.setLimit(1);
+        return result;
     }
 
     /** 快路径详情:集源行索引直装配,零目录列举 —— 旧路径要对 主挂载/每转存目标/每补缺挂载(上限 6)各做

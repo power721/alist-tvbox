@@ -189,6 +189,46 @@ class MediaSubscriptionFastDetailTest {
                 + "#03. 第3集$msubep-7-3#04. 第4集(缺源)$msubep-7-4", logical);
     }
 
+    @Test
+    void zeroPrimaryWithPathResourceServesFastDetail() {
+        // #1071 线上反馈:全新豆瓣订阅(零主源 mountPath/shareId 空)手动加了网盘目录,
+        // 占位闸门仍把可用集源行全挡在门外 → app 恒「尚未找到可用资源」
+        subscription.setMountPath(null);
+        subscription.setShareId(null);
+        subscription.setCurrentEpisodes(null);
+        Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(7)).thenReturn(List.of(
+                resource(11, 8, "/115/115/电视剧/下一站婚姻", 1000, MediaSubscriptionResource.STATE_MOUNTED)));
+        Mockito.when(episodeSourceRepository.findNumberAndSource(7)).thenReturn(rows(
+                new Object[]{1, row(11, "第01集.mp4", 800 * MB, MediaSubscriptionEpisodeSource.STATE_LISTED)},
+                new Object[]{2, row(11, "第02集.mp4", 800 * MB, MediaSubscriptionEpisodeSource.STATE_LISTED)}));
+
+        MovieList result = service.contentDetail(1, 7, null, null);
+
+        MovieDetail detail = result.getList().getFirst();
+        assertFalse(detail.getVod_remarks().contains("尚未找到可用资源"),
+                "零主源但有挂载线路(路径资源)必须出详情,不再占位");
+        String[] from = detail.getVod_play_from().split("\\$\\$\\$");
+        assertEquals("我的追剧", from[0]);
+        assertEquals("115网盘", from[1]);
+        String logical = detail.getVod_play_url().split("\\$\\$\\$")[0];
+        assertTrue(logical.contains("msubep-7-1"), logical);
+        assertTrue(logical.contains("msubep-7-2"), logical);
+        Mockito.verifyNoInteractions(tvBoxService); // 不回落旧路径(零主源无主挂载可列举)
+    }
+
+    @Test
+    void zeroPrimaryZeroResourceKeepsPlaceholder() {
+        subscription.setMountPath(null);
+        subscription.setShareId(null);
+        Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(7)).thenReturn(List.of());
+        Mockito.when(episodeSourceRepository.findNumberAndSource(7)).thenReturn(List.of());
+
+        MovieList result = service.contentDetail(1, 7, null, null);
+
+        assertEquals("尚未找到可用资源", result.getList().getFirst().getVod_remarks());
+        Mockito.verifyNoInteractions(tvBoxService);
+    }
+
     private static cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback fallbackRow(int episode) {
         cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback row =
                 new cn.har01d.alist_tvbox.entity.MediaSubscriptionEpisodeFallback();
