@@ -17,6 +17,10 @@ public class GuangYaPan extends Storage {
         if (StringUtils.isNotBlank(deviceId)) {
             addAddition("device_id", deviceId);
         }
+        String accessToken = text(addition.get("access_token"));
+        if (StringUtils.isNotBlank(accessToken)) {
+            addAddition("access_token", accessToken);
+        }
         buildAddition();
     }
 

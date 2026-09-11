@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.entity;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +10,7 @@ import lombok.ToString;
 
 @Getter
 @Setter
-@ToString(exclude = {"cookie", "token", "password", "safePassword"})
+@ToString(exclude = {"cookie", "token", "password", "safePassword", "accessToken"})
 @RequiredArgsConstructor
 @Entity
 @TableGenerator(name = "tableGenerator", table = "id_generator", pkColumnName = "entity_name", valueColumnName = "next_id", allocationSize = 1)
@@ -46,4 +47,8 @@ public class DriverAccount {
     /** 仅全局账号有效:是否允许普通用户经服务端代理使用(凭证不下发)。 */
     @Column(columnDefinition = "BOOLEAN DEFAULT TRUE")
     private boolean shared = true;
+    /** Go 侧回同步的短寿命 access_token(光鸭 2h),仅入站不落库,updateToken 双写进 token+addition。 */
+    @Transient
+    @JsonProperty(value = "access_token", access = JsonProperty.Access.WRITE_ONLY)
+    private String accessToken;
 }

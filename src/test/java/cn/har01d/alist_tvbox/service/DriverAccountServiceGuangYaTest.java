@@ -107,4 +107,65 @@ class DriverAccountServiceGuangYaTest {
         assertEquals("refresh-token", info.getAddition().get("refresh_token"));
         assertEquals("0123456789abcdef0123456789abcdef", info.getAddition().get("device_id"));
     }
+
+    private DriverAccountService newService(ObjectMapper mapper) {
+        RestTemplateBuilder builder = mock(RestTemplateBuilder.class);
+        when(builder.connectTimeout(any(java.time.Duration.class))).thenReturn(builder);
+        when(builder.readTimeout(any(java.time.Duration.class))).thenReturn(builder);
+        when(builder.build()).thenReturn(mock(RestTemplate.class));
+        return new DriverAccountService(panAccountRepository, driverAccountRepository,
+                settingRepository, shareRepository, accountService, aListLocalService, offlineDownloadService,
+                builder, mapper, alistJdbcTemplate);
+    }
+
+    private DriverAccount guangYaAccount() {
+        DriverAccount existing = new DriverAccount();
+        existing.setId(40);
+        existing.setType(DriverType.GUANGYA);
+        existing.setToken("stale-access");
+        existing.setAddition("{\"access_token\":\"stale-access\",\"refresh_token\":\"old-refresh\",\"device_id\":\"d1\"}");
+        return existing;
+    }
+
+    @Test
+    void updateTokenDualWritesGuangYaAccessToken() throws Exception {
+        when(driverAccountRepository.findById(40)).thenReturn(Optional.of(guangYaAccount()));
+        when(driverAccountRepository.save(any(DriverAccount.class))).thenAnswer(inv -> inv.getArgument(0));
+        DriverAccountService service = newService(new ObjectMapper());
+
+        DriverAccount dto = new DriverAccount();
+        dto.setToken("new-refresh");
+        dto.setAccessToken("fresh-access");
+
+        service.updateToken(DriverAccountService.IDX + 40, dto);
+
+        ArgumentCaptor<DriverAccount> captor = ArgumentCaptor.forClass(DriverAccount.class);
+        verify(driverAccountRepository).save(captor.capture());
+        DriverAccount saved = captor.getValue();
+        assertEquals("fresh-access", saved.getToken());
+        var add = new ObjectMapper().readTree(saved.getAddition());
+        assertEquals("new-refresh", add.path("refresh_token").asText());
+        assertEquals("fresh-access", add.path("access_token").asText());
+        assertEquals("d1", add.path("device_id").asText());
+    }
+
+    @Test
+    void updateTokenKeepsAccessWhenSyncOmitsIt() throws Exception {
+        when(driverAccountRepository.findById(40)).thenReturn(Optional.of(guangYaAccount()));
+        when(driverAccountRepository.save(any(DriverAccount.class))).thenAnswer(inv -> inv.getArgument(0));
+        DriverAccountService service = newService(new ObjectMapper());
+
+        DriverAccount dto = new DriverAccount();
+        dto.setToken("new-refresh");
+
+        service.updateToken(DriverAccountService.IDX + 40, dto);
+
+        ArgumentCaptor<DriverAccount> captor = ArgumentCaptor.forClass(DriverAccount.class);
+        verify(driverAccountRepository).save(captor.capture());
+        DriverAccount saved = captor.getValue();
+        assertEquals("stale-access", saved.getToken());
+        var add = new ObjectMapper().readTree(saved.getAddition());
+        assertEquals("new-refresh", add.path("refresh_token").asText());
+        assertEquals("stale-access", add.path("access_token").asText());
+    }
 }

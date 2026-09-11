@@ -358,10 +358,15 @@ public class DriverAccountService {
         log.debug("update token: {} {}", id - IDX, dto);
         var account = get(id - IDX);
         if (account.getType() == DriverType.OPEN123 || account.getType() == DriverType.GUANGYA) {
-            // Go 刷新后同步回来的是 refresh_token(可能轮换),写回 addition.refresh_token,保留 access token。
+            // Go 刷新后同步回来的是 refresh_token(可能轮换),写回 addition.refresh_token。
+            // 光鸭 access_token 仅 2h 寿命,Go 一并回传时双写 token+addition,否则账号信息永远用登录时的死 token。
             try {
                 var add = Utils.readJson(account.getAddition());
                 add.put("refresh_token", dto.getToken());
+                if (account.getType() == DriverType.GUANGYA && StringUtils.isNotBlank(dto.getAccessToken())) {
+                    add.put("access_token", dto.getAccessToken());
+                    account.setToken(dto.getAccessToken());
+                }
                 account.setAddition(objectMapper.writeValueAsString(add));
             } catch (Exception e) {
                 log.warn("sync {} refresh_token failed", account.getType(), e);
