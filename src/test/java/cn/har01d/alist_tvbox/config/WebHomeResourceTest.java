@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.config;
 
 import jakarta.servlet.ServletContext;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,6 +34,13 @@ class WebHomeResourceTest {
     /** 内置 app.html 中的稳定 ASCII 标记(页面注入 ATV_TOKEN/ATV_SERVER 配置)。 */
     private static final String BUILTIN_MARKER = "ATV_TOKEN";
     private static final String OVERRIDE_MARKER = "custom-webhome-override-42";
+
+    /** 内置页 classpath:/static/webhome/app.html 是 web-ui 构建产物(真源 web-ui/public,static/ 整目录 gitignore):
+     * 没跑过 npm build 的环境(新 clone 裸 mvn test、无前端步骤的 build-base CI)该资源不存在,
+     * 内置页相关断言跳过而非假红;overrideBundleAssetsAreServed 只依赖覆盖目录,不受影响。 */
+    private static boolean builtinPageAvailable() {
+        return WebHomeResourceTest.class.getResource("/static/webhome/app.html") != null;
+    }
 
     @TempDir
     Path tempDir;
@@ -81,6 +89,7 @@ class WebHomeResourceTest {
 
     @Test
     void noOverrideFallsBackToBuiltinPage() throws Exception {
+        Assumptions.assumeTrue(builtinPageAvailable(), "缺少 web-ui 构建产物 static/webhome/app.html(先 cd web-ui && npm run build)");
         mockMvc.perform(get("/webhome/app.html"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString(BUILTIN_MARKER)))
@@ -89,6 +98,7 @@ class WebHomeResourceTest {
 
     @Test
     void uploadedAppHtmlOverridesBuiltinAndRestoreOnDelete() throws Exception {
+        Assumptions.assumeTrue(builtinPageAvailable(), "缺少 web-ui 构建产物 static/webhome/app.html(先 cd web-ui && npm run build)");
         Files.writeString(overrideDir.resolve("app.html"),
                 "<html><body>" + OVERRIDE_MARKER + "</body></html>");
         mockMvc.perform(get("/webhome/app.html"))
