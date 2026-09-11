@@ -831,9 +831,14 @@ public class ShareService {
         Optional<Account> ali = uid == 0 ? accountRepository.getFirstByMasterTrue()
                 : accountRepository.findFirstByOwnerUidOrderByIdAsc(uid);
         ali.ifPresent(account -> {
+            // access token 都是 2h TTL、调度按天刷,下发前按需续期(过期才刷,防频控);
+            // 开放域 token 给 xs jar 等开放平台客户端用(openFile 列表),消费域给 user/get 校验
+            accountService.ensureFreshAccessTokens(account);
             ObjectNode node = result.putObject("ali");
             node.put("refresh_token", account.getRefreshToken());
             node.put("access_token", account.getAccessToken());
+            node.put("open_refresh_token", account.getOpenToken());
+            node.put("open_access_token", account.getOpenAccessToken());
         });
 
         putToken(result, "139", account(DriverType.PAN139, uid).map(DriverAccount::getToken).orElse("").trim());

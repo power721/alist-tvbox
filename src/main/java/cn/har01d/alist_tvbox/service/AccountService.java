@@ -398,6 +398,63 @@ public class AccountService {
         return true;
     }
 
+    /**
+     * /cookies 下发前保证 access token 可用:两个域的 access token 都是 2h TTL,
+     * 调度刷新(refreshTokens)按天跑,下发时常已过期。这里按需刷新——仅当 JWT exp 已过
+     * (留 60s 余量)才走刷新,避免设备每次拉取都轮换 refresh token 触发阿里频控。
+     * 刷新会轮换 refresh token(getAliToken/getAliOpenToken 的响应含新值),保存回账号。
+     */
+    public void ensureFreshAccessTokens(Account account) {
+        boolean changed = false;
+        try {
+            if (StringUtils.isNotBlank(account.getOpenToken())
+                    && !isAccessTokenFresh(account.getOpenAccessToken())) {
+                log.info("refresh expired open access token for account {}", account.getId());
+                account.setOpenTokenTime(Instant.now());
+                account.setOpenAccessTokenTime(Instant.now());
+                Map<Object, Object> response = getAliOpenToken(account.getOpenToken());
+                account.setOpenToken((String) response.get(REFRESH_TOKEN));
+                account.setOpenAccessToken((String) response.get(ACCESS_TOKEN));
+                changed = true;
+            }
+        } catch (Exception e) {
+            log.warn("refresh open access token failed", e);
+        }
+        try {
+            if (StringUtils.isNotBlank(account.getRefreshToken())
+                    && !isAccessTokenFresh(account.getAccessToken())) {
+                log.info("refresh expired access token for account {}", account.getId());
+                account.setRefreshTokenTime(Instant.now());
+                Map<Object, Object> response = getAliToken(account.getRefreshToken());
+                account.setNickname((String) response.get("nick_name"));
+                account.setRefreshToken((String) response.get(REFRESH_TOKEN));
+                account.setAccessToken((String) response.get(ACCESS_TOKEN));
+                changed = true;
+            }
+        } catch (Exception e) {
+            log.warn("refresh access token failed", e);
+        }
+        if (changed) {
+            accountRepository.save(account);
+            updateTokenToAList(account);
+        }
+    }
+
+    /** access token 是否还有效(JWT exp 留 60s 余量);非 JWT/解析失败按已过期处理。 */
+    private boolean isAccessTokenFresh(String accessToken) {
+        if (StringUtils.isBlank(accessToken)) {
+            return false;
+        }
+        try {
+            String payload = accessToken.split("\\.")[1];
+            byte[] bytes = Base64.getUrlDecoder().decode(payload);
+            JsonNode map = objectMapper.readTree(bytes);
+            return map.has("exp") && map.get("exp").asLong() > Instant.now().getEpochSecond() + 60;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private void refreshTokens(Account account) {
         boolean changed = false;
         Instant now = Instant.now().plusSeconds(60);
