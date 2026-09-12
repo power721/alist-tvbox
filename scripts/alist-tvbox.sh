@@ -2574,7 +2574,7 @@ detect_backup_type() {
   fi
 }
 
-# SQL 备份恢复：复制到 database.zip，删除 mv.db，重启容器（init.sh 执行 RunScript）
+# SQL 备份恢复：复制到 database.zip，旧库移为 .bak 保留（init.sh 执行 RunScript，失败自动回滚）
 restore_sql_backup() {
   local selected_backup="$1"
   local backup_name
@@ -2589,8 +2589,11 @@ restore_sql_backup() {
         return 1
       fi
       echo -e "${GREEN}✓ 备份文件已复制${NC}"
-      rm -f "${CONFIG[BASE_DIR]}/atv.mv.db" 2>/dev/null && echo -e "${GREEN}✓ 已删除 atv.mv.db${NC}"
-      rm -f "${CONFIG[BASE_DIR]}/atv.trace.db" 2>/dev/null && echo -e "${GREEN}✓ 已删除 atv.trace.db${NC}"
+      if [ -f "${CONFIG[BASE_DIR]}/atv.mv.db" ]; then
+        mv -f "${CONFIG[BASE_DIR]}/atv.mv.db" "${CONFIG[BASE_DIR]}/atv.mv.db.bak" 2>/dev/null \
+          && echo -e "${GREEN}✓ 已保留原库为 atv.mv.db.bak（恢复失败时自动回滚，成功后由容器清理）${NC}"
+      fi
+      rm -f "${CONFIG[BASE_DIR]}/atv.trace.db" 2>/dev/null
       local container_name
       container_name="$(get_container_name)"
       if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then

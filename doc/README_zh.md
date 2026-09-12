@@ -827,13 +827,13 @@ H2 / MySQL / PostgreSQL 之间迁移请使用 JSON 备份路径，详见 [数据
 - `m. 数据库迁移`：进入 H2 / MySQL / PostgreSQL 迁移与数据库配置菜单。支持迁移向导、配置/切换主应用数据库、导出 JSON、导入 JSON、回退到迁移前数据库。迁移向导会自动执行“导出当前数据 → 切换数据库并重建容器 → 导入恢复”。容器未运行但已有 JSON 备份时也可继续；今天的备份自动使用，更早的备份需要确认。
 - `8. 配置管理` → `a. 数据恢复`：列出 `backup/` 下所有备份，按文件名自动识别 `[JSON]` / `[SQL]`，**JSON 排在前面优先**。选择后：
   - JSON → 复制为 `database-json.zip` 并重启容器，应用启动时自动以覆盖方式恢复。
-  - SQL → 复制为 `database.zip`、删除 `atv.mv.db` / `atv.trace.db` 并重启，启动时执行 `script.sql` 恢复。
+  - SQL → 复制为 `database.zip`、旧库移为 `atv.mv.db.bak` 保留并重启，启动时执行恢复；失败自动回滚原库并把包改名为 `database.zip.failed`（改回原名可重试）。
 - `8. 配置管理` → `b. 立即备份数据库`：立即生成一份 JSON 备份（JSON 失败时回退 SQL；容器未运行时回退裸 `atv.mv.db`）。
 
 #### 手动恢复
 
 - JSON：把 `database-json-*.zip` 复制为 `/opt/alist-tvbox/database-json.zip`，重启容器（**不要**删除 `atv.mv.db`）。应用启动时自动恢复并重启一次以加载数据。
-- SQL（H2）：把 `database-*.zip` 复制为 `/opt/alist-tvbox/database.zip`，删除 `atv.mv.db` 和 `atv.trace.db`，重启 docker 容器或重新运行安装脚本。
+- SQL（H2）：把 `database-*.zip` 复制为 `/opt/alist-tvbox/database.zip`，重启 docker 容器或重新运行安装脚本（**不要**手动删除 `atv.mv.db`，启动脚本会自动备份旧库并在失败时回滚）。
 
 #### 通过配置页面
 

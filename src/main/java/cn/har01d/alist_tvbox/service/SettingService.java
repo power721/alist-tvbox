@@ -288,8 +288,11 @@ public class SettingService {
             return null;
         }
 
+        // MOVIE/META/ALIAS 有意排除(豆瓣数据走 diff 增量链路,全量导出会让备份巨大;恢复端由
+        // FlywayRepairConfig 补建空表)。FLYWAY_SCHEMA_HISTORY 必须随备份走:恢复出的库若没有
+        // 迁移历史,baseline-on-migrate 会把库打到版本 1 并在已演进的结构上重放 V2+,启动必炸
+        // ——即 database.zip 反复删库重建却恢复不生效的根因。
         Set<String> blacklist = Set.of(
-                "FLYWAY_SCHEMA_HISTORY",
                 "META",
                 "MOVIE",
                 "ALIAS",
@@ -318,7 +321,10 @@ public class SettingService {
 
                 try (FileOutputStream fos = new FileOutputStream(out);
                      ZipOutputStream zipOut = new ZipOutputStream(fos)) {
-                    Utils.zipFile(sqlFile, sqlFile.getName(), zipOut);
+                    // 条目名必须固定为 script.sql:H2 RunScript 的 COMPRESSION ZIP 硬编码只认
+                    // 这个名字(File not found: "script.sql in ..." 即条目名不符),此前用临时
+                    // 文件名作条目导致 database.zip 恢复必然失败、init 反复删库重建。
+                    Utils.zipFile(sqlFile, "script.sql", zipOut);
                 }
                 cleanBackups();
                 return out;
