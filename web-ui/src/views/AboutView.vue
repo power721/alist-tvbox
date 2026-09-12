@@ -45,7 +45,11 @@
     </p>
     <p>
       一键部署（Docker版）：
-      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)"</code><br>
+      <code>curl -fsSL http://d.har01d.cn/alist-tvbox.sh | sudo bash</code><br>
+    </p>
+    <p>
+      一键升级（Docker版）：
+      <code>curl -fsSL http://d.har01d.cn/alist-tvbox.sh | sudo bash -s -- update -y</code><br>
     </p>
 <!--    <p>-->
 <!--      一键部署(电报监控版)：-->
