@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.live.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.model.Filter;
+import cn.har01d.alist_tvbox.model.FilterValue;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
@@ -81,6 +83,13 @@ public class LiveService {
         result.setCategories(list);
         result.setTotal(result.getCategories().size());
         result.setLimit(result.getCategories().size());
+        // "关注"分类追加平台筛选:值复用平台 type,list 端点按 platform 参数过滤
+        List<FilterValue> values = new ArrayList<>();
+        values.add(new FilterValue("全部", ""));
+        for (LivePlatform platform : platforms) {
+            values.add(new FilterValue(platform.getName(), platform.getType()));
+        }
+        result.getFilters().put(LiveFollowService.CATEGORY_ID, List.of(new Filter("platform", "平台", values)));
 
         log.debug("category result: {}", result);
         return result;

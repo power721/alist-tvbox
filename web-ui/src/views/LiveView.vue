@@ -308,11 +308,27 @@ const loadFollows = () => {
   followsLoading.value = true;
   axios.get("/api/live/follows").then(({data}) => {
     follows.value = data;
+    // 已选平台被取关空了(比如删掉该平台最后一个关注)时回落"全部",避免停在空标签上
+    if (followPlatform.value && !follows.value.some(follow => follow.platform === followPlatform.value)) {
+      followPlatform.value = "";
+    }
     followsLoading.value = false;
   }).catch(() => {
     followsLoading.value = false;
   });
 };
+
+// 关注列表平台筛选:只展示有关注的平台,顺序与平台分类一致
+const followPlatform = ref("");
+const followPlatformOrder = ["bilibili", "douyu", "huya", "douyin", "cc", "kuaishou", "twitch", "soop"];
+const followPlatforms = computed(() => {
+  const present = new Set(follows.value.map(follow => follow.platform));
+  return followPlatformOrder.filter(platform => present.has(platform));
+});
+const followCountByPlatform = (platform: string) => follows.value.filter(follow => follow.platform === platform).length;
+const filteredFollows = computed(() => followPlatform.value
+  ? follows.value.filter(follow => follow.platform === followPlatform.value)
+  : follows.value);
 
 const removeFollow = (row: LiveFollow) => {
   axios.delete("/api/live/follows", {params: {platform: row.platform, roomId: row.roomId}}).then(() => {
@@ -702,9 +718,17 @@ onUnmounted(() => {
           />
           <el-button type="primary" :loading="followUrlLoading" @click="addFollowByUrl">添加关注</el-button>
           <el-button :icon="Refresh" circle @click="loadFollows"/>
-          <span v-if="follows.length" class="follow-summary">共 {{ follows.length }} 个关注</span>
+          <span v-if="follows.length" class="follow-summary">共 {{ filteredFollows.length }} 个关注</span>
         </div>
-        <el-table :data="follows" v-loading="followsLoading">
+        <div id="follow-platform-filter" v-if="followPlatforms.length > 1">
+          <el-radio-group v-model="followPlatform" size="small">
+            <el-radio-button value="">全部 {{ follows.length }}</el-radio-button>
+            <el-radio-button v-for="platform of followPlatforms" :key="platform" :value="platform">
+              {{ platformNames[platform] || platform }} {{ followCountByPlatform(platform) }}
+            </el-radio-button>
+          </el-radio-group>
+        </div>
+        <el-table :data="filteredFollows" v-loading="followsLoading">
           <el-table-column label="房间" min-width="300">
             <template #default="{row}">
               <div class="follow-room">
@@ -977,6 +1001,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   margin-top: 8px;
+}
+
+#follow-platform-filter {
+  margin: 12px 0;
 }
 
 .follow-url-input {

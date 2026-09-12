@@ -139,6 +139,30 @@ class LiveFollowServiceTest {
     }
 
     @Test
+    void listFiltersByKnownPlatformOnly() {
+        LivePlatform platform = mock(LivePlatform.class);
+        when(platform.getType()).thenReturn("huya");
+        LiveFollowService service = new LiveFollowService(followRepository, userService, appProperties, List.of(platform), shortLinkResolver);
+        LiveFollow huyaFollow = new LiveFollow();
+        huyaFollow.setUid(1);
+        huyaFollow.setPlatform("huya");
+        huyaFollow.setRoomId("123");
+        huyaFollow.setRoomName("虎牙房间");
+        LiveFollow biliFollow = new LiveFollow();
+        biliFollow.setUid(1);
+        biliFollow.setPlatform("bilibili");
+        biliFollow.setRoomId("6");
+        biliFollow.setRoomName("B站房间");
+        when(followRepository.findByUidOrderByCreatedTimeDesc(1)).thenReturn(List.of(huyaFollow, biliFollow));
+
+        // 已知平台:只返回该平台的关注
+        assertEquals(List.of("虎牙房间"), service.list(1, "huya").getList().stream().map(MovieDetail::getVod_name).toList());
+        // 非平台值(网页端 detail 透传的 platform=web 等):视为不过滤返回全部
+        assertEquals(2, service.list(1, "web").getList().size());
+        assertEquals(2, service.list(1, null).getList().size());
+    }
+
+    @Test
     void followByUrlValidatesAndStoresRoomInfo() throws IOException {
         LivePlatform platform = mock(LivePlatform.class);
         when(platform.getType()).thenReturn("huya");

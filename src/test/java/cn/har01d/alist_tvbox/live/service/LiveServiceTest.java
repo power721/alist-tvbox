@@ -69,6 +69,39 @@ class LiveServiceTest {
     }
 
     @Test
+    void categoryAddsPlatformFilterToFollowTab() throws IOException {
+        stubPlatformTypes();
+        when(huyaService.getName()).thenReturn("虎牙");
+        when(douyuService.getName()).thenReturn("斗鱼");
+
+        CategoryList result = liveService.category();
+
+        var filter = result.getFilters().get("follow");
+        assertEquals(1, filter.size());
+        assertEquals("platform", filter.get(0).getKey());
+        // 首项是"全部"(空值),其后按平台分类顺序逐一列出可选平台
+        assertEquals("全部", filter.get(0).getValue().get(0).getN());
+        assertEquals("", filter.get(0).getValue().get(0).getV());
+        assertEquals("虎牙", filter.get(0).getValue().get(1).getN());
+        assertEquals("huya", filter.get(0).getValue().get(1).getV());
+        assertEquals("斗鱼", filter.get(0).getValue().get(2).getN());
+        assertEquals("douyu", filter.get(0).getValue().get(2).getV());
+        // 全部支持的平台都在筛选项里,不只四大平台
+        assertEquals(1 + 8, filter.get(0).getValue().size());
+    }
+
+    private void stubPlatformTypes() {
+        when(huyaService.getType()).thenReturn("huya");
+        when(douyuService.getType()).thenReturn("douyu");
+        when(bilibiliService.getType()).thenReturn("bilibili");
+        when(ccService.getType()).thenReturn("cc");
+        when(kuaishouService.getType()).thenReturn("kuaishou");
+        when(douyinService.getType()).thenReturn("douyin");
+        when(twitchService.getType()).thenReturn("twitch");
+        when(soopService.getType()).thenReturn("soop");
+    }
+
+    @Test
     void mixModeShowsHotRoomsBeforeCategoryFolders() throws IOException {
         appProperties.setLiveHotMode("mix");
         when(huyaService.getType()).thenReturn("huya");

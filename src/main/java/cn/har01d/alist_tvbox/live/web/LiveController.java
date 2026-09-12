@@ -51,7 +51,7 @@ public class LiveController {
                 return liveService.home();
             }
             if (t.equals(LiveFollowService.CATEGORY_ID)) {
-                return liveFollowService.list(liveFollowService.resolveUid(token));
+                return liveFollowService.list(liveFollowService.resolveUid(token), platform);
             }
             return liveService.list(t, ac, sort, pg);
         }
