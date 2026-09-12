@@ -94,6 +94,8 @@ class Index115TvBoxAdapterTest {
         Index115SearchData data = new Index115SearchData();
         data.setTotal(1);
         data.setItems(List.of(file("f1", "sw1", "6666", "a.mkv", false)));
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115))
+                .thenReturn(Optional.of(new DriverAccount()));
         when(client.search(any(), anyString(), anyInt(), anyInt())).thenReturn(data);
 
         List<MovieDetail> list = adapter.search(s, "foo");
@@ -101,6 +103,17 @@ class Index115TvBoxAdapterTest {
         assertEquals(1, list.size());
         assertEquals("a.mkv", list.get(0).getVod_name());
         assertEquals("9$sw1-f1$1", list.get(0).getVod_id());
+    }
+
+    @Test
+    void searchSkipsWithoutPan115Account() {
+        Site s = site();
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.empty());
+
+        List<MovieDetail> list = adapter.search(s, "foo");
+
+        assertTrue(list.isEmpty());
+        verifyNoInteractions(client);
     }
 
     private Index115File file(String fileId, String sc, String rc, String name, boolean dir) {

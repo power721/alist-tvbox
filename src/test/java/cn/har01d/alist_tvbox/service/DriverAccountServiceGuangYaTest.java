@@ -64,7 +64,7 @@ class DriverAccountServiceGuangYaTest {
 
         DriverAccountService service = new DriverAccountService(panAccountRepository, driverAccountRepository,
                 settingRepository, shareRepository, accountService, aListLocalService, offlineDownloadService,
-                builder, new ObjectMapper(), alistJdbcTemplate);
+                builder, new ObjectMapper(), alistJdbcTemplate, mock(cn.har01d.alist_tvbox.service.Index115SiteSeed.class));
 
         DriverAccount account = new DriverAccount();
         account.setName("main");
@@ -88,7 +88,7 @@ class DriverAccountServiceGuangYaTest {
         when(builder.build()).thenReturn(mock(RestTemplate.class));
         DriverAccountService service = new DriverAccountService(panAccountRepository, driverAccountRepository,
                 settingRepository, shareRepository, accountService, aListLocalService, offlineDownloadService,
-                builder, new ObjectMapper(), alistJdbcTemplate);
+                builder, new ObjectMapper(), alistJdbcTemplate, mock(cn.har01d.alist_tvbox.service.Index115SiteSeed.class));
 
         DriverAccount account = new DriverAccount();
         account.setName("main");
@@ -115,7 +115,7 @@ class DriverAccountServiceGuangYaTest {
         when(builder.build()).thenReturn(mock(RestTemplate.class));
         return new DriverAccountService(panAccountRepository, driverAccountRepository,
                 settingRepository, shareRepository, accountService, aListLocalService, offlineDownloadService,
-                builder, mapper, alistJdbcTemplate);
+                builder, mapper, alistJdbcTemplate, mock(cn.har01d.alist_tvbox.service.Index115SiteSeed.class));
     }
 
     private DriverAccount guangYaAccount() {

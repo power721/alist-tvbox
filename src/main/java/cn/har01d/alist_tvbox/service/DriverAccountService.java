@@ -101,6 +101,7 @@ public class DriverAccountService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate alistJdbcTemplate;
+    private final Index115SiteSeed index115SiteSeed;
     private final Map<String, QuarkUCTV> drivers = new HashMap<>();
 
     public DriverAccountService(PanAccountRepository panAccountRepository,
@@ -112,7 +113,8 @@ public class DriverAccountService {
                                 OfflineDownloadService offlineDownloadService,
                                 RestTemplateBuilder builder,
                                 ObjectMapper objectMapper,
-                                @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
+                                @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate,
+                                Index115SiteSeed index115SiteSeed) {
         this.panAccountRepository = panAccountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.settingRepository = settingRepository;
@@ -123,6 +125,7 @@ public class DriverAccountService {
         this.restTemplate = builder.connectTimeout(Duration.ofSeconds(10)).readTimeout(Duration.ofSeconds(30)).build();
         this.objectMapper = objectMapper;
         this.alistJdbcTemplate = alistJdbcTemplate;
+        this.index115SiteSeed = index115SiteSeed;
     }
 
     @PostConstruct
@@ -350,6 +353,9 @@ public class DriverAccountService {
         }
 
         updateStorage(saved);
+        if (saved.getType() == DriverType.PAN115) {
+            index115SiteSeed.refreshStorage();
+        }
 
         return saved;
     }
@@ -389,6 +395,7 @@ public class DriverAccountService {
         validate(dto);
         var account = get(id);
         String previousFolder = account.getFolder();
+        DriverType previousType = account.getType();
         var other = driverAccountRepository.findByNameAndType(dto.getName(), dto.getType());
         if (other != null && !other.getId().equals(id)) {
             throw new BadRequestException("账号名称已经存在");
@@ -439,6 +446,9 @@ public class DriverAccountService {
         }
 
         updateStorage(account);
+        if (previousType == DriverType.PAN115 || account.getType() == DriverType.PAN115) {
+            index115SiteSeed.refreshStorage();
+        }
 
         return account;
     }
@@ -459,6 +469,9 @@ public class DriverAccountService {
                 aListLocalService.executeUpdate("DELETE FROM x_storages WHERE id = " + storageId);
             }
             driverAccountRepository.deleteById(id);
+            if (account.getType() == DriverType.PAN115) {
+                index115SiteSeed.refreshStorage();
+            }
         }
     }
 

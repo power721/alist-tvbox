@@ -87,6 +87,11 @@ public class Index115TvBoxAdapter {
 
     public List<MovieDetail> search(Site site, String keyword) {
         log.debug("[Pan115Index] search site: {}, keyword: {}", site.getId(), keyword);
+        // 播放要靠主 115 账号 cookie 换直链,没账号时搜出来也全不可播,直接跳过
+        if (driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).isEmpty()) {
+            log.info("[Pan115Index] skip search: no pan115 account");
+            return List.of();
+        }
         var data = client.search(site, keyword, 1, PER_PAGE);
         List<MovieDetail> list = new ArrayList<>();
         if (data == null || data.getItems() == null) {

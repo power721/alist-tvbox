@@ -260,6 +260,7 @@ const total = ref(0)
 const jsonData = ref({} as VodList)
 const paths = ref([] as Item[])
 const sites = ref([])
+const has115Account = ref(true)
 const siteVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
@@ -384,7 +385,8 @@ const updateIndexFile = (id: string | number) => {
 
 const load = () => {
   axios.get('/api/sites').then(({data}) => {
-    sites.value = data
+    // 115分享索引站点(version 1)没有 115 账号时整体不可用,站点列表隐藏
+    sites.value = has115Account.value ? data : data.filter((s: any) => s.version !== 1)
   })
 }
 
@@ -471,7 +473,9 @@ const handleExceed: UploadProps['onExceed'] = (files: File[]) => {
 }
 
 onMounted(async () => {
-  load()
+  axios.get('/api/index115/status').then(({data}) => {
+    has115Account.value = data.hasAccount
+  }).finally(load)
   if (!store.token) {
     store.token = await axios.get("/api/token").then(({data}) => {
       return data.token ? data.token.split(",")[0] : "-"

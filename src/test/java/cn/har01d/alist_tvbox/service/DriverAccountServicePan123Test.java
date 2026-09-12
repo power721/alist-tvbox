@@ -58,7 +58,7 @@ class DriverAccountServicePan123Test {
         when(builder.build()).thenReturn(restTemplate);
         return new DriverAccountService(panAccountRepository, driverAccountRepository,
                 settingRepository, shareRepository, accountService, aListLocalService, offlineDownloadService,
-                builder, new ObjectMapper(), alistJdbcTemplate);
+                builder, new ObjectMapper(), alistJdbcTemplate, mock(cn.har01d.alist_tvbox.service.Index115SiteSeed.class));
     }
 
     private ObjectNode parse(String json) {
