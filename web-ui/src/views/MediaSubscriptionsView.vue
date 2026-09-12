@@ -685,6 +685,10 @@
               <el-switch v-model="notifyForm.selfShareEnabled"/>
               <span class="sub-text">总闸(默认关):开启后订阅级打了开关的追剧把可看集转存到自有 115 盘建永久分享快照后删源释放空间;需 cookie 版 115 账号,单批转存瞬时占盘,空间大的用户才适合</span>
             </el-form-item>
+            <el-form-item v-if="store.admin" label="自有分享集数上限">
+              <el-input-number v-model="notifyForm.selfShareMaxEpisodes" :min="0" :max="5000"/>
+              <span class="sub-text">集数规模(官方总集数与可看集数取大)超过上限的剧不启用自有分享——长番分享数会随更新无限增长且首批占盘过大;已有批次照常供播;0 = 不限</span>
+            </el-form-item>
             <el-form-item label="Bot Token">
               <el-input v-model="notifyForm.botToken" placeholder="123456:ABC-...,留空关闭通知"/>
             </el-form-item>
@@ -1408,6 +1412,7 @@ const notifyForm = ref({
   tmdbApiHost: '',
   vipAccounts: [] as number[],
   selfShareEnabled: false,
+  selfShareMaxEpisodes: 200,
   mainDrives: [] as number[],
   extendedDrives: [] as number[],
   poolMinQuality: '',
@@ -2498,6 +2503,7 @@ const openNotify = () => {
     notifyForm.value.vipAccounts = (settings['msub_vip_accounts'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
     notifyForm.value.selfShareEnabled = (settings['msub_self_share_enabled'] || '') === 'true'
+    notifyForm.value.selfShareMaxEpisodes = parseInt(settings['msub_self_share_max_episodes'] || '200') || 200
     notifyForm.value.mainDrives = (settings['msub_main_drives'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0).slice(0, 2)
     notifyForm.value.extendedDrives = (settings['msub_extended_drives'] || '')
@@ -2580,6 +2586,7 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'msub_magnet_total_quota', value: String(notifyForm.value.magnetTotalQuota)}),
     axios.post('/api/settings', {name: 'msub_vip_accounts', value: notifyForm.value.vipAccounts.join(',')}),
     axios.post('/api/settings', {name: 'msub_self_share_enabled', value: String(notifyForm.value.selfShareEnabled)}),
+    axios.post('/api/settings', {name: 'msub_self_share_max_episodes', value: String(notifyForm.value.selfShareMaxEpisodes)}),
     axios.post('/api/settings', {
       name: 'msub_main_drives',
       value: [...new Set(notifyForm.value.mainDrives)].slice(0, 2).join(','),

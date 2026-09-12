@@ -126,6 +126,9 @@ public class MediaSubscriptionCheckService {
     /** 115 自有分享全局总闸(默认关):追剧可看集转存自有 115 盘建永久分享后删源释放空间,
      *  订阅级 self_share 列 + cookie 版 115 账号齐备才生效 */
     public static final String MSUB_SELF_SHARE_ENABLED = "msub_self_share_enabled";
+    /** 115 自有分享集数规模上限(数字,0=不限,默认 200):超上限的剧不启用(长番分享数随更新
+     *  无限增长且首批转存瞬时占盘过大),已有批次照常供播 */
+    public static final String MSUB_SELF_SHARE_MAX_EPISODES = "msub_self_share_max_episodes";
     /** 追剧总离线配额(数字,0=不限,默认 200):全部追剧订阅的磁力提交尝试总数上限 */
     public static final String MSUB_MAGNET_TOTAL_QUOTA = "msub_magnet_total_quota";
     /** 预告/花絮等非正片(片头/片尾:年番分享常带「片头尾/」目录装 OP/ED 片段,线上被当成第 2、3 集;
@@ -4460,7 +4463,7 @@ public class MediaSubscriptionCheckService {
         // 会让分享/挂载数随更新无限增长,且首批转存瞬时占盘过大 —— 超上限的剧自动/手动都不建批,
         // 已固化的批次照常供播,新集回归普通模式(上游+搜索)。规模取官方总集数与可看集数的较大者:
         // 前瞻拦在播长篇(官方已登记数百集),观测拦官方数据缺失的存量
-        int maxEpisodes = appProperties.getSubscription().getSelfShareMaxEpisodes();
+        int maxEpisodes = settingInt(MSUB_SELF_SHARE_MAX_EPISODES, 200);
         if (maxEpisodes > 0) {
             Integer officialTotal = subscription.getOfficialTotal();
             int scale = Math.max(episodes.size(), Math.max(
@@ -4639,12 +4642,12 @@ public class MediaSubscriptionCheckService {
      * 缺口集按序逐集推进,某集单集配额耗尽换下一集。 */
     private void submitMagnetForGaps(MediaSubscription subscription, Set<Integer> missing) {
         AppProperties.Subscription config = appProperties.getSubscription();
-        int totalQuota = magnetQuota(MSUB_MAGNET_TOTAL_QUOTA, 200);
+        int totalQuota = settingInt(MSUB_MAGNET_TOTAL_QUOTA, 200);
         if (quotaReached(totalQuota, offlineDownloadService.totalMagnetCount())) {
             log.info("skip magnet submit: total quota {} reached", totalQuota);
             return;
         }
-        int subscriptionQuota = magnetQuota(MSUB_MAGNET_SUBSCRIPTION_QUOTA, 30);
+        int subscriptionQuota = settingInt(MSUB_MAGNET_SUBSCRIPTION_QUOTA, 30);
         if (quotaReached(subscriptionQuota, offlineDownloadService.subscriptionMagnetCount(subscription.getId()))) {
             log.info("subscription {} skip magnet submit: subscription quota {} reached", subscription.getId(), subscriptionQuota);
             return;
@@ -4653,7 +4656,7 @@ public class MediaSubscriptionCheckService {
             log.info("subscription {} skip magnet submit: pending tasks reach limit", subscription.getId());
             return;
         }
-        int episodeQuota = magnetQuota(MSUB_MAGNET_EPISODE_QUOTA, 2);
+        int episodeQuota = settingInt(MSUB_MAGNET_EPISODE_QUOTA, 2);
         for (int episode : new TreeSet<>(missing)) {
             if (quotaReached(episodeQuota, offlineDownloadService.episodeMagnetCount(subscription.getId(), episode))) {
                 continue; // 该集的当月磁力尝试额度耗尽:计数即月内记忆,换下一集
@@ -4788,7 +4791,8 @@ public class MediaSubscriptionCheckService {
     }
 
     /** 数字 Setting 读取(空/坏值回落默认,0=不限)。 */
-    private int magnetQuota(String key, int defaultValue) {
+    /** Setting 数值读取(空/非法回默认值)。 */
+    private int settingInt(String key, int defaultValue) {
         try {
             String value = settingRepository.findById(key).map(Setting::getValue).orElse("");
             return StringUtils.isBlank(value) ? defaultValue : Integer.parseInt(value.trim());

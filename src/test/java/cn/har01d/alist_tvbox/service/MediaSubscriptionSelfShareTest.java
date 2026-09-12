@@ -308,6 +308,26 @@ class MediaSubscriptionSelfShareTest {
         verify(selfShareService, never()).createShare(any(), anyString());
     }
 
+    /** 上限可配:Setting 配 0(不限)时 201 集的剧也放行。 */
+    @Test
+    void maxEpisodesSettingZeroDisablesGate() {
+        stubUpstreamEpisodes(row(1, 21, "第01集.mp4"), row(2, 21, "第02集.mp4"));
+        List<Integer> observed = new java.util.ArrayList<>();
+        for (int i = 1; i <= 201; i++) {
+            observed.add(i);
+        }
+        when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(anyInt(), any(Collection.class)))
+                .thenReturn(observed);
+        when(settingRepository.findById(MediaSubscriptionCheckService.MSUB_SELF_SHARE_MAX_EPISODES))
+                .thenReturn(Optional.of(new Setting(MediaSubscriptionCheckService.MSUB_SELF_SHARE_MAX_EPISODES, "0")));
+        stubMountedEpisodes("第01集.mp4", "第02集.mp4");
+
+        String message = service.selfShareNow(1, 9);
+
+        assertTrue(message.contains("第1-2集"), message);
+        verify(selfShareService).createShare(any(), anyString());
+    }
+
     // ---------- 开关 ----------
 
     /** 开关闸门:全局总闸关 / 非 FOLLOW 模式 / 订阅未开 → 自动批次不生效。 */

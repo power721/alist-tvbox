@@ -134,9 +134,6 @@ public class AppProperties {
         private int transferTimeoutMinutes = 30;
         /** 115 自有分享:每订阅每日建分享(批次)次数上限,防 115 分享接口风控 */
         private int selfShareDailyLimit = 3;
-        /** 115 自有分享:剧集集数规模上限(0=不限)——快照按批固化、每批一链接,长番会让分享/挂载
-         *  随更新无限增长且首批转存瞬时占盘过大,超上限的剧不启用(已有批次照常供播) */
-        private int selfShareMaxEpisodes = 200;
         /** 新集播放预热验证:发现新集时做链接解析探测,失败判损坏(被和谐)登记补源 */
         private boolean preheatEnabled = true;
         /** 新集播放预热验证:每轮最多探测的集数 */
