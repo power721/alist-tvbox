@@ -232,7 +232,7 @@
         </el-form-item>
         <el-form-item v-if="form.mode !== 'TRANSFER'" label="115自有分享">
           <el-switch v-model="form.selfShare"/>
-          <span class="sub-text" style="margin-left:8px">可看集转存到自有115盘建永久分享快照后删源释放空间,上游失效不影响已追集数;需 cookie 版115账号,单批转存瞬时占盘(空间大再开);超过200集的长番自动跳过;与转存模式互斥</span>
+          <span class="sub-text" style="margin-left:8px">可看集转存到自有115盘建永久分享快照后删源释放空间,上游失效不影响已追集数;需 cookie 版115账号,单批转存瞬时占盘(空间大再开);超过{{ globalSelfShareLimit === 0 ? '不限(0)' : globalSelfShareLimit + '集' }}的长番自动跳过;与转存模式互斥</span>
         </el-form-item>
         <el-form-item label="巡检周期(时)">
           <el-input-number v-model="form.checkIntervalHours" :min="1" :max="168"/>
@@ -1232,6 +1232,20 @@ const loadGlobalMainDrives = () => {
   })
 }
 
+// 115 自有分享集数上限的展示值(订阅表单提示与实际配置一致;拉不到回落默认 200)
+const globalSelfShareLimit = ref(200)
+
+const loadGlobalSelfShareLimit = () => {
+  axios.get('/api/settings').then(response => {
+    const raw = (response.data || {})['msub_self_share_max_episodes'] || ''
+    const value = parseInt(raw)
+    if (!isNaN(value)) {
+      globalSelfShareLimit.value = value
+    }
+  }).catch(() => {
+  })
+}
+
 const globalMainDrivesLabel = computed(() => globalMainDrives.value.length
     ? `(${globalMainDrives.value.map(code => driveOptions.find(d => d.value === code)?.label || code).join('/')})`
     : '(未配置)')
@@ -1526,6 +1540,7 @@ const navDetailSubscribe = () => {
 onMounted(() => {
   loadAll()
   loadGlobalMainDrives()
+  loadGlobalSelfShareLimit()
   loadGlobalPoolFilter()
   axios.get('/api/pan/accounts').then(response => {
     accounts.value = response.data || []
