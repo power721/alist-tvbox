@@ -247,6 +247,9 @@ public class MediaSubscriptionService {
         // 磁力兜底仅转存模式可用:离线产物落全局离线配置账号,挂载模式无资源沉淀语义
         subscription.setMagnetOffline(MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
                 && request.getMagnetOffline() != null && request.getMagnetOffline());
+        // 115 自有分享仅挂载模式可用(与转存互斥:转存副本已达成同等稳定性,且共享转存目录会互相踩)
+        subscription.setSelfShare(MediaSubscription.MODE_FOLLOW.equals(subscription.getMode())
+                && request.getSelfShare() != null && request.getSelfShare());
         subscription.setCheckIntervalHours(request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0
                 ? request.getCheckIntervalHours() : appProperties.getSubscription().getCheckIntervalHours());
         subscription.setCustomAirClock(requireAirClock(request.getCustomAirClock()));
@@ -332,6 +335,10 @@ public class MediaSubscriptionService {
             if (!MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
                 subscription.setMagnetOffline(false);
             }
+            // 115 自有分享仅挂载模式:切出 FOLLOW 时同步关闭,防孤儿开关(selfShare 未随请求携带时)
+            if (!MediaSubscription.MODE_FOLLOW.equals(subscription.getMode())) {
+                subscription.setSelfShare(false);
+            }
         }
         if (request.getAccountId() != null) {
             subscription.setAccountId(request.getAccountId());
@@ -346,6 +353,11 @@ public class MediaSubscriptionService {
             // 模式可能同请求内切换:以更新后的 mode 为准,非转存模式静默回落 false(顺滑降级不报错)
             subscription.setMagnetOffline(MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
                     && request.getMagnetOffline());
+        }
+        if (request.getSelfShare() != null) {
+            // 同上:非挂载模式静默回落 false
+            subscription.setSelfShare(MediaSubscription.MODE_FOLLOW.equals(subscription.getMode())
+                    && request.getSelfShare());
         }
         if (request.getCheckIntervalHours() != null && request.getCheckIntervalHours() > 0) {
             subscription.setCheckIntervalHours(request.getCheckIntervalHours());
@@ -3315,6 +3327,7 @@ public class MediaSubscriptionService {
         dto.setMountPath(subscription.getMountPath());
         dto.setCrossDrive(subscription.isCrossDrive());
         dto.setMagnetOffline(subscription.isMagnetOffline());
+        dto.setSelfShare(subscription.isSelfShare());
         dto.setMainDrives(parseMainDrives(subscription.getMainDrives()));
         dto.setStatus(subscription.getStatus());
         dto.setExpectedEpisodes(subscription.getExpectedEpisodes());

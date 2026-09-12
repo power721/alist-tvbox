@@ -11,6 +11,8 @@ import cn.har01d.alist_tvbox.model.FsDetailResponse;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsInfoV2;
 import cn.har01d.alist_tvbox.model.FsListResponse;
+import cn.har01d.alist_tvbox.model.ShareCreateData;
+import cn.har01d.alist_tvbox.model.ShareCreateResponse;
 import cn.har01d.alist_tvbox.model.FsListResponseV2;
 import cn.har01d.alist_tvbox.model.FsRequest;
 import cn.har01d.alist_tvbox.model.FsResponse;
@@ -314,6 +316,22 @@ public class AListService {
         log.info("share save: {}/{} -> {} ({} objects)", srcDir, names, dstDir, names.size());
         LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
         logError(response);
+    }
+
+    /**
+     * 创建 115 永久分享(快照式):对 cookie 版 115 账号挂载下的目录建分享,
+     * share/send + updateshare(-1) 两步在 PowerList 驱动内串好。
+     * 建后即可删除盘内源文件(快照不受影响);追加内容须再次调用(产出新 share_code)。
+     * 需要 PowerList 含 {@code POST /api/fs/share/create} 端点,旧版返回 404 时错误上抛由调用方记录。
+     */
+    public ShareCreateData createShare(Site site, String path) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("path", path);
+        String url = getUrl(site) + "/api/fs/share/create";
+        log.info("create permanent share: {}", path);
+        ShareCreateResponse response = postAdmin(site, url, data, ShareCreateResponse.class);
+        logError(response);
+        return response.getData();
     }
 
     /**

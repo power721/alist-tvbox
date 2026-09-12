@@ -30,6 +30,8 @@ public class MediaSubscriptionRequest {
     private Boolean crossDrive;
     /** 磁力兜底(仅转存模式生效):补缺穷尽后用磁力经离线下载补集,前置=网盘账号配置已开启离线下载 */
     private Boolean magnetOffline;
+    /** 115 自有分享(仅挂载模式生效,与转存互斥):可看集转存自有 115 盘建永久分享后删源释放空间 */
+    private Boolean selfShare;
     private Integer checkIntervalHours;
     /** 手动播出时刻校正("HH:mm",空=自动;仅日期无时刻的剧按 20:00 兜底,可按实际排播改写) */
     private String customAirClock;

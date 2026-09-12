@@ -18,4 +18,7 @@ public interface MediaSubscriptionEventRepository extends JpaRepository<MediaSub
 
     /** 保留期清理:取每订阅最新 201 条判定是否超额(取到 201 条才说明超过 200 保留线)。 */
     List<MediaSubscriptionEvent> findTop201BySubscriptionIdOrderByIdDesc(int subscriptionId);
+
+    /** 115 自有分享每日限频:当日已建分享(批次)数。 */
+    long countBySubscriptionIdAndTypeAndCreatedTimeGreaterThanEqual(int subscriptionId, String type, long createdTime);
 }

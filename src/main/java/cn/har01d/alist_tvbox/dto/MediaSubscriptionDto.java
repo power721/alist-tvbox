@@ -30,6 +30,8 @@ public class MediaSubscriptionDto {
     private boolean crossDrive;
     /** 磁力兜底(仅转存模式生效) */
     private boolean magnetOffline;
+    /** 115 自有分享(仅挂载模式生效) */
+    private boolean selfShare;
     private String status;
     private Integer expectedEpisodes;
     /** 手动锁定总集数(null = 跟随官方) */

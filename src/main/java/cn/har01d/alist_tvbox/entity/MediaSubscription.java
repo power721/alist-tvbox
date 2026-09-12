@@ -181,6 +181,12 @@ public class MediaSubscription {
     @Column(name = "magnet_offline")
     private boolean magnetOffline;
 
+    /** 115 自有分享(仅 FOLLOW 模式生效,与 TRANSFER 互斥):巡检把可看集转存到自有 115 盘
+     *  建永久分享快照后删盘内源文件释放空间 —— 上游失效不影响已追集数,自有批次永不重列。
+     *  需 cookie 版 115 账号(开放平台无分享 API);单批转存要求瞬时容纳整批文件,空间大的用户才开。 */
+    @Column(name = "self_share")
+    private boolean selfShare;
+
     @Column(nullable = false, length = 16)
     private String status = STATUS_ACTIVE;
 

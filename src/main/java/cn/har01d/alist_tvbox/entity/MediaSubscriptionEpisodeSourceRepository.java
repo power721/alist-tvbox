@@ -53,6 +53,13 @@ public interface MediaSubscriptionEpisodeSourceRepository extends JpaRepository<
             + " where e.subscriptionId in ?1 and s.state in ?2 and r.state = 'MOUNTED'")
     List<Object[]> findSubscriptionIdAndNumbersByStatesIn(Collection<Integer> subscriptionIds, Collection<String> states);
 
+    /** 115 自有分享批次收集:(集号, 资源id, 分享内相对路径) 投影,调用方按资源行过滤 115 类型挂载。 */
+    @Query("select e.number, s.resourceId, s.relPath from MediaSubscriptionEpisode e"
+            + " join MediaSubscriptionEpisodeSource s on s.episodeId = e.id"
+            + " join MediaSubscriptionResource r on s.resourceId = r.id"
+            + " where e.subscriptionId = ?1 and s.state in ?2 and r.state = 'MOUNTED'")
+    List<Object[]> findNumberAndResourceIdAndRelPathByStatesIn(int subscriptionId, Collection<String> states);
+
     /** 每个资源已记录的分集文件大小平均数(候选池"单集平均体积"列)。null fileSize 行不计入。 */
     @Query("select s.resourceId, avg(s.fileSize) from MediaSubscriptionEpisodeSource s"
             + " where s.resourceId in ?1 and s.fileSize is not null group by s.resourceId")

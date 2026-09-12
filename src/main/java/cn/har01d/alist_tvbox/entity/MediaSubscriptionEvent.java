@@ -41,6 +41,8 @@ public class MediaSubscriptionEvent {
     public static final String TYPE_PINNED = "PINNED";
     /** 磁力兜底已提交离线下载(网盘侧任务建立,产物落地后由下轮巡检收割入库;只进事件流) */
     public static final String TYPE_MAGNET_SUBMITTED = "MAGNET_SUBMITTED";
+    /** 115 自有分享批次已固化(转存→建永久分享→删源;兼作每日建分享限频的计数凭证) */
+    public static final String TYPE_SELF_SHARE = "SELF_SHARE";
 
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")

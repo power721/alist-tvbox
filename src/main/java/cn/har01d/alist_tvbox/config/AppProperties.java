@@ -132,6 +132,8 @@ public class AppProperties {
         private int maxTransfersPerDay = 20;
         /** 自动转存:单轮转存等待 AList copy 任务完成的超时(分钟) */
         private int transferTimeoutMinutes = 30;
+        /** 115 自有分享:每订阅每日建分享(批次)次数上限,防 115 分享接口风控 */
+        private int selfShareDailyLimit = 3;
         /** 新集播放预热验证:发现新集时做链接解析探测,失败判损坏(被和谐)登记补源 */
         private boolean preheatEnabled = true;
         /** 新集播放预热验证:每轮最多探测的集数 */

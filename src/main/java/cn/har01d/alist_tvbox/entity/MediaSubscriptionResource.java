@@ -50,6 +50,9 @@ public class MediaSubscriptionResource {
     /** 来源标记:磁力离线产物(非分享链接,shareId 恒 null,link 形如 offline:{产物名})——
      *  不参与普通候选探测/挂载槽位/换血/同盘回收,维护由磁力收割对账承担。 */
     public static final String SOURCE_MAGNET = "magnet";
+    /** 来源标记:115 自有永久分享(批次快照:转存到自有 115 盘建分享后源文件已删)——
+     *  快照不可变,豁免死链判死/补缺重列/同盘回收;新集靠新批次,不从这些行增量。 */
+    public static final String SOURCE_SELF_115 = "self115";
 
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")

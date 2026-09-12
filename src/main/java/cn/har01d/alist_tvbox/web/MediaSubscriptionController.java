@@ -231,6 +231,13 @@ public class MediaSubscriptionController {
                 episode);
     }
 
+    /** 手动固化一批 115 自有分享(转存可看集 → 建永久分享 → 删源释放空间):同步执行,结果消息回显;
+     *  需订阅开启 115 自有分享 + cookie 版 115 账号(全局总闸只管自动巡检,用户显式动作直通)。 */
+    @PostMapping("/{id}/self-share")
+    public Map<String, Object> selfShare(@PathVariable int id) {
+        return Map.of("message", checkService.selfShareNow(currentUid(), id));
+    }
+
     /** 手动磁力搜索:按关键词(空=订阅关键词)+可选集号搜磁力/ed2k 候选(与自动兜底同源),
      *  不做门禁 —— 结果由用户自己挑(解析看包内容 / 入库提交离线)。 */
     @GetMapping("/{id}/magnet/search")
