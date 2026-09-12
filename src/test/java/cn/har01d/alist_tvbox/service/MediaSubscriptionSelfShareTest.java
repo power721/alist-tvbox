@@ -275,6 +275,39 @@ class MediaSubscriptionSelfShareTest {
         verify(selfShareService, never()).removeAll(any(), anyString(), anyList());
     }
 
+    // ---------- 长番闸门 ----------
+
+    /** 可看集超过上限(柯南形态:观测 201 集)→ 不建批,手动入口返回说明。 */
+    @Test
+    void longRunningShowSkippedByEpisodeScale() {
+        stubUpstreamEpisodes(row(1, 21, "第01集.mp4"), row(2, 21, "第02集.mp4"));
+        List<Integer> observed = new java.util.ArrayList<>();
+        for (int i = 1; i <= 201; i++) {
+            observed.add(i);
+        }
+        when(episodeSourceRepository.findNumbersBySubscriptionAndStatesIn(anyInt(), any(Collection.class)))
+                .thenReturn(observed);
+
+        String message = service.selfShareNow(1, 9);
+
+        assertTrue(message.contains("超过自有分享上限"), message);
+        verify(selfShareService, never()).createShare(any(), anyString());
+    }
+
+    /** 前瞻拦截:官方已登记 300 集的在播长篇,当前只看到 2 集也不开启(避免固化一半停)。 */
+    @Test
+    void longRunningShowSkippedByOfficialTotal() {
+        stubUpstreamEpisodes(row(1, 21, "第01集.mp4"), row(2, 21, "第02集.mp4"));
+        MediaSubscription subscription = subscription();
+        subscription.setOfficialTotal(300);
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(subscription));
+
+        String message = service.selfShareNow(1, 9);
+
+        assertTrue(message.contains("超过自有分享上限"), message);
+        verify(selfShareService, never()).createShare(any(), anyString());
+    }
+
     // ---------- 开关 ----------
 
     /** 开关闸门:全局总闸关 / 非 FOLLOW 模式 / 订阅未开 → 自动批次不生效。 */

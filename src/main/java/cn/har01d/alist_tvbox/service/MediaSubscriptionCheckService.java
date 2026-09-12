@@ -4456,6 +4456,26 @@ public class MediaSubscriptionCheckService {
         if (episodes.isEmpty()) {
             return manual ? "没有可固化的集(115 来源的可看集已全部自有化)" : "无批次";
         }
+        // 长番闸门(用户定规:超过上限不开启此模式):快照按批固化、每批一链接,柯南式长番
+        // 会让分享/挂载数随更新无限增长,且首批转存瞬时占盘过大 —— 超上限的剧自动/手动都不建批,
+        // 已固化的批次照常供播,新集回归普通模式(上游+搜索)。规模取官方总集数与可看集数的较大者:
+        // 前瞻拦在播长篇(官方已登记数百集),观测拦官方数据缺失的存量
+        int maxEpisodes = appProperties.getSubscription().getSelfShareMaxEpisodes();
+        if (maxEpisodes > 0) {
+            Integer officialTotal = subscription.getOfficialTotal();
+            int scale = Math.max(episodes.size(), Math.max(
+                    officialTotal == null ? 0 : officialTotal,
+                    liveEpisodeNumbers(subscription).size()));
+            if (scale > maxEpisodes) {
+                if (manual) {
+                    return "该剧规模约 " + scale + " 集,超过自有分享上限 " + maxEpisodes
+                            + " 集,已跳过(长番分享数会随更新无限增长,建议保持普通模式)";
+                }
+                log.debug("subscription {} self share skipped: {} episodes exceeds limit {}",
+                        subscription.getId(), scale, maxEpisodes);
+                return "超上限";
+            }
+        }
 
         Site site = site();
         String dir = selfShareService.targetDir(subscription, account);

@@ -232,7 +232,7 @@
         </el-form-item>
         <el-form-item v-if="form.mode !== 'TRANSFER'" label="115自有分享">
           <el-switch v-model="form.selfShare"/>
-          <span class="sub-text" style="margin-left:8px">可看集转存到自有115盘建永久分享快照后删源释放空间,上游失效不影响已追集数;需 cookie 版115账号,单批转存瞬时占盘(空间大再开);与转存模式互斥</span>
+          <span class="sub-text" style="margin-left:8px">可看集转存到自有115盘建永久分享快照后删源释放空间,上游失效不影响已追集数;需 cookie 版115账号,单批转存瞬时占盘(空间大再开);超过200集的长番自动跳过;与转存模式互斥</span>
         </el-form-item>
         <el-form-item label="巡检周期(时)">
           <el-input-number v-model="form.checkIntervalHours" :min="1" :max="168"/>
