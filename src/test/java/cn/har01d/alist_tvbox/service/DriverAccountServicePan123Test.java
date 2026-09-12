@@ -22,13 +22,17 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -69,8 +73,17 @@ class DriverAccountServicePan123Test {
         }
     }
 
+    private DriverAccount account() {
+        DriverAccount account = new DriverAccount();
+        account.setId(12);
+        account.setType(DriverType.PAN123);
+        account.setUsername("15828249500");
+        account.setPassword("secret");
+        return account;
+    }
+
     @Test
-    void pan123AccountInfoUsesWebApiContract() {
+    void pan123AccountInfoUsesDriverContract() {
         RestTemplate restTemplate = mock(RestTemplate.class);
         DriverAccountService service = newService(restTemplate);
         String storageAddition = "{\"accesstoken\":\"token-123\",\"loginuuid\":\"login-uuid-1\",\"platform\":\"web\"}";
@@ -82,12 +95,7 @@ class DriverAccountServicePan123Test {
         when(restTemplate.exchange(any(String.class), eq(HttpMethod.GET), any(HttpEntity.class), eq(ObjectNode.class)))
                 .thenReturn(ResponseEntity.ok(parse(body)));
 
-        DriverAccount account = new DriverAccount();
-        account.setId(12);
-        account.setType(DriverType.PAN123);
-        account.setUsername("15828249500");
-
-        AccountInfo info = service.getInfo(account);
+        AccountInfo info = service.getInfo(account());
 
         assertEquals("1823458492", info.getId());
         assertEquals("Har01d", info.getName());
@@ -103,16 +111,74 @@ class DriverAccountServicePan123Test {
         ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<HttpEntity> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate).exchange(urlCaptor.capture(), eq(HttpMethod.GET), entityCaptor.capture(), eq(ObjectNode.class));
-        assertTrue(urlCaptor.getValue().startsWith("https://api.123278.com/b/api/user/info?1597486751="));
+        assertTrue(urlCaptor.getValue().startsWith("https://yun.123pan.com/api/user/info?auth-key="));
         var headers = entityCaptor.getValue().getHeaders();
         assertEquals("Bearer token-123", headers.getFirst("Authorization"));
         assertEquals("login-uuid-1", headers.getFirst("loginuuid"));
-        assertEquals("web", headers.getFirst("platform"));
-        assertEquals("3", headers.getFirst("app-version"));
+        assertEquals("android", headers.getFirst("platform"));
+        assertEquals("70", headers.getFirst("app-version"));
+        assertEquals("123pan/v2.4.8(Android_8.1.0;Xiaomi M1810E5A)", headers.getFirst("User-Agent"));
     }
 
     @Test
-    void pan123AccountInfoRequiresToken() {
+    void pan123AccountInfoReloginsWhenTokenExpired() {
+        RestTemplate restTemplate = mock(RestTemplate.class);
+        DriverAccountService service = newService(restTemplate);
+        String storageAddition = "{\"accesstoken\":\"token-expired\",\"loginuuid\":\"login-uuid-1\"}";
+        when(alistJdbcTemplate.queryForObject(any(String.class), eq(String.class), eq(4012))).thenReturn(storageAddition);
+        String unauthorized = "{\"code\":401,\"message\":\"用户未登录\"}";
+        String body = "{\"code\":0,\"message\":\"ok\",\"data\":{\"UID\":1823458492,\"Nickname\":\"Har01d\","
+                + "\"SpaceUsed\":1,\"SpacePermanent\":100,\"SpaceTemp\":0,\"FileCount\":1}}";
+        when(restTemplate.exchange(any(String.class), eq(HttpMethod.GET), any(HttpEntity.class), eq(ObjectNode.class)))
+                .thenReturn(ResponseEntity.ok(parse(unauthorized)), ResponseEntity.ok(parse(body)));
+        when(restTemplate.postForObject(any(String.class), any(HttpEntity.class), eq(ObjectNode.class)))
+                .thenReturn(parse("{\"code\":200,\"message\":\"ok\",\"data\":{\"token\":\"token-fresh\"}}"));
+
+        AccountInfo info = service.getInfo(account());
+
+        assertEquals("Har01d", info.getName());
+
+        // 重登走驱动同款 sign_in 契约
+        ArgumentCaptor<String> postUrl = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<HttpEntity> postEntity = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForObject(postUrl.capture(), postEntity.capture(), eq(ObjectNode.class));
+        assertTrue(postUrl.getValue().startsWith("https://login.123pan.com/api/user/sign_in?auth-key="));
+        Map<String, Object> loginBody = (Map<String, Object>) postEntity.getValue().getBody();
+        assertEquals("15828249500", loginBody.get("passport"));
+        assertEquals("secret", loginBody.get("password"));
+        assertEquals(1, loginBody.get("type"));
+
+        // 重试 user/info 用新 token
+        ArgumentCaptor<HttpEntity> getCalls = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate, times(2)).exchange(any(String.class), eq(HttpMethod.GET),
+                getCalls.capture(), eq(ObjectNode.class));
+        assertEquals("Bearer token-fresh", getCalls.getAllValues().get(1).getHeaders().getFirst("Authorization"));
+
+        // 新 token 回写 addition 与账号行
+        verify(alistJdbcTemplate).update(eq("UPDATE x_storages SET addition = ? WHERE id = ?"),
+                contains("token-fresh"), eq(4012));
+        ArgumentCaptor<DriverAccount> saved = ArgumentCaptor.forClass(DriverAccount.class);
+        verify(driverAccountRepository).save(saved.capture());
+        assertEquals("token-fresh", saved.getValue().getToken());
+    }
+
+    @Test
+    void pan123ReloginFailureSurfacesMessage() {
+        RestTemplate restTemplate = mock(RestTemplate.class);
+        DriverAccountService service = newService(restTemplate);
+        String storageAddition = "{\"accesstoken\":\"token-expired\",\"loginuuid\":\"login-uuid-1\"}";
+        when(alistJdbcTemplate.queryForObject(any(String.class), eq(String.class), eq(4012))).thenReturn(storageAddition);
+        when(restTemplate.exchange(any(String.class), eq(HttpMethod.GET), any(HttpEntity.class), eq(ObjectNode.class)))
+                .thenReturn(ResponseEntity.ok(parse("{\"code\":401,\"message\":\"用户未登录\"}")));
+        when(restTemplate.postForObject(any(String.class), any(HttpEntity.class), eq(ObjectNode.class)))
+                .thenReturn(parse("{\"code\":1001,\"message\":\"密码错误\"}"));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.getInfo(account()));
+        assertTrue(ex.getMessage().contains("密码错误"));
+    }
+
+    @Test
+    void pan123AccountInfoRequiresCredentials() {
         RestTemplate restTemplate = mock(RestTemplate.class);
         DriverAccountService service = newService(restTemplate);
 

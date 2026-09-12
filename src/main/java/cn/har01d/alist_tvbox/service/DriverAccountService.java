@@ -40,6 +40,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
@@ -73,6 +74,10 @@ public class DriverAccountService {
     private static final String GY_DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
     private static final String PAN123_OAUTH_SERVER = "https://oauth.litepan.top";
     private static final String PAN123_OAUTH_DRIVER = "123云盘Open";
+    private static final String PAN123_WEB_API = "https://yun.123pan.com/api";
+    private static final String PAN123_LOGIN_API = "https://login.123pan.com/api";
+    // 与内嵌 AList 123Pan 驱动(platformType=android 默认设备参数)同款 UA
+    private static final String PAN123_ANDROID_USER_AGENT = "123pan/v2.4.8(Android_8.1.0;Xiaomi M1810E5A)";
     private static final String THUNDER_CLIENT_ID = "Xp6vsxz_7IYVw2BB";
     private static final String THUNDER_CAPTCHA_CLIENT_VERSION = "8.03.0.9067";
     private static final String THUNDER_PACKAGE_NAME = "com.xunlei.downloadprovider";
@@ -1180,33 +1185,33 @@ public class DriverAccountService {
     }
 
     // 网页版 123云盘(PAN123):凭证在内嵌 AList 侧登录维护(x_storages addition 的 accesstoken/loginuuid),
-    // 对齐官网前端契约(api.123278.com/b/api/user/info,Bearer + loginuuid + platform=web)。
+    // 契约对齐内嵌 AList 123Pan 驱动 Request/Init(yun.123pan.com,android 头族)。
+    // 驱动运行期 401 重登只更新内存 token 不回写 addition,Java 侧读到的 addition token 会随 token 寿命
+    // 过期(表现为挂载正常但「账号信息」报未登录),故 401 时用账号密码按驱动同款契约重登并回写 addition 自愈。
     private AccountInfo get123WebUserInfo(DriverAccount account) {
         String token = getStorageAdditionValue(account, "accesstoken");
         if (StringUtils.isBlank(token)) {
             token = StringUtils.defaultIfBlank(account.getToken(), text(readAddition(account.getAddition()).get("access_token")));
         }
-        if (StringUtils.isBlank(token)) {
-            throw new BadRequestException("123网盘账号信息获取失败: 未获取到 AccessToken,请确认账号已在网盘账号页保存并登录成功");
-        }
-        if (token.startsWith("Bearer ")) {
+        if (token != null && token.startsWith("Bearer ")) {
             token = token.substring("Bearer ".length()).trim();
         }
         String loginUuid = getStorageAdditionValue(account, "loginuuid");
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        headers.set(HttpHeaders.ACCEPT, Constants.ACCEPT);
-        headers.set(HttpHeaders.USER_AGENT, Constants.USER_AGENT);
-        headers.set(HttpHeaders.ORIGIN, "https://yun.123pan.cn");
-        headers.set(HttpHeaders.REFERER, "https://yun.123pan.cn/");
-        headers.set("platform", "web");
-        headers.set("app-version", "3");
-        if (StringUtils.isNotBlank(loginUuid)) {
-            headers.set("loginuuid", loginUuid);
+        if (StringUtils.isBlank(loginUuid)) {
+            loginUuid = UUID.randomUUID().toString().replace("-", "");
         }
-        String url = "https://api.123278.com/b/api/user/info?1597486751=" + generate123AuthKey();
-        ObjectNode json = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<Void>(headers), ObjectNode.class).getBody();
+
+        ObjectNode json = StringUtils.isNotBlank(token) ? request123UserInfo(token, loginUuid) : null;
+        if (json == null || is123Unauthorized(json)) {
+            if (StringUtils.isBlank(account.getUsername()) || StringUtils.isBlank(account.getPassword())) {
+                throw new BadRequestException("123网盘账号信息获取失败: 未获取到 AccessToken,请确认账号已在网盘账号页保存并登录成功");
+            }
+            token = login123Web(account, loginUuid);
+            updateStorageAddition(account, "accesstoken", token, "loginuuid", loginUuid);
+            account.setToken(token);
+            driverAccountRepository.save(account);
+            json = request123UserInfo(token, loginUuid);
+        }
         ObjectNode data = json == null ? null : object(json, "data");
         if (data == null) {
             String message = json == null ? "empty response" : json.path("message").asText("invalid response");
@@ -1215,7 +1220,102 @@ public class DriverAccountService {
         return build123UserInfo(data);
     }
 
-    // 对齐官网前端的 auth-key 形参(名即固定数字串):秒级时间戳-9位随机-32位hex
+    private ObjectNode request123UserInfo(String token, String loginUuid) {
+        String url = PAN123_WEB_API + "/user/info?auth-key=" + generate123AuthKey();
+        try {
+            return restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(build123Headers(token, loginUuid)), ObjectNode.class).getBody();
+        } catch (HttpStatusCodeException e) {
+            // 非 2xx 时 123 仍可能在 body 里给出 code/message(如 401 未登录),解析后由调用方判定
+            try {
+                return (ObjectNode) objectMapper.readTree(e.getResponseBodyAsString());
+            } catch (Exception ignore) {
+                throw new BadRequestException("123网盘账号信息获取失败: HTTP " + e.getStatusCode().value());
+            }
+        }
+    }
+
+    private boolean is123Unauthorized(ObjectNode json) {
+        if (json.path("code").asInt(0) == 401) {
+            return true;
+        }
+        String message = json.path("message").asText("");
+        return message.contains("未登录");
+    }
+
+    // 对齐内嵌 AList 123Pan 驱动 login():passport/mail 双形态 body,android 头族
+    private String login123Web(DriverAccount account, String loginUuid) {
+        boolean email = account.getUsername().contains("@");
+        Map<String, Object> body = new HashMap<>();
+        body.put(email ? "mail" : "passport", account.getUsername());
+        body.put("password", account.getPassword());
+        body.put("type", email ? 2 : 1);
+        HttpHeaders headers = build123Headers("", loginUuid);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String url = PAN123_LOGIN_API + "/user/sign_in?auth-key=" + generate123AuthKey();
+        ObjectNode json;
+        try {
+            json = restTemplate.postForObject(url, new HttpEntity<>(body, headers), ObjectNode.class);
+        } catch (HttpStatusCodeException e) {
+            try {
+                json = (ObjectNode) objectMapper.readTree(e.getResponseBodyAsString());
+            } catch (Exception ignore) {
+                throw new BadRequestException("123网盘账号信息获取失败: 登录 HTTP " + e.getStatusCode().value());
+            }
+        }
+        if (json == null) {
+            throw new BadRequestException("123网盘账号信息获取失败: 登录无响应");
+        }
+        if (json.path("code").asInt(-1) != 200) {
+            throw new BadRequestException("123网盘账号信息获取失败: " + json.path("message").asText("登录失败"));
+        }
+        String token = json.path("data").path("token").asText("");
+        if (StringUtils.isBlank(token)) {
+            throw new BadRequestException("123网盘账号信息获取失败: 登录成功但未返回 token");
+        }
+        return token;
+    }
+
+    // 与内嵌 AList 123Pan 驱动 Request 同款头族(platformType=android 默认设备参数)
+    private HttpHeaders build123Headers(String token, String loginUuid) {
+        HttpHeaders headers = new HttpHeaders();
+        if (StringUtils.isNotBlank(token)) {
+            headers.setBearerAuth(token);
+        }
+        headers.set(HttpHeaders.ACCEPT, Constants.ACCEPT);
+        headers.set(HttpHeaders.USER_AGENT, PAN123_ANDROID_USER_AGENT);
+        headers.set(HttpHeaders.ORIGIN, "https://yun.123pan.com");
+        headers.set(HttpHeaders.REFERER, "https://yun.123pan.com/");
+        headers.set("platform", "android");
+        headers.set("app-version", "70");
+        headers.set("osversion", "Android_8.1.0");
+        headers.set("devicetype", "M1810E5A");
+        headers.set("devicename", "Xiaomi");
+        headers.set("loginuuid", loginUuid);
+        headers.set("x-channel", "1001");
+        headers.set("x-app-version", "2.4.8");
+        return headers;
+    }
+
+    // 把新 token 回写内嵌 AList x_storages addition,驱动下次 Init 直接用新 token(运行中的驱动不受影响)
+    private void updateStorageAddition(DriverAccount account, String... pairs) {
+        if (account.getId() == null || pairs.length % 2 != 0) {
+            return;
+        }
+        try {
+            String addition = alistJdbcTemplate.queryForObject("SELECT addition FROM x_storages WHERE id = ?",
+                    String.class, IDX + account.getId());
+            ObjectNode node = addition == null ? objectMapper.createObjectNode()
+                    : (ObjectNode) objectMapper.readTree(addition);
+            for (int i = 0; i < pairs.length; i += 2) {
+                node.put(pairs[i], pairs[i + 1]);
+            }
+            alistJdbcTemplate.update("UPDATE x_storages SET addition = ? WHERE id = ?", node.toString(), IDX + account.getId());
+        } catch (Exception e) {
+            log.warn("update storage addition failed for account {}: {}", account.getId(), e.getMessage());
+        }
+    }
+
+    // 对齐内嵌 AList 123Pan 驱动 generateAuthKey:秒级时间戳-9位随机-32位hex,query 参数名 auth-key
     private static String generate123AuthKey() {
         int random = SECURE_RANDOM.nextInt(900000000) + 100000000;
         return System.currentTimeMillis() / 1000 + "-" + random + "-" + UUID.randomUUID().toString().replace("-", "");
