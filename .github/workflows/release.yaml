@@ -340,7 +340,7 @@ jobs:
           api: ${{ secrets.VERSION_API }}
         if: ${{ env.api != '' }}
         run: |
-          curl -s "${{ env.api }}?type=app&version=${{ github.ref_name }}"
+          curl -sf --retry 3 "${{ env.api }}?type=app&version=${{ github.ref_name }}"
 
       - name: Send telegram message
         uses: appleboy/telegram-action@master

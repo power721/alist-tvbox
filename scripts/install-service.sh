@@ -131,14 +131,34 @@ fi
 TMPDIR=$(mktemp -d)
 cd "$TMPDIR"
 
+case "$(uname -m)" in
+  x86_64|amd64) ARCH="amd64" ;;
+  aarch64|arm64) ARCH="arm64" ;;
+  *)
+    log "$RED" "不支持的系统架构: $(uname -m)"
+    exit 1
+    ;;
+esac
+
+# ========== GitHub 下载代理(可选) ==========
+# 通过环境变量 GH_PROXY 提供镜像前缀,示例: GH_PROXY=https://edgeone.gh-proxy.org
+GH_PREFIX=""
+if [ -n "${GH_PROXY:-}" ]; then
+  case "$GH_PROXY" in
+    http://*|https://*) GH_PREFIX="${GH_PROXY%/}/" ;;
+    *) GH_PREFIX="https://${GH_PROXY%/}/" ;;
+  esac
+  log "$YELLOW" "已启用 GitHub 下载代理: ${GH_PREFIX}"
+fi
+
 [ "$LOCAL_VERSION1" != "$VERSION1" ] && {
   log "$YELLOW" "升级 AList TvBox: $LOCAL_VERSION1 -> $VERSION1"
-  wget https://8866033.xyz/atv.tgz -O atv.tgz && tar xf atv.tgz
+  wget "${GH_PREFIX}https://github.com/power721/alist-tvbox/releases/download/${VERSION1}/atv.tar.gz" -O atv.tgz && tar xf atv.tgz
 }
 
 [ "$LOCAL_VERSION2" != "$VERSION2" ] && {
   log "$YELLOW" "升级 Power AList: $LOCAL_VERSION2 -> $VERSION2"
-  wget https://8866033.xyz/alist.tgz -O alist.tgz && tar xf alist.tgz
+  wget "${GH_PREFIX}https://github.com/power721/PowerList/releases/download/${VERSION2}/alist-linux-musl-${ARCH}.tar.gz" -O alist.tgz && tar xf alist.tgz
 }
 
 # ========== 生成 systemd 服务 ==========
