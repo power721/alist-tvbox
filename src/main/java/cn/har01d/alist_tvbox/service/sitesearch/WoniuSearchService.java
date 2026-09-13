@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,7 +38,9 @@ import java.util.regex.Pattern;
  * 或直接 {@code woniu_cookie},站点 {@code woniu_host} 可覆盖双线路测速),未配置时源静默关闭。
  * 登录:POST {@code /user/login.html}(user_name/user_pwd)→ code=="1" → 只保留
  * {@code user_check/user_id/user_name} 最小凭证集(须有 user_check);链接被打码即视为
- * 登录态失效,自动续期一次,失败 10 分钟冷却防凭证错误刷接口。
+ * 登录态失效,自动续期一次,失败 10 分钟冷却防凭证错误刷接口。登录取得的凭证 Cookie
+ * 落库 Setting {@code woniu_session}(账号密码形态专属,Cookie 形态由用户配置自管),
+ * 重启播种回内存免重登,被站点打码且续期失败才清除 —— 失效前不重复登录。
  *
  * <p>搜索页 {@code /vodsearch/-------------/?wd=}(第 1 页),卡片 {@code a.video-card};
  * 详情 {@code /voddetail/{id}/} 的 {@code .pan-link-item}:链接候选 =
@@ -50,6 +53,8 @@ public class WoniuSearchService {
     public static final String USERNAME_SETTING = "woniu_username";
     public static final String PASSWORD_SETTING = "woniu_password";
     public static final String COOKIE_SETTING = "woniu_cookie";
+    /** 登录会话持久化:登录凭证 Cookie 头(k=v; k=v),重启播种免重登 */
+    public static final String SESSION_SETTING = "woniu_session";
 
     private static final List<String> DEFAULT_HOSTS = List.of("https://wn4k.com", "https://zmi.kdns.fr");
     private static final String USER_AGENT =
@@ -70,6 +75,7 @@ public class WoniuSearchService {
     private volatile String cookie = "";
     private volatile String activeHost = "";
     private volatile boolean seededConfigCookie;
+    private volatile boolean seededSession;
     private final LoginCooldown loginCooldown = new LoginCooldown();
     private volatile boolean warnedNoCredentials;
 
@@ -198,6 +204,9 @@ public class WoniuSearchService {
             }
             cookie = SiteSearchSupport.joinCookies(auth);
             log.info("蜗牛登录成功(username={})", config.username());
+            if (config.cookie().isEmpty()) {
+                persistSession(cookie);
+            }
             return true;
         } catch (Exception e) {
             return loginFailed(e.getMessage());
@@ -205,7 +214,18 @@ public class WoniuSearchService {
     }
 
     private boolean loginFailed(String reason) {
+        // 走到登录说明旧会话已被打码或从未建立,过期凭证不得留在库里等重启回灌
+        persistSession("");
         return loginCooldown.fail("蜗牛", reason, RELOGIN_COOLDOWN_MS);
+    }
+
+    /** 会话落库:cookie 空 = 清除;失败只告警不阻断(大不了下次重启重登)。值含凭证绝不进日志。 */
+    private void persistSession(String value) {
+        try {
+            settingRepository.save(new Setting(SESSION_SETTING, StringUtils.defaultString(value)));
+        } catch (Exception e) {
+            log.warn("蜗牛会话持久化失败(下次重启需重新登录):{}", e.getMessage());
+        }
     }
 
     // ---------- 解析 ----------
@@ -292,6 +312,21 @@ public class WoniuSearchService {
                 SiteSearchSupport.setting(settingRepository, USERNAME_SETTING).trim(),
                 SiteSearchSupport.setting(settingRepository, PASSWORD_SETTING).trim(),
                 normalizeCookie(SiteSearchSupport.setting(settingRepository, COOKIE_SETTING)));
+        // 播种落库会话只在进程生命周期发生一次:被续期换掉/被冷却清空的内存态不回灌旧 Cookie
+        if (!seededSession) {
+            synchronized (this) {
+                if (!seededSession) {
+                    seededSession = true;
+                    if (config.cookie().isEmpty() && StringUtils.isBlank(cookie)) {
+                        String persisted = SiteSearchSupport.setting(settingRepository, SESSION_SETTING).trim();
+                        if (!persisted.isEmpty()) {
+                            cookie = persisted;
+                            log.info("蜗牛复用持久化登录态(免重登)");
+                        }
+                    }
+                }
+            }
+        }
         if (seededConfigCookie || config.cookie().isEmpty()) {
             return config;
         }

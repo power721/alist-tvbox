@@ -12,6 +12,7 @@ import org.jsoup.Jsoup;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,6 +72,29 @@ class WoniuSearchServiceTest {
             setting.setValue(pairs[i + 1]);
             Mockito.when(repository.findById(pairs[i])).thenReturn(Optional.of(setting));
         }
+        return repository;
+    }
+
+    /** 可写 Setting 仓库桩:findById/save 走同一张内存表,模拟跨重启的持久化语义。 */
+    private static SettingRepository writableSettings(Map<String, String> store) {
+        SettingRepository repository = Mockito.mock(SettingRepository.class);
+        Mockito.when(repository.findById(Mockito.any())).thenAnswer(invocation -> {
+            String name = invocation.getArgument(0);
+            if (name == null || !store.containsKey(name)) {
+                return Optional.empty();
+            }
+            Setting setting = new Setting();
+            setting.setName(name);
+            setting.setValue(store.get(name));
+            return Optional.of(setting);
+        });
+        Mockito.when(repository.save(Mockito.any())).thenAnswer(invocation -> {
+            Setting setting = invocation.getArgument(0);
+            if (setting != null) {
+                store.put(setting.getName(), setting.getValue());
+            }
+            return setting;
+        });
         return repository;
     }
 
@@ -244,5 +268,124 @@ class WoniuSearchServiceTest {
         // Cookie 打码(无账号密码可续期)→ 返回空但绝不触发登录
         assertTrue(service.search("难哄").isEmpty());
         assertEquals(0, logins.get());
+    }
+
+    @Test
+    void loginCookiePersistedAndReusedAfterRestart() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        store.put("woniu_host", "https://wn.example");
+        store.put("woniu_username", "u1");
+        store.put("woniu_password", "pw");
+        AtomicInteger logins = new AtomicInteger();
+        WoniuSearchService first = new WoniuSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                if (url.endsWith("/user/login.html")) {
+                    logins.incrementAndGet();
+                    return new Resp(200, List.of(
+                            "user_check=chk-1; Path=/", "user_id=7; Path=/", "user_name=u1; Path=/",
+                            "PHPSESSID=junk; Path=/"), "{\"code\":\"1\"}");
+                }
+                if (url.contains("/vodsearch/")) {
+                    return new Resp(200, List.of(), SEARCH_HTML);
+                }
+                if (url.contains("/voddetail/10038/")) {
+                    assertEquals("user_check=chk-1; user_id=7; user_name=u1", request.header("Cookie"));
+                    return new Resp(200, List.of(), DETAIL_UNLOCKED);
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        assertEquals(2, first.search("难哄").size());
+        assertEquals(1, logins.get());
+        // 登录成功即落库:只留最小凭证集(user_check/user_id/user_name),PHPSESSID 不进
+        assertEquals("user_check=chk-1; user_id=7; user_name=u1", store.get(WoniuSearchService.SESSION_SETTING));
+
+        // 新实例=进程重启(内存会话清零):播种落库会话,零登录
+        WoniuSearchService restarted = new WoniuSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                if (url.endsWith("/user/login.html")) {
+                    throw new AssertionError("持久会话有效期内不得重新登录");
+                }
+                if (url.contains("/vodsearch/")) {
+                    return new Resp(200, List.of(), SEARCH_HTML);
+                }
+                if (url.contains("/voddetail/10038/")) {
+                    assertEquals("user_check=chk-1; user_id=7; user_name=u1", request.header("Cookie"),
+                            "重启后播种落库会话");
+                    return new Resp(200, List.of(), DETAIL_UNLOCKED);
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        assertEquals(2, restarted.search("难哄").size());
+        assertEquals(1, logins.get(), "重启后复用持久化 Cookie,不再撞登录接口");
+    }
+
+    @Test
+    void stalePersistedSessionReloginsAndOverwritesStore() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        store.put("woniu_host", "https://wn.example");
+        store.put("woniu_username", "u1");
+        store.put("woniu_password", "pw");
+        store.put(WoniuSearchService.SESSION_SETTING, "user_check=stale; user_id=7; user_name=u1");
+        AtomicInteger logins = new AtomicInteger();
+        WoniuSearchService service = new WoniuSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                String cookie = request.header("Cookie") == null ? "" : request.header("Cookie");
+                if (url.endsWith("/user/login.html")) {
+                    logins.incrementAndGet();
+                    return new Resp(200, List.of(
+                            "user_check=fresh; Path=/", "user_id=7; Path=/", "user_name=u1; Path=/"),
+                            "{\"code\":\"1\"}");
+                }
+                if (url.contains("/vodsearch/")) {
+                    return new Resp(200, List.of(), SEARCH_HTML);
+                }
+                if (url.contains("/voddetail/10038/")) {
+                    return new Resp(200, List.of(),
+                            cookie.contains("user_check=fresh") ? DETAIL_UNLOCKED : DETAIL_LOCKED);
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        assertEquals(2, service.search("难哄").size());
+        assertEquals(1, logins.get(), "落库会话被站点打码后必须续期一次");
+        assertEquals("user_check=fresh; user_id=7; user_name=u1", store.get(WoniuSearchService.SESSION_SETTING),
+                "续期后覆盖旧会话");
+    }
+
+    @Test
+    void loginFailureEvictsPersistedSession() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        store.put("woniu_host", "https://wn.example");
+        store.put("woniu_username", "u1");
+        store.put("woniu_password", "wrong");
+        store.put(WoniuSearchService.SESSION_SETTING, "user_check=stale; user_id=7; user_name=u1");
+        WoniuSearchService service = new WoniuSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                if (url.endsWith("/user/login.html")) {
+                    return new Resp(200, List.of(), "{\"code\":\"0\",\"msg\":\"密码错误\"}");
+                }
+                if (url.contains("/vodsearch/")) {
+                    return new Resp(200, List.of(), SEARCH_HTML);
+                }
+                if (url.contains("/voddetail/10038/")) {
+                    return new Resp(200, List.of(), DETAIL_LOCKED);
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        assertTrue(service.search("难哄").isEmpty());
+        // 过期会话被打码 → 续期失败(如密码已改)→ 须清除,防下次重启回灌同一张死 Cookie
+        assertTrue(store.get(WoniuSearchService.SESSION_SETTING).isEmpty(),
+                "重登失败须清除过期会话,防重启回灌死 Cookie");
     }
 }

@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +39,9 @@ import java.util.regex.Pattern;
  * ②登录态——响应含 nologin/未登录 时用账号密码重登。<b>凭证必须用户自配</b>
  * (Setting {@code guanying_username}/{@code guanying_password} 或直接 {@code guanying_cookie},
  * 站点列表 {@code guanying_host} 可覆盖,逗号/竖线/换行分隔),未配置时本源静默关闭。
+ * 登录取得的会话 Cookie(登录表单 cookietime=10506240,约 121 天)剔 PoW 短时效项后
+ * 落库 Setting {@code guanying_session}(账号密码形态专属,Cookie 形态由用户配置自管),
+ * 重启播种回内存免重登,被站点判 nologin 且重登失败才清除 —— 失效前不重复登录。
  *
  * <p>搜索:HTML 页内嵌 {@code _obj.search={l:{i,title,d,year,info}}} 列表,空则回退
  * {@code /res/search_suggest} JSON;盘链取 {@code /res/downurl/{type}/{rid}} 的
@@ -53,6 +57,8 @@ public class GuanYingSearchService {
     public static final String USERNAME_SETTING = "guanying_username";
     public static final String PASSWORD_SETTING = "guanying_password";
     public static final String COOKIE_SETTING = "guanying_cookie";
+    /** 登录会话持久化:登录态 Cookie 头(k=v; k=v,剔 PoW 短时效项),重启播种免重登 */
+    public static final String SESSION_SETTING = "guanying_session";
 
     private static final List<String> DEFAULT_HOSTS = List.of(
             "https://www.教父.com", "https://www.星际穿越.com", "https://www.楚门的世界.com",
@@ -386,6 +392,9 @@ public class GuanYingSearchService {
             JsonNode payload = objectMapper.readTree(StringUtils.defaultString(resp.body()));
             if (payload.path("code").asInt(0) == 200) {
                 log.info("观影登录成功(username={})", config.username());
+                if (config.cookie().isBlank()) {
+                    persistSession();
+                }
                 return true;
             }
             if (payload.path("captcha").asBoolean(false)) {
@@ -398,7 +407,39 @@ public class GuanYingSearchService {
     }
 
     private boolean loginFailed(String reason) {
+        // 走到登录说明旧会话已被判 nologin 或从未建立,过期会话不得留在库里等重启回灌
+        evictSession();
         return loginCooldown.fail("观影", reason, LOGIN_COOLDOWN_MS);
+    }
+
+    /** 登录态快照落库(剔 PoW 短时效 Cookie):失败只告警不阻断(大不了下次重启重登)。值含凭证绝不进日志。 */
+    private void persistSession() {
+        String snapshot;
+        synchronized (cookies) {
+            Map<String, String> auth = new LinkedHashMap<>();
+            for (Map.Entry<String, String> entry : cookies.entrySet()) {
+                if (!TRANSIENT_COOKIES.contains(entry.getKey().toLowerCase())) {
+                    auth.put(entry.getKey(), entry.getValue());
+                }
+            }
+            snapshot = SiteSearchSupport.joinCookies(auth);
+        }
+        if (snapshot.isBlank()) {
+            return;
+        }
+        try {
+            settingRepository.save(new Setting(SESSION_SETTING, snapshot));
+        } catch (Exception e) {
+            log.warn("观影会话持久化失败(下次重启需重新登录):{}", e.getMessage());
+        }
+    }
+
+    private void evictSession() {
+        try {
+            settingRepository.save(new Setting(SESSION_SETTING, ""));
+        } catch (Exception e) {
+            log.debug("观影过期会话清除失败: {}", e.getMessage());
+        }
     }
 
     // ---------- Cookie 状态 ----------
@@ -411,6 +452,16 @@ public class GuanYingSearchService {
             if (!seededConfigCookie) {
                 for (Map.Entry<String, String> entry : parseCookieHeader(config.cookie()).entrySet()) {
                     cookies.putIfAbsent(entry.getKey(), entry.getValue());
+                }
+                // 播种落库会话只在进程生命周期发生一次:被 nologin 换掉/清除后的内存态不回灌旧 Cookie
+                if (config.cookie().isBlank()) {
+                    String persisted = SiteSearchSupport.setting(settingRepository, SESSION_SETTING);
+                    if (!persisted.isBlank()) {
+                        for (Map.Entry<String, String> entry : parseCookieHeader(persisted).entrySet()) {
+                            cookies.putIfAbsent(entry.getKey(), entry.getValue());
+                        }
+                        log.info("观影复用持久化登录态(免重登)");
+                    }
                 }
                 seededConfigCookie = true;
             }

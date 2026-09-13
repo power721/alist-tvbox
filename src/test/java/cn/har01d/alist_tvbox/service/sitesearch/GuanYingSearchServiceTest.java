@@ -12,6 +12,7 @@ import org.mockito.Mockito;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,6 +36,29 @@ class GuanYingSearchServiceTest {
             setting.setValue(pairs[i + 1]);
             Mockito.when(repository.findById(pairs[i])).thenReturn(Optional.of(setting));
         }
+        return repository;
+    }
+
+    /** 可写 Setting 仓库桩:findById/save 走同一张内存表,模拟跨重启的持久化语义。 */
+    private static SettingRepository writableSettings(Map<String, String> store) {
+        SettingRepository repository = Mockito.mock(SettingRepository.class);
+        Mockito.when(repository.findById(Mockito.any())).thenAnswer(invocation -> {
+            String name = invocation.getArgument(0);
+            if (name == null || !store.containsKey(name)) {
+                return Optional.empty();
+            }
+            Setting setting = new Setting();
+            setting.setName(name);
+            setting.setValue(store.get(name));
+            return Optional.of(setting);
+        });
+        Mockito.when(repository.save(Mockito.any())).thenAnswer(invocation -> {
+            Setting setting = invocation.getArgument(0);
+            if (setting != null) {
+                store.put(setting.getName(), setting.getValue());
+            }
+            return setting;
+        });
         return repository;
     }
 
@@ -263,5 +287,133 @@ class GuanYingSearchServiceTest {
             }
         };
         assertTrue(service.search("难哄").isEmpty());
+    }
+
+    private static final String EMPTY_SEARCH_HTML =
+            "<html><script>_obj.search={\"l\":{\"i\":[],\"title\":[],\"d\":[],\"year\":[],\"info\":[]}};_obj.x=1;</script></html>";
+
+    @Test
+    void loginCookiePersistedAndReusedAfterRestart() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        store.put("guanying_host", "https://gy.example");
+        store.put("guanying_username", "u1");
+        store.put("guanying_password", "pw");
+        AtomicInteger logins = new AtomicInteger();
+        GuanYingSearchService first = new GuanYingSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                if (url.equals("https://gy.example/user/login") && request.method().equals("POST")) {
+                    logins.incrementAndGet();
+                    return new Resp(200, List.of("auth=user1; Path=/", "uid=9; Path=/"), "{\"code\":200}");
+                }
+                if (url.equals("https://gy.example/user/login/")) {
+                    return new Resp(200, List.of("PHPSESSID=s1; Path=/"), "login page");
+                }
+                if (url.equals("https://gy.example/")) {
+                    return new Resp(200, List.of(), "_obj.ok");
+                }
+                if (url.startsWith("https://gy.example/search")) {
+                    return new Resp(200, List.of(), EMPTY_SEARCH_HTML);
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        assertEquals(0, first.search("难哄").size());
+        assertEquals(1, logins.get());
+        // 登录态快照落库:非 PoW 短时效 Cookie 全进(登录页会话 PHPSESSID 同属登录态)
+        String persisted = store.get(GuanYingSearchService.SESSION_SETTING);
+        assertTrue(persisted.contains("auth=user1"));
+        assertTrue(persisted.contains("uid=9"));
+        assertTrue(persisted.contains("PHPSESSID=s1"));
+
+        // 新实例=进程重启(内存 Cookie 清零):播种落库会话,零登录
+        GuanYingSearchService restarted = new GuanYingSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                if (url.contains("/user/login")) {
+                    throw new AssertionError("持久会话有效期内不得重新登录");
+                }
+                if (url.startsWith("https://gy.example/search")) {
+                    assertTrue(request.header("Cookie").contains("auth=user1"), "重启后播种落库会话");
+                    return new Resp(200, List.of(), EMPTY_SEARCH_HTML);
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        assertEquals(0, restarted.search("难哄").size());
+        assertEquals(1, logins.get(), "重启后复用持久化 Cookie,不再撞登录接口");
+    }
+
+    @Test
+    void stalePersistedSessionReloginsAndOverwritesStore() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        store.put("guanying_host", "https://gy.example");
+        store.put("guanying_username", "u1");
+        store.put("guanying_password", "pw");
+        store.put(GuanYingSearchService.SESSION_SETTING, "auth=stale; uid=9");
+        AtomicInteger logins = new AtomicInteger();
+        GuanYingSearchService service = new GuanYingSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                String cookie = request.header("Cookie") == null ? "" : request.header("Cookie");
+                if (url.equals("https://gy.example/user/login") && request.method().equals("POST")) {
+                    logins.incrementAndGet();
+                    return new Resp(200, List.of("auth=fresh; Path=/"), "{\"code\":200}");
+                }
+                if (url.equals("https://gy.example/user/login/")) {
+                    return new Resp(200, List.of(), "login page");
+                }
+                if (url.equals("https://gy.example/")) {
+                    return new Resp(200, List.of(), "_obj.ok");
+                }
+                if (url.startsWith("https://gy.example/search")) {
+                    if (!cookie.contains("auth=fresh")) {
+                        return new Resp(200, List.of(), "nologin");
+                    }
+                    return new Resp(200, List.of(), EMPTY_SEARCH_HTML);
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        assertEquals(0, service.search("难哄").size());
+        assertEquals(1, logins.get(), "落库会话被站点判 nologin 后必须重登一次");
+        String persisted = store.get(GuanYingSearchService.SESSION_SETTING);
+        assertTrue(persisted.contains("auth=fresh"), "重登后覆盖旧会话");
+        assertTrue(persisted.contains("uid=9"), "播种的其余登录态 Cookie 不因重登丢失");
+    }
+
+    @Test
+    void loginFailureEvictsPersistedSession() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        store.put("guanying_host", "https://gy.example");
+        store.put("guanying_username", "u1");
+        store.put("guanying_password", "wrong");
+        store.put(GuanYingSearchService.SESSION_SETTING, "auth=stale; uid=9");
+        GuanYingSearchService service = new GuanYingSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                if (url.equals("https://gy.example/user/login") && request.method().equals("POST")) {
+                    return new Resp(200, List.of(), "{\"code\":400,\"msg\":\"账号密码被拒绝\"}");
+                }
+                if (url.equals("https://gy.example/user/login/")) {
+                    return new Resp(200, List.of(), "login page");
+                }
+                if (url.equals("https://gy.example/")) {
+                    return new Resp(200, List.of(), "_obj.ok");
+                }
+                if (url.startsWith("https://gy.example/search")) {
+                    return new Resp(200, List.of(), "nologin");
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        assertTrue(service.search("难哄").isEmpty());
+        // 过期会话被判 nologin → 重登失败(如密码已改)→ 须清除,防下次重启回灌死 Cookie
+        assertTrue(store.get(GuanYingSearchService.SESSION_SETTING).isEmpty(),
+                "重登失败须清除过期会话,防重启回灌死 Cookie");
     }
 }
