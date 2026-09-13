@@ -488,6 +488,51 @@ class PanLianSearchServiceTest {
     }
 
     @Test
+    void dailyCheckinCoversWholePoolOncePerDay() {
+        List<String> checkinCookies = new CopyOnWriteArrayList<>();
+        AtomicInteger logins = new AtomicInteger();
+        PanLianSearchService service = new PanLianSearchService(
+                settings("panlian_accounts", """
+                [{"username": "u1@x.com", "password": "p1"}, {"username": "u2@x.com", "password": "p2"}]"""), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String path = request.url().encodedPath();
+                String method = request.method();
+                if ("POST".equals(method) && path.equals("/api/auth/login")) {
+                    logins.incrementAndGet();
+                    FormBody form = (FormBody) request.body();
+                    return new Resp(200, List.of("admin_session=sess-" + form.value(0) + "; Path=/"),
+                            "{\"success\":true,\"data\":{\"user_id\":1}}");
+                }
+                if ("POST".equals(method) && path.equals("/api/tasks/checkin")) {
+                    checkinCookies.add(request.header("Cookie"));
+                    return new Resp(200, List.of(),
+                            "{\"success\":true,\"data\":{\"quota\":{\"remaining\":50,\"limit\":50}},\"message\":\"签到成功\"}");
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        service.dailyCheckin();
+        service.dailyCheckin();
+        // 定时签到逐号登录+签到(会话顺带预热落库),当天无搜索也不漏签;同日幂等
+        assertEquals(2, logins.get());
+        assertEquals(2, checkinCookies.size(), "两号各签一次,重复触发同日不重签");
+        assertTrue(checkinCookies.contains("admin_session=sess-u1@x.com"));
+        assertTrue(checkinCookies.contains("admin_session=sess-u2@x.com"));
+    }
+
+    @Test
+    void dailyCheckinWithoutPoolDoesNothing() {
+        PanLianSearchService service = new PanLianSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                throw new AssertionError("无账号不得发任何请求");
+            }
+        };
+        service.dailyCheckin();
+    }
+
+    @Test
     void accountPoolRoundRobinsAcrossSearches() {
         List<String> searchCookies = new CopyOnWriteArrayList<>();
         PanLianSearchService service = new PanLianSearchService(

@@ -3,20 +3,25 @@ package cn.har01d.alist_tvbox.service.sitesearch;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -49,6 +54,9 @@ import java.util.regex.Pattern;
  * 冷却内直接跳过不发 —— 阻塞共享搜索线程不值,下轮巡检自愈;每搜索至多回复一次,
  * 成功后 1s 重取一次)。正文「待登录」= Cookie 失效,该帖跳过。Cookie 不配不关源
  * (第③级正则匿名可抓锁贴泄漏链接)。
+ *
+ * <p><b>每日签到</b>:配置 Cookie 时定时 POST {@code /my-sign.htm}(Xiuno 口径
+ * {@code code=="0"} 为成功,签到得经验/金币),同日幂等,详见 {@link #dailyCheckin()}。
  */
 @Slf4j
 @Service
@@ -96,13 +104,17 @@ public class KuafuSearchService {
 
     private final SettingRepository settingRepository;
     private final AppProperties appProperties;
+    private final ObjectMapper objectMapper;
     private final OkHttpClient httpClient = new OkHttpClient();
     /** 站点回复限速时间戳(实例级,跨搜索生效)。 */
     private volatile long lastReplyAt;
+    private volatile String lastCheckinDay = "";
 
-    public KuafuSearchService(SettingRepository settingRepository, AppProperties appProperties) {
+    public KuafuSearchService(SettingRepository settingRepository, AppProperties appProperties,
+                              ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
         this.appProperties = appProperties;
+        this.objectMapper = objectMapper;
     }
 
     record Card(String threadId, String title) {
@@ -171,6 +183,55 @@ public class KuafuSearchService {
             // 吞掉则死站被 recordSuccess 清零连击,退避闸门对站点源永不生效
             log.warn("kuafu search [{}] failed: {}", keyword, e.getMessage());
             throw e instanceof RuntimeException runtimeException ? runtimeException : new IllegalStateException(e);
+        }
+    }
+
+    // ---------- 每日签到 ----------
+
+    /**
+     * 每日定时签到(2026-09-13 抓包契约):POST {@code /my-sign.htm} 空 body,XHR/Origin/
+     * Referer 头 + 论坛 Cookie(须含 bbs_sid/bbs_token)。Xiuno 口径 {@code code=="0"}
+     * 为成功,message 带签到排名与经验/金币;「已签」文案同样记当日完成。Cookie 未配置
+     * 静默跳过(匿名签到无意义);失败只记日志,不影响搜索主链路。
+     */
+    @Scheduled(cron = "0 9 6 * * *")
+    public void dailyCheckin() {
+        String cookie = SiteSearchSupport.setting(settingRepository, COOKIE_SETTING).trim();
+        if (cookie.isEmpty()) {
+            return;
+        }
+        String today = LocalDate.now().toString();
+        if (today.equals(lastCheckinDay)) {
+            return;
+        }
+        String host = SiteSearchSupport.normalizeHost(
+                SiteSearchSupport.setting(settingRepository, HOST_SETTING), DEFAULT_HOST);
+        try {
+            Resp resp = http(new Request.Builder()
+                    .url(host + "/my-sign.htm")
+                    .header("User-Agent", DESKTOP_UA)
+                    .header("Accept", "text/plain, */*; q=0.01")
+                    .header("X-Requested-With", "XMLHttpRequest")
+                    .header("Origin", host)
+                    .header("Referer", host + "/")
+                    .header("Cookie", cookie)
+                    .post(RequestBody.create(new byte[0]))
+                    .build());
+            JsonNode payload = SiteSearchSupport.parseJson(objectMapper,
+                    resp.code() == 200 ? resp.body() : "");
+            String message = payload.path("message").asText(payload.path("msg").asText(""));
+            if ("0".equals(payload.path("code").asText(""))) {
+                lastCheckinDay = today;
+                log.info("夸父每日签到完成:{}", cleanText(message));
+            } else if (SiteSearchSupport.alreadyCheckedIn(message)) {
+                lastCheckinDay = today;
+                log.debug("kuafu checkin already done today: {}", cleanText(message));
+            } else {
+                log.debug("kuafu checkin failed: code={} msg={}",
+                        payload.path("code").asText(""), cleanText(message));
+            }
+        } catch (Exception e) {
+            log.debug("kuafu checkin failed: {}", e.getMessage());
         }
     }
 

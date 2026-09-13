@@ -15,6 +15,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -54,7 +55,8 @@ import java.util.regex.Pattern;
  *
  * <p><b>配额</b>:站点按天计解锁配额(基础 30 + 每日签到 +20,按号叠加),本源另做
  * 三层防御:单次搜索解锁预算上限、解锁结果短缓存(同一检查周期重复搜索不重扣,
- * 全池共享)、配额用尽即停。每日签到幂等,账号被用到时自动触发一次。
+ * 全池共享)、配额用尽即停。每日签到幂等,账号被用到时自动触发一次,另有每日定时
+ * 兜底({@link #dailyCheckin()})保证无搜索的日子不漏签。
  */
 @Slf4j
 @Service
@@ -437,6 +439,35 @@ public class PanLianSearchService {
         } catch (Exception e) {
             log.debug("panlian[{}] checkin failed: {}", account.display(), e.getMessage());
         }
+    }
+
+    /**
+     * 每日定时签到:搜索是"账号被用到才签",当天没有搜索的账号会漏签(+20 配额白丢),
+     * 定时逐号补齐。与 {@link #checkinOncePerDay} 共享同日记账,先签后搜/先搜后签都只签
+     * 一次;登录失败冷却中的账号跳过(次日重试),无账号时静默返回。
+     */
+    @Scheduled(cron = "0 5 6 * * *")
+    public void dailyCheckin() {
+        Config config = loadConfig();
+        List<Account> pool = buildPool();
+        if (pool.isEmpty()) {
+            return;
+        }
+        int done = 0;
+        for (Account account : pool) {
+            if (account.state().cooldown.blocked()) {
+                continue;
+            }
+            try {
+                if (ensureSession(config, account)) {
+                    checkinOncePerDay(config, account);
+                    done++;
+                }
+            } catch (Exception e) {
+                log.debug("panlian[{}] scheduled checkin failed: {}", account.display(), e.getMessage());
+            }
+        }
+        log.info("盘链每日定时签到完成:{}/{} 个账号", done, pool.size());
     }
 
     /**

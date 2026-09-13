@@ -10,14 +10,17 @@ import okhttp3.FormBody;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -46,6 +49,9 @@ import java.util.regex.Pattern;
  * 至多回复一次,后续隐藏帖跳过;回复成功后 1.2s 重取详情一次,py 同款)。登录墙帖子
  * (无权访问文案)静默跳过。Cookie 不配不关源 —— 匿名可搜可提取非隐藏帖,只是隐藏帖
  * 跳过(与 123臻藏的「正文默认全隐藏」不同)。
+ *
+ * <p><b>每日签到</b>:配置 Cookie 时定时 POST {@code /?my-sign.htm}(签到得经验/金币),
+ * 同日幂等,详见 {@link #dailyCheckin()}。
  */
 @Slf4j
 @Service
@@ -98,6 +104,7 @@ public class Pan123CommunitySearchService {
     private volatile String activeHost;
     /** 站点回复限速时间戳(实例级,跨搜索生效)。 */
     private volatile long lastReplyAt;
+    private volatile String lastCheckinDay = "";
 
     public Pan123CommunitySearchService(SettingRepository settingRepository, AppProperties appProperties,
                                         ObjectMapper objectMapper) {
@@ -165,6 +172,50 @@ public class Pan123CommunitySearchService {
     }
 
     // ---------- 站点与请求 ----------
+
+    /**
+     * 每日定时签到(2026-09-13 抓包契约):POST {@code /?my-sign.htm} 空 body —— 本站
+     * rewrite 把路由放 query(与夸父的 {@code /my-sign.htm} 路径形态不同),XHR/Origin/
+     * Referer 头 + 社区 Cookie(须含 bbs_sid/bbs_token)。Xiuno 口径 {@code code=="0"}
+     * 为成功,message 带签到排名与经验/金币;「已签」文案同样记当日完成。Cookie 未配置
+     * 静默跳过;失败只记日志,不影响搜索主链路。
+     */
+    @Scheduled(cron = "0 11 6 * * *")
+    public void dailyCheckin() {
+        String cookie = SiteSearchSupport.setting(settingRepository, COOKIE_SETTING).trim();
+        if (cookie.isEmpty()) {
+            return;
+        }
+        String today = LocalDate.now().toString();
+        if (today.equals(lastCheckinDay)) {
+            return;
+        }
+        String host = activeHost();
+        try {
+            Resp resp = http(baseRequest(host, cookie, host + "/?my-sign.htm")
+                    .header("User-Agent", DESKTOP_UA)
+                    .header("Accept", "text/plain, */*; q=0.01")
+                    .header("Origin", host)
+                    .header("X-Requested-With", "XMLHttpRequest")
+                    .post(RequestBody.create(new byte[0]))
+                    .build());
+            JsonNode payload = SiteSearchSupport.parseJson(objectMapper,
+                    resp.code() == 200 ? resp.body() : "");
+            String message = payload.path("message").asText(payload.path("msg").asText(""));
+            if ("0".equals(payload.path("code").asText(""))) {
+                lastCheckinDay = today;
+                log.info("123社区每日签到完成:{}", cleanText(message));
+            } else if (SiteSearchSupport.alreadyCheckedIn(message)) {
+                lastCheckinDay = today;
+                log.debug("pan123community checkin already done today: {}", cleanText(message));
+            } else {
+                log.debug("pan123community checkin failed: code={} msg={}",
+                        payload.path("code").asText(""), cleanText(message));
+            }
+        } catch (Exception e) {
+            log.debug("pan123community checkin failed: {}", e.getMessage());
+        }
+    }
 
     /** 双站探活选站(2xx~3xx 即通,py _pick_site);Setting 覆盖则直接用;结果进程内缓存。 */
     String activeHost() {

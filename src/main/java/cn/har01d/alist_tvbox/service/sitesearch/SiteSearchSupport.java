@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
 
 import java.net.IDN;
@@ -22,6 +24,25 @@ final class SiteSearchSupport {
             return "";
         }
         return repository.findById(name).map(s -> StringUtils.defaultString(s.getValue())).orElse("");
+    }
+
+    /** 响应体容错解析:空/非法 JSON 返回空对象(签到等低价值端点不因解析炸主链路)。 */
+    static JsonNode parseJson(ObjectMapper objectMapper, String body) {
+        try {
+            JsonNode node = objectMapper.readTree(StringUtils.defaultString(body));
+            return node == null ? objectMapper.createObjectNode() : node;
+        } catch (Exception e) {
+            return objectMapper.createObjectNode();
+        }
+    }
+
+    /**
+     * 签到端点「今日已签」文案判定:已签到/已经签到/重复签到等变体(注意「已经签到」
+     * 不含连续的「已签」二字),命中即视为当日已完成,同日不再撞接口。
+     */
+    static boolean alreadyCheckedIn(String message) {
+        String text = StringUtils.defaultString(message);
+        return text.contains("已签") || text.contains("经签到") || text.contains("重复签到");
     }
 
     /**

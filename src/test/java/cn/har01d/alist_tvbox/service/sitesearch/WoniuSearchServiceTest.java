@@ -361,6 +361,80 @@ class WoniuSearchServiceTest {
     }
 
     @Test
+    void dailyCheckinLoginsPostsAndIsIdempotentPerDay() {
+        AtomicInteger logins = new AtomicInteger();
+        AtomicInteger checkins = new AtomicInteger();
+        WoniuSearchService service = new WoniuSearchService(
+                settings("woniu_username", "u1", "woniu_password", "pw", "woniu_host", "https://wn.example"),
+                new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                if (url.equals("https://wn.example/user/login.html")) {
+                    logins.incrementAndGet();
+                    return new Resp(200, List.of(
+                            "user_check=abc123; Path=/", "user_id=42; Path=/", "user_name=u1; Path=/"),
+                            "{\"code\":\"1\"}");
+                }
+                if (url.equals("https://wn.example/user/checkin.html")) {
+                    checkins.incrementAndGet();
+                    // 2026-09-13 抓包契约:XHR/Origin/Referer 头 + 空 body
+                    assertEquals("XMLHttpRequest", request.header("X-Requested-With"));
+                    assertEquals("https://wn.example", request.header("Origin"));
+                    assertEquals("https://wn.example/user/checkin.html", request.header("Referer"));
+                    assertEquals("user_check=abc123; user_id=42; user_name=u1", request.header("Cookie"));
+                    try (okio.Buffer buffer = new okio.Buffer()) {
+                        request.body().writeTo(buffer);
+                        assertEquals("", buffer.readUtf8(), "签到空 body(content-length: 0)");
+                    } catch (java.io.IOException e) {
+                        throw new AssertionError(e);
+                    }
+                    return new Resp(200, List.of(),
+                            "{\"code\":1,\"msg\":\"签到成功\",\"info\":{\"points\":10,\"base_points\":10,\"serial_days\":1,\"claimable_milestones\":0}}");
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        service.dailyCheckin();
+        service.dailyCheckin();
+        assertEquals(1, logins.get(), "无会话先登录一次");
+        assertEquals(1, checkins.get(), "code==1 记当日完成,同日幂等");
+    }
+
+    @Test
+    void dailyCheckinAlreadyDoneCountsAsDone() {
+        AtomicInteger checkins = new AtomicInteger();
+        WoniuSearchService service = new WoniuSearchService(
+                settings("woniu_cookie", "user_check=cfg; user_id=7; user_name=x", "woniu_host", "https://wn.example"),
+                new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                if (request.url().toString().endsWith("/user/checkin.html")) {
+                    checkins.incrementAndGet();
+                    assertEquals("user_check=cfg; user_id=7; user_name=x", request.header("Cookie"),
+                            "Cookie 形态直用用户配置,不触发登录");
+                    return new Resp(200, List.of(), "{\"code\":0,\"msg\":\"今天已签到过了\"}");
+                }
+                throw new AssertionError("Cookie 形态不得触发其它请求: " + request.url());
+            }
+        };
+        service.dailyCheckin();
+        service.dailyCheckin();
+        assertEquals(1, checkins.get(), "已签文案同样记当日完成,同日不再撞接口");
+    }
+
+    @Test
+    void dailyCheckinWithoutCredentialsDoesNothing() {
+        WoniuSearchService service = new WoniuSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                throw new AssertionError("无凭证不得发任何请求");
+            }
+        };
+        service.dailyCheckin();
+    }
+
+    @Test
     void loginFailureEvictsPersistedSession() {
         Map<String, String> store = new ConcurrentHashMap<>();
         store.put("woniu_host", "https://wn.example");
