@@ -4488,6 +4488,11 @@ public class MediaSubscriptionCheckService {
     }
 
     private String doSelfShareBatch(MediaSubscription subscription, boolean manual) {
+        if (!MediaSubscription.MODE_FOLLOW.equals(subscription.getMode())) {
+            // 与 TRANSFER 互斥:转存副本已达成同等稳定性,且共享转存目录会互相踩;手动入口同样拦截。
+            String message = "转存模式订阅不适用自有分享";
+            return message;
+        }
         if (!manual && !selfShareEnabled(subscription)) {
             return "未开启";
         }

@@ -35,7 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 115 自有分享执行器:目标账号解析(订阅目标优先、开放平台排除、master 兜底)、
+ * 115 自有分享执行器:目标账号解析(master 优先、无 master 回退订阅目标、开放平台排除)、
  * 批次转存目录规格(与 TRANSFER 同根)、建分享空码上抛、删源逐文件提交。
  */
 class Pan115SelfShareServiceTest {
@@ -50,6 +50,7 @@ class Pan115SelfShareServiceTest {
     void setUp() {
         service = new Pan115SelfShareService(aListService, accountRepository, settingRepository, new ObjectMapper());
         when(settingRepository.findById(anyString())).thenReturn(Optional.empty());
+        when(accountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.empty());
     }
 
     private static DriverAccount account(int id, DriverType type) {
@@ -68,29 +69,28 @@ class Pan115SelfShareServiceTest {
         return subscription;
     }
 
-    /** 订阅转存目标里的 cookie 版 PAN115 优先(开放平台账号无分享 API,跳过)。 */
+    /** master PAN115 优先(用户定规:分享统一固化为一个账号便于管理),压过订阅目标。 */
     @Test
-    void resolveAccountPrefersCookiePan115FromTargets() {
+    void resolveAccountPrefersMaster() {
+        when(accountRepository.findByTypeAndMasterTrue(DriverType.PAN115))
+                .thenReturn(Optional.of(account(11, DriverType.PAN115)));
+        when(accountRepository.findById(5)).thenReturn(Optional.of(account(5, DriverType.PAN115)));
+        DriverAccount resolved = service.resolveAccount(subscription("[\"pan:5\"]"));
+        assertEquals(11, resolved.getId());
+    }
+
+    /** 无 master:回退订阅转存目标里的 cookie 版 PAN115(开放平台账号无分享 API,跳过)。 */
+    @Test
+    void resolveAccountFallsBackToTargetsCookiePan115() {
         when(accountRepository.findById(7)).thenReturn(Optional.of(account(7, DriverType.OPEN115)));
         when(accountRepository.findById(5)).thenReturn(Optional.of(account(5, DriverType.PAN115)));
         DriverAccount resolved = service.resolveAccount(subscription("[\"pan:7\",\"pan:5\"]"));
         assertEquals(5, resolved.getId());
     }
 
-    /** 订阅目标没有 115:回退 master PAN115。 */
-    @Test
-    void resolveAccountFallsBackToMaster() {
-        when(accountRepository.findById(4)).thenReturn(Optional.of(account(4, DriverType.QUARK)));
-        when(accountRepository.findByTypeAndMasterTrue(DriverType.PAN115))
-                .thenReturn(Optional.of(account(11, DriverType.PAN115)));
-        DriverAccount resolved = service.resolveAccount(subscription("[\"pan:4\"]"));
-        assertEquals(11, resolved.getId());
-    }
-
-    /** 既无订阅目标也无 master:返回 null(调用方记事件跳过)。 */
+    /** 既无 master 也无订阅目标:返回 null(调用方记事件跳过)。 */
     @Test
     void resolveAccountAbsent() {
-        when(accountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.empty());
         assertNull(service.resolveAccount(subscription(null)));
     }
 

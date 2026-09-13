@@ -55,10 +55,15 @@ public class Pan115SelfShareService {
     }
 
     /**
-     * 目标 115 账号:订阅转存目标(accountIds)里第一个 cookie 版 PAN115 —— 开放平台账号
-     * 无分享 API 不考虑;无则 master PAN115;都没有返回 null(调用方记事件跳过)。
+     * 目标 115 账号:master PAN115 优先(用户定规:分享统一固化为一个账号便于管理);
+     * 无 master 再取订阅转存目标(accountIds)里第一个 cookie 版 PAN115 —— 开放平台账号
+     * 无分享 API 不考虑;都没有返回 null(调用方记事件跳过)。
      */
     public DriverAccount resolveAccount(MediaSubscription subscription) {
+        DriverAccount master = accountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElse(null);
+        if (master != null) {
+            return master;
+        }
         for (String id : accountIds(subscription)) {
             try {
                 DriverAccount account = accountRepository
@@ -70,7 +75,7 @@ public class Pan115SelfShareService {
                 // 非法目标 id 跳过
             }
         }
-        return accountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElse(null);
+        return null;
     }
 
     /** 订阅目标 id 列表("pan:{id}"/"ali:{id}" JSON 数组;兼容旧单值 accountId)。 */

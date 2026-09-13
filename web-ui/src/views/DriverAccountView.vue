@@ -224,14 +224,14 @@
         <el-form-item v-if="form.type=='PAN115'" label="请求限速">
           <el-input-number :min="1" :max="4" v-model="form.addition.limit_rate"/>
         </el-form-item>
-        <el-form-item label="主账号" v-if="!driverRoundRobin&&form.type!='OPEN115'&&form.type!='QUARK_TV'&&form.type!='UC_TV'">
+        <el-form-item label="主账号" v-if="form.type!='OPEN115'&&form.type!='QUARK_TV'&&form.type!='UC_TV'">
           <el-switch
             v-model="form.master"
             inline-prompt
             active-text="是"
             inactive-text="否"
           />
-          <span class="hint">主账号用来观看分享</span>
+          <span class="hint">{{ driverRoundRobin ? '负载均衡下观看分享不走主账号，仅决定115自有分享等写操作的用号' : '主账号用来观看分享' }}</span>
         </el-form-item>
         <el-form-item label="自动签到" v-if="form.type=='CLOUD189'||form.type=='BAIDU'">
           <el-switch

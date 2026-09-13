@@ -225,6 +225,20 @@ class MediaSubscriptionSelfShareTest {
                 "固化事件应携带分享码");
     }
 
+    /** 转存模式订阅与自有分享互斥:手动入口同样拦截,不触碰转存目录。 */
+    @Test
+    void transferModeBlocksManualBatch() {
+        MediaSubscription transfer = subscription();
+        transfer.setMode(MediaSubscription.MODE_TRANSFER);
+        when(subscriptionRepository.findById(9)).thenReturn(Optional.of(transfer));
+
+        String message = service.selfShareNow(1, 9);
+
+        assertTrue(message.contains("转存模式"), message);
+        verify(selfShareService, never()).transferObjects(any(), anyString(), anyList(), anyString());
+        verify(selfShareService, never()).createShare(any(), anyString());
+    }
+
     /** 非 115 来源(夸克挂载/磁力/路径资源)不进批次。 */
     @Test
     void batchSkipsNon115Sources() {
