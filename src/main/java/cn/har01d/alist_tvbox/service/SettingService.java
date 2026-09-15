@@ -303,8 +303,12 @@ public class SettingService {
             List<String> tables = listTables();
             log.debug("tables: {}  blacklist: {}", tables, blacklist);
 
+            // 标识符必须加引号：H2 未加引号的标识符折叠为大写，而 Flyway 11 的历史表是带引号小写
+            // (flyway_schema_history) 存储的，裸写会被解析成 FLYWAY_SCHEMA_HISTORY 而报表不存在。
+            // SHOW TABLES 返回的就是精确存储名，逐个加引号后按原名精确匹配，对大写业务表无影响。
             String tableList = tables.stream()
                     .filter(t -> blacklist.stream().noneMatch(b -> b.equalsIgnoreCase(t)))
+                    .map(t -> "\"" + t.replace("\"", "\"\"") + "\"")
                     .collect(Collectors.joining(", "));
 
             log.info("backup database tables: {}", tableList);

@@ -55,9 +55,11 @@ class SettingServiceSqlBackupTest {
 
     @Test
     void sqlDumpStatementIncludesFlywayHistoryAndKeepsDoubanTablesExcluded() {
+        // Flyway 11 在 H2 里把历史表建成带引号小写；SHOW TABLES 原样返回，SCRIPT TO 清单必须
+        // 加引号逐名精确匹配，否则未加引号的小写名被折叠成大写而报表不存在。
         when(jdbcTemplate.query(org.mockito.ArgumentMatchers.eq("SHOW TABLES"),
                 org.mockito.ArgumentMatchers.any(org.springframework.jdbc.core.RowMapper.class)))
-            .thenReturn((List) List.of("FLYWAY_SCHEMA_HISTORY", "SETTING", "SITE", "MOVIE", "META", "ALIAS", "USER"));
+            .thenReturn((List) List.of("flyway_schema_history", "SETTING", "SITE", "MOVIE", "META", "ALIAS", "USER"));
 
         service.backupDatabase();
 
@@ -65,8 +67,8 @@ class SettingServiceSqlBackupTest {
         verify(jdbcTemplate).execute(sql.capture());
         String script = sql.getValue();
         assertTrue(script.startsWith("SCRIPT TO "), () -> "unexpected statement: " + script);
-        assertTrue(script.contains("FLYWAY_SCHEMA_HISTORY"), () -> "history table must be dumped: " + script);
-        assertTrue(script.contains("SETTING"), () -> script);
+        assertTrue(script.contains("\"flyway_schema_history\""), () -> "history table must be dumped quoted: " + script);
+        assertTrue(script.contains("\"SETTING\""), () -> script);
         assertFalse(script.matches("(?s).*\\bMOVIE\\b.*"), () -> "douban bulk tables must stay excluded: " + script);
         assertFalse(script.matches("(?s).*\\bMETA\\b.*"), () -> script);
         assertFalse(script.matches("(?s).*\\bALIAS\\b.*"), () -> script);
