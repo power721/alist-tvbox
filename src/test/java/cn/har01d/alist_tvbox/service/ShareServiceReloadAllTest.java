@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -194,6 +195,29 @@ class ShareServiceReloadAllTest {
     }
 
     @Test
+    void nullDriverThrottleDoesNotCrashOrPoisonSkipSet() throws Exception {
+        doAnswer(inv -> objectMapper.readTree(
+                "{\"data\":{\"content\":[{\"id\":1,\"driver\":\"BaiduShare2\"},{\"id\":2},{\"id\":3}]}}"))
+                .when(service).listStorages(any(Pageable.class));
+        doAnswer(inv -> {
+            Response<Void> response = new Response<>();
+            response.setCode(500);
+            response.setMessage("failed init storage: 触发百度风控,请稍后重试(errno=-62)");
+            return response;
+        }).when(service).reloadStorage(anyInt());
+
+        service.doReloadAllStorages(0);
+
+        StorageReloadProgress progress = service.getReloadAllProgress();
+        // driver 缺失的条目无法按盘跳过须逐条尝试,但 null 不得入集合(Set.copyOf 拒绝 null 会 NPE 卡死进度)
+        assertThat(progress.getThrottled()).isEqualTo(3);
+        assertThat(progress.getThrottledDrivers()).containsExactly("BaiduShare2");
+        assertThat(progress.getProcessed()).isEqualTo(3);
+        assertThat(progress.isRunning()).isFalse();
+        verify(service, times(3)).reloadStorage(anyInt());
+    }
+
+    @Test
     void recordsErrorWhenListingFailedStoragesThrows() {
         doThrow(new RuntimeException("alist down")).when(service).listStorages(any(Pageable.class));
 
@@ -234,6 +258,22 @@ class ShareServiceReloadAllTest {
         assertThat(progress.isRunning()).isFalse();
         assertThat(progress.isCancelled()).isTrue();
         assertThat(progress.getProcessed()).isLessThanOrEqualTo(3);
+        assertThat(progress.getFinishedTime()).isPositive();
+    }
+
+    @Test
+    void unexpectedCrashStillFinishesProgress() throws Exception {
+        doThrow(new RuntimeException("unexpected")).when(service).doReloadAllStorages(anyLong());
+
+        service.startReloadAllStorages(0);
+
+        StorageReloadProgress progress = service.getReloadAllProgress();
+        for (int i = 0; i < 100 && progress.isRunning(); i++) {
+            Thread.sleep(50);
+        }
+        // 线程内异常逃逸也必须收尾进度,否则 running 永久 true、前端轮询不停
+        assertThat(progress.isRunning()).isFalse();
+        assertThat(progress.getError()).contains("unexpected");
         assertThat(progress.getFinishedTime()).isPositive();
     }
 

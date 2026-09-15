@@ -879,7 +879,7 @@ const pollReloadAll = () => {
         ElMessage.error(data.error)
       } else {
         ElMessage.success(`重载完成：成功 ${data.success} 个，失败 ${data.failed} 个` +
-          (data.throttled ? `，${data.throttled} 个因网盘风控跳过` : ''))
+          (data.throttled ? `，${data.throttled} 个因网盘风控跳过，风控解除后可再次执行` : ''))
       }
       loadStorages(1)
     }

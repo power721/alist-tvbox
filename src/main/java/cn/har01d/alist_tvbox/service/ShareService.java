@@ -1792,8 +1792,8 @@ public class ShareService {
             throw new BadRequestException("批量重载正在进行中");
         }
         reloadAllCancelled = false;
-        // 进度在启动线程同步初始化:后台线程被调度前查询方就能看到 running=true,不会误判"已完成"
-        reloadProgress.setRunning(true);
+        // 进度在启动线程同步初始化:后台线程被调度前查询方就能看到 running=true,不会误判"已完成";
+        // running=true 必须最后置位,否则并发查询会看到新任务叠加上一轮残留计数
         reloadProgress.setCancelled(false);
         reloadProgress.setTotal(0);
         reloadProgress.setProcessed(0);
@@ -1805,9 +1805,16 @@ public class ShareService {
         reloadProgress.setInterval(intervalMs);
         reloadProgress.setStartedTime(System.currentTimeMillis());
         reloadProgress.setFinishedTime(0);
+        reloadProgress.setRunning(true);
         Thread thread = new Thread(() -> {
             try {
                 doReloadAllStorages(intervalMs);
+            } catch (Exception e) {
+                // doReloadAllStorages 内部不总揽异常,逃逸到这里必须收尾进度,
+                // 否则 running 永久 true、前端轮询不停
+                log.error("reload all storages crashed", e);
+                reloadProgress.setError("批量重载异常中断: " + e.getMessage());
+                finishReloadAll();
             } finally {
                 reloadAllRunning.set(false);
                 reloadAllThread = null;
@@ -1887,8 +1894,10 @@ public class ShareService {
             } else if (isThrottledReload(errorText)) {
                 log.warn("reload storage {} throttled ({}): {}, skip remaining storages of this driver",
                         storage.id(), storage.driver(), errorText);
-                throttledDrivers.add(storage.driver());
-                reloadProgress.setThrottledDrivers(Set.copyOf(throttledDrivers));
+                if (storage.driver() != null) {
+                    throttledDrivers.add(storage.driver());
+                    reloadProgress.setThrottledDrivers(Set.copyOf(throttledDrivers));
+                }
                 reloadProgress.setThrottled(reloadProgress.getThrottled() + 1);
             } else {
                 log.warn("reload storage {} failed: {}", storage.id(), errorText);
