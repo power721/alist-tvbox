@@ -56,6 +56,7 @@ public class TelemetryService {
     private final MediaSubscriptionRepository mediaSubscriptionRepository;
     private final LiveFollowRepository liveFollowRepository;
     private final UserRepository userRepository;
+    private final OfflineDownloadService offlineDownloadService;
     private final Environment environment;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "telemetry");
@@ -84,6 +85,7 @@ public class TelemetryService {
                             MediaSubscriptionRepository mediaSubscriptionRepository,
                             LiveFollowRepository liveFollowRepository,
                             UserRepository userRepository,
+                            OfflineDownloadService offlineDownloadService,
                             Environment environment) {
         this.appProperties = appProperties;
         this.settingRepository = settingRepository;
@@ -91,6 +93,7 @@ public class TelemetryService {
         this.mediaSubscriptionRepository = mediaSubscriptionRepository;
         this.liveFollowRepository = liveFollowRepository;
         this.userRepository = userRepository;
+        this.offlineDownloadService = offlineDownloadService;
         this.environment = environment;
     }
 
@@ -258,6 +261,7 @@ public class TelemetryService {
         }
     }
 
+    /** 功能开关集合(仅布尔信号):sub=追剧 live=关注 multiuser=多用户 offline=离线下载 token=订阅 token 鉴权 */
     private String featureFlags() {
         List<String> flags = new ArrayList<>();
         try {
@@ -277,6 +281,15 @@ public class TelemetryService {
                 flags.add("multiuser");
             }
         } catch (Exception ignored) {
+        }
+        try {
+            if (offlineDownloadService.isConfigured()) {
+                flags.add("offline");
+            }
+        } catch (Exception ignored) {
+        }
+        if (appProperties.isEnabledToken()) {
+            flags.add("token");
         }
         return String.join(",", flags);
     }

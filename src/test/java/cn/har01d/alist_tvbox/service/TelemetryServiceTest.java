@@ -36,6 +36,7 @@ class TelemetryServiceTest {
     private MediaSubscriptionRepository mediaSubscriptionRepository;
     private LiveFollowRepository liveFollowRepository;
     private UserRepository userRepository;
+    private OfflineDownloadService offlineDownloadService;
     private MockEnvironment environment;
     private TelemetryService service;
 
@@ -50,11 +51,13 @@ class TelemetryServiceTest {
         mediaSubscriptionRepository = mock(MediaSubscriptionRepository.class);
         liveFollowRepository = mock(LiveFollowRepository.class);
         userRepository = mock(UserRepository.class);
+        offlineDownloadService = mock(OfflineDownloadService.class);
         environment = new MockEnvironment()
                 .withProperty("spring.datasource.jdbc-url", "jdbc:h2:file:/tmp/x/data")
                 .withProperty("os.arch", "aarch64");
         service = new TelemetryService(appProperties, repository, alistJdbcTemplate,
-                mediaSubscriptionRepository, liveFollowRepository, userRepository, environment);
+                mediaSubscriptionRepository, liveFollowRepository, userRepository,
+                offlineDownloadService, environment);
         setField(service, "reportUrl", "http://127.0.0.1:1/telemetry/report");
         setField(service, "enabled", true);
         setField(service, "jitterMaxMinutes", 0);
@@ -74,6 +77,8 @@ class TelemetryServiceTest {
         when(mediaSubscriptionRepository.count()).thenReturn(2L);
         when(liveFollowRepository.count()).thenReturn(5L);
         when(userRepository.count()).thenReturn(1L);
+        when(offlineDownloadService.isConfigured()).thenReturn(true);
+        appProperties.setEnabledToken(true);
 
         JsonNode node = new ObjectMapper().readTree(service.buildPayload());
 
@@ -86,7 +91,7 @@ class TelemetryServiceTest {
         assertThat(node.get("db").asText()).isEqualTo("h2");
         assertThat(node.get("alist").asText()).isEqualTo("3.45.0");
         assertThat(node.get("drivers").asText()).isEqualTo("baidupan,local,quark");
-        assertThat(node.get("features").asText()).isEqualTo("sub,live");
+        assertThat(node.get("features").asText()).isEqualTo("sub,live,offline,token");
         assertThat(node.get("subs").asText()).isEqualTo("1-3");
     }
 
@@ -96,12 +101,13 @@ class TelemetryServiceTest {
         when(mediaSubscriptionRepository.count()).thenReturn(60L);
         when(liveFollowRepository.count()).thenThrow(new RuntimeException("db down"));
         when(userRepository.count()).thenReturn(3L);
+        when(offlineDownloadService.isConfigured()).thenThrow(new RuntimeException("db down"));
 
         JsonNode node = new ObjectMapper().readTree(service.buildPayload());
 
         assertThat(node.get("drivers").asText()).isEmpty();
         assertThat(node.get("subs").asText()).isEqualTo("50+");
-        // 订阅数 60 同时点亮 sub 标志
+        // 订阅数 60 同时点亮 sub 标志;离线判定挂掉时 offline 安全缺席
         assertThat(node.get("features").asText()).isEqualTo("sub,multiuser");
         assertThat(node.get("db").asText()).isEqualTo("h2");
     }
