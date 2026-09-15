@@ -51,10 +51,10 @@ public class FileDownloader {
     private static final String REMOTE_DIFF_ZIP_URL = BASE_URL + "diff.zip";
     private static final String PG_LATEST_URL = "https://github.com/power721/PG/releases/latest";
     private static final String ZX_LATEST_URL = "https://github.com/power721/ZX/releases/latest";
-    private static final String SYNC_BASE_URL = "https://8866033.xyz/";
-    private static final String XS_INDEX_URL = SYNC_BASE_URL + "xs.txt";
-    private static final String XS_VERSION_URL = SYNC_BASE_URL + "xs.version.txt";
+    // xs 同步产物(xs.txt/xs.version.txt)地址;8866033.xyz 已失效,固定 d.har01d.cn
+    private static final List<String> XS_SYNC_BASES = List.of(BASE_URL);
     private static final String XS_USER_AGENT = "okhttp/5.3.2";
+    private static final ObjectMapper XS_MAPPER = new ObjectMapper();
 
     private static final Set<String> GITHUB_PROXY = Set.of("https://slink.ltd/", "https://cors.zme.ink/", "https://git.886.be/", "https://gitdl.cn/", "https://ghfast.top/", "https://ghproxy.net/", "https://github.moeyy.xyz/", "https://gh-proxy.com/", "https://ghproxy.cc/", "https://gh.llkk.cc/", "https://gh.ddlc.top/", "https://gh-proxy.llyke.com/");
 
@@ -82,16 +82,14 @@ public class FileDownloader {
 
     private final TaskService taskService;
     private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
 
-    public FileDownloader(TaskService taskService, RestTemplateBuilder builder, GitHubProxyService gitHubProxyService, ObjectMapper objectMapper) {
+    public FileDownloader(TaskService taskService, RestTemplateBuilder builder, GitHubProxyService gitHubProxyService) {
         this.taskService = taskService;
         this.restTemplate = builder
                 .connectTimeout(Duration.ofSeconds(5))
                 .readTimeout(Duration.ofSeconds(10))
                 .build();
         this.gitHubProxyService = gitHubProxyService;
-        this.objectMapper = objectMapper;
         pgVersionFile = Utils.getDataPath("pg_version.txt");
         zxBaseVersionFile = Utils.getDataPath("zx_base_version.txt");
         zxVersionFile = Utils.getDataPath("zx_version.txt");
@@ -304,16 +302,22 @@ public class FileDownloader {
         log.info("local xs: {}, remote xs: {}", localVersion, remoteVersion);
 
         if (!localVersion.equals(remoteVersion)) {
-            String downloadUrl = getXsDownloadUrl();
-            log.debug("download xs file {} from {}", remoteVersion, downloadUrl);
-            downloadFile(downloadUrl, xsZip, XS_USER_AGENT);
+            String url = resolveXsSingleUrl();
+            String content = decryptXsContent(getRemoteText(url, XS_USER_AGENT));
+            String downloadUrl = findXsZipUrl(content);
+            if (downloadUrl != null) {
+                log.debug("download xs file {} from {}", remoteVersion, downloadUrl);
+                downloadFile(downloadUrl, xsZip, XS_USER_AGENT);
 
-            logFileInfo(xsZip);
+                logFileInfo(xsZip);
 
-            deleteDirectory(xsWebDir);
+                deleteDirectory(xsWebDir);
 
-            log.debug("unzip xs file to {}", xsWebDir);
-            unzipFile(xsZip, xsWebDir);
+                log.debug("unzip xs file to {}", xsWebDir);
+                unzipFile(xsZip, xsWebDir);
+            } else {
+                writeXsInterface(content);
+            }
 
             log.debug("save xs version: {}", remoteVersion);
             saveVersion(xsVersionFile, remoteVersion);
@@ -342,29 +346,84 @@ public class FileDownloader {
 
     public String getXsVersion() {
         try {
-            return getRemoteVersion(XS_VERSION_URL);
+            return fetchXsSyncText("xs.version.txt").trim();
         } catch (IOException e) {
             log.warn("getXsVersion IOException", e);
         }
         return "";
     }
 
-    private String getXsDownloadUrl() throws IOException {
-        String json = getRemoteText(resolveXsSingleUrl(), XS_USER_AGENT);
-        var root = objectMapper.readTree(json);
-        for (var section : root) {
-            if ("本地包".equals(section.path("name").asText())) {
-                for (var item : section.path("list")) {
-                    if ("点击下载".equals(item.path("name").asText())) {
-                        String url = item.path("url").asText();
-                        if (!url.isEmpty()) {
-                            return url;
+    /**
+     * 潇洒接口可能是市场 JSON（数组，含「本地包/点击下载」zip 地址），
+     * 也可能是完整配置 JSON（对象，含 sites）；后者直接落盘为本地包配置。
+     */
+    static String findXsZipUrl(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            var root = XS_MAPPER.readTree(json);
+            if (!root.isArray()) {
+                return null;
+            }
+            for (var section : root) {
+                if ("本地包".equals(section.path("name").asText())) {
+                    for (var item : section.path("list")) {
+                        if ("点击下载".equals(item.path("name").asText())) {
+                            String url = item.path("url").asText();
+                            if (!url.isEmpty()) {
+                                return url;
+                            }
                         }
                     }
                 }
             }
+        } catch (Exception e) {
+            return null;
         }
-        throw new IOException("Cannot find xs download url from single.json");
+        return null;
+    }
+
+    // 2423 开头的 hex 是 FongMi 系「$#密钥#$」加密接口（如 sun.json），算法同 SubscriptionService.convertResult
+    static String decryptXsContent(String content) {
+        if (content == null) {
+            return null;
+        }
+        String text = content.replaceAll("\\s+", "");
+        if (!text.startsWith("2423")) {
+            return content;
+        }
+        String ascii = new String(hexToBytes(text), StandardCharsets.ISO_8859_1).toLowerCase();
+        int start = ascii.indexOf("$#");
+        int end = ascii.indexOf("#$", start + 2);
+        if (start < 0 || end < 0) {
+            throw new IllegalArgumentException("encrypted xs content missing $#...#$ key marker");
+        }
+        String key = SubscriptionService.rightPadding(ascii.substring(start + 2, end), "0", 16);
+        String iv = SubscriptionService.rightPadding(ascii.substring(ascii.length() - 13), "0", 16);
+        String data = text.substring(text.indexOf("2324") + 4, text.length() - 26);
+        return SubscriptionService.CBC(data, key, iv);
+    }
+
+    private static byte[] hexToBytes(String src) {
+        int l = src.length() / 2;
+        byte[] ret = new byte[l];
+        for (int i = 0; i < l; i++) {
+            ret[i] = Integer.valueOf(src.substring(i * 2, i * 2 + 2), 16).byteValue();
+        }
+        return ret;
+    }
+
+    private void writeXsInterface(String content) throws IOException {
+        var root = content == null ? null : XS_MAPPER.readTree(content);
+        if (root == null || !root.isObject() || !root.has("sites")) {
+            throw new IOException("xs.txt target is neither market json with 本地包/点击下载 nor config json with sites");
+        }
+        deleteDirectory(xsWebDir);
+        Path target = xsWebDir.resolve(Paths.get("TVBoxOSC", "tvbox", "api.json"));
+        Files.createDirectories(target.getParent());
+        Files.writeString(target, content);
+        log.info("wrote xs interface config to {}", target);
     }
 
     static String parseXsSingleUrl(String text) {
@@ -398,7 +457,20 @@ public class FileDownloader {
     }
 
     private String resolveXsSingleUrl() throws IOException {
-        return parseXsSingleUrl(getRemoteText(XS_INDEX_URL, XS_USER_AGENT));
+        return parseXsSingleUrl(fetchXsSyncText("xs.txt"));
+    }
+
+    private String fetchXsSyncText(String name) throws IOException {
+        IOException last = null;
+        for (String base : XS_SYNC_BASES) {
+            try {
+                return getRemoteText(base + name, XS_USER_AGENT);
+            } catch (IOException e) {
+                log.warn("fetch {} from {} failed", name, base, e);
+                last = e;
+            }
+        }
+        throw last;
     }
 
     private String getGitHubVersion(String name, String url, Pattern pattern) {

@@ -23,6 +23,10 @@ set -euo pipefail
 # 上游基址（version.txt / single.json 所在目录）。
 # 迁移史：pizazz.s3.bitiful.net → 9877.kstore.space → oss-v1.wangmeipo.cn/236
 #         → 2026-09-03 回归 9877.kstore.space（zip 本体另行迁移至 pizazz.us.ci/单线路.zip）
+# 2026-09-15：潇洒在线接口迁至 https://9877.kstore.space/sun.json（2423 加密配置，FongMi 系客户端原生解密），
+#         xs.txt 已手工改指 sun.json。注意：本脚本在下次上游版本号变化时仍会按新 zip 的 sites[].ext
+#         重写 xs.txt——消费端 FileDownloader 已同时支持市场指针与加密接口指针（解密后按配置落盘），
+#         两种指向均可工作；若要固定接口指针，需在此跳过第 9 步或改写取值逻辑。
 XS_BASE="${XS_BASE:-https://9877.kstore.space}"
 USER_AGENT="okhttp/5.3.2"
 OUT_DIR="${OUT_DIR:-/var/www/html}"

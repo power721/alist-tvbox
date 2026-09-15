@@ -9,6 +9,8 @@
 
 潇洒本地包的下载地址（single.json）与版本地址（version.txt）目前写死在 `FileDownloader.java:52-53`。上游换地址频繁——git 历史已改 3 次（`pizazz.s3.bitiful.net` → `9877.kstore.space` → `oss-v1.wangmeipo.cn/236`），每次都得发版。动态化后又迁移 1 次（2026-09-03：市场 json 回归 `9877.kstore.space`，zip 本体迁至 `pizazz.us.ci/单线路.zip`）；同步产物（xs.txt/xs.version.txt）随之迁至同步后端 `https://8866033.xyz/`，消费端版本号不再从 single.json 基址推导 version.txt、改直读 `xs.version.txt`（上游搬版本文件不再连带失联），xs.txt 指针与 zip 取链不变。
 
+2026-09-15 追记：潇洒**在线接口**迁至 `https://9877.kstore.space/sun.json`——2423 开头的 hex 密文（内嵌 `$#密钥#$`，AES/CBC/PKCS5，FongMi `Decoder.cbc` / `SubscriptionService.convertResult` 同源算法），解密后是完整 TVBox 配置（非市场 json，无「本地包/点击下载」）。xs.txt 曾改指 sun.json，消费端 `FileDownloader` 随之双模式化：指针内容解密后按市场（数组含 zip 链接）走原 zip 流程、按配置（对象含 sites）直接落盘为 `/static/xs/TVBoxOSC/tvbox/api.json`（订阅地址不变）。同日 `8866033.xyz` 整域失效，xs.txt/xs.version.txt 固定回 `d.har01d.cn` 单镜像；xs.txt 已由作者手工指回 single.json（走 zip 流程），双模式支持保留——指针在市场/接口两种形态间切换均可工作。生产端 `xs-version-sync.sh` 逻辑不变，下次版本号变化仍按 zip 内 ext 重写 xs.txt。
+
 ## 2. 目标
 
 - 消除写死的 single.json / version.txt URL。

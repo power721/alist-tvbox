@@ -41,7 +41,7 @@ public class TmdbEndpoint {
     public static final String WORKER_POOL_VALUE = "worker-pool";
     /** 内置 Worker 轮询池(免费额度分摊);启动首读即洗牌,此处书写顺序无关紧要。 */
     static final List<String> BUILTIN_WORKER_POOL = List.of(
-            "https://tmdb.8866033.xyz",
+            "https://tmdb.power0721.workers.dev",
             "https://tmdb.swust-oj.workers.dev",
             "https://tmdb.8866033.workers.dev",
             "https://tmdb.power348045.workers.dev",
