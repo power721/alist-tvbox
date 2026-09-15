@@ -231,4 +231,44 @@ class FileNameComparatorTest {
         Assertions.assertEquals(20260702L, new FileNameInfo("2026.7.2-第1期.mp4").getDate());
     }
 
+    @Test
+    void sort16() {
+        // 中（上）/中（下）are halves of 中: order is 上 < 中（上）< 中（下）< 下, date groups intact
+        List<String> list = new ArrayList<>(List.of(
+                "20260915-第7期下.mkv",
+                "20260915-第7期中（下）.mkv",
+                "20260914-第7期中（上）.mkv",
+                "20260914-第7期上.mkv"));
+        list.sort(Comparator.comparing(FileNameInfo::new));
+        List<String> expected = List.of(
+                "20260914-第7期上.mkv",
+                "20260914-第7期中（上）.mkv",
+                "20260915-第7期中（下）.mkv",
+                "20260915-第7期下.mkv");
+        Assertions.assertEquals(expected, list);
+        System.out.println(list);
+    }
+
+    @Test
+    void sort17() {
+        // same without date prefixes, plus qualifier-only chapters 第10期（上）/（下）
+        List<String> list = new ArrayList<>(List.of(
+                "第7期下.mkv",
+                "第7期中（下）.mkv",
+                "第7期中（上）.mkv",
+                "第7期上.mkv",
+                "第10期（下）.mp4",
+                "第10期（上）.mp4"));
+        list.sort(Comparator.comparing(FileNameInfo::new));
+        List<String> expected = List.of(
+                "第7期上.mkv",
+                "第7期中（上）.mkv",
+                "第7期中（下）.mkv",
+                "第7期下.mkv",
+                "第10期（上）.mp4",
+                "第10期（下）.mp4");
+        Assertions.assertEquals(expected, list);
+        System.out.println(list);
+    }
+
 }

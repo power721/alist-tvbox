@@ -15,6 +15,8 @@ public class FileNameInfo implements Comparable<FileNameInfo> {
     private static final Comparator<Object> comparator = Collator.getInstance(java.util.Locale.CHINA);
     private static final List<String> NUMBERS = Arrays.asList("零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十");
     private static final List<String> CHAPTER = Arrays.asList("上", "中", "下");
+    // parenthetical sub-chapter qualifier: 中（上）/中（下）split 中 in halves, 第10期（上）has no bare chapter
+    private static final Pattern CHAPTER_QUALIFIER = Pattern.compile("[（(]\\s*([上中下])\\s*[)）]");
     private static final Pattern NUMBER = Pattern.compile("(\\d+\\.?\\d*)");
     private static final Pattern SEASON = Pattern.compile("S(\\d{1,3})E(\\d{1,3})");
     // variety-show air dates: "2026.07.02-xxx", "2026年7月2日", "2026-07-02", "2026/7/2", "2026_07_02"
@@ -27,11 +29,19 @@ public class FileNameInfo implements Comparable<FileNameInfo> {
 
     private final String name;
     private final Long date;
+    private final int subChapter;
     private final List<String> prefixes = new ArrayList<>();
     private final List<Double> numbers = new ArrayList<>();
 
     public FileNameInfo(String name) {
         name = name.replaceAll(" ", "");
+        Matcher qualifierMatcher = CHAPTER_QUALIFIER.matcher(name);
+        if (qualifierMatcher.find()) {
+            this.subChapter = CHAPTER.indexOf(qualifierMatcher.group(1));
+            name = name.substring(0, qualifierMatcher.start()) + name.substring(qualifierMatcher.end());
+        } else {
+            this.subChapter = -1;
+        }
         this.name = name;
         int index = name.lastIndexOf('.');
         if (index != -1) {
@@ -118,14 +128,22 @@ public class FileNameInfo implements Comparable<FileNameInfo> {
         }
 
         int i = index(name);
-        if (i > -1) {
-            if (index(o.getName()) == i) {
-                String name1 = name.substring(0, i) + name.substring(i + 1);
-                String name2 = o.getName().substring(0, i) + o.getName().substring(i + 1);
-                if (name1.equals(name2)) {
-                    return CHAPTER.indexOf(name.substring(i, i + 1)) - CHAPTER.indexOf(o.getName().substring(i, i + 1));
+        int j = index(o.getName());
+        if (i > -1 && j > -1) {
+            String name1 = name.substring(0, i) + name.substring(i + 1);
+            String name2 = o.getName().substring(0, j) + o.getName().substring(j + 1);
+            if (name1.equals(name2)) {
+                int result = CHAPTER.indexOf(name.substring(i, i + 1)) - CHAPTER.indexOf(o.getName().substring(j, j + 1));
+                if (result == 0) {
+                    result = Integer.compare(subChapter, o.subChapter);
+                }
+                if (result != 0) {
+                    return result;
                 }
             }
+        } else if (i == -1 && j == -1 && name.equals(o.getName())) {
+            // names differ only by the parenthetical qualifier, e.g. 第10期（上）/第10期（下）
+            return Integer.compare(subChapter, o.subChapter);
         }
 
         return comparator.compare(name, o.getName());
