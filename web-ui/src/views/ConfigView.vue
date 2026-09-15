@@ -434,7 +434,7 @@ const options = [
     ]
   }
 ]
-const tooltip = ref('sudo bash -c "$(curl -fsSL https://d.har01d.cn/alist-tvbox.sh)"')
+const tooltip = ref('curl -fsSL http://d.har01d.cn/alist-tvbox.sh | sudo bash')
 const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mixSiteSource = ref(false)
@@ -813,9 +813,9 @@ onMounted(() => {
     login.value.password = data.alist_password
     login.value.enabled = data.alist_login === 'true'
     if (store.standalone) {
-      tooltip.value = 'bash -c "$(curl -fsSL http://d.har01d.cn/install-service.sh)"'
+      tooltip.value = 'curl -fsSL http://d.har01d.cn/install-service.sh | sudo bash'
     } else {
-      tooltip.value = 'sudo bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)" -s update'
+      tooltip.value = 'curl -fsSL http://d.har01d.cn/alist-tvbox.sh | sudo bash -s -- update -y'
     }
   })
   axios.get('/api/alist/status').then(({data}) => {
