@@ -176,6 +176,49 @@ class H2MigrationTest {
         }
     }
 
+    /**
+     * V54 给 offline_download_task 加 cleanup_attempts 是裸 INT(无默认值),存量行该列为 NULL,
+     * 而实体 OfflineDownloadTask.cleanupAttempts 是 primitive int —— 备份导出 findAll()/定时备份/
+     * 清理调度加载存量行即抛 "Null value was assigned to a property ... of primitive type"。
+     * V55 必须把存量 NULL 回填为 0。测试库是新库永远造不出这种行,须手动复现 V1 既有表 + 存量行。
+     */
+    @Test
+    void v55BackfillsNullCleanupAttemptsOnLegacyOfflineTasks() throws Exception {
+        String url = "jdbc:h2:mem:v55-cleanup-attempts-backfill;DB_CLOSE_DELAY=-1";
+        try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
+            // 空库先只跑 V1,复现生产起始形态(全量 schema;预建单表会触发 baseline 跳过 V1,不可取)
+            migrateTo(url, "1");
+            // V54 之前的存量离线任务行
+            execute(connection, "INSERT INTO offline_download_task (id, url_hash) VALUES (1, 'hash-1')");
+
+            // 链路跑到 V54 为止:加列裸 INT 无默认值,存量行 cleanup_attempts = NULL(线上炸点)
+            migrateTo(url, "54");
+            assertThat(queryString(connection,
+                    "SELECT CAST(cleanup_attempts AS VARCHAR) FROM offline_download_task WHERE id = 1"))
+                    .isNull();
+
+            // V55 继续跑:NULL 全部回填为 0,实体 primitive int 可正常读回
+            runFullMigration(url);
+            assertThat(appliedVersions(connection)).contains("55");
+            assertThat(queryString(connection,
+                    "SELECT CAST(cleanup_attempts AS VARCHAR) FROM offline_download_task WHERE id = 1"))
+                    .isEqualTo("0");
+            assertThat(queryString(connection,
+                    "SELECT CAST(COUNT(*) AS VARCHAR) FROM offline_download_task WHERE cleanup_attempts IS NULL"))
+                    .isEqualTo("0");
+        }
+    }
+
+    private void migrateTo(String url, String target) {
+        Flyway.configure()
+                .dataSource(url, "sa", "")
+                .locations("classpath:db/migration/h2", "classpath:db/migration/common",
+                        "classpath:db/migration/current")
+                .target(target)
+                .load()
+                .migrate();
+    }
+
     private List<String> indexColumns(Connection connection, String table, String indexName) throws Exception {
         List<String> columns = new ArrayList<>();
         try (ResultSet rs = connection.getMetaData().getIndexInfo(null, null, table, false, false)) {
