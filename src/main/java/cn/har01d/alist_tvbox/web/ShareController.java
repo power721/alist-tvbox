@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
+import cn.har01d.alist_tvbox.dto.StorageReloadProgress;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.Response;
@@ -116,6 +117,21 @@ public class ShareController {
     @PostMapping("/api/storages/{id}")
     public Response reloadStorage(@PathVariable Integer id) {
         return shareService.reloadStorage(id);
+    }
+
+    @PostMapping("/api/storages/reload-all")
+    public StorageReloadProgress reloadAllStorages(@RequestParam(defaultValue = "2000") long interval) {
+        return shareService.startReloadAllStorages(interval);
+    }
+
+    @GetMapping("/api/storages/reload-all")
+    public StorageReloadProgress getReloadAllProgress() {
+        return shareService.getReloadAllProgress();
+    }
+
+    @PostMapping("/api/storages/reload-all/cancel")
+    public StorageReloadProgress cancelReloadAllStorages() {
+        return shareService.cancelReloadAllStorages();
     }
 
     @PostMapping("/api/import-shares")

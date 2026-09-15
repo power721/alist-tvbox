@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
+import cn.har01d.alist_tvbox.dto.StorageReloadProgress;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.entity.Account;
@@ -88,6 +89,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -125,6 +127,12 @@ public class ShareService {
     private final AtomicInteger shareId = new AtomicInteger(20000);
     private final ObjectMapper objectMapper;
     private final UserService userService;
+
+    private static final int RELOAD_ALL_PAGE_SIZE = 500;
+    private final AtomicBoolean reloadAllRunning = new AtomicBoolean();
+    private volatile boolean reloadAllCancelled;
+    private volatile Thread reloadAllThread;
+    private final StorageReloadProgress reloadProgress = new StorageReloadProgress();
 
     public ShareService(AppProperties appProperties,
                         ShareRepository shareRepository,
@@ -1760,6 +1768,133 @@ public class ShareService {
         ResponseEntity<Response> response = restTemplate.exchange("/api/admin/storage/reload?id=" + id, HttpMethod.POST, entity, Response.class);
         log.debug("reload storage {}: {}", id, response.getBody());
         return response.getBody();
+    }
+
+    public StorageReloadProgress getReloadAllProgress() {
+        return reloadProgress;
+    }
+
+    public StorageReloadProgress startReloadAllStorages(long intervalMs) {
+        if (intervalMs < 0 || intervalMs > 600_000) {
+            throw new BadRequestException("间隔必须在 0-600000 毫秒之间");
+        }
+        if (!reloadAllRunning.compareAndSet(false, true)) {
+            throw new BadRequestException("批量重载正在进行中");
+        }
+        reloadAllCancelled = false;
+        // 进度在启动线程同步初始化:后台线程被调度前查询方就能看到 running=true,不会误判"已完成"
+        reloadProgress.setRunning(true);
+        reloadProgress.setCancelled(false);
+        reloadProgress.setTotal(0);
+        reloadProgress.setProcessed(0);
+        reloadProgress.setSuccess(0);
+        reloadProgress.setFailed(0);
+        reloadProgress.setError(null);
+        reloadProgress.setInterval(intervalMs);
+        reloadProgress.setStartedTime(System.currentTimeMillis());
+        reloadProgress.setFinishedTime(0);
+        Thread thread = new Thread(() -> {
+            try {
+                doReloadAllStorages(intervalMs);
+            } finally {
+                reloadAllRunning.set(false);
+                reloadAllThread = null;
+            }
+        }, "storage-reload-all");
+        reloadAllThread = thread;
+        thread.start();
+        return reloadProgress;
+    }
+
+    public StorageReloadProgress cancelReloadAllStorages() {
+        if (reloadAllRunning.get()) {
+            reloadAllCancelled = true;
+            Thread thread = reloadAllThread;
+            if (thread != null) {
+                thread.interrupt();
+            }
+            log.info("cancel reload all storages requested");
+        }
+        return reloadProgress;
+    }
+
+    void doReloadAllStorages(long intervalMs) {
+        List<Integer> ids;
+        try {
+            ids = collectFailedStorageIds();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            finishReloadAll();
+            return;
+        } catch (Exception e) {
+            log.warn("collect failed storages failed", e);
+            reloadProgress.setError("获取失效资源列表失败: " + e.getMessage());
+            finishReloadAll();
+            return;
+        }
+
+        reloadProgress.setTotal(ids.size());
+        log.info("reload all storages begin: {} items, interval {}ms", ids.size(), intervalMs);
+        for (int i = 0; i < ids.size(); i++) {
+            if (reloadAllCancelled) {
+                log.info("reload all storages cancelled at {}/{}", i, ids.size());
+                break;
+            }
+            if (i > 0 && intervalMs > 0) {
+                try {
+                    Thread.sleep(intervalMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            int id = ids.get(i);
+            try {
+                Response response = reloadStorage(id);
+                if (response != null && response.getCode() != null && response.getCode() == 200) {
+                    reloadProgress.setSuccess(reloadProgress.getSuccess() + 1);
+                } else {
+                    reloadProgress.setFailed(reloadProgress.getFailed() + 1);
+                }
+            } catch (Exception e) {
+                if (reloadAllCancelled) {
+                    break;
+                }
+                log.warn("reload storage {} failed: {}", id, e.getMessage());
+                reloadProgress.setFailed(reloadProgress.getFailed() + 1);
+            }
+            reloadProgress.setProcessed(i + 1);
+        }
+        if (reloadAllCancelled) {
+            reloadProgress.setCancelled(true);
+        }
+        finishReloadAll();
+        log.info("reload all storages end: total {} success {} failed {} cancelled {}",
+                reloadProgress.getTotal(), reloadProgress.getSuccess(), reloadProgress.getFailed(), reloadProgress.isCancelled());
+    }
+
+    private void finishReloadAll() {
+        reloadProgress.setRunning(false);
+        reloadProgress.setFinishedTime(System.currentTimeMillis());
+    }
+
+    List<Integer> collectFailedStorageIds() throws InterruptedException {
+        List<Integer> ids = new ArrayList<>();
+        // AList 侧页码从 1 开始,cleanStorages 的 PageRequest.of(1, size) 同口径
+        for (int page = 1; ; page++) {
+            JsonNode result = listStorages(PageRequest.of(page, RELOAD_ALL_PAGE_SIZE));
+            JsonNode content = result == null ? null : result.get("data").get("content");
+            if (!(content instanceof ArrayNode array)) {
+                break;
+            }
+            for (JsonNode item : array) {
+                ids.add(item.get("id").asInt());
+            }
+            if (array.size() < RELOAD_ALL_PAGE_SIZE) {
+                break;
+            }
+        }
+        return ids;
     }
 
     private List<Share> loadLatestShare() {
