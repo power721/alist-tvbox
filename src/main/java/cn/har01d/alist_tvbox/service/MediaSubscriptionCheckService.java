@@ -4666,6 +4666,53 @@ public class MediaSubscriptionCheckService {
     }
 
     /**
+     * 磁力产物固化(每日离线清理调用,docs/pan115-offline-auto-delete-design.md §4):对离线目录产物
+     * 建 115 永久分享(快照固化)→ 新 self115 资源行补缺挂载入账 → 老磁力行退役。此后清理删盘内源文件
+     * 与 115 任务,播放由分享快照接管,零影响。与自有分享批次不同:不转存(产物本就在离线账号盘内)、
+     * 不碰「我的追剧」目录,TRANSFER 订阅同样适用;分享对象=离线目录产物本身(单文件产物分享该文件)。
+     *
+     * @return 分享链接(null = 订阅已删,无播放要保护,调用方直接删任务+文件);固化失败抛异常,调用方次日重试、不删文件
+     */
+    public String selfifyOfflineProduct(Integer subscriptionId, DriverAccount account, String taskName) {
+        MediaSubscription subscription = subscriptionRepository.findById(subscriptionId).orElse(null);
+        if (subscription == null || stopIfDeleted(subscriptionId)) {
+            return null;
+        }
+        if (selfShareService == null) {
+            throw new IllegalStateException("自有分享不可用");
+        }
+        String productDir = offlineDownloadService.offlineRootPath() + "/" + taskName;
+        Pan115SelfShareService.ShareCreated share = selfShareService.createShare(site(), productDir);
+        MediaSubscriptionResource resource = new MediaSubscriptionResource();
+        resource.setSubscriptionId(subscription.getId());
+        resource.setLink(share.link());
+        resource.setType(8);
+        resource.setSource(MediaSubscriptionResource.SOURCE_SELF_115);
+        resource.setTitle(StringUtils.defaultIfBlank(share.shareTitle(), taskName));
+        resource.setPassword(share.receiveCode());
+        resource.setScore(1000);
+        resource.setCreatedTime(System.currentTimeMillis());
+        resourceRepository.save(resource);
+        try {
+            mountSelfBatch(subscription, resource);
+        } catch (Exception e) {
+            // 建分享成功但入账失败(门禁/挂载):删行保池干净,已建分享成孤儿(快照无害,清理留二期)
+            try {
+                resourceRepository.delete(resource);
+            } catch (Exception ignored) {
+                // 删行失败不掩盖原始错误
+            }
+            throw e instanceof RuntimeException runtimeException ? runtimeException : new IllegalStateException(e);
+        }
+        // 老磁力行退役(集源行判 FAILED,播放由新 self 行接管)。RETIRED 不会复活:复活须 PENDING
+        // 归属闸门放行,而该产物的 PENDING 早已收割结算;文件随后即删,收割扫描只会确认消失。
+        resourceRepository.findBySubscriptionIdAndLink(subscription.getId(), "offline:" + taskName)
+                .ifPresent(row -> retireResource(subscription, row, "磁力产物已固化自有分享", true));
+        log.info("subscription {} offline product {} selfified as share {}", subscription.getId(), taskName, share.shareCode());
+        return share.link();
+    }
+
+    /**
      * 目录选择器数据(issue #1071):path 下的子目录名(仅目录,名称排序,超 1000 截断);
      * path 空 = 根,即已挂载存储列表。目录不可访问抛 400,选择器把消息展示给用户。
      */

@@ -404,6 +404,7 @@
             <el-form-item label="网盘类型">
               <el-select v-model="offlineDownloadConfig.driverType" :disabled="!offlineDownloadConfig.enabled">
                 <el-option label="115云盘" value="PAN115"/>
+                <el-option label="123网盘" value="PAN123"/>
                 <el-option label="光鸭云盘" value="GUANGYA"/>
                 <el-option label="迅雷云盘" value="THUNDER"/>
               </el-select>
@@ -415,6 +416,21 @@
             </el-form-item>
             <el-form-item label="当前挂载目录">
               <el-input :model-value="offlineMountFolder" readonly/>
+            </el-form-item>
+            <el-form-item label="自动清理">
+              <el-switch v-model="offlineDownloadConfig.autoDelete" inline-prompt active-text="开启" inactive-text="关闭"
+                         :disabled="!offlineDownloadConfig.enabled"/>
+              <span class="hint">每日清理离线任务和文件,释放任务槽位与空间</span>
+            </el-form-item>
+            <el-form-item v-if="offlineDownloadConfig.autoDelete" label="通用入口保留时长">
+              <el-input-number v-model="offlineDownloadConfig.ttlHours" :min="1" :disabled="!offlineDownloadConfig.enabled"/>
+              &nbsp;&nbsp;小时
+              <span class="hint">即看即走内容(播放解析)的保留时长;追剧内容按观看进度/固化时机清理,不受此值影响</span>
+            </el-form-item>
+            <el-form-item v-if="offlineDownloadConfig.driverType === 'PAN115'" label="清理前固化分享">
+              <el-switch v-model="offlineDownloadConfig.selfShare" inline-prompt active-text="开启" inactive-text="关闭"
+                         :disabled="!offlineDownloadConfig.enabled"/>
+              <span class="hint">删除前自动创建115永久分享接管播放,收割后立即回收空间;关闭则整部剧追平后才删除</span>
             </el-form-item>
             <el-form-item v-if="offlineQuotaText" label="配额信息">
               <span>{{ offlineQuotaText }}</span>
@@ -527,6 +543,9 @@ type OfflineDownloadConfig = {
   enabled: boolean
   driverType: string
   accountId: number | null
+  autoDelete: boolean
+  ttlHours: number | null
+  selfShare: boolean
 }
 
 type OfflineDownloadQuota = {
@@ -661,6 +680,9 @@ const offlineDownloadConfig = ref<OfflineDownloadConfig>({
   enabled: false,
   driverType: 'PAN115',
   accountId: null,
+  autoDelete: false,
+  ttlHours: 24,
+  selfShare: false,
 })
 const offlineDownloadQuota = ref<OfflineDownloadQuota>(null)
 const savingLocalProxyConfig = ref(false)
@@ -850,6 +872,9 @@ const loadOfflineDownloadConfig = async () => {
     enabled: !!data?.enabled,
     driverType: data?.driverType ?? 'PAN115',
     accountId: data?.accountId ?? null,
+    autoDelete: !!data?.autoDelete,
+    ttlHours: data?.ttlHours ?? 24,
+    selfShare: !!data?.selfShare,
   }
 }
 

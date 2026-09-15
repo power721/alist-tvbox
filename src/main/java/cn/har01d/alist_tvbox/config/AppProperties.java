@@ -227,6 +227,9 @@ public class AppProperties {
         private int magnetCooldownHours = 24;
         /** 磁力兜底超时重查间隔(小时):SUBMITTED 任务网盘侧还在下载,到期前不再提交新磁力 */
         private int magnetPendingRecheckHours = 12;
+        /** 离线自动清理:滞留 PENDING 判定阈值(天)——提交超该天数且 115 侧仍在下载(或无 btih
+         *  对不上任务列表)才按滞留清任务+文件,顺带释放 app 侧 pending 闸门占位 */
+        private int offlinePendingStuckDays = 7;
         /** 采集源兜底(部署级默认;用户开关走 Setting msub_collection_fallback):候选源全灭时
          *  播放链路最后一级从 MacCMS 采集站(资源聚合精选 8 站)搜索直链补集「当前集+后3集」。
          *  结果只落 msub_episode_fallback 覆盖层,不改写原始追剧数据 */

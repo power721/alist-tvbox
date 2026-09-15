@@ -20,6 +20,9 @@ public interface MediaSubscriptionResourceRepository extends JpaRepository<Media
 
     Optional<MediaSubscriptionResource> findBySubscriptionIdAndLink(int subscriptionId, String link);
 
+    /** 离线清理删除守卫:任意订阅里挂载同链接(磁力产物 link=offline:{产物名})的资源行。 */
+    List<MediaSubscriptionResource> findByLink(String link);
+
     /** 派生删除 = 先 select 再逐个 em.remove,必须在事务里执行(无外围事务的调用方会抛 TransactionRequiredException)。 */
     @Transactional
     void deleteBySubscriptionId(int subscriptionId);

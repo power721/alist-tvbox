@@ -43,6 +43,8 @@ public class OfflineDownloadService {
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_FAILED = "FAILED";
+    /** 清理完成标记:COMPLETED/PENDING 行带此标记时提交短路放行(文件已删,同磁力须可重提)。 */
+    public static final String CLEANUP_DONE = "DONE";
 
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
@@ -76,26 +78,31 @@ public class OfflineDownloadService {
             folder = account.map(Storage::getMountPath).orElse("");
             accountName = account.map(DriverAccount::getName).orElse(null);
         }
-        return new OfflineDownloadConfigDto(config.enabled(), normalizeDriverType(config.driverType()), config.accountId(), accountName, folder);
+        return new OfflineDownloadConfigDto(config.enabled(), normalizeDriverType(config.driverType()), config.accountId(),
+                accountName, folder, config.autoDelete(), config.ttlHours(), config.selfShare());
     }
 
     public OfflineDownloadConfigDto saveConfig(OfflineDownloadConfigRequest request) {
         validateConfig(request);
         String driverType = normalizeDriverType(request.driverType());
-        StoredConfig normalized = new StoredConfig(request.enabled(), driverType, request.accountId(), "");
+        StoredConfig normalized = new StoredConfig(request.enabled(), driverType, request.accountId(), "",
+                request.autoDelete(), request.ttlHours(), request.selfShare());
         if (!normalized.enabled()) {
             settingRepository.save(new Setting(SETTING_NAME, writeConfig(normalized)));
             log.info("offline download config disabled");
-            return new OfflineDownloadConfigDto(false, driverType, normalized.accountId(), null, "");
+            return new OfflineDownloadConfigDto(false, driverType, normalized.accountId(), null, "",
+                    normalized.autoDelete(), normalized.ttlHours(), normalized.selfShare());
         }
 
         DriverAccount account = getAccount(normalized.accountId(), driverType);
         OfflineDownloadHandler handler = getHandler(driverType);
         String offlineFolderId = handler.ensureOfflineFolder(account);
-        settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(), offlineFolderId))));
-        log.info("offline download config saved: driverType={}, accountId={}, offlineFolderId={}",
-                driverType, account.getId(), offlineFolderId);
-        return new OfflineDownloadConfigDto(true, driverType, account.getId(), account.getName(), Storage.getMountPath(account));
+        settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(),
+                offlineFolderId, normalized.autoDelete(), normalized.ttlHours(), normalized.selfShare()))));
+        log.info("offline download config saved: driverType={}, accountId={}, offlineFolderId={}, autoDelete={}, selfShare={}",
+                driverType, account.getId(), offlineFolderId, normalized.autoDeleteEnabled(), normalized.selfShareEnabled());
+        return new OfflineDownloadConfigDto(true, driverType, account.getId(), account.getName(), Storage.getMountPath(account),
+                normalized.autoDelete(), normalized.ttlHours(), normalized.selfShare());
     }
 
     public OfflineDownloadQuotaResponse getQuota() {
@@ -117,7 +124,9 @@ public class OfflineDownloadService {
         String urlHash = hashUrl(request.url());
         Optional<OfflineDownloadTask> localTask = offlineDownloadTaskRepository
                 .findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(account.getId(), urlHash);
-        if (localTask.isPresent() && STATUS_COMPLETED.equals(localTask.get().getStatus()) && StringUtils.isNotBlank(localTask.get().getTargetPath())) {
+        if (localTask.isPresent() && STATUS_COMPLETED.equals(localTask.get().getStatus())
+                && StringUtils.isNotBlank(localTask.get().getTargetPath())
+                && !CLEANUP_DONE.equals(localTask.get().getCleanupState())) {
             return new DownloadTarget(resolveTargetPath(account, localTask.get()), localTask.get().isFolder());
         }
 
@@ -161,6 +170,7 @@ public class OfflineDownloadService {
                 case "PAN115" -> 8;   // DriveId: 115
                 case "THUNDER" -> 2;  // DriveId: thunder
                 case "GUANGYA" -> 12; // DriveId: duck(广雅/光鸭)
+                case "PAN123" -> 3;   // DriveId: 123
                 default -> null;
             };
         } catch (BadRequestException e) {
@@ -222,10 +232,13 @@ public class OfflineDownloadService {
                 .findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(account.getId(), urlHash);
         if (localTask.isPresent()) {
             OfflineDownloadTask task = localTask.get();
-            if (STATUS_COMPLETED.equals(task.getStatus()) && StringUtils.isNotBlank(task.getTargetPath())) {
+            // 清理完成(DONE)的 COMPLETED/PENDING 行放行重提:文件已删,「已有/进行中」都是谎言
+            // —— 115 删任务正是为了解除「不能重复添加」,app 侧短路必须同步放行。
+            boolean cleaned = CLEANUP_DONE.equals(task.getCleanupState());
+            if (!cleaned && STATUS_COMPLETED.equals(task.getStatus()) && StringUtils.isNotBlank(task.getTargetPath())) {
                 return MagnetSubmitResult.completed(task.getTaskName());
             }
-            if (STATUS_PENDING.equals(task.getStatus())) {
+            if (!cleaned && STATUS_PENDING.equals(task.getStatus())) {
                 return MagnetSubmitResult.submitted("任务进行中,等待网盘下载");
             }
             if (STATUS_FAILED.equals(task.getStatus()) && !retryFailed) {
@@ -242,13 +255,19 @@ public class OfflineDownloadService {
             result = handler.submitAndWait(account, url, pathId, waitSeconds);
         } catch (BadRequestException e) {
             if (isTimeoutMessage(e.getMessage())) {
-                saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_PENDING, predictProductName(url), null, false);
+                // 123 等盘超时时已拿到网盘侧任务 id,存 info_hash 供清理活体检查直按它对账
+                String pendingTaskId = e instanceof cn.har01d.alist_tvbox.service.offline.OfflineTaskPendingException pending
+                        && StringUtils.isNotBlank(pending.getTaskId()) ? pending.getTaskId() : null;
+                saveAttempt(account.getId(), urlHash, url, pendingTaskId, subscriptionId, episode,
+                        STATUS_PENDING, predictProductName(url), null, false);
                 return MagnetSubmitResult.submitted("已提交,等待网盘下载");
             }
-            saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_FAILED, null, null, false);
+            saveAttempt(account.getId(), urlHash, url, null, subscriptionId, episode, STATUS_FAILED, null, null, false);
+            deleteFailedTaskQuietly(config, account, url, urlHash);
             return MagnetSubmitResult.failed(e.getMessage());
         } catch (Exception e) {
-            saveAttempt(account.getId(), urlHash, subscriptionId, episode, STATUS_FAILED, null, null, false);
+            saveAttempt(account.getId(), urlHash, url, null, subscriptionId, episode, STATUS_FAILED, null, null, false);
+            deleteFailedTaskQuietly(config, account, url, urlHash);
             return MagnetSubmitResult.failed(StringUtils.defaultIfBlank(e.getMessage(), "离线下载提交失败"));
         }
         String targetPath = buildTargetPath(account, result.taskName());
@@ -282,6 +301,7 @@ public class OfflineDownloadService {
                         task.setStatus(STATUS_COMPLETED);
                         task.setTaskName(taskName);
                         task.setTargetPath(StringUtils.defaultString(targetPath));
+                        task.setCompletedTime(Instant.now()); // 通用入口 TTL 的起算点
                         task.setUpdatedTime(Instant.now());
                         offlineDownloadTaskRepository.save(task);
                         log.info("settled pending offline download task {} to product {}", task.getId(), taskName);
@@ -326,6 +346,7 @@ public class OfflineDownloadService {
                 task.setStatus(STATUS_COMPLETED);
                 task.setTaskName(taskName);
                 task.setTargetPath(StringUtils.defaultString(targetPath));
+                task.setCompletedTime(Instant.now()); // 通用入口 TTL 的起算点
                 task.setUpdatedTime(Instant.now());
                 offlineDownloadTaskRepository.save(task);
                 log.info("settled manual pending offline download task {} to product {}", task.getId(), taskName);
@@ -389,7 +410,7 @@ public class OfflineDownloadService {
         }
     }
 
-    private OfflineDownloadHandler getHandler(String driverType) {
+    OfflineDownloadHandler getHandler(String driverType) {
         DriverType type = DriverType.valueOf(driverType);
         OfflineDownloadHandler handler = handlerMap.get(type);
         if (handler == null) {
@@ -398,7 +419,7 @@ public class OfflineDownloadService {
         return handler;
     }
 
-    private DriverAccount getAccount(Integer accountId, String driverType) {
+    DriverAccount getAccount(Integer accountId, String driverType) {
         DriverAccount account = driverAccountRepository.findById(accountId)
                 .orElseThrow(() -> new BadRequestException("离线下载账号不存在"));
         DriverType type = DriverType.valueOf(driverType);
@@ -461,7 +482,8 @@ public class OfflineDownloadService {
         DriverAccount account = getAccount(config.accountId(), driverType);
         OfflineDownloadHandler handler = getHandler(driverType);
         String offlineFolderId = handler.ensureOfflineFolder(account);
-        settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(), offlineFolderId))));
+        settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(),
+                offlineFolderId, config.autoDelete(), config.ttlHours(), config.selfShare()))));
     }
 
     private String requireOfflineFolderId(StoredConfig config) {
@@ -509,13 +531,18 @@ public class OfflineDownloadService {
         entity.setFolder(result.folder());
         entity.setSubscriptionId(subscriptionId);
         entity.setEpisode(episode);
+        entity.setCompletedTime(now);
+        entity.setCleanupState(null); // 重提覆盖:清理状态归位,新一轮清理重新跟进
+        entity.setCleanupAttempts(0);
         entity.setUpdatedTime(now);
         offlineDownloadTaskRepository.save(entity);
     }
 
-    /** 提交尝试落行(超时 PENDING/被拒 FAILED):无 taskName/targetPath(产物名未知),扫描收割按目录对账。 */
-    private void saveAttempt(Integer accountId, String urlHash, Integer subscriptionId, Integer episode,
-                             String status, String taskName, String targetPath, boolean folder) {
+    /** 提交尝试落行(超时 PENDING/被拒 FAILED):无 taskName/targetPath(产物名未知),扫描收割按目录对账。
+     *  超时 PENDING 行落 info_hash(优先网盘侧任务 id——123 等盘超时时已拿到;否则 magnet btih):
+     *  离线清理活体检查按它对账网盘任务列表。infoHash 参数为 null 时从链接提取 btih。 */
+    private void saveAttempt(Integer accountId, String urlHash, String url, String infoHash, Integer subscriptionId,
+                             Integer episode, String status, String taskName, String targetPath, boolean folder) {
         OfflineDownloadTask entity = offlineDownloadTaskRepository
                 .findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(accountId, urlHash)
                 .orElseGet(OfflineDownloadTask::new);
@@ -525,14 +552,66 @@ public class OfflineDownloadService {
         }
         entity.setAccountId(accountId);
         entity.setUrlHash(urlHash);
+        entity.setInfoHash(StringUtils.firstNonBlank(infoHash, OfflineDownloadHandler.extractInfoHash(url), entity.getInfoHash()));
         entity.setTaskName(taskName);
         entity.setTargetPath(targetPath);
         entity.setStatus(status);
         entity.setFolder(folder);
         entity.setSubscriptionId(subscriptionId);
         entity.setEpisode(episode);
+        entity.setCleanupState(null); // 重提覆盖:清理状态归位,新一轮清理重新跟进
+        entity.setCleanupAttempts(0);
         entity.setUpdatedTime(now);
         offlineDownloadTaskRepository.save(entity);
+    }
+
+    /**
+     * FAILED 即清(提交路径钩子):残留的失败任务会挡同磁力重提(115/迅雷的「任务已存在」),
+     * 提交失败当场删任务+残文件;失败只记日志,每日清理任务兜底重试。光鸭无任务删除契约
+     * 且重复提交直接建新任务,无需即清。
+     */
+    private void deleteFailedTaskQuietly(StoredConfig config, DriverAccount account, String url, String urlHash) {
+        if (!config.autoDeleteEnabled()) {
+            return;
+        }
+        try {
+            OfflineDownloadHandler handler = getHandler(config.driverType());
+            if (!handler.supportsTaskManagement()) {
+                return;
+            }
+            handler.deleteTask(account, OfflineDownloadHandler.extractInfoHash(url), null, true);
+            markCleaned(account.getId(), urlHash);
+            log.info("failed 115 offline task deleted immediately: urlHash={}", urlHash);
+        } catch (Exception e) {
+            log.info("delete failed 115 offline task now failed (daily cleanup will retry): {}", e.getMessage());
+        }
+    }
+
+    /** 清理完成记账(即清钩子用):行标 DONE,提交短路随之放行重提。 */
+    private void markCleaned(Integer accountId, String urlHash) {
+        offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(accountId, urlHash)
+                .ifPresent(task -> {
+                    task.setCleanupState(CLEANUP_DONE);
+                    task.setCleanupTime(Instant.now());
+                    task.setCleanupAttempts(0);
+                    task.setUpdatedTime(Instant.now());
+                    offlineDownloadTaskRepository.save(task);
+                });
+    }
+
+    /** 离线清理配置快照(清理调度用);离线未配置/未开启返回 null。 */
+    public CleanupConfig cleanupConfig() {
+        try {
+            StoredConfig config = loadEnabledConfig();
+            return new CleanupConfig(config.accountId(), config.driverType(),
+                    config.autoDeleteEnabled(), config.ttlHoursOrDefault(), config.selfShareEnabled());
+        } catch (BadRequestException e) {
+            return null;
+        }
+    }
+
+    /** 离线清理配置快照。 */
+    public record CleanupConfig(Integer accountId, String driverType, boolean autoDelete, int ttlHours, boolean selfShare) {
     }
 
     private String hashUrl(String url) {

@@ -80,6 +80,79 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
     }
 
     @Override
+    public boolean supportsTaskManagement() {
+        return true;
+    }
+
+    @Override
+    public boolean deletesFilesWithTask() {
+        return true; // DELETE task_ids + delete_files=true 连文件删
+    }
+
+    /** 离线清理活体检查:全量任务列表按 btih(从 params.url 提取)优先/产物名兜底定位后映射 phase。 */
+    @Override
+    public TaskStatus taskStatus(DriverAccount account, String infoHash, String taskName) {
+        ObjectNode task = findTaskByIdentity(account, infoHash, taskName);
+        if (task == null) {
+            return TaskStatus.ABSENT;
+        }
+        String phase = task.path("phase").asText("");
+        if ("PHASE_TYPE_COMPLETE".equals(phase)) {
+            return TaskStatus.SUCCEEDED;
+        }
+        if ("PHASE_TYPE_ERROR".equals(phase)) {
+            return TaskStatus.FAILED;
+        }
+        return TaskStatus.RUNNING;
+    }
+
+    /** 离线清理删除任务:定位任务(查无=幂等成功)后 DELETE task_ids(+delete_files 连文件);失败上抛由清理侧重试。 */
+    @Override
+    public void deleteTask(DriverAccount account, String infoHash, String taskName, boolean deleteFiles) {
+        ObjectNode task = findTaskByIdentity(account, infoHash, taskName);
+        if (task == null) {
+            log.info("thunder offline task not found (hash={}, name={}), nothing to delete", infoHash, taskName);
+            return;
+        }
+        String taskId = task.path("id").asText("");
+        exchangeWithRetry(account,
+                TASKS_URL + "?task_ids=" + taskId + "&space=" + (deleteFiles ? "&delete_files=true" : ""),
+                HttpMethod.DELETE, null);
+        log.info("thunder task {} deleted (deleteFiles={})", taskId, deleteFiles);
+    }
+
+    /** 离线清理对账:全量任务列表里定位任务,btih 优先(params.url 提取,磁力行 info_hash 已存)、产物名兜底(ed2k)。 */
+    private ObjectNode findTaskByIdentity(DriverAccount account, String infoHash, String taskName) {
+        ObjectNode taskList = exchangeWithRetry(account,
+                TASKS_URL + "?type=offline&limit=10000&page_token=",
+                HttpMethod.GET, null);
+        ArrayNode tasks = withArray(taskList, "tasks");
+        if (tasks == null) {
+            return null;
+        }
+        if (StringUtils.isNotBlank(infoHash)) {
+            for (var item : tasks) {
+                String taskInfoHash = extractInfoHash(item.path("params").path("url").asText(""));
+                if (StringUtils.isNotBlank(taskInfoHash) && infoHash.equalsIgnoreCase(taskInfoHash)) {
+                    return (ObjectNode) item;
+                }
+            }
+        }
+        if (StringUtils.isNotBlank(taskName)) {
+            for (var item : tasks) {
+                String name = item.path("file_name").asText("");
+                if (StringUtils.isBlank(name)) {
+                    name = item.path("name").asText("");
+                }
+                if (taskName.equals(name)) {
+                    return (ObjectNode) item;
+                }
+            }
+        }
+        return null;
+    }
+
+    @Override
     public String ensureOfflineFolder(DriverAccount account) {
         String parentId = requireParentFolderId(account);
 

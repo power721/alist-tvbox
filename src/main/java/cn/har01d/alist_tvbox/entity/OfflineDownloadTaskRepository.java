@@ -47,4 +47,10 @@ public interface OfflineDownloadTaskRepository extends JpaRepository<OfflineDown
 
     /** 追剧总离线配额(当月;磁力兜底提交的行才带 subscription_id) */
     long countBySubscriptionIdNotNullAndCreatedTimeGreaterThanEqual(Instant since);
+
+    /** 每日离线清理候选:未清理完成的行(DONE 除外;FAILED 重试次数在服务层判定) */
+    @org.springframework.data.jpa.repository.Query("select t from OfflineDownloadTask t"
+            + " where t.accountId = :accountId and (t.cleanupState is null or t.cleanupState <> 'DONE')"
+            + " order by t.createdTime asc")
+    java.util.List<OfflineDownloadTask> findCleanupCandidates(Integer accountId);
 }
