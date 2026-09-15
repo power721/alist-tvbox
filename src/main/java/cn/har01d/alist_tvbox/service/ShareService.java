@@ -85,10 +85,12 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
@@ -129,10 +131,18 @@ public class ShareService {
     private final UserService userService;
 
     private static final int RELOAD_ALL_PAGE_SIZE = 500;
+    /** 风控/限流失败特征(判定整盘跳过):百度 errno -62/-19/-65 家族 + 通用限流措辞。
+     *  errno 支须兼容 reload 报错的 {@code (errno=-62)} 括号形态(PowerList baiduErrnoMessage 翻译文案)
+     *  与未翻译裸 body 的 {@code "errno":-62} JSON 形态。 */
+    private static final Pattern RELOAD_THROTTLED = Pattern.compile(
+            "(?i)errno\\s*[=:]\\s*(-62|-19|-65)|触发百度风控|访问频率太快|操作过于频繁|验证次数过多|请稍[后候]|too many (requests|attempts)|rate.?limit|\\b429\\b");
     private final AtomicBoolean reloadAllRunning = new AtomicBoolean();
     private volatile boolean reloadAllCancelled;
     private volatile Thread reloadAllThread;
     private final StorageReloadProgress reloadProgress = new StorageReloadProgress();
+
+    record FailedStorageRef(int id, String driver) {
+    }
 
     public ShareService(AppProperties appProperties,
                         ShareRepository shareRepository,
@@ -1789,6 +1799,8 @@ public class ShareService {
         reloadProgress.setProcessed(0);
         reloadProgress.setSuccess(0);
         reloadProgress.setFailed(0);
+        reloadProgress.setThrottled(0);
+        reloadProgress.setThrottledDrivers(Set.of());
         reloadProgress.setError(null);
         reloadProgress.setInterval(intervalMs);
         reloadProgress.setStartedTime(System.currentTimeMillis());
@@ -1819,13 +1831,9 @@ public class ShareService {
     }
 
     void doReloadAllStorages(long intervalMs) {
-        List<Integer> ids;
+        List<FailedStorageRef> storages;
         try {
-            ids = collectFailedStorageIds();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            finishReloadAll();
-            return;
+            storages = collectFailedStorages();
         } catch (Exception e) {
             log.warn("collect failed storages failed", e);
             reloadProgress.setError("获取失效资源列表失败: " + e.getMessage());
@@ -1833,14 +1841,24 @@ public class ShareService {
             return;
         }
 
-        reloadProgress.setTotal(ids.size());
-        log.info("reload all storages begin: {} items, interval {}ms", ids.size(), intervalMs);
-        for (int i = 0; i < ids.size(); i++) {
+        reloadProgress.setTotal(storages.size());
+        log.info("reload all storages begin: {} items, interval {}ms", storages.size(), intervalMs);
+
+        // 某网盘触发风控说明该盘在风控窗口内,继续请求必然失败且可能加重风控:
+        // 记下驱动名,后续同盘条目直接跳过(不请求),其他网盘正常处理
+        Set<String> throttledDrivers = new HashSet<>();
+        boolean first = true;
+        for (FailedStorageRef storage : storages) {
             if (reloadAllCancelled) {
-                log.info("reload all storages cancelled at {}/{}", i, ids.size());
+                log.info("reload all storages cancelled at {}/{}", reloadProgress.getProcessed(), storages.size());
                 break;
             }
-            if (i > 0 && intervalMs > 0) {
+            if (storage.driver() != null && throttledDrivers.contains(storage.driver())) {
+                reloadProgress.setThrottled(reloadProgress.getThrottled() + 1);
+                reloadProgress.setProcessed(reloadProgress.getSuccess() + reloadProgress.getFailed() + reloadProgress.getThrottled());
+                continue;
+            }
+            if (!first && intervalMs > 0) {
                 try {
                     Thread.sleep(intervalMs);
                 } catch (InterruptedException e) {
@@ -1848,29 +1866,47 @@ public class ShareService {
                     break;
                 }
             }
-            int id = ids.get(i);
+            first = false;
+            boolean ok = false;
+            String errorText = null;
             try {
-                Response response = reloadStorage(id);
+                Response response = reloadStorage(storage.id());
                 if (response != null && response.getCode() != null && response.getCode() == 200) {
-                    reloadProgress.setSuccess(reloadProgress.getSuccess() + 1);
+                    ok = true;
                 } else {
-                    reloadProgress.setFailed(reloadProgress.getFailed() + 1);
+                    errorText = response == null ? "empty response" : response.getMessage();
                 }
             } catch (Exception e) {
                 if (reloadAllCancelled) {
                     break;
                 }
-                log.warn("reload storage {} failed: {}", id, e.getMessage());
+                errorText = e.getMessage();
+            }
+            if (ok) {
+                reloadProgress.setSuccess(reloadProgress.getSuccess() + 1);
+            } else if (isThrottledReload(errorText)) {
+                log.warn("reload storage {} throttled ({}): {}, skip remaining storages of this driver",
+                        storage.id(), storage.driver(), errorText);
+                throttledDrivers.add(storage.driver());
+                reloadProgress.setThrottledDrivers(Set.copyOf(throttledDrivers));
+                reloadProgress.setThrottled(reloadProgress.getThrottled() + 1);
+            } else {
+                log.warn("reload storage {} failed: {}", storage.id(), errorText);
                 reloadProgress.setFailed(reloadProgress.getFailed() + 1);
             }
-            reloadProgress.setProcessed(i + 1);
+            reloadProgress.setProcessed(reloadProgress.getSuccess() + reloadProgress.getFailed() + reloadProgress.getThrottled());
         }
         if (reloadAllCancelled) {
             reloadProgress.setCancelled(true);
         }
         finishReloadAll();
-        log.info("reload all storages end: total {} success {} failed {} cancelled {}",
-                reloadProgress.getTotal(), reloadProgress.getSuccess(), reloadProgress.getFailed(), reloadProgress.isCancelled());
+        log.info("reload all storages end: total {} success {} failed {} throttled {} cancelled {}",
+                reloadProgress.getTotal(), reloadProgress.getSuccess(), reloadProgress.getFailed(),
+                reloadProgress.getThrottled(), reloadProgress.isCancelled());
+    }
+
+    private boolean isThrottledReload(String message) {
+        return message != null && RELOAD_THROTTLED.matcher(message).find();
     }
 
     private void finishReloadAll() {
@@ -1878,8 +1914,8 @@ public class ShareService {
         reloadProgress.setFinishedTime(System.currentTimeMillis());
     }
 
-    List<Integer> collectFailedStorageIds() throws InterruptedException {
-        List<Integer> ids = new ArrayList<>();
+    List<FailedStorageRef> collectFailedStorages() {
+        List<FailedStorageRef> storages = new ArrayList<>();
         // AList 侧页码从 1 开始,cleanStorages 的 PageRequest.of(1, size) 同口径
         for (int page = 1; ; page++) {
             JsonNode result = listStorages(PageRequest.of(page, RELOAD_ALL_PAGE_SIZE));
@@ -1888,13 +1924,15 @@ public class ShareService {
                 break;
             }
             for (JsonNode item : array) {
-                ids.add(item.get("id").asInt());
+                JsonNode driver = item.get("driver");
+                storages.add(new FailedStorageRef(item.get("id").asInt(),
+                        driver == null ? null : driver.asText()));
             }
             if (array.size() < RELOAD_ALL_PAGE_SIZE) {
                 break;
             }
         }
-        return ids;
+        return storages;
     }
 
     private List<Share> loadLatestShare() {
