@@ -354,7 +354,7 @@ public class EmbyService {
         int id = proxyService.generateImageUrl(url, referer);
         // nginx https
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("/images/" + id)
                 .replaceQuery("")
                 .build()

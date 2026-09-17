@@ -571,7 +571,7 @@ public class LiveFollowService {
         }
         String query = stored.contains("?") ? stored.substring(stored.indexOf('?') + 1) : "";
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("/images")
                 .replaceQuery(query)
                 .build()

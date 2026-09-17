@@ -2047,7 +2047,7 @@ public class SubscriptionService {
 
     public String readHostAddress(String path) {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // 反代 TLS 终结采信 X-Forwarded-Proto(#1073)
                 .replacePath(path)
                 .replaceQuery(null)
                 .build();

@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.BufferedReader;
@@ -584,6 +586,46 @@ public final class Utils {
         }
 
         return ip;
+    }
+
+    /**
+     * 信任来源(反代)的 X-Forwarded-Proto 首段:Caddy/nginx 等做 TLS 终结时后端只能看到 http 连接,
+     * 客户端实际协议只能从这个头还原。取值与 getClientIp 共用 trusted_proxies 信任模型
+     * (未配置=维持历来行为采信转发头)。多级反代逗号链取最左(客户端到第一跳的真实协议)。
+     * 非信任来源或缺失/空白返回 null,由调用方回落自身默认。
+     */
+    public static String getTrustedForwardedProto(HttpServletRequest request) {
+        if (request == null || !isTrustedProxy(request.getRemoteAddr())) {
+            return null;
+        }
+        String proto = request.getHeader("X-Forwarded-Proto");
+        if (StringUtils.isBlank(proto)) {
+            return null;
+        }
+        int comma = proto.indexOf(',');
+        String value = (comma > 0 ? proto.substring(0, comma) : proto).trim().toLowerCase();
+        // 只认 http/https:h2/h2c 等中间协议不是可用链接协议,按缺失回落
+        return "http".equals(value) || "https".equals(value) ? value : null;
+    }
+
+    /**
+     * 生成客户端可访问链接应使用的协议(#1073):反代 TLS 终结时采信信任来源的
+     * X-Forwarded-Proto,与用户实际访问协议一致;无该头(直连/反代未终结 TLS)时
+     * 回落既有 enable_https 全局开关语义(192.168. 内网直连恒 http)。
+     */
+    public static String publicScheme(boolean enableHttps) {
+        String forwardedProto = getTrustedForwardedProto(currentRequestOrNull());
+        if (forwardedProto != null) {
+            return forwardedProto;
+        }
+        return enableHttps && !isLocalAddress() ? "https" : "http";
+    }
+
+    private static HttpServletRequest currentRequestOrNull() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
+            return attributes.getRequest();
+        }
+        return null;
     }
 
     public static String getQrCode(String text) throws IOException {

@@ -159,7 +159,7 @@ public class LiveService {
     private String getUrl(String path) {
         try {
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                    .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                     .replacePath(path)
                     .replaceQuery(null)
                     .build()

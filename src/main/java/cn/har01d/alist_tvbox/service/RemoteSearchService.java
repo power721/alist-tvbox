@@ -724,7 +724,7 @@ public class RemoteSearchService {
 
     private String getUrl(String path) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath(path)
                 .replaceQuery(null)
                 .build()

@@ -51,7 +51,7 @@ public class LiveProxyService {
         try {
             String token = subscriptionService.getCurrentToken();
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                    .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                     .replacePath("/live-proxy/" + token)
                     .replaceQuery("u=" + URLEncoder.encode(targetUrl, StandardCharsets.UTF_8))
                     .build()

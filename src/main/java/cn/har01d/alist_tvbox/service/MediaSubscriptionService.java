@@ -977,9 +977,8 @@ public class MediaSubscriptionService {
                 return stored;
             }
             String query = stored.substring(queryAt + 1);
-            boolean https = appProperties.isEnableHttps() && !cn.har01d.alist_tvbox.util.Utils.isLocalAddress();
             return org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(https ? "https" : "http")
+                    .scheme(cn.har01d.alist_tvbox.util.Utils.publicScheme(appProperties.isEnableHttps()))
                     .replacePath("/images")
                     .replaceQuery(query)
                     .build()

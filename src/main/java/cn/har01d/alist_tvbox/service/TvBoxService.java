@@ -919,7 +919,7 @@ public class TvBoxService {
 
     private String getBaseUrl() {
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("")
                 .replaceQuery(null)
                 .build()
@@ -1439,7 +1439,7 @@ public class TvBoxService {
 
     private String getListPic() {
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("/list.png")
                 .replaceQuery(null)
                 .build()
@@ -2772,7 +2772,7 @@ public class TvBoxService {
         try {
             if (movie.getVod_pic() != null && !movie.getVod_pic().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                        .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                         .replacePath("/images")
                         .replaceQuery("url=" + movie.getVod_pic())
                         .build()
@@ -2789,7 +2789,7 @@ public class TvBoxService {
         String pic = thumb;
         if (pic.isEmpty() && type == 1 && !"web".equals(ac)) {
             pic = ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                    .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                     .replacePath("/folder.png")
                     .replaceQuery(null)
                     .build()
@@ -2895,7 +2895,7 @@ public class TvBoxService {
         // Second: replace localhost with external address for non-.strm files
         if (url.startsWith("http://localhost")) {
             String proxy = ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                    .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                     .port(aListLocalService.getExternalPort())
                     .replacePath("/")
                     .replaceQuery("")
@@ -2922,7 +2922,7 @@ public class TvBoxService {
     private String buildProxyUrl(Site site, String name, String path) {
         String p = buildProxyPath(site.getId(), proxyService.generateProxyUrl(site, path), name);
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath(p)
                 .replaceQuery("")
                 .build()
@@ -2933,7 +2933,7 @@ public class TvBoxService {
     private String buildProxyUrl(Site site, String path, Video item) {
         String p = buildProxyPath(site.getId(), proxyService.generateProxyUrl(site, path, item), path);
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath(p)
                 .replaceQuery("")
                 .build()
@@ -2989,7 +2989,7 @@ public class TvBoxService {
 
     private String buildM3u8Url(String path) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("/m3u8/" + subscriptionService.getCurrentToken())
                 .replaceQuery("path=" + encodeUrl(path))
                 .build()
@@ -3107,7 +3107,7 @@ public class TvBoxService {
 
     private String buildTvUrl() {
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("/tv")
                 .replaceQuery(null)
                 .build()

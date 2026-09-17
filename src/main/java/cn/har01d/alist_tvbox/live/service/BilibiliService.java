@@ -224,7 +224,7 @@ public class BilibiliService implements LivePlatform {
 
     private String getCover() {
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("/bilibili.jpg")
                 .replaceQuery(null)
                 .build()
@@ -514,7 +514,7 @@ public class BilibiliService implements LivePlatform {
         }
         // nginx https
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("/images")
                 .replaceQuery("url=" + url)
                 .build()

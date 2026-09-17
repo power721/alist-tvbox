@@ -2800,7 +2800,7 @@ public class BiliBiliService {
 
     private String fixSubtitleUrl(String url) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("/subtitles")
                 .query("url=" + fixUrl(url))
                 .build()
@@ -2809,7 +2809,7 @@ public class BiliBiliService {
 
     private String getListPic() {
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
                 .replacePath("/list.png")
                 .replaceQuery(null)
                 .build()

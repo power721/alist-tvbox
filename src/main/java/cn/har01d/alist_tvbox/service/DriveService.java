@@ -228,7 +228,7 @@ public class DriveService {
         String proxyPath = "/p/" + subscriptionService.getFirstToken() + "/"
                 + site.getId() + "@" + playUrlId + suffix;
         return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http")
+                .scheme(Utils.publicScheme(appProperties.isEnableHttps()))
                 .replacePath(proxyPath)
                 .replaceQuery("")
                 .build()

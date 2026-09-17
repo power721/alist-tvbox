@@ -592,7 +592,7 @@ TvBox接口：
 - https://api.xhofe.top/alist/ali_open/token
 - https://api.nn.ci/alist/ali_open/token
 
-如果nginx配置了SSL，需要在高级设置中打开`订阅域名支持HTTPS`开关。
+通过 nginx/Caddy 等反代配置 SSL 时，后端会自动根据转发头 `X-Forwarded-Proto` 识别客户端实际访问协议，订阅里的链接会自动使用 `https`。若反代未传递该头，需在高级设置中打开`订阅域名支持HTTPS`开关。
 
 #### 高级设置
 可配置项：
