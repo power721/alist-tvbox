@@ -158,6 +158,7 @@ public class TelegramBotClient {
         commands.addObject().put("command", "search").put("description", "搜索追剧,可带剧名:/search 庆余年");
         commands.addObject().put("command", "piandan").put("description", "片单追更(榜单挑剧)");
         commands.addObject().put("command", "calendar").put("description", "追更日历(今晚更新什么)");
+        commands.addObject().put("command", "want").put("description", "稍后再看队列");
         try {
             exchange(token, "setMyCommands", body);
         } catch (Exception e) {

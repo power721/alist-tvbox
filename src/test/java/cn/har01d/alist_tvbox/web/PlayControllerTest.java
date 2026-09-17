@@ -47,6 +47,8 @@ class PlayControllerTest {
     private PianDanService pianDanService;
     @Mock
     private cn.har01d.alist_tvbox.service.AccountAccessGuard accountAccessGuard;
+    @Mock
+    private cn.har01d.alist_tvbox.service.WatchlistService watchlistService;
 
     private MockMvc mockMvc;
 
@@ -57,7 +59,7 @@ class PlayControllerTest {
                 new cn.har01d.alist_tvbox.service.PianDanSubscriptionService(
                         mediaSubscriptionService, checkService, pianDanService);
         PlayController controller = new PlayController(tvBoxService, biliBiliService, subscriptionService, proxyService,
-                mediaSubscriptionService, pianDanSubscriptionService, accountAccessGuard);
+                mediaSubscriptionService, pianDanSubscriptionService, accountAccessGuard, watchlistService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new RestErrorHandler())
                 .build();
@@ -86,6 +88,32 @@ class PlayControllerTest {
     void playShouldRejectMalformedMediaSubscriptionEpisodeId() throws Exception {
         mockMvc.perform(get("/play/test-token").param("id", "msubep-5"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void playShouldAddWatchlistEntry() throws Exception {
+        when(mediaSubscriptionService.resolveUid("test-token")).thenReturn(7);
+        when(watchlistService.add(7, "tmdb:tv:42|测试剧"))
+                .thenReturn(new cn.har01d.alist_tvbox.service.WatchlistService.Result(
+                        false, "测试剧", "已加入稍后再看《测试剧》"));
+
+        mockMvc.perform(get("/play/test-token").param("id", "watchadd-tmdb:tv:42|测试剧"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("已加入稍后再看《测试剧》"));
+        verifyNoInteractions(tvBoxService, biliBiliService, proxyService, pianDanService);
+    }
+
+    @Test
+    void playShouldRemoveWatchlistEntry() throws Exception {
+        when(mediaSubscriptionService.resolveUid("test-token")).thenReturn(7);
+        when(watchlistService.remove(7, "tmdb:tv:42|测试剧"))
+                .thenReturn(new cn.har01d.alist_tvbox.service.WatchlistService.Result(
+                        true, "测试剧", "已移出稍后再看《测试剧》"));
+
+        mockMvc.perform(get("/play/test-token").param("id", "watchdel-tmdb:tv:42|测试剧"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("已移出稍后再看《测试剧》"));
+        verifyNoInteractions(tvBoxService, biliBiliService, proxyService, pianDanService);
     }
 
     @Test

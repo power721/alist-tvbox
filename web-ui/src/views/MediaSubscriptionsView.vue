@@ -46,6 +46,8 @@
     </div>
 
     <div class="page-card">
+      <el-tabs v-model="mainTab">
+        <el-tab-pane label="我的追剧" name="subs">
       <div class="batch-bar" v-if="subscriptions.length">
         <el-select v-model="statusFilter" size="small" style="width: 110px" placeholder="全部状态">
           <el-option label="全部状态" value=""/>
@@ -139,6 +141,11 @@
           </el-table-column>
         </el-table>
       </div>
+        </el-tab-pane>
+        <el-tab-pane label="稍后再看" name="want" lazy>
+          <WatchlistView ref="watchlistRef" embedded @subscribed="loadAll"/>
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
     <el-dialog v-model="formVisible" :title="form.id ? '编辑订阅' : '新建订阅'" width="750" top="3vh">
@@ -184,6 +191,10 @@
                 <div>{{ item.name }}({{ item.year }}){{ item.score ? ' ★' + item.score : '' }}</div>
                 <div class="sub-text">{{ providerName(item.provider) }} · {{ item.id }}</div>
               </div>
+              <el-button size="small" style="margin-left: auto" @click.stop="wantMeta(item)"
+                         :disabled="wantedKeys.has(item.provider + item.id)">
+                {{ wantedKeys.has(item.provider + item.id) ? '已想看' : '想看' }}
+              </el-button>
             </div>
           </div>
           <div v-if="form.metaId" class="sub-text">已选:{{ providerName(form.metaProvider) }} {{ form.metaId }}</div>
@@ -1004,74 +1015,8 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="navigationVisible" title="片单追更(豆瓣/TMDB 热门榜单选剧订阅)" width="960" top="3vh">
-      <div class="nav-toolbar">
-        <el-select v-model="navType" filterable style="width: 240px" @change="onNavTypeChange">
-          <el-option v-for="item in navCategories" :key="item.type_id" :label="item.type_name" :value="item.type_id"/>
-        </el-select>
-        <el-select v-for="f in navFilterDefs" :key="f.key" v-model="navFilters[f.key]" :placeholder="f.name"
-                   clearable style="width: 132px" @change="onNavFilterChange">
-          <el-option v-for="option in f.value" :key="option.v" :label="option.n" :value="option.v"/>
-        </el-select>
-        <span class="sub-text">共 {{ navTotal }} 条 · 点击追更补充季/网盘等信息:TMDB 条目自动绑定元数据,豆瓣条目自动匹配条目</span>
-      </div>
-      <div class="nav-grid" v-loading="navLoading">
-        <div v-for="item in navList" :key="item.vod_id" class="nav-card">
-          <el-image :src="item.vod_pic" fit="cover" class="nav-cover cover-click" lazy @click="showNavDetail(item)">
-            <template #error><div class="nav-cover nav-cover-placeholder cover-click" @click="showNavDetail(item)">{{ (item.vod_name || '?').charAt(0) }}</div></template>
-          </el-image>
-          <div class="nav-title name-link" :title="item.vod_name" @click="showNavDetail(item)">{{ item.vod_name }}</div>
-          <div class="nav-meta">
-            <span v-if="item.vod_remarks">{{ item.vod_remarks }}</span>
-            <span v-if="item.vod_year">{{ item.vod_year }}</span>
-            <span v-if="item.type_name">{{ item.type_name }}</span>
-          </div>
-          <el-button v-if="isNavSubscribed(item)" size="small" disabled>已追更</el-button>
-          <el-button v-else size="small" type="primary" @click="navSubscribe(item)">追更</el-button>
-        </div>
-      </div>
-      <div class="nav-pager" v-if="navPageCount > 1">
-        <el-pagination background layout="prev, pager, next" :total="navTotal" :page-size="24"
-                       :current-page="navPage" @current-change="onNavPageChange"/>
-      </div>
-    </el-dialog>
-
-    <el-dialog v-model="navDetailVisible" title="媒体详情" width="860">
-      <div class="nav-detail" v-loading="navDetailLoading">
-        <template v-if="navDetail">
-          <el-image :src="navDetailPoster" fit="cover" class="nav-detail-poster">
-            <template #error>
-              <div class="nav-detail-poster cover-placeholder">{{ (navDetail.vod_name || '?').charAt(0) }}</div>
-            </template>
-          </el-image>
-          <div class="nav-detail-info">
-            <div class="nav-detail-title">
-              {{ navDetail.vod_name }}
-              <span v-if="navDetail.vod_year" class="sub-text">({{ navDetail.vod_year }})</span>
-            </div>
-            <div class="nav-detail-tags">
-              <el-tag v-for="genre in navDetailGenres" :key="genre" effect="plain">{{ genre }}</el-tag>
-              <el-tag v-if="navDetail.vod_remarks" type="warning">{{ navDetail.vod_remarks }}</el-tag>
-              <el-tag v-for="season in navDetailSeasons" :key="'s' + season" type="info">第{{ season }}季</el-tag>
-            </div>
-            <div v-if="navDetail.vod_director" class="sub-text">导演:{{ navDetail.vod_director }}</div>
-            <div v-if="navDetail.vod_actor" class="sub-text">演员:{{ navDetail.vod_actor }}</div>
-            <div v-if="navDetail.vod_area || navDetail.vod_lang" class="sub-text">
-              <template v-if="navDetail.vod_area">{{ navDetail.vod_area }}</template>
-              <template v-if="navDetail.vod_area && navDetail.vod_lang"> / </template>
-              <template v-if="navDetail.vod_lang">{{ navDetail.vod_lang }}</template>
-            </div>
-            <div v-if="navDetail.vod_content" class="nav-detail-overview">{{ navDetail.vod_content }}</div>
-            <div v-else class="sub-text">暂无简介,点击「追更」按标题订阅</div>
-          </div>
-        </template>
-      </div>
-      <template #footer>
-        <el-button @click="navDetailVisible = false">关闭</el-button>
-        <el-button v-if="navDetailItem && isNavSubscribed(navDetailItem)" disabled>已追更</el-button>
-        <el-button v-else type="primary" @click="navDetailSubscribe">追更</el-button>
-      </template>
-    </el-dialog>
+    <PianDanBrowser v-model="navigationVisible" :subscribed-names="navSubscribedNames"
+                    @subscribe="navSubscribe" @wanted="refreshEmbeddedWatchlist"/>
   </div>
 </template>
 
@@ -1081,6 +1026,8 @@ import {useRouter} from 'vue-router'
 import axios from 'axios'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {store} from '@/services/store'
+import PianDanBrowser from '@/components/PianDanBrowser.vue'
+import WatchlistView from '@/views/WatchlistView.vue'
 
 /** 组件卸载统一清理延时刷新(检查/转存后的自动 reload):离开页面后不再触发孤儿请求 */
 const pendingTimers = new Set<number>()
@@ -1098,7 +1045,6 @@ let detailSeq = 0
 let episodesSeq = 0
 let eventsSeq = 0
 let resourcesSeq = 0
-let navSeq = 0
 
 const router = useRouter()
 
@@ -1374,6 +1320,25 @@ const metaSearching = ref(false)
 const metaResults = ref<any[]>([])
 const metaLink = ref('')
 const resolvingLink = ref(false)
+/* 元数据搜索结果「想看」已加入标记(provider+id → 稍后再看,tmdb/db 条目带真 id,其余回落标题) */
+const wantedKeys = ref(new Set<string>())
+const wantMeta = (item: any) => {
+  const key = item.provider + item.id
+  if (wantedKeys.value.has(key)) return
+  const body: any = {title: item.name}
+  if (item.provider === 'tmdb') {
+    body.vodId = 'tmdb:tv:' + item.id
+  } else if (item.provider === 'douban') {
+    body.vodId = 'db:' + item.id
+  }
+  if (item.year) body.year = item.year
+  axios.post('/api/watchlist', body).then(({data}) => {
+    ElMessage.success(data.msg || '已加入稍后再看')
+    const next = new Set(wantedKeys.value)
+    next.add(key)
+    wantedKeys.value = next
+  })
+}
 const accounts = ref<any[]>([])
 /** 仅中转目标无服务端转存能力(与后端 resolveTargets 的 relayOnly 同口径):不列入转存网盘;历史已选中的保留显示便于取消 */
 const relayOnlyTypes = new Set(['QUARK_TV', 'UC_TV', 'OPEN115'])
@@ -1628,55 +1593,16 @@ const tmdbApiHostOptions = [
   {label: 'NAStool 代理', value: 'https://tmdb.nastool.org'},
 ]
 const navigationVisible = ref(false)
-const navCategories = ref<{ type_id: string, type_name: string }[]>([])
-const navAllFilters = ref<Record<string, any[]>>({})
-const navFilterDefs = ref<any[]>([])
-const navFilters = ref<Record<string, string>>({})
-const navType = ref('douban:hot_tv')
-const navList = ref<any[]>([])
-const navPage = ref(1)
-const navPageCount = ref(1)
-const navTotal = ref(0)
-const navLoading = ref(false)
+/** 主体视图切换:我的追剧 / 稍后再看(想看队列整页并入,菜单不再单列) */
+const mainTab = ref('subs')
+/** 嵌入想看面板引用:片单追更里加了想看时,面板已挂载(lazy)才需要就地刷新,未挂载时挂载即拉新 */
+const watchlistRef = ref<any>(null)
+const refreshEmbeddedWatchlist = () => watchlistRef.value?.load?.()
 const navSubscribed = ref<Set<string>>(new Set())
+/** 片单榜单组件「已追更」回显:刚订阅成功的临时标记 + 订阅列表标题 */
+const navSubscribedNames = computed(() => Array.from(new Set([...navSubscribed.value, ...subscriptions.value.map(s => s.name)])))
 /** 从片单追更打开新建对话框的条目:创建成功后标记"已追更",对话框关闭即解除 */
 const navPending = ref<any>(null)
-
-/** 片单条目媒体详情:打开即用榜单卡片数据垫底,后端详情(TMDB 直取/豆瓣本地库富化)回来整体替换 */
-const navDetailVisible = ref(false)
-const navDetailLoading = ref(false)
-const navDetail = ref<any>(null)
-const navDetailItem = ref<any>(null)
-let navDetailSeq = 0
-
-const navDetailPoster = computed(() => navDetail.value?.vod_pic || navDetailItem.value?.vod_pic || '')
-/** 类型(type_name)各源分隔符不一(TMDB " / "、豆瓣逗号),统一拆成 tag 列表 */
-const navDetailGenres = computed(() => {
-  const source = navDetail.value?.type_name || navDetailItem.value?.type_name || ''
-  return String(source).split(/[/,、]/).map((s: string) => s.trim()).filter(Boolean)
-})
-/** TMDB 剧集季号清单(ext 数组,已滤特典与未开播占位季);电影/豆瓣条目为空 */
-const navDetailSeasons = computed(() => Array.isArray(navDetail.value?.ext) ? navDetail.value.ext : [])
-
-const showNavDetail = (item: any) => {
-  navDetailItem.value = item
-  navDetail.value = {vod_name: item.vod_name, vod_pic: item.vod_pic, vod_year: item.vod_year,
-    type_name: item.type_name, vod_remarks: item.vod_remarks}
-  navDetailVisible.value = true
-  navDetailLoading.value = true
-  const my = ++navDetailSeq
-  axios.get('/api/media-subscriptions/navigation/detail', {params: {id: item.vod_id}}).then(response => {
-    if (my !== navDetailSeq) return
-    navDetail.value = response.data || null
-  }).catch(() => ElMessage.error('媒体详情加载失败')).finally(() => {
-    if (my === navDetailSeq) navDetailLoading.value = false
-  })
-}
-
-const navDetailSubscribe = () => {
-  navDetailVisible.value = false
-  if (navDetailItem.value) navSubscribe(navDetailItem.value)
-}
 
 onMounted(() => {
   loadAll()
@@ -1702,65 +1628,6 @@ onMounted(() => {
 
 const openNavigation = () => {
   navigationVisible.value = true
-  if (!navCategories.value.length) {
-    axios.get('/api/media-subscriptions/navigation').then(response => {
-      // CategoryList 的分类字段经 @JsonProperty 序列化为 "class"
-      navCategories.value = ((response.data['class'] || []) as any[]).filter((c: any) => c.type_id && c.type_id !== '0')
-      navAllFilters.value = response.data.filters || {}
-      if (!navCategories.value.some(c => c.type_id === navType.value)) {
-        navType.value = navCategories.value[0]?.type_id || ''
-      }
-      applyNavFilters()
-      loadNavList()
-    }).catch(() => ElMessage.error('片单分类加载失败'))
-  }
-}
-
-/** 分类切换:换用该分类的筛选定义(地区/年代/排序等,TVBox filter 同源),已选筛选清空。 */
-const applyNavFilters = () => {
-  navFilterDefs.value = navAllFilters.value[navType.value] || []
-  navFilters.value = {}
-}
-
-const onNavTypeChange = () => {
-  navPage.value = 1
-  applyNavFilters()
-  loadNavList()
-}
-
-const onNavFilterChange = () => {
-  navPage.value = 1
-  loadNavList()
-}
-
-const onNavPageChange = (page: number) => {
-  navPage.value = page
-  loadNavList()
-}
-
-const loadNavList = () => {
-  if (!navType.value) return
-  navLoading.value = true
-  const params: any = {t: navType.value, pg: navPage.value, size: 24}
-  Object.entries(navFilters.value).forEach(([key, value]) => {
-    if (value) {
-      params[key] = value // 空串 = "全部"选项,不传参
-    }
-  })
-  const my = ++navSeq
-  axios.get('/api/media-subscriptions/navigation/list', {params}).then(response => {
-    if (my !== navSeq) return
-    const data = response.data || {}
-    navList.value = data.list || []
-    navPageCount.value = data.pagecount || 1
-    navTotal.value = data.total || navList.value.length
-  }).catch(() => ElMessage.error('片单加载失败,该分类可能依赖外部接口')).finally(() => {
-    if (my === navSeq) navLoading.value = false
-  })
-}
-
-const isNavSubscribed = (item: any) => {
-  return navSubscribed.value.has(item.vod_name) || subscriptions.value.some(s => s.name === item.vod_name)
 }
 
 /** 追更按钮 → 打开新建订阅对话框预填榜单条目,由用户补充(季/网盘/过滤等)后确认创建 */
@@ -3428,115 +3295,6 @@ const formatClock = (time: number) => {
 
 .meta-info {
   font-size: 13px;
-}
-
-.nav-toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-bottom: 12px;
-}
-
-.nav-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 12px;
-  min-height: 200px;
-}
-
-.nav-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 4px;
-}
-
-.nav-cover {
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  border-radius: 4px;
-  background: var(--el-fill-color);
-}
-
-.nav-cover-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-dark);
-}
-
-.nav-title {
-  font-size: 13px;
-  line-height: 1.3;
-  height: 34px;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.nav-meta {
-  display: flex;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  min-height: 18px;
-}
-
-.nav-detail {
-  display: flex;
-  gap: 24px;
-  min-height: 300px;
-}
-
-.nav-detail-poster {
-  width: 220px;
-  aspect-ratio: 2 / 3;
-  flex-shrink: 0;
-  border-radius: 6px;
-  background: var(--el-fill-color);
-}
-
-.nav-detail-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.nav-detail-info .sub-text {
-  font-size: 15px;
-  line-height: 1.6;
-}
-
-.nav-detail-title {
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.nav-detail-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.nav-detail-overview {
-  font-size: 15px;
-  line-height: 1.8;
-  white-space: pre-wrap;
-}
-
-.nav-pager {
-  display: flex;
-  justify-content: center;
-  margin-top: 14px;
 }
 
 .episode-filter {

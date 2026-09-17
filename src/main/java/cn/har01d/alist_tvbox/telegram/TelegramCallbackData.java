@@ -32,6 +32,12 @@ public final class TelegramCallbackData {
     public static final String PIAN_DAN_PAGE = "pdl";
     public static final String PIAN_DAN_ENTRY = "pde";
     public static final String PIAN_DAN_ADD = "pdadd";
+    // 稍后再看:列表页(翻页) → 单条 追剧/移出(索引,条目本体走服务端暂存)
+    public static final String WANT = "want";
+    public static final String WANT_PAGE = "wantp";
+    public static final String WANT_ENTRY = "wante";
+    public static final String WANT_SUB = "wantsub";
+    public static final String WANT_DEL = "wantdel";
 
     private TelegramCallbackData() {
     }
@@ -62,12 +68,12 @@ public final class TelegramCallbackData {
             return null;
         }
         switch (action) {
-            case HOME, SEARCH, CANCEL, INBOX, CALENDAR, PIAN_DAN -> {
+            case HOME, SEARCH, CANCEL, INBOX, CALENDAR, PIAN_DAN, WANT -> {
                 return new Callback(action, 0, null);
             }
             case SUBS, SUB, SUB_DELETE, SUB_DELETE_CONFIRM, SUB_CHECK, SUB_UPDATE, SUB_PAUSE,
                  SUB_RESUME, PICK, ADD, RESULT_PAGE, RESULT_BACK, PIAN_DAN_CATEGORY, PIAN_DAN_PAGE,
-                 PIAN_DAN_ENTRY, PIAN_DAN_ADD -> {
+                 PIAN_DAN_ENTRY, PIAN_DAN_ADD, WANT_PAGE, WANT_ENTRY, WANT_SUB, WANT_DEL -> {
                 return arg == null ? null : new Callback(action, arg, arg2);
             }
             default -> {

@@ -48,13 +48,14 @@ class TelegramSubscriptionBotTest {
     private final PianDanService pianDanService = mock(PianDanService.class);
     private final PianDanSubscriptionService pianDanSubscriptionService = mock(PianDanSubscriptionService.class);
     private final DoubanService doubanService = mock(DoubanService.class);
+    private final cn.har01d.alist_tvbox.service.WatchlistService watchlistService = mock(cn.har01d.alist_tvbox.service.WatchlistService.class);
     private final TelegramBotClient client = mock(TelegramBotClient.class);
     private TelegramSubscriptionBot bot;
 
     @BeforeEach
     void setUp() {
         bot = new TelegramSubscriptionBot(subscriptionService, checkService, pianDanService,
-                pianDanSubscriptionService, doubanService, client);
+                pianDanSubscriptionService, doubanService, watchlistService, client);
     }
 
     private MetadataSearchItem item(String provider, String id, String name) {
@@ -520,5 +521,172 @@ class TelegramSubscriptionBotTest {
         when(subscriptionService.schedule(5)).thenReturn(List.of());
         bot.sendCalendar("TOKEN", "100", 5);
         verify(client).sendMessage(eq("TOKEN"), eq("100"), contains("没有排播日程"), any(), any());
+    }
+
+    @Test
+    void sendWatchlistListsWantItemsWithSubscribedMark() {
+        cn.har01d.alist_tvbox.entity.WatchlistItem first = new cn.har01d.alist_tvbox.entity.WatchlistItem();
+        first.setTitle("测试剧");
+        first.setYear(2026);
+        first.setStatus(cn.har01d.alist_tvbox.entity.WatchlistItem.STATUS_WANT);
+        cn.har01d.alist_tvbox.entity.WatchlistItem archived = new cn.har01d.alist_tvbox.entity.WatchlistItem();
+        archived.setTitle("归档剧");
+        archived.setSeason(2);
+        archived.setStatus(cn.har01d.alist_tvbox.entity.WatchlistItem.STATUS_WATCHED); // 非 WANT 不出现
+        when(watchlistService.list(7)).thenReturn(List.of(first, archived));
+        when(subscriptionService.subscriptionsOf(7)).thenReturn(List.of());
+        when(subscriptionService.isSubscribedTitle(eq(7), eq("测试剧"), any())).thenReturn(true);
+
+        bot.sendWatchlist("TOKEN", "100", 7);
+
+        verify(client).sendMessage(eq("TOKEN"), eq("100"), argThat(text ->
+                text.contains("测试剧") && text.contains("✅已追") && !text.contains("归档剧")), any(), any());
+    }
+
+    @Test
+    void wantSubscribeCallbackSubscribesAndRerenders() {
+        cn.har01d.alist_tvbox.entity.WatchlistItem item = new cn.har01d.alist_tvbox.entity.WatchlistItem();
+        item.setVodId("tmdb:tv:42");
+        item.setTitle("测试剧");
+        item.setStatus(cn.har01d.alist_tvbox.entity.WatchlistItem.STATUS_WANT);
+        when(watchlistService.list(7)).thenReturn(List.of(item));
+        when(subscriptionService.subscriptionsOf(7)).thenReturn(List.of());
+        bot.sendWatchlist("TOKEN", "100", 7); // 暂存全量列表
+        when(pianDanSubscriptionService.subscribe(eq(7), eq("tmdb:tv:42|测试剧")))
+                .thenReturn(new cn.har01d.alist_tvbox.service.PianDanSubscriptionService.Result(
+                        null, false, "测试剧", null, "已加入追剧《测试剧》,稍后在我的追剧查看"));
+
+        String toast = bot.handleCallback("TOKEN", 7, callback(100L, 55L, "wantsub:0"),
+                cn.har01d.alist_tvbox.telegram.TelegramCallbackData.parse("wantsub:0"));
+
+        assertEquals("已加入追剧《测试剧》,稍后在我的追剧查看", toast);
+        verify(pianDanSubscriptionService).subscribe(7, "tmdb:tv:42|测试剧");
+        // 操作后就地重渲染列表(watchlistService.list 再次拉取)
+        verify(watchlistService, org.mockito.Mockito.times(2)).list(7);
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("稍后再看"), any(), any());
+    }
+
+    @Test
+    void wantRemoveCallbackRemovesAndRerenders() {
+        cn.har01d.alist_tvbox.entity.WatchlistItem item = new cn.har01d.alist_tvbox.entity.WatchlistItem();
+        item.setVodId("s:测试剧@2026");
+        item.setTitle("测试剧");
+        item.setSeason(2);
+        item.setStatus(cn.har01d.alist_tvbox.entity.WatchlistItem.STATUS_WANT);
+        when(watchlistService.list(7)).thenReturn(List.of(item));
+        when(subscriptionService.subscriptionsOf(7)).thenReturn(List.of());
+        bot.sendWatchlist("TOKEN", "100", 7);
+        when(watchlistService.remove(7, "s:测试剧@2026|测试剧|2"))
+                .thenReturn(new cn.har01d.alist_tvbox.service.WatchlistService.Result(
+                        true, "测试剧", "已移出稍后再看《测试剧》"));
+
+        String toast = bot.handleCallback("TOKEN", 7, callback(100L, 55L, "wantdel:0"),
+                cn.har01d.alist_tvbox.telegram.TelegramCallbackData.parse("wantdel:0"));
+
+        assertEquals("已移出稍后再看《测试剧》", toast);
+        verify(watchlistService).remove(7, "s:测试剧@2026|测试剧|2");
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("稍后再看"), any(), any());
+    }
+
+    @Test
+    void wantEntryCallbackShowsDetailWithActions() throws Exception {
+        cn.har01d.alist_tvbox.entity.WatchlistItem item = new cn.har01d.alist_tvbox.entity.WatchlistItem();
+        item.setVodId("s:测试剧@2026");
+        item.setTitle("测试剧");
+        item.setYear(2026);
+        item.setStatus(cn.har01d.alist_tvbox.entity.WatchlistItem.STATUS_WANT);
+        when(watchlistService.list(7)).thenReturn(List.of(item));
+        when(subscriptionService.subscriptionsOf(7)).thenReturn(List.of());
+        bot.sendWatchlist("TOKEN", "100", 7);
+
+        bot.handleCallback("TOKEN", 7, callback(100L, 55L, "wante:0"),
+                cn.har01d.alist_tvbox.telegram.TelegramCallbackData.parse("wante:0"));
+
+        // 详情含标题与操作按钮(加入追剧/移出/返回列表),不在列表直接操作
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("测试剧"),
+                argThat(kb -> {
+                    var joined = String.valueOf(kb);
+                    return joined.contains("wantsub:0") && joined.contains("wantdel:0") && joined.contains("wantp:0");
+                }), any());
+    }
+
+    @Test
+    void wantEntrySeasonButtonSubscribesThatSeason() throws Exception {
+        cn.har01d.alist_tvbox.entity.WatchlistItem item = new cn.har01d.alist_tvbox.entity.WatchlistItem();
+        item.setVodId("tmdb:tv:42");
+        item.setTitle("测试剧");
+        item.setStatus(cn.har01d.alist_tvbox.entity.WatchlistItem.STATUS_WANT);
+        when(watchlistService.list(7)).thenReturn(List.of(item));
+        when(subscriptionService.subscriptionsOf(7)).thenReturn(List.of());
+        bot.sendWatchlist("TOKEN", "100", 7);
+        when(pianDanSubscriptionService.subscribe(eq(7), eq("tmdb:tv:42|测试剧|3")))
+                .thenReturn(new cn.har01d.alist_tvbox.service.PianDanSubscriptionService.Result(
+                        null, false, "测试剧", 3, "已加入追剧"));
+
+        String toast = bot.handleCallback("TOKEN", 7, callback(100L, 55L, "wantsub:0:3"),
+                cn.har01d.alist_tvbox.telegram.TelegramCallbackData.parse("wantsub:0:3"));
+
+        assertEquals("已加入追剧", toast);
+        verify(pianDanSubscriptionService).subscribe(7, "tmdb:tv:42|测试剧|3");
+    }
+
+    @Test
+    void wantEntryEnrichesDetailFromLocalDoubanById() throws Exception {
+        // db:{豆瓣id} 条目:id 直取本地库,详情带出简介/主演(零消歧零网络)
+        cn.har01d.alist_tvbox.entity.WatchlistItem item = new cn.har01d.alist_tvbox.entity.WatchlistItem();
+        item.setVodId("db:1234567");
+        item.setTitle("测试剧");
+        item.setYear(2026);
+        item.setStatus(cn.har01d.alist_tvbox.entity.WatchlistItem.STATUS_WANT);
+        when(watchlistService.list(7)).thenReturn(List.of(item));
+        when(subscriptionService.subscriptionsOf(7)).thenReturn(List.of());
+        bot.sendWatchlist("TOKEN", "100", 7);
+        cn.har01d.alist_tvbox.tvbox.MovieDetail meta = new cn.har01d.alist_tvbox.tvbox.MovieDetail();
+        meta.setVod_content("一部测试剧的简介。");
+        meta.setVod_actor("演员甲/演员乙");
+        meta.setVod_director("导演甲");
+        meta.setType_name("剧情/悬疑");
+        when(subscriptionService.localDoubanDetailById(1234567)).thenReturn(meta);
+
+        bot.handleCallback("TOKEN", 7, callback(100L, 55L, "wante:0"),
+                cn.har01d.alist_tvbox.telegram.TelegramCallbackData.parse("wante:0"));
+
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), argThat(text ->
+                        text.contains("一部测试剧的简介。") && text.contains("演员甲/演员乙") && text.contains("剧情/悬疑")),
+                any(), any());
+    }
+
+    @Test
+    void wantEntryCarriesSnapshotCoverAsPoster() throws Exception {
+        // 本地库未命中的标题条目:详情页海报用队列快照封面(posterUrl 只认 http/代理形态,快照是原始外站地址)
+        cn.har01d.alist_tvbox.entity.WatchlistItem item = new cn.har01d.alist_tvbox.entity.WatchlistItem();
+        item.setVodId("s:冷门剧@2020");
+        item.setTitle("冷门剧");
+        item.setYear(2020);
+        item.setPic("https://image.tmdb.org/t/p/w500/cold.jpg");
+        item.setStatus(cn.har01d.alist_tvbox.entity.WatchlistItem.STATUS_WANT);
+        when(watchlistService.list(7)).thenReturn(List.of(item));
+        when(subscriptionService.subscriptionsOf(7)).thenReturn(List.of());
+        when(doubanService.getByName("冷门剧", 2020)).thenReturn(null);
+        bot.sendWatchlist("TOKEN", "100", 7);
+
+        bot.handleCallback("TOKEN", 7, callback(100L, 55L, "wante:0"),
+                cn.har01d.alist_tvbox.telegram.TelegramCallbackData.parse("wante:0"));
+
+        verify(client).editMessageText(eq("TOKEN"), eq("100"), eq(55L), contains("冷门剧"), any(),
+                eq("https://image.tmdb.org/t/p/w500/cold.jpg"));
+    }
+
+    @Test
+    void wantCallbackWithStaleIndexReloadsList() {
+        // 暂存过期(未先打开列表):按钮点击不误操作别的条目,重拉列表 toast 提示
+        when(watchlistService.list(7)).thenReturn(List.of());
+        when(subscriptionService.subscriptionsOf(7)).thenReturn(List.of());
+
+        String toast = bot.handleCallback("TOKEN", 7, callback(100L, 55L, "wantsub:3"),
+                cn.har01d.alist_tvbox.telegram.TelegramCallbackData.parse("wantsub:3"));
+
+        assertEquals("列表已变化,已重新加载", toast);
+        verify(pianDanSubscriptionService, never()).subscribe(anyInt(), anyString());
     }
 }

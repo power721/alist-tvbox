@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.PianDanService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.service.WatchlistService;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -41,20 +42,26 @@ import java.util.Set;
 public class MediaLibraryController {
     /** browse 已占用的保留参数,其余 query 参数透传为片单筛选(TVBox categoryContent extend 同名平铺)。 */
     private static final Set<String> RESERVED_PARAMS = Set.of("id", "t", "pg", "ac", "wd", "title");
+    /** 「稍后再看」分类短 id:必须在此显式分流 —— 未知 tid 落 contentList 后 filterByStatus 的
+     *  default->true 会把它显示成「全部订阅」。 */
+    private static final String WANT_CATEGORY_ID = "want";
 
     private final SubscriptionService subscriptionService;
     private final MediaSubscriptionService mediaSubscriptionService;
     private final PianDanService pianDanService;
     private final cn.har01d.alist_tvbox.service.WebHomeService webHomeService;
+    private final WatchlistService watchlistService;
 
     public MediaLibraryController(SubscriptionService subscriptionService,
                                   MediaSubscriptionService mediaSubscriptionService,
                                   PianDanService pianDanService,
-                                  cn.har01d.alist_tvbox.service.WebHomeService webHomeService) {
+                                  cn.har01d.alist_tvbox.service.WebHomeService webHomeService,
+                                  WatchlistService watchlistService) {
         this.subscriptionService = subscriptionService;
         this.mediaSubscriptionService = mediaSubscriptionService;
         this.pianDanService = pianDanService;
         this.webHomeService = webHomeService;
+        this.watchlistService = watchlistService;
     }
 
     @GetMapping("/media")
@@ -86,13 +93,29 @@ public class MediaLibraryController {
         if (isPianDanId(t)) {
             return pianDanList(uid, t, pg, params);
         }
+        if (WANT_CATEGORY_ID.equals(t)) {
+            return watchlistContent(uid, pg);
+        }
         if (StringUtils.isNotBlank(t) && !"0".equals(t)) {
             return mediaSubscriptionService.contentList(uid, t, null);
         }
         if (StringUtils.isNotBlank(t)) { // t=0:首页直接展示全部
             return mediaSubscriptionService.contentList(uid);
         }
-        return categories();
+        return categories(uid);
+    }
+
+    /** 「稍后再看」分类列表(t=want):条目 vod_id 为片单形态,封面/「已追」角标与片单列表同口径
+     *  (角标走幂等助手,转订阅后队列条目原地显示已追,用户自行移出或留着)。 */
+    private Object watchlistContent(int uid, int pg) {
+        MovieList result = watchlistService.content(uid, pg);
+        var subscriptions = mediaSubscriptionService.subscriptionsOf(uid);
+        for (MovieDetail item : result.getList()) {
+            item.setVod_pic(mediaSubscriptionService.absoluteClientCover(item.getVod_pic()));
+            item.setVod_remarks(subscribedRemarks(item.getVod_remarks(),
+                    mediaSubscriptionService.isSubscribedTitle(uid, item.getVod_name(), subscriptions)));
+        }
+        return result;
     }
 
     private static boolean isPianDanId(String value) {
@@ -257,6 +280,14 @@ public class MediaLibraryController {
                 .append("#🔍 全局搜索$")
                 .append(MediaSubscriptionService.SEARCH_PLAY_PREFIX)
                 .append(java.net.URLEncoder.encode(detail.getVod_name(), java.nio.charset.StandardCharsets.UTF_8));
+        // 稍后再看:按钮文案即状态(已在队列=移出),载荷与加入追剧同款 {vodId}|{剧名}
+        if (watchlistService.exists(uid, id)) {
+            playUrl.append("#➖ 移出稍后再看$")
+                    .append(MediaSubscriptionService.WATCH_DEL_PLAY_PREFIX).append(encoded);
+        } else {
+            playUrl.append("#➕ 稍后再看$")
+                    .append(MediaSubscriptionService.WATCH_ADD_PLAY_PREFIX).append(encoded);
+        }
         if (detail.getExt() instanceof List<?> seasons && !seasons.isEmpty()) {
             // 多季剧按季展开:每季一条目(已追季为取消项),单点直达「追剧·第5季」
             for (Object season : seasons) {
@@ -289,10 +320,14 @@ public class MediaLibraryController {
         return result;
     }
 
-    private CategoryList categories() {
+    private CategoryList categories(int uid) {
         CategoryList result = new CategoryList();
         List<Category> categories = new ArrayList<>();
         categories.add(category("recent", "最近更新"));
+        // 稍后再看:用户级想看队列,空则不出分类(新用户首屏不被空分类占位)
+        if (watchlistService.count(uid) > 0) {
+            categories.add(category(WANT_CATEGORY_ID, "稍后再看"));
+        }
         categories.add(category("active", "连载中"));
         categories.add(category("ended", "已完结"));
         categories.add(category("all", "全部订阅"));

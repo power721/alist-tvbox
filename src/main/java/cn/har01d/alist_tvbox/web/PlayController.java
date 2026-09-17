@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.service.PianDanSubscriptionService;
 import cn.har01d.alist_tvbox.service.ProxyService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
+import cn.har01d.alist_tvbox.service.WatchlistService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,7 @@ public class PlayController {
     private final MediaSubscriptionService mediaSubscriptionService;
     private final PianDanSubscriptionService pianDanSubscriptionService;
     private final AccountAccessGuard accountAccessGuard;
+    private final WatchlistService watchlistService;
 
     public PlayController(TvBoxService tvBoxService,
                           BiliBiliService biliBiliService,
@@ -43,7 +45,8 @@ public class PlayController {
                           ProxyService proxyService,
                           MediaSubscriptionService mediaSubscriptionService,
                           PianDanSubscriptionService pianDanSubscriptionService,
-                          AccountAccessGuard accountAccessGuard) {
+                          AccountAccessGuard accountAccessGuard,
+                          WatchlistService watchlistService) {
         this.tvBoxService = tvBoxService;
         this.biliBiliService = biliBiliService;
         this.subscriptionService = subscriptionService;
@@ -51,6 +54,7 @@ public class PlayController {
         this.mediaSubscriptionService = mediaSubscriptionService;
         this.pianDanSubscriptionService = pianDanSubscriptionService;
         this.accountAccessGuard = accountAccessGuard;
+        this.watchlistService = watchlistService;
     }
 
     @RequestMapping(value = "/p/{token}/{id}")
@@ -114,6 +118,20 @@ public class PlayController {
             // 片单条目「媒体信息」:msg 通道返回条目元数据,无副作用(TMDB 现拉详情,豆瓣条目只有标题)
             int uid = mediaSubscriptionService.resolveUid(token);
             return infoPianDan(uid, id.substring(MediaSubscriptionService.INFO_PLAY_PREFIX.length()));
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith("watchadd-")) {
+            // 片单条目「加入稍后再看」(watchadd-{vodId}|{剧名}):载荷同 msubadd-,msg 通道回执
+            int uid = mediaSubscriptionService.resolveUid(token);
+            return Map.of("msg", watchlistService.add(uid,
+                    id.substring(MediaSubscriptionService.WATCH_ADD_PLAY_PREFIX.length())).msg());
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith("watchdel-")) {
+            // 片单条目「移出稍后再看」(watchdel- 同载荷):按 vodId 精确删,msg 通道回执
+            int uid = mediaSubscriptionService.resolveUid(token);
+            return Map.of("msg", watchlistService.remove(uid,
+                    id.substring(MediaSubscriptionService.WATCH_DEL_PLAY_PREFIX.length())).msg());
         }
 
         if (StringUtils.isNotBlank(id) && id.startsWith("msubstat-")) {

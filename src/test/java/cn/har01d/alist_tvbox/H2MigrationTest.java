@@ -125,6 +125,16 @@ class H2MigrationTest {
                     "INSERT INTO playback_tombstone (id, uid, scope, source_kind, source_key, vod_id, deleted_at, expire_at)"
                             + " VALUES (1, 1, 'item', 'site', 'abc', 'v1', 300, 400)"))
                     .doesNotThrowAnyException();
+
+            // V56 watchlist_item 稍后再看:(uid, vod_id) 唯一索引防重复加入
+            assertThatCode(() -> execute(connection,
+                    "INSERT INTO watchlist_item (id, uid, vod_id, status, title, created_time)"
+                            + " VALUES (1, 1, 'tmdb:tv:42', 'WANT', '测试剧', 0)"))
+                    .doesNotThrowAnyException();
+            assertThatThrownBy(() -> execute(connection,
+                    "INSERT INTO watchlist_item (id, uid, vod_id, status, title, created_time)"
+                            + " VALUES (2, 1, 'tmdb:tv:42', 'WANT', '测试剧', 0)"))
+                    .hasMessageContaining("Unique index or primary key violation");
         }
     }
 

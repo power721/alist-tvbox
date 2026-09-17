@@ -47,3 +47,4 @@ db.migration.current.V52__MediaSubscriptionEpisodeFallback
 db.migration.current.V53__MediaSubscriptionSelfShare
 db.migration.current.V54__OfflineDownloadTaskCleanup
 db.migration.current.V55__OfflineDownloadTaskCleanupBackfill
+db.migration.current.V56__WatchlistItem

@@ -121,6 +121,33 @@ class MediaSubscriptionControllerTest {
     }
 
     @Test
+    void navigationListProxiesTmdbCoverWithoutPollutingCache() throws Exception {
+        // 线上形态:TMDB 榜单条目封面是 image.tmdb.org 绝对地址,网页直连被墙 → /images 代理;
+        // listCache 共享实例不得被改写
+        MovieDetail cached = new MovieDetail();
+        cached.setVod_id("tmdb:tv:42");
+        cached.setVod_name("测试剧");
+        cached.setVod_pic("https://image.tmdb.org/t/p/w500/abc.jpg");
+        MovieList movieList = new MovieList();
+        movieList.setList(java.util.List.of(cached));
+        when(pianDanService.list(any(), any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(), any())).thenReturn(movieList);
+        when(subscriptionService.proxiedCover(any())).thenAnswer(invocation -> {
+            String cover = invocation.getArgument(0);
+            if (cover == null || !cover.startsWith("http")) {
+                return cover;
+            }
+            return "/images?url=" + java.net.URLEncoder.encode(cover, java.nio.charset.StandardCharsets.UTF_8);
+        });
+
+        mockMvc.perform(get("/api/media-subscriptions/navigation/list").param("t", "tmdb:tv_popular"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.list[0].vod_pic")
+                        .value("/images?url=https%3A%2F%2Fimage.tmdb.org%2Ft%2Fp%2Fw500%2Fabc.jpg"));
+
+        org.junit.jupiter.api.Assertions.assertEquals("https://image.tmdb.org/t/p/w500/abc.jpg", cached.getVod_pic());
+    }
+
+    @Test
     void navigationDetailTmdbProxiesCoverWithoutPollutingCache() throws Exception {
         MovieDetail cached = new MovieDetail();
         cached.setVod_id("tmdb:tv:42");

@@ -299,6 +299,7 @@
       <div class="detail-actions">
         <button class="act" id="detail-search" type="button">搜索播放</button>
         <button class="act" id="detail-sub" type="button">➕ 加入追剧</button>
+        <button class="act" id="detail-watch" type="button">➕ 稍后再看</button>
         <button class="act" id="detail-close" type="button">关闭</button>
       </div>
     </div>
@@ -721,7 +722,7 @@
   }
 
   function overlayButtons() {
-    return [qs('detail-search'), qs('detail-sub'), qs('detail-close')];
+    return [qs('detail-search'), qs('detail-sub'), qs('detail-watch'), qs('detail-close')];
   }
 
   function focusOverlayBtn(idx) {
@@ -742,6 +743,7 @@
       img.style.display = '';
     }
     qs('detail-sub').textContent = '➕ 加入追剧';
+    qs('detail-watch').textContent = '➕ 稍后再看';
     showDetailPage();
     focusOverlayBtn(0);
     getJson(API_BASE + '?id=' + encodeURIComponent(item.vod_id)).then(function (data) {
@@ -813,6 +815,10 @@
       qs('detail-bg').style.backgroundImage = 'url(' + coverSrc(d.vod_pic) + ')';
     }
     qs('detail-sub').textContent = subscribed ? '➖ 取消追剧' : '➕ 加入追剧';
+    /* 稍后再看状态读详情动作行前缀:已在队列时详情装配的是 watchdel- 条目 */
+    var inWatch = String(d.vod_play_url || '').indexOf('watchdel-') >= 0;
+    overlayState.inWatch = inWatch;
+    qs('detail-watch').textContent = inWatch ? '➖ 移出稍后再看' : '➕ 稍后再看';
   }
 
   /* 整页详情 + WebView history 集成:pushState 进详情,返回键/浏览器回退回列表 */
@@ -878,6 +884,26 @@
     if (name) doSearch(name);
   };
   qs('detail-sub').onclick = toggleSubscribe;
+
+  /* 稍后再看:载荷 {vodId}|{剧名} 与追剧同构,GET /play watchadd-/watchdel- msg 回执 */
+  function toggleWatchlist() {
+    if (!overlayState || !overlayState.detail) return;
+    var d = overlayState.detail;
+    var prefix = overlayState.inWatch ? 'watchdel-' : 'watchadd-';
+    var url = playBase() + '?id=' + encodeURIComponent(prefix + d.vod_id + '|' + d.vod_name) + '&type=jar';
+    qs('detail-watch').textContent = '提交中…';
+    getJson(url).then(function (res) {
+      toast(res && res.msg ? res.msg : '操作已提交');
+      return getJson(API_BASE + '?id=' + encodeURIComponent(d.vod_id));
+    }).then(function (data) {
+      var nd = data && data.list && data.list.length ? data.list[0] : null;
+      if (nd) renderBoardDetail(nd);
+    }).catch(function () {
+      toast('操作失败,请重试');
+      qs('detail-watch').textContent = overlayState && overlayState.inWatch ? '➖ 移出稍后再看' : '➕ 稍后再看';
+    });
+  }
+  qs('detail-watch').onclick = toggleWatchlist;
 
   /* ---------- 搜索 ---------- */
   function doSearch(keyword) {
@@ -1041,6 +1067,20 @@
     return loadRow(entry, board.type_id, openBoardDetail);
   }
 
+  /* 稍后再看行:队列空整行不出现(免占位),非空插在继续观看之后;卡片走网页详情浮层 */
+  function loadWantRow(insertBefore) {
+    return getJson(API_BASE + '?t=' + encodeURIComponent('want')).then(function (data) {
+      var list = data && data.list ? data.list : [];
+      if (!list.length) return;
+      var want = buildRow('稍后再看', null, null);
+      rowsBox.insertBefore(want.rowEl, insertBefore || null);
+      /* buildRow 尾插 rowRegistry,挪到继续观看(首位)之后,与 DOM 序对齐(焦点导航依赖) */
+      rowRegistry.splice(rowRegistry.indexOf(want), 1);
+      rowRegistry.splice(1, 0, want);
+      renderCards(want, list, openBoardDetail);
+    }).catch(function () { /* 静默:首屏行失败不打扰 */ });
+  }
+
   var booted = false;
   var contEntry = null;  /* 继续观看行:fmsdk 晚到竞态时补拉用 */
   function boot() {
@@ -1067,6 +1107,7 @@
     loadRow(active, 'active');
     loadRow(ended, 'ended');
     loadHistory(cont);
+    loadWantRow(recent.rowEl);
 
     loadBoardCategories().then(function (boards) {
       var chain = Promise.resolve();

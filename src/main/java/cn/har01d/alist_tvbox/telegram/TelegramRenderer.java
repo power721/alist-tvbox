@@ -30,6 +30,7 @@ import java.util.Set;
 public final class TelegramRenderer {
     /** 订阅列表每页条数 */
     static final int SUBS_PAGE_SIZE = 10;
+    static final int WANT_PAGE_SIZE = 10;
     /** 搜索结果每页条数 */
     static final int RESULTS_PAGE_SIZE = 10;
     private static final int MAX_TEXT_LENGTH = 3800;
@@ -94,6 +95,7 @@ public final class TelegramRenderer {
                         row(new TelegramButton("📺 我的订阅", TelegramCallbackData.of(TelegramCallbackData.SUBS, 0)),
                                 new TelegramButton("🔍 搜索追剧", TelegramCallbackData.SEARCH)),
                         row(new TelegramButton("🎞 片单追更", TelegramCallbackData.PIAN_DAN),
+                                new TelegramButton("🔖 稍后再看", TelegramCallbackData.WANT),
                                 new TelegramButton("📅 追更日历", TelegramCallbackData.CALENDAR)),
                         row(new TelegramButton("🔄 最近更新", TelegramCallbackData.INBOX))));
     }
@@ -118,6 +120,100 @@ public final class TelegramRenderer {
         }
         appendNav(keyboard, page, pages);
         return new Rendered(truncate(text), keyboard);
+    }
+
+    /** /want 稍后再看列表:分页+单条可操作(▶ 追剧 / ➖ 移出,索引指向全量列表,条目本体在服务端暂存);
+     *  subscribedIndexes 为全量索引集(含未展示页),操作后由 Bot 重渲染。 */
+    public static Rendered watchlistPage(List<cn.har01d.alist_tvbox.entity.WatchlistItem> items,
+                                         java.util.Set<Integer> subscribedIndexes, int page) {
+        if (items.isEmpty()) {
+            return new Rendered("🔖 <b>稍后再看</b>\n\n队列是空的。电视/网页片单详情页点「➕ 稍后再看」即可加入。",
+                    List.of(row(new TelegramButton("🔍 搜索追剧", TelegramCallbackData.SEARCH),
+                                    new TelegramButton("🎞 片单追更", TelegramCallbackData.PIAN_DAN)),
+                            row(new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME))));
+        }
+        int pages = (items.size() + WANT_PAGE_SIZE - 1) / WANT_PAGE_SIZE;
+        int safePage = Math.min(Math.max(page, 0), pages - 1);
+        int from = safePage * WANT_PAGE_SIZE;
+        int to = Math.min(from + WANT_PAGE_SIZE, items.size());
+        StringBuilder text = new StringBuilder("🔖 <b>稍后再看</b>(共 " + items.size() + " 条)");
+        if (pages > 1) {
+            text.append(",第 ").append(safePage + 1).append("/").append(pages).append(" 页");
+        }
+        List<List<TelegramButton>> keyboard = new ArrayList<>();
+        for (int i = from; i < to; i++) {
+            cn.har01d.alist_tvbox.entity.WatchlistItem item = items.get(i);
+            String title = wantTitle(item);
+            text.append("\n").append(i + 1).append(". <b>").append(esc(title)).append("</b>");
+            if (item.getYear() != null) {
+                text.append(" · ").append(item.getYear());
+            }
+            if (subscribedIndexes.contains(i)) {
+                text.append(" · ✅已追");
+            }
+            // 与追剧/片单列表同交互:单按钮进详情(详情里再 追剧/移出),不在列表直接操作
+            keyboard.add(row(new TelegramButton(
+                    (subscribedIndexes.contains(i) ? "✅ " : "") + abbrev(title, 24),
+                    TelegramCallbackData.of(TelegramCallbackData.WANT_ENTRY, i))));
+        }
+        List<TelegramButton> nav = new ArrayList<>();
+        if (safePage > 0) {
+            nav.add(new TelegramButton("◀ 上一页", TelegramCallbackData.of(TelegramCallbackData.WANT_PAGE, safePage - 1)));
+        }
+        if (safePage < pages - 1) {
+            nav.add(new TelegramButton("下一页 ▶", TelegramCallbackData.of(TelegramCallbackData.WANT_PAGE, safePage + 1)));
+        }
+        if (!nav.isEmpty()) {
+            keyboard.add(nav);
+        }
+        keyboard.add(row(new TelegramButton("🔍 搜索追剧", TelegramCallbackData.SEARCH),
+                new TelegramButton("🎞 片单追更", TelegramCallbackData.PIAN_DAN)));
+        keyboard.add(row(new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME)));
+        return new Rendered(truncate(text), keyboard);
+    }
+
+    /** 想看条目标题:条目加队列时若标了季(N 季),标题带季后缀 —— 与已追判定的显示口径一致。 */
+    private static String wantTitle(cn.har01d.alist_tvbox.entity.WatchlistItem item) {
+        return item.getSeason() != null
+                ? item.getTitle() + " 第" + item.getSeason() + "季" : item.getTitle();
+    }
+
+    /** 想看条目详情(与追剧/片单详情同交互):简介富化在 Bot 侧完成,按钮 = 按季加入追剧 / 移出 / 返回列表。
+     *  index 为队列全量索引,page 为返回列表时回到的页码。 */
+    public static Rendered wantEntry(MovieDetail item, int index, int page, boolean subscribed,
+                                     List<Integer> seasons, java.util.Set<Integer> subscribedSeasons) {
+        StringBuilder text = new StringBuilder("🔖 <b>").append(esc(abbrev(item.getVod_name(), 60))).append("</b>");
+        if (StringUtils.isNotBlank(item.getVod_year())) {
+            text.append("(").append(esc(item.getVod_year())).append(")");
+        }
+        if (StringUtils.isNotBlank(item.getType_name())) {
+            text.append("\n\n类型:").append(esc(abbrev(item.getType_name(), 60)));
+        }
+        if (StringUtils.isNotBlank(item.getVod_remarks())) {
+            text.append("\n评分:").append(esc(abbrev(item.getVod_remarks(), 12)));
+        }
+        if (StringUtils.isNotBlank(item.getVod_actor())) {
+            text.append("\n主演:").append(esc(abbrev(item.getVod_actor(), 60)));
+        }
+        if (StringUtils.isNotBlank(item.getVod_content())) {
+            text.append("\n\n").append(esc(StringUtils.abbreviate(item.getVod_content(), 400)));
+        }
+        List<List<TelegramButton>> keyboard = new ArrayList<>();
+        if (seasons != null && !seasons.isEmpty()) {
+            appendSeasonButtons(keyboard, seasons, subscribedSeasons, TelegramCallbackData.WANT_SUB, index);
+        } else if (subscribed) {
+            keyboard.add(row(new TelegramButton("✅ 已在追剧列表 · 查看",
+                    TelegramCallbackData.of(TelegramCallbackData.SUBS, 0))));
+        } else {
+            keyboard.add(row(new TelegramButton("➕ 加入追剧",
+                    TelegramCallbackData.of(TelegramCallbackData.WANT_SUB, index))));
+        }
+        keyboard.add(row(new TelegramButton("➖ 移出稍后再看",
+                TelegramCallbackData.of(TelegramCallbackData.WANT_DEL, index))));
+        keyboard.add(row(new TelegramButton("◀ 返回列表",
+                TelegramCallbackData.of(TelegramCallbackData.WANT_PAGE, page))));
+        keyboard.add(row(new TelegramButton("🏠 主菜单", TelegramCallbackData.HOME)));
+        return new Rendered(truncate(text), keyboard, posterUrl(item.getVod_pic()));
     }
 
     /** 订阅列表/详情共用的标题行:名字 + 季 + 进度 + 状态 emoji。 */

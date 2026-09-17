@@ -56,12 +56,14 @@ class MediaLibraryControllerTest {
     private PianDanService pianDanService;
     @Mock
     private WebHomeService webHomeService;
+    @Mock
+    private cn.har01d.alist_tvbox.service.WatchlistService watchlistService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new MediaLibraryController(subscriptionService, mediaSubscriptionService, pianDanService, webHomeService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new MediaLibraryController(subscriptionService, mediaSubscriptionService, pianDanService, webHomeService, watchlistService))
                 .setControllerAdvice(new RestErrorHandler())
                 .build();
         when(mediaSubscriptionService.resolveUid("token-a")).thenReturn(7);
@@ -139,6 +141,7 @@ class MediaLibraryControllerTest {
                 .andExpect(jsonPath("$.list[0].vod_play_url")
                         .value("📄 媒体信息$msubinfo-" + encode("tmdb:tv:42|测试剧")
                                 + "#🔍 全局搜索$msubsearch-" + encode("测试剧")
+                                + "#➕ 稍后再看$watchadd-" + encode("tmdb:tv:42|测试剧")
                                 + "#➕ 加入追剧$msubadd-" + encode("tmdb:tv:42|测试剧")));
     }
 
@@ -158,6 +161,7 @@ class MediaLibraryControllerTest {
                 .andExpect(jsonPath("$.list[0].vod_play_url")
                         .value("📄 媒体信息$msubinfo-" + encode("tmdb:tv:42|测试剧")
                                 + "#🔍 全局搜索$msubsearch-" + encode("测试剧")
+                                + "#➕ 稍后再看$watchadd-" + encode("tmdb:tv:42|测试剧")
                                 + "#➖ 取消·第1季$msubdel-" + encode("tmdb:tv:42|测试剧|1")
                                 + "#➕ 追剧·第5季$msubadd-" + encode("tmdb:tv:42|测试剧|5")))
                 .andExpect(jsonPath("$.list[0].ext").doesNotExist());
@@ -175,7 +179,68 @@ class MediaLibraryControllerTest {
                 .andExpect(jsonPath("$.list[0].vod_play_url")
                         .value("📄 媒体信息$msubinfo-" + encode("s:showa|showa")
                                 + "#🔍 全局搜索$msubsearch-" + encode("showa")
+                                + "#➕ 稍后再看$watchadd-" + encode("s:showa|showa")
                                 + "#➖ 取消追剧$msubdel-" + encode("s:showa|showa")));
+    }
+
+    @Test
+    void homeContentHidesWantCategoryWhenEmpty() throws Exception {
+        // mock 默认 count=0:稍后再看分类不出现,首屏顺序不变
+        when(pianDanService.subscriptionCategory()).thenReturn(new CategoryList());
+        mockMvc.perform(get("/media/token-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.class.length()").value(4))
+                .andExpect(jsonPath("$.class[1].type_id").value("active"));
+    }
+
+    @Test
+    void homeContentShowsWantCategoryAfterRecentWhenNonEmpty() throws Exception {
+        when(pianDanService.subscriptionCategory()).thenReturn(new CategoryList());
+        when(watchlistService.count(7)).thenReturn(3L);
+        mockMvc.perform(get("/media/token-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.class[1].type_id").value("want"))
+                .andExpect(jsonPath("$.class[1].type_name").value("稍后再看"))
+                .andExpect(jsonPath("$.class[2].type_id").value("active"));
+    }
+
+    @Test
+    void wantCategoryReturnsWatchlistWithSubscribedBadge() throws Exception {
+        MovieList watchlist = new MovieList();
+        MovieDetail item = new MovieDetail();
+        item.setVod_id("tmdb:tv:42");
+        item.setVod_name("测试剧");
+        item.setVod_pic("/images?url=x.jpg");
+        item.setVod_remarks("2024 · 8.5");
+        watchlist.getList().add(item);
+        when(watchlistService.content(7, 1)).thenReturn(watchlist);
+        when(mediaSubscriptionService.subscriptionsOf(7)).thenReturn(java.util.List.of());
+        when(mediaSubscriptionService.isSubscribedTitle(eq(7), eq("测试剧"), org.mockito.ArgumentMatchers.anyList())).thenReturn(true);
+        when(mediaSubscriptionService.absoluteClientCover(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        mockMvc.perform(get("/media/token-a").param("t", "want"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.list[0].vod_id").value("tmdb:tv:42"))
+                .andExpect(jsonPath("$.list[0].vod_remarks").value("已追 2024 · 8.5"));
+    }
+
+    @Test
+    void pianDanDetailShowsRemoveWatchWhenInWatchlist() throws Exception {
+        MovieDetail meta = new MovieDetail();
+        meta.setVod_id("tmdb:tv:42");
+        meta.setVod_name("测试剧");
+        when(pianDanService.tmdbDetail("tv", 42)).thenReturn(meta);
+        when(mediaSubscriptionService.isSubscribedTitle(org.mockito.ArgumentMatchers.eq(7), org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
+        when(mediaSubscriptionService.absoluteClientCover(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(watchlistService.exists(7, "tmdb:tv:42")).thenReturn(true);
+
+        mockMvc.perform(get("/media/token-a").param("id", "tmdb:tv:42"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.list[0].vod_play_url")
+                        .value("📄 媒体信息$msubinfo-" + encode("tmdb:tv:42|测试剧")
+                                + "#🔍 全局搜索$msubsearch-" + encode("测试剧")
+                                + "#➖ 移出稍后再看$watchdel-" + encode("tmdb:tv:42|测试剧")
+                                + "#➕ 加入追剧$msubadd-" + encode("tmdb:tv:42|测试剧")));
     }
 
     private static String encode(String value) {

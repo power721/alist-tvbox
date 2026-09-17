@@ -99,13 +99,16 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="140">
+      <el-table-column label="操作" width="180">
         <template #default="scope">
           <el-button link type="primary" :disabled="!isCheckSupportedRow(scope.row)" :loading="scope.row.validity_checking" @click="checkLink(scope.row)">
             检测
           </el-button>
           <el-button link type="success" @click="followSearch(scope.row)">
             追更
+          </el-button>
+          <el-button link type="warning" @click="wantSearch(scope.row)" :disabled="wantedNames.has(scope.row.vod_name)">
+            {{ wantedNames.has(scope.row.vod_name) ? '已想看' : '想看' }}
           </el-button>
         </template>
       </el-table-column>
@@ -257,6 +260,18 @@ const followSearch = (row: any) => {
     ElMessage.success(`已订阅追更「${row.vod_name}」,当前资源直接作为主源,稍后到追剧页查看`)
   }).finally(() => {
     followingKeys.delete(key)
+  })
+}
+
+/* 盘搜结果「想看」:按分享名入稍后再看(标题形态,详情靠名称匹配),与「追更」并排分流 */
+const wantedNames = ref(new Set<string>())
+const wantSearch = (row: any) => {
+  if (!row.vod_name || wantedNames.value.has(row.vod_name)) return
+  axios.post('/api/watchlist', {title: row.vod_name}).then(({data}) => {
+    ElMessage.success(data.msg || '已加入稍后再看')
+    const next = new Set(wantedNames.value)
+    next.add(row.vod_name)
+    wantedNames.value = next
   })
 }
 

@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.service.MediaSubscriptionTransferService;
 import cn.har01d.alist_tvbox.service.PianDanService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -62,13 +64,23 @@ public class MediaSubscriptionController {
         return pianDanService.subscriptionCategory();
     }
 
-    /** 片单追更:分类条目列表。ac 固定 web(豆瓣封面走 /images 代理防盗链)。 */
+    /** 片单追更:分类条目列表。ac 固定 web(豆瓣封面走 /images 代理防盗链)。
+     *  TMDB 条目封面是 image.tmdb.org 绝对地址(网页直连被墙/防盗链),与 detail 同口径包代理;
+     *  列表对象可能是 pianDanService listCache 里的共享实例 —— 拷贝再改写,防缓存被污染。 */
     @GetMapping("/navigation/list")
     public Object navigationList(String t,
                                  @RequestParam(required = false, defaultValue = "1") int pg,
                                  @RequestParam(required = false, defaultValue = "24") int size,
                                  @RequestParam Map<String, String> filters) {
-        return pianDanService.list(t, "web", pg, size, filters);
+        MovieList result = pianDanService.list(t, "web", pg, size, filters);
+        List<MovieDetail> items = new ArrayList<>();
+        for (MovieDetail item : result.getList()) {
+            MovieDetail copy = copyMovieDetail(item);
+            copy.setVod_pic(subscriptionService.proxiedCover(copy.getVod_pic()));
+            items.add(copy);
+        }
+        result.setList(items);
+        return result;
     }
 
     /** 片单追更:条目媒体详情。tmdb:{tv|movie}:{id} 直取 TMDB 元数据;s:{标题}[@{年份}] 本地豆瓣库

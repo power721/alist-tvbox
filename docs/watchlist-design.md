@@ -1,6 +1,8 @@
 # 收藏 / 稍后再看 设计方案
 
-> 状态：设计稿（未实现）。2026-09-09 起草，基于当时代码现状的摸底结论。
+> 状态：**一期+二期均已实现**（2026-09-16，V56 迁移，atv 全量 1836 绿 + spider 418 绿）。四端闭环：TVBox `/media` want 分类 + 片单详情动作行（watchadd-/watchdel-）、WebHome 详情浮层按钮 + 首页行（v=23）、管理网页 `/watchlist`（想看）、REST `/api/watchlist`。二期追加（2026-09-16）：spider `Media.java` Toast 拦截块（msubadd 块条件扩展，spring.jar 已重打、dex 实证 watchadd-/watchdel-，客户端按 md5 自动重下）、订阅对话框元数据搜索行「想看」按钮（tmdb:tv:/db: 真 id 映射）+ 盘搜结果行「想看」（标题形态）、TG Bot `/want`（`/watchlist` 别名，已入主菜单第二排；列表分页、每条「▶ 追剧 / ➖ 移出」inline 按钮，转订阅复用 msubadd 编排、操作后就地重渲染）。**想看页榜单入口**（同日追加）：追剧页「片单追更」对话框抽成通用组件 `web-ui/src/components/PianDanBrowser.vue`（豆瓣/TMDB 分类+筛选+海报网格+详情，内置「想看」按钮与已想看回显——vodId+标题双匹配，豆瓣榜单条目无 subject id 靠标题；「追更」emit 给宿主页），追剧页（预填订阅对话框）与想看页「逛榜单」按钮（直接建订阅）两处复用。**并入追剧页**（同日）：管理网页「想看」不再是独立菜单入口 —— 追剧页主体表格区改为 el-tabs（我的追剧 / 稍后再看，want 面板 lazy 加载嵌入 `WatchlistView embedded`，embedded 模式自带工具行且不再叠卡片框），`/watchlist` 路由保留作深链。**明确不做**：「看完自动归档 WATCHED」——读侧判定需逐订阅拉 History 查询、价值/成本比低，三态手动流转（网页 cycleStatus 按钮）已覆盖。
+>
+> 2026-09-16 起草，基于当时代码现状的摸底结论。
 
 ## 1. 目标与非目标
 

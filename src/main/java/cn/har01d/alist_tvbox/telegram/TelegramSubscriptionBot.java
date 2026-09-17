@@ -61,11 +61,16 @@ public class TelegramSubscriptionBot {
     record PianDanState(String typeId, String typeName, int page, List<MovieDetail> items) {
     }
 
+    /** 稍后再看暂存:chatId → 全量队列与当前页(wante/wantsub/wantdel 的全量索引在此解析,page 供返回)。 */
+    record WantState(List<cn.har01d.alist_tvbox.entity.WatchlistItem> items, int page) {
+    }
+
     private final MediaSubscriptionService subscriptionService;
     private final MediaSubscriptionCheckService checkService;
     private final PianDanService pianDanService;
     private final PianDanSubscriptionService pianDanSubscriptionService;
     private final DoubanService doubanService;
+    private final cn.har01d.alist_tvbox.service.WatchlistService watchlistService;
     private final TelegramBotClient client;
     private final Cache<String, SearchState> searchStates = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofMinutes(10))
@@ -76,17 +81,24 @@ public class TelegramSubscriptionBot {
             .maximumSize(100)
             .build();
 
+    private final Cache<String, WantState> wantStates = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofMinutes(10))
+            .maximumSize(100)
+            .build();
+
     public TelegramSubscriptionBot(MediaSubscriptionService subscriptionService,
                                     MediaSubscriptionCheckService checkService,
                                     PianDanService pianDanService,
                                     PianDanSubscriptionService pianDanSubscriptionService,
                                     DoubanService doubanService,
+                                    cn.har01d.alist_tvbox.service.WatchlistService watchlistService,
                                     TelegramBotClient client) {
         this.subscriptionService = subscriptionService;
         this.checkService = checkService;
         this.pianDanService = pianDanService;
         this.pianDanSubscriptionService = pianDanSubscriptionService;
         this.doubanService = doubanService;
+        this.watchlistService = watchlistService;
         this.client = client;
     }
 
@@ -109,6 +121,144 @@ public class TelegramSubscriptionBot {
     /** /calendar:追更日历(与网页端横向日历条同源,每次实时拉,无暂存)。 */
     public void sendCalendar(String token, String chatId, int uid) {
         editFresh(token, chatId, TelegramRenderer.calendar(subscriptionService.schedule(uid)));
+    }
+
+    /** /want:稍后再看队列(单条可操作:追剧/移出;列表实时拉,已追条目带标记)。 */
+    public void sendWatchlist(String token, String chatId, int uid) {
+        editFresh(token, chatId, renderWantPage(uid, chatId, 0));
+    }
+
+    /** 拉全量 WANT 队列 → 暂存(操作回调按全量索引取条目)→ 渲染指定页。 */
+    private TelegramRenderer.Rendered renderWantPage(int uid, String chatId, int page) {
+        List<cn.har01d.alist_tvbox.entity.WatchlistItem> items = watchlistService.list(uid).stream()
+                .filter(item -> cn.har01d.alist_tvbox.entity.WatchlistItem.STATUS_WANT.equals(item.getStatus()))
+                .toList();
+        wantStates.put(chatId, new WantState(items, page));
+        var subscriptions = subscriptionService.subscriptionsOf(uid);
+        Set<Integer> subscribed = new HashSet<>();
+        for (int i = 0; i < items.size(); i++) {
+            String display = items.get(i).getSeason() != null
+                    ? items.get(i).getTitle() + " 第" + items.get(i).getSeason() + "季"
+                    : items.get(i).getTitle();
+            if (subscriptionService.isSubscribedTitle(uid, display, subscriptions)) {
+                subscribed.add(i);
+            }
+        }
+        return TelegramRenderer.watchlistPage(items, subscribed, page);
+    }
+
+    /** 单条操作后的索引失效兜底:实时重拉即可,无须用户重来;页码回到用户刚才浏览的那页。 */
+    private String reloadWant(String token, int uid, String chatId, long messageId, String toast) {
+        WantState state = wantStates.getIfPresent(chatId);
+        edit(token, chatId, messageId, renderWantPage(uid, chatId, state == null ? 0 : state.page()));
+        return toast;
+    }
+
+    /** 想看条目详情(与追剧/片单同交互):TMDB 条目富化简介/季清单(短缓存),已追按整剧与逐季判定。 */
+    private String showWantEntry(String token, int uid, String chatId, long messageId, int index) {
+        WantState state = wantStates.getIfPresent(chatId);
+        if (state == null || index < 0 || index >= state.items().size()) {
+            return reloadWant(token, uid, chatId, messageId, "列表已变化,已重新加载");
+        }
+        cn.har01d.alist_tvbox.entity.WatchlistItem item = state.items().get(index);
+        MovieDetail shell = new MovieDetail();
+        shell.setVod_id(item.getVodId());
+        shell.setVod_name(item.getSeason() != null
+                ? item.getTitle() + " 第" + item.getSeason() + "季" : item.getTitle());
+        if (item.getYear() != null) {
+            shell.setVod_year(String.valueOf(item.getYear()));
+        }
+        shell.setVod_remarks(item.getRemarks());
+        // 快照封面垫底(加入时富化存库):TMDB 详情/本地库都拿不到时详情页仍有图
+        shell.setVod_pic(item.getPic());
+        MovieDetail detail = pianDanDetail(shell);
+        enrichWantDetail(detail, item);
+        List<Integer> seasons = seasonsOf(detail);
+        String name = StringUtils.defaultString(detail.getVod_name());
+        edit(token, chatId, messageId, TelegramRenderer.wantEntry(detail, index, state.page(),
+                subscriptionService.isSubscribedTitle(uid, name), seasons,
+                subscribedSeasons(uid, name, seasons)));
+        return null;
+    }
+
+    /** 豆瓣/标题条目的媒体详情富化(零网络):db:{id} 本地库 id 直取(零消歧),其余按裸名+年份精确匹配;
+     *  只补壳上缺失的字段(简介/演职员/类型/封面),查不到保持快照版(标题+年份+评分)。 */
+    private void enrichWantDetail(MovieDetail detail, cn.har01d.alist_tvbox.entity.WatchlistItem item) {
+        if (StringUtils.startsWith(item.getVodId(), PianDanService.TMDB_PREFIX)) {
+            return; // TMDB 条目 pianDanDetail 已富化
+        }
+        MovieDetail meta = null;
+        if (StringUtils.startsWith(item.getVodId(), PianDanService.DOUBAN_SUBJECT_PREFIX)
+                && StringUtils.isNumeric(item.getVodId().substring(PianDanService.DOUBAN_SUBJECT_PREFIX.length()))) {
+            meta = subscriptionService.localDoubanDetailById(
+                    Integer.valueOf(item.getVodId().substring(PianDanService.DOUBAN_SUBJECT_PREFIX.length())));
+        }
+        if (meta == null) {
+            cn.har01d.alist_tvbox.dto.MetadataSearchItem probe = new cn.har01d.alist_tvbox.dto.MetadataSearchItem();
+            probe.setName(item.getTitle());
+            probe.setYear(item.getYear() == null ? null : String.valueOf(item.getYear()));
+            meta = localDoubanDetail(probe);
+        }
+        if (meta == null) {
+            return;
+        }
+        if (StringUtils.isBlank(detail.getVod_content())) {
+            detail.setVod_content(meta.getVod_content());
+        }
+        if (StringUtils.isBlank(detail.getVod_actor())) {
+            detail.setVod_actor(meta.getVod_actor());
+        }
+        if (StringUtils.isBlank(detail.getVod_director())) {
+            detail.setVod_director(meta.getVod_director());
+        }
+        if (StringUtils.isBlank(detail.getType_name())) {
+            detail.setType_name(meta.getType_name());
+        }
+        if (StringUtils.isBlank(detail.getVod_pic())) {
+            detail.setVod_pic(meta.getVod_pic());
+        }
+    }
+
+    /** 想看条目一键转订阅:载荷 {vodId}|{剧名}|{季?} 与片单/电视端同一编排(元数据直绑+幂等+首轮巡检)。
+     *  详情页按季按钮传显式季(优先);列表/裸按钮用条目自身标记的季。 */
+    private String subscribeWant(String token, int uid, String chatId, long messageId, int index, Integer explicitSeason) {
+        cn.har01d.alist_tvbox.entity.WatchlistItem item = wantedItem(chatId, index);
+        if (item == null) {
+            return reloadWant(token, uid, chatId, messageId, "列表已变化,已重新加载");
+        }
+        Integer season = explicitSeason != null ? explicitSeason : item.getSeason();
+        String payload = item.getVodId() + "|" + item.getTitle()
+                + (season == null ? "" : "|" + season);
+        cn.har01d.alist_tvbox.service.PianDanSubscriptionService.Result result;
+        try {
+            result = pianDanSubscriptionService.subscribe(uid, payload);
+        } catch (cn.har01d.alist_tvbox.exception.BadRequestException e) {
+            log.info("telegram want subscribe rejected: uid={} {}", uid, payload);
+            return "❌ 条目信息获取失败,请稍后重试";
+        }
+        log.info("telegram want subscribe: uid={} {} {}", uid, result.dto() == null ? "-" : result.dto().getId(), result.name());
+        return reloadWant(token, uid, chatId, messageId, result.msg());
+    }
+
+    /** 想看条目移出:与电视端 watchdel- 同载荷,重渲染列表。 */
+    private String removeWant(String token, int uid, String chatId, long messageId, int index) {
+        cn.har01d.alist_tvbox.entity.WatchlistItem item = wantedItem(chatId, index);
+        if (item == null) {
+            return reloadWant(token, uid, chatId, messageId, "列表已变化,已重新加载");
+        }
+        String payload = item.getVodId() + "|" + item.getTitle()
+                + (item.getSeason() == null ? "" : "|" + item.getSeason());
+        cn.har01d.alist_tvbox.service.WatchlistService.Result result = watchlistService.remove(uid, payload);
+        return reloadWant(token, uid, chatId, messageId, result.msg());
+    }
+
+    /** 暂存有效且索引在范围内才返回条目;过期/越界返回 null。 */
+    private cn.har01d.alist_tvbox.entity.WatchlistItem wantedItem(String chatId, int index) {
+        WantState state = wantStates.getIfPresent(chatId);
+        if (state == null || index < 0 || index >= state.items().size()) {
+            return null;
+        }
+        return state.items().get(index);
     }
 
     /** 搜索提示由 Router 在进入会话时发出(新消息,记 message_id 作为后续编辑锚点)。 */
@@ -278,6 +428,23 @@ public class TelegramSubscriptionBot {
             }
             case TelegramCallbackData.PIAN_DAN_ADD -> {
                 return addPianDan(token, uid, chatId, messageId, cb.arg(), cb.arg2());
+            }
+            case TelegramCallbackData.WANT -> {
+                edit(token, chatId, messageId, renderWantPage(uid, chatId, 0));
+                return null;
+            }
+            case TelegramCallbackData.WANT_PAGE -> {
+                edit(token, chatId, messageId, renderWantPage(uid, chatId, Math.max(cb.arg(), 0)));
+                return null;
+            }
+            case TelegramCallbackData.WANT_ENTRY -> {
+                return showWantEntry(token, uid, chatId, messageId, cb.arg());
+            }
+            case TelegramCallbackData.WANT_SUB -> {
+                return subscribeWant(token, uid, chatId, messageId, cb.arg(), cb.arg2());
+            }
+            case TelegramCallbackData.WANT_DEL -> {
+                return removeWant(token, uid, chatId, messageId, cb.arg());
             }
             default -> {
             }

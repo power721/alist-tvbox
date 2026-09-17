@@ -221,4 +221,11 @@ class TelegramUpdateRouterTest {
         router.dispatch("TOKEN", message(100L, "/cal"));
         verify(bot, org.mockito.Mockito.times(2)).sendCalendar("TOKEN", "100", 5);
     }
+
+    @Test
+    void wantCommandCarriesResolvedUid() {
+        router.dispatch("TOKEN", message(100L, "/want"));
+        router.dispatch("TOKEN", message(100L, "/watchlist"));
+        verify(bot, org.mockito.Mockito.times(2)).sendWatchlist("TOKEN", "100", 5);
+    }
 }
