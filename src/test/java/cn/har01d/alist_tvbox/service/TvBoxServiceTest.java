@@ -120,8 +120,27 @@ class TvBoxServiceTest {
     }
 
     @Test
-    void getDetailRoutesHttpShareLinkToMountedPlaylist() {
-        // 播放同步回放:ids 为网盘分享链接 → 挂载后转成 "1$<path>/~playlist" 走 getPlaylist。
+    void fixHttpKeepsPlainSchemeForRawAListPortBehindTlsProxy() {
+        // 1.90.0 回归(线上夸克播放全灭):fixHttp 把 PowerList 的 localhost 直链改写为
+        // {scheme}://{域名}:5344,5344 是裸 AList 明文端口不在反代 TLS 覆盖内,
+        // 主请求经 NPM 带来的 X-Forwarded-Proto=https 只描述主端口,跨端口套用会拼出
+        // https://domain:5344 对明文端口 TLS 握手必死;此处必须维持 http
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/play");
+        request.setServerName("tvbox.example");
+        request.addHeader("X-Forwarded-Proto", "https");
+        org.springframework.web.context.request.RequestContextHolder
+                .setRequestAttributes(new ServletRequestAttributes(request));
+        when(aListLocalService.getExternalPort()).thenReturn(5344);
+        when(appProperties.isEnableHttps()).thenReturn(false);
+
+        String fixed = org.springframework.test.util.ReflectionTestUtils
+                .invokeMethod(tvBoxService, "fixHttp", "http://localhost:5244/d/quark/video.mkv");
+
+        assertThat(fixed).isEqualTo("http://tvbox.example:5344/d/quark/video.mkv");
+    }
+
+    @Test
+    void getDetailRoutesHttpShareLinkToMountedPlaylist() {        // 播放同步回放:ids 为网盘分享链接 → 挂载后转成 "1$<path>/~playlist" 走 getPlaylist。
         // 用 spy 桩掉递归的 getDetail,隔离 dfs/aListService,只验证路由与挂载。
         TvBoxService spied = spy(tvBoxService);
         String link = "https://pan.baidu.com/s/abc?pwd=HAO8";

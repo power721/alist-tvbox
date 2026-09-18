@@ -2894,8 +2894,11 @@ public class TvBoxService {
 
         // Second: replace localhost with external address for non-.strm files
         if (url.startsWith("http://localhost")) {
+            // 5344 是裸 AList 明文端口,不在反代 TLS 覆盖范围:主请求的 X-Forwarded-Proto 只描述主端口,
+            // 跨端口套用会拼出 https://domain:5344 → 对明文端口 TLS 握手必死(1.90.0 夸克播放回归),
+            // 此处维持 enable_https 时代语义,不采信 publicScheme
             String proxy = ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
+                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                     .port(aListLocalService.getExternalPort())
                     .replacePath("/")
                     .replaceQuery("")
