@@ -91,8 +91,13 @@ class PianDanServiceTest {
                 .extracting(Category::getType_name)
                 .containsExactly("TMDB动漫片库", "TMDB综艺片库");
         assertThat(result.getFilters().get("douban:local")).containsExactly(filter);
-        assertThat(result.getFilters().get("douban:hot_tv")).extracting(Filter::getKey).containsExactly("region");
-        assertThat(result.getFilters().get("douban:hot_movie")).extracting(Filter::getKey).containsExactly("region");
+        // hot/分类类目下发条件筛选四组:带任一筛选降级 recommend 条件选片
+        assertThat(result.getFilters().get("douban:hot_tv")).extracting(Filter::getKey)
+                .containsExactly("region", "genre", "year", "sort");
+        assertThat(result.getFilters().get("douban:hot_movie")).extracting(Filter::getKey)
+                .containsExactly("region", "genre", "year", "sort");
+        assertThat(result.getFilters().get("douban:tv_animation")).extracting(Filter::getKey)
+                .containsExactly("region", "genre", "year", "sort");
         assertThat(result.getFilters()).containsKeys(
                 "tmdb:trending",
                 "tmdb:movie_upcoming",
@@ -150,8 +155,11 @@ class PianDanServiceTest {
         assertThat(result.getCategories()).extracting(Category::getType_id)
                 .doesNotContain("douban:tv_domestic", "douban:movie_top250", "tmdb:movie_popular", "tmdb:platform_tv");
         assertThat(result.getFilters().get("douban:local")).containsExactly(browseFilter);
-        assertThat(result.getFilters().get("douban:hot_tv")).extracting(Filter::getKey).containsExactly("region");
-        assertThat(result.getFilters().get("douban:category")).extracting(Filter::getKey).containsExactly("category");
+        assertThat(result.getFilters().get("douban:hot_tv")).extracting(Filter::getKey)
+                .containsExactly("region", "genre", "year", "sort");
+        // lite 分类单选 + 条件四组(切到具体类目后再叠筛选)
+        assertThat(result.getFilters().get("douban:category")).extracting(Filter::getKey)
+                .containsExactly("category", "region", "genre", "year", "sort");
         assertThat(result.getFilters().get("douban:billboard")).extracting(Filter::getKey).containsExactly("billboard");
         assertThat(result.getFilters().get("tmdb:movie")).extracting(Filter::getKey)
                 .containsExactly("list", "origin_group", "sort_by");
@@ -195,7 +203,7 @@ class PianDanServiceTest {
         folder.setCate(new CategoryList());
         MovieList expected = new MovieList();
         expected.setList(List.of(folder));
-        when(telegramService.listDouban("local", "web", "score,desc", 2025, "剧情", "中国", 2, 30))
+        when(telegramService.listDouban("local", "web", "score,desc", "2025", "剧情", "中国", 2, 30))
                 .thenReturn(expected);
 
         MovieList result = service.list("douban:local", "web", 2, 30, Map.of(
@@ -215,7 +223,7 @@ class PianDanServiceTest {
         });
         assertThat(folder.getVod_tag()).isEqualTo("folder");
         assertThat(folder.getCate()).isNotNull();
-        verify(telegramService).listDouban("local", "web", "score,desc", 2025, "剧情", "中国", 2, 30);
+        verify(telegramService).listDouban("local", "web", "score,desc", "2025", "剧情", "中国", 2, 30);
     }
 
     @Test

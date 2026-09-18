@@ -112,7 +112,7 @@ public class TelegramController {
             if (t.equals("0")) {
                 t = "suggestion";
             }
-            return telegramService.listDouban(t, ac, sort, year, genre, region, pg, size);
+            return telegramService.listDouban(t, ac, sort, year == null ? null : String.valueOf(year), genre, region, pg, size);
         } else if (StringUtils.isNotBlank(wd)) {
             return telegramService.searchDouban(wd, 20);
         }

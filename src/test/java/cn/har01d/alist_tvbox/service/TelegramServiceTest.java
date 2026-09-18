@@ -20,6 +20,8 @@ import org.springframework.web.client.RestTemplate;
 
 import org.jsoup.Jsoup;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 
@@ -504,6 +506,145 @@ class TelegramServiceTest {
         });
         assertThat(korea.getList()).singleElement().satisfies(movie ->
                 assertThat(movie.getVod_name()).isEqualTo("韩剧"));
+        server.verify();
+    }
+
+    @Test
+    void listDoubanCategoryWithFiltersFallsBackToRecommend() {
+        // 分类类目(动漫)带筛选降级条件选片:tags=动画,日本 —— 日漫场景,动画词自带剧集语义
+        RestTemplate restTemplate = new RestTemplateBuilder().build();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getPath()).endsWith("/tv/recommend");
+                    assertThat(request.getURI().getRawQuery()).contains("tags=" + URLEncoder.encode("动画,日本", StandardCharsets.UTF_8));
+                })
+                .andRespond(withSuccess("""
+                        {"total":500,"items":[{"id":"1","title":"日漫",
+                          "pic":{"normal":"https://img1.doubanio.com/p1.jpg"},"rating":{"count":10,"value":9.0}}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        var result = service.listDouban("tv_animation", "web", null, null, null, "日本", 1, 20);
+
+        assertThat(result.getList()).singleElement().satisfies(movie -> assertThat(movie.getVod_name()).isEqualTo("日漫"));
+        server.verify();
+    }
+
+    @Test
+    void listDoubanCategoryWithoutFiltersKeepsSubjectCollection() {
+        // 不带筛选维持原站固定列表语义
+        RestTemplate restTemplate = new RestTemplateBuilder().build();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), request ->
+                        assertThat(request.getURI().getPath()).endsWith("/subject_collection/tv_animation/items"))
+                .andRespond(withSuccess("""
+                        {"total":100,"subject_collection_items":[{"id":"2","title":"固定榜",
+                          "pic":{"normal":"https://img2.doubanio.com/p2.jpg"},"rating":{"count":5,"value":8.0}}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        var result = service.listDouban("tv_animation", "web", null, null, null, null, 1, 20);
+
+        assertThat(result.getList()).singleElement().satisfies(movie -> assertThat(movie.getVod_name()).isEqualTo("固定榜"));
+        server.verify();
+    }
+
+    @Test
+    void listDoubanCategoryDefaultsRegionToCategorySemantics() {
+        // 国产剧类目未选地区:默认地区回落类目语义(tags=电视剧,中国大陆,2024),避免丢类目性质
+        RestTemplate restTemplate = new RestTemplateBuilder().build();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getPath()).endsWith("/tv/recommend");
+                    assertThat(request.getURI().getRawQuery())
+                            .contains("tags=" + URLEncoder.encode("电视剧,中国大陆,2024", StandardCharsets.UTF_8));
+                })
+                .andRespond(withSuccess("{\"total\":50,\"items\":[]}", MediaType.APPLICATION_JSON));
+
+        service.listDouban("tv_domestic", "web", null, "2024", null, null, 1, 20);
+        server.verify();
+    }
+
+    @Test
+    void listDoubanCategoryRegionOverridesDefaultAndDeduplicates() {
+        // 显式选地区则覆盖类目默认,且与默认值相同时去重(不出现「中国大陆,中国大陆」)
+        RestTemplate restTemplate = new RestTemplateBuilder().build();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), request ->
+                        assertThat(request.getURI().getRawQuery())
+                                .contains("tags=" + URLEncoder.encode("电视剧,美国", StandardCharsets.UTF_8)))
+                .andRespond(withSuccess("{\"total\":10,\"items\":[]}", MediaType.APPLICATION_JSON));
+        server.expect(once(), request ->
+                        assertThat(request.getURI().getRawQuery())
+                                .contains("tags=" + URLEncoder.encode("电视剧,中国大陆", StandardCharsets.UTF_8)))
+                .andRespond(withSuccess("{\"total\":10,\"items\":[]}", MediaType.APPLICATION_JSON));
+
+        service.listDouban("tv_domestic", "web", null, null, null, "美国", 1, 20);
+        service.listDouban("tv_domestic", "web", null, null, null, "中国大陆", 1, 20);
+        server.verify();
+    }
+
+    @Test
+    void listDoubanRecommendSortWhitelistAndServerPaging() {
+        // 排序白名单 T/U/R/S,乱值回落 U;服务端页大小恒 20 —— start 按 20 步进(防 size=24 漏条),pagecount 按 20 求商
+        RestTemplate restTemplate = new RestTemplateBuilder().build();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getRawQuery()).contains("sort=S");
+                    assertThat(request.getURI().getRawQuery()).contains("start=0");
+                })
+                .andRespond(withSuccess("{\"total\":45,\"items\":[]}", MediaType.APPLICATION_JSON));
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getRawQuery()).contains("sort=U");
+                    assertThat(request.getURI().getRawQuery()).contains("start=20");
+                })
+                .andRespond(withSuccess("{\"total\":45,\"items\":[]}", MediaType.APPLICATION_JSON));
+
+        var page1 = service.listDouban("hot_tv", "web", "S", null, null, "日本", 1, 24);
+        var page2 = service.listDouban("hot_tv", "web", "X", null, null, "日本", 2, 24);
+
+        assertThat(page1.getPagecount()).isEqualTo(3); // 45 条按服务端页大小 20 求商,而非请求 size 24
+        assertThat(page2.getPagecount()).isEqualTo(3);
+        server.verify();
+    }
+
+    @Test
+    void listDoubanHotWithAnyFilterUsesRecommend() {
+        // hot 类目带任一筛选(不只地区)即走条件选片:题材+年代叠加
+        RestTemplate restTemplate = new RestTemplateBuilder().build();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), request ->
+                        assertThat(request.getURI().getRawQuery())
+                                .contains("tags=" + URLEncoder.encode("电影,科幻,2024", StandardCharsets.UTF_8)))
+                .andRespond(withSuccess("{\"total\":30,\"items\":[]}", MediaType.APPLICATION_JSON));
+
+        service.listDouban("hot_movie", "web", null, "2024", "科幻", null, 1, 20);
+        server.verify();
+    }
+
+    @Test
+    void listDoubanEraYearWordPassesThroughToTags() {
+        // 年代段词非数字:year 走 String 原样进 tags(旧 parseYear 数字化会静默丢弃,筛选完全失效)
+        RestTemplate restTemplate = new RestTemplateBuilder().build();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), request ->
+                        assertThat(request.getURI().getRawQuery())
+                                .contains("tags=" + URLEncoder.encode("动画,日本,2020年代", StandardCharsets.UTF_8)))
+                .andRespond(withSuccess("{\"total\":60,\"items\":[]}", MediaType.APPLICATION_JSON));
+
+        service.listDouban("tv_animation", "web", null, "2020年代", null, "日本", 1, 20);
         server.verify();
     }
 
