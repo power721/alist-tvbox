@@ -1693,6 +1693,12 @@ public class BiliBiliService {
                 String name = info.getOwner().getName();
                 String owner = String.format("[a=cr:{\"id\":\"up:%d\",\"name\":\"%s\"}/]%s[/a]", id, name, name);
                 movieDetail.setVod_director(owner);
+            } else if ("gui".equals(client)) {
+                // atv-player(X-CLIENT: gui):详情「导演」行把 [a=cr:...] 渲染为内联链接,点击经 detail-field(category) 跳 t=up:<mid> 的 UP 主视频列表
+                long id = info.getOwner().getMid();
+                String name = info.getOwner().getName();
+                String owner = String.format("[a=cr:{\"target\":\"bilibili\",\"type\":\"category\",\"value\":\"up:%d\"}/]%s[/a]", id, name);
+                movieDetail.setVod_director(owner);
             }
             upPlayUrl = fetchUpPlayUrl(info.getOwner().getMid(), client);
         }

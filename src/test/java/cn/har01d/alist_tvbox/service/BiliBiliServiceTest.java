@@ -1,11 +1,14 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2InfoResponse;
 import cn.har01d.alist_tvbox.dto.bili.Data;
 import cn.har01d.alist_tvbox.dto.bili.Resp;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -146,4 +149,51 @@ class BiliBiliServiceTest {
         assertEquals("第一集", points.get(1).getContent());
         assertTrue(response.getData().getSubtitle().getSubtitles().isEmpty());
     }
+
+    private void stubInfoApi(BiliBiliInfo info) {
+        BiliBiliInfoResponse response = new BiliBiliInfoResponse();
+        response.setData(info);
+        when(restTemplate.getForObject(startsWith("https://api.bilibili.com/x/web-interface/view?bvid="), eq(BiliBiliInfoResponse.class)))
+                .thenReturn(response);
+    }
+
+    private BiliBiliInfo videoInfo() {
+        BiliBiliInfo info = new BiliBiliInfo();
+        info.setAid(116958703918865L);
+        info.setBvid("BV195KY6YEeY");
+        info.setCid(40168587741L);
+        info.setDuration(4531);
+        info.setPubdate(1758220800L);
+        info.setTitle("归墟");
+        info.setTname("动画");
+        info.setTname_v2("短片");
+        BiliBiliInfo.User owner = new BiliBiliInfo.User();
+        owner.setMid(378885845L);
+        owner.setName("归墟制造局");
+        info.setOwner(owner);
+        info.setStat(new BiliBiliInfo.Stats());
+        return info;
+    }
+
+    @Test
+    void getDetailReturnsClickableDirectorMarkupForGuiClient() throws Exception {
+        stubInfoApi(videoInfo());
+
+        MovieList detail = service.getDetail("BV195KY6YEeY", "gui");
+
+        // atv-player 渲染 [a=cr:...] 为内联链接,点击跳 t=up:<mid> 的 UP 主视频列表
+        assertEquals("[a=cr:{\"target\":\"bilibili\",\"type\":\"category\",\"value\":\"up:378885845\"}/]归墟制造局[/a]",
+                detail.getList().get(0).getVod_director());
+    }
+
+    @Test
+    void getDetailKeepsFongmiAndPlainDirectorForOtherClients() throws Exception {
+        stubInfoApi(videoInfo());
+
+        assertEquals("[a=cr:{\"id\":\"up:378885845\",\"name\":\"归墟制造局\"}/]归墟制造局[/a]",
+                service.getDetail("BV195KY6YEeY", "com.fongmi.android.tv").getList().get(0).getVod_director());
+        assertEquals("归墟制造局",
+                service.getDetail("BV195KY6YEeY", "com.github.tvbox.osc").getList().get(0).getVod_director());
+    }
+
 }
