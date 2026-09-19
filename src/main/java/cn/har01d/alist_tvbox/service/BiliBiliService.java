@@ -1981,7 +1981,9 @@ public class BiliBiliService {
         headers.put(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
         result.put("header", headers);
 
-        result.put("subs", getSubtitles(aid, cid));
+        BiliBiliV2Info playerInfo = getPlayerInfo(aid, cid);
+        result.put("subs", getSubtitles(playerInfo));
+        result.put("chapters", getChapters(playerInfo));
 
         result.put("danmaku", "https://comment.bilibili.com/" + cid + ".xml");
 
@@ -1993,9 +1995,8 @@ public class BiliBiliService {
         return result;
     }
 
-    private List<Sub> getSubtitles(String aid, String cid) {
-        boolean allAi = true;
-        List<Sub> list = new ArrayList<>();
+    /** player/wbi/v2 一次返回字幕与分段章节(view_points),供 getPlayUrl 组装;失败返回 null,字幕/章节各自兜底为空。 */
+    private BiliBiliV2Info getPlayerInfo(String aid, String cid) {
         try {
             Map<String, Object> map = new HashMap<>();
             map.put("aid", aid);
@@ -2012,39 +2013,60 @@ public class BiliBiliService {
             String url = PLAYER2 + "?" + Utils.encryptWbi(map, imgKey, subKey);
 
             ResponseEntity<BiliBiliV2InfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliV2InfoResponse.class);
-            log.debug("get subtitles: {}", url);
-            for (BiliBiliV2Info.Subtitle subtitle : response.getBody().getData().getSubtitle().getSubtitles()) {
-                if (StringUtils.isBlank(subtitle.getSubtitle_url())) {
-                    continue;
-                }
-                if (subtitle.getLan_doc().contains("中文") && (subtitle.getLan_doc().contains("自动生成") || subtitle.getLan_doc().contains("自动翻译"))) {
-                    continue;
-                }
-                if (!subtitle.getLan().startsWith("ai-")) {
-                    allAi = false;
-                }
-                Sub sub = new Sub();
-                sub.setName(subtitle.getLan_doc());
-                sub.setLang(subtitle.getLan());
-                sub.setFormat("application/x-subrip");
-                sub.setUrl(fixSubtitleUrl(subtitle.getSubtitle_url()));
-                if (subtitle.getLan().startsWith("ai-")) {
-                    sub.setFlag(4);
-                }
-                list.add(sub);
-            }
+            log.debug("get player info: {}", url);
+            return response.getBody().getData();
         } catch (Exception e) {
             log.warn("", e);
+            return null;
         }
-//        if (!list.isEmpty() && allAi) {
-//            Sub sub = new Sub();
-//            sub.setName("关闭");
-//            sub.setLang("");
-//            sub.setFormat("application/x-subrip");
-//            sub.setUrl(fixSubtitleUrl(""));
-//            list.add(0, sub);
-//        }
+    }
+
+    private List<Sub> getSubtitles(BiliBiliV2Info info) {
+        boolean allAi = true;
+        List<Sub> list = new ArrayList<>();
+        if (info == null || info.getSubtitle() == null) {
+            return list;
+        }
+        for (BiliBiliV2Info.Subtitle subtitle : info.getSubtitle().getSubtitles()) {
+            if (StringUtils.isBlank(subtitle.getSubtitle_url())) {
+                continue;
+            }
+            if (subtitle.getLan_doc().contains("中文") && (subtitle.getLan_doc().contains("自动生成") || subtitle.getLan_doc().contains("自动翻译"))) {
+                continue;
+            }
+            if (!subtitle.getLan().startsWith("ai-")) {
+                allAi = false;
+            }
+            Sub sub = new Sub();
+            sub.setName(subtitle.getLan_doc());
+            sub.setLang(subtitle.getLan());
+            sub.setFormat("application/x-subrip");
+            sub.setUrl(fixSubtitleUrl(subtitle.getSubtitle_url()));
+            if (subtitle.getLan().startsWith("ai-")) {
+                sub.setFlag(4);
+            }
+            list.add(sub);
+        }
         log.debug("subtitles: {}", list);
+        return list;
+    }
+
+    /** B站分段章节(view_points)→ {from,to,title};章节随 cid 不可变,播放时直出。 */
+    List<Map<String, Object>> getChapters(BiliBiliV2Info info) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (info == null) {
+            return list;
+        }
+        for (BiliBiliV2Info.ViewPoint point : info.getView_points()) {
+            if (point == null || StringUtils.isBlank(point.getContent())) {
+                continue;
+            }
+            Map<String, Object> chapter = new HashMap<>();
+            chapter.put("from", point.getFrom());
+            chapter.put("to", point.getTo());
+            chapter.put("title", point.getContent().trim());
+            list.add(chapter);
+        }
         return list;
     }
 

@@ -25,6 +25,7 @@ public class BiliBiliV2Info {
     private Stats stat;
     private Owner owner;
     private SubtitleList subtitle;
+    private List<ViewPoint> view_points = new ArrayList<>();
     private List<PageInfo> pages = new ArrayList<>();
 
     @Data
@@ -64,5 +65,13 @@ public class BiliBiliV2Info {
         private String lan;
         private String lan_doc;
         private String subtitle_url;
+    }
+
+    /** 分段章节(data.view_points),from/to 为秒。 */
+    @Data
+    public static class ViewPoint {
+        private long from;
+        private long to;
+        private String content;
     }
 }
