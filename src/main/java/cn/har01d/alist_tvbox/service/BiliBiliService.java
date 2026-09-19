@@ -858,13 +858,23 @@ public class BiliBiliService {
         return hotResponse.getData();
     }
 
-    private <T> T getJson(String url, Class<T> clazz) throws IOException {
-        Request request = new Request.Builder()
+    /** 空间投稿接口(x/space/wbi/arc/search)风控校验依赖 Cookie:无 Cookie 直接 412 回 HTML 挑战页(JsonParseException '<')。
+     *  entity 头(buildHttpEntity 注入的 Cookie/UA/Referer)必须随 OkHttp 请求发出,原实现造了 entity 只用于 WBI 签名却丢头。 */
+    private <T> T getJson(String url, Class<T> clazz, HttpEntity<Void> entity) throws IOException {
+        Request.Builder builder = new Request.Builder()
                 .url(url)
-                .addHeader(HttpHeaders.ACCEPT, "*/*")
-                .addHeader(HttpHeaders.USER_AGENT, appProperties.getUserAgent())
-                .addHeader(HttpHeaders.REFERER, "https://space.bilibili.com")
-                .build();
+                .addHeader(HttpHeaders.ACCEPT, "*/*");
+        if (entity != null) {
+            entity.getHeaders().forEach((name, values) -> {
+                for (String value : values) {
+                    builder.addHeader(name, value);
+                }
+            });
+        } else {
+            builder.addHeader(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
+            builder.addHeader(HttpHeaders.REFERER, "https://space.bilibili.com");
+        }
+        Request request = builder.build();
 
         Call call = client.newCall(request);
         Response response = call.execute();
@@ -1134,7 +1144,7 @@ public class BiliBiliService {
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpMedia: {}", url);
 
-        BiliBiliSearchInfoResponse response = getJson(url, BiliBiliSearchInfoResponse.class);
+        BiliBiliSearchInfoResponse response = getJson(url, BiliBiliSearchInfoResponse.class, entity);
         log.debug("{}", response);
         BiliBiliSearchInfo searchInfo = response.getData();
         List<MovieDetail> list = new ArrayList<>();
@@ -1252,7 +1262,7 @@ public class BiliBiliService {
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpPlaylist: {}", url);
 
-        BiliBiliSearchInfoResponse response = getJson(url, BiliBiliSearchInfoResponse.class);
+        BiliBiliSearchInfoResponse response = getJson(url, BiliBiliSearchInfoResponse.class, entity);
         log.debug("{}", response);
         List<BiliBiliSearchInfo.Video> list = new ArrayList<>();
         List<BiliBiliSearchInfo.Video> videos = response.getData().getList().getVlist();

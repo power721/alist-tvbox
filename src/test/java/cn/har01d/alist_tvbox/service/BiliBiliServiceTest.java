@@ -3,21 +3,34 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfo;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
+import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2InfoResponse;
 import cn.har01d.alist_tvbox.dto.bili.Data;
 import cn.har01d.alist_tvbox.dto.bili.Resp;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import okhttp3.Call;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
@@ -27,18 +40,21 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class BiliBiliServiceTest {
     private final RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
     private final SettingRepository settingRepository = Mockito.mock(SettingRepository.class);
     private final AppProperties appProperties = Mockito.mock(AppProperties.class);
+    private final BiliCookieRefreshService biliCookieRefreshService = Mockito.mock(BiliCookieRefreshService.class);
     private BiliBiliService service;
 
     @BeforeEach
@@ -53,7 +69,7 @@ class BiliBiliServiceTest {
         when(appProperties.getUserAgent()).thenReturn("Mozilla/5.0 Test");
 
         service = new BiliBiliService(settingRepository, mock(NavigationService.class), appProperties,
-                mock(BiliCookieRefreshService.class), builder, new ObjectMapper());
+                biliCookieRefreshService, builder, new ObjectMapper());
         // 预置 WBI key,跳过 NAV_API 往返
         ReflectionTestUtils.setField(service, "imgKey", "7cd084941338484aae1ad9425b84077c");
         ReflectionTestUtils.setField(service, "subKey", "4932caff0ff746eab6f21fae462f4454");
@@ -196,4 +212,40 @@ class BiliBiliServiceTest {
                 service.getDetail("BV195KY6YEeY", "com.github.tvbox.osc").getList().get(0).getVod_director());
     }
 
+
+    @Test
+    void getUpMediaSendsCookieHeaderToSpaceArcSearch() throws Exception {
+        // 空间投稿接口无 Cookie 直接 412 回 HTML(JsonParseException '<'),回归点=entity 头必须随 OkHttp 请求发出
+        OkHttpClient httpClient = Mockito.mock(OkHttpClient.class);
+        Call call = Mockito.mock(Call.class);
+        Response response = new Response.Builder()
+                .request(new Request.Builder().url("https://api.bilibili.com/x/space/wbi/arc/search").build())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(ResponseBody.create("{\"code\":0,\"data\":{\"list\":{\"vlist\":[]},\"page\":{\"count\":0}}}",
+                        MediaType.parse("application/json")))
+                .build();
+        when(httpClient.newCall(org.mockito.ArgumentMatchers.any())).thenReturn(call);
+        when(call.execute()).thenReturn(response);
+        ReflectionTestUtils.setField(service, "client", httpClient);
+        when(biliCookieRefreshService.refreshIfNeeded(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE))
+                .thenReturn(java.util.Optional.of(new cn.har01d.alist_tvbox.entity.Setting(
+                        cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE, BiliBiliUtils.getCookie())));
+
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+        try {
+            service.getUpMedia("21384754", "pubdate", 1);
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
+
+        org.mockito.ArgumentCaptor<Request> captor = org.mockito.ArgumentCaptor.forClass(Request.class);
+        verify(httpClient).newCall(captor.capture());
+        Request sent = captor.getValue();
+        assertFalse(StringUtils.isBlank(sent.header("Cookie")), "space arc-search 必须携带 Cookie,否则风控 412 回 HTML");
+        assertEquals("https://space.bilibili.com", sent.header("Referer"));
+    }
 }
