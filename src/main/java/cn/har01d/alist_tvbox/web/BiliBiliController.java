@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.FilterDto;
+import cn.har01d.alist_tvbox.dto.bili.BiliActionRequest;
 import cn.har01d.alist_tvbox.dto.bili.CookieData;
 import cn.har01d.alist_tvbox.dto.bili.QrCode;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
@@ -75,6 +76,14 @@ public class BiliBiliController {
             result = biliBiliService.getCategoryList(client);
         }
         return result;
+    }
+
+    @PostMapping({"/bilibili/action", "/bilibili/{token}/action"})
+    public Object action(@PathVariable(required = false) String token,
+                         @RequestBody BiliActionRequest request) {
+        subscriptionService.checkToken(token);
+        log.info("bilibili action: {} {}", request.id(), request.action());
+        return biliBiliService.runAction(request.id(), request.action());
     }
 
     @GetMapping("/api/bilibili/status")

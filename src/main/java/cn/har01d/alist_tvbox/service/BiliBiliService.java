@@ -153,6 +153,13 @@ public class BiliBiliService {
     private static final String CHAN_API = "https://api.bilibili.com/x/web-interface/web/channel/category/channel_arc/list?id=%s&offset=%s";
     public static final String NAV_API = "https://api.bilibili.com/x/web-interface/nav";
     public static final String HEARTBEAT_API = "https://api.bilibili.com/x/click-interface/web/heartbeat";
+    private static final String LIKE_API = "https://api.bilibili.com/x/web-interface/archive/like";
+    private static final String COIN_ADD_API = "https://api.bilibili.com/x/web-interface/coin/add";
+    private static final String FAV_DEAL_API = "https://api.bilibili.com/x/v3/fav/resource/deal";
+    private static final String HAS_LIKE_API = "https://api.bilibili.com/x/web-interface/archive/has/like?aid=%s";
+    private static final String COINS_API = "https://api.bilibili.com/x/web-interface/archive/coins?aid=%s";
+    private static final String FAVOURED_API = "https://api.bilibili.com/x/v2/fav/video/favoured?aid=%s";
+    private static final String FAV_FOLDER_API = "https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=%s&type=2&rid=%s";
     public static final String RELATED_API = "https://api.bilibili.com/x/web-interface/archive/related?bvid=%s";
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/dynamic/region?ps=%d&rid=%s&pn=%d";
     public static final String CHANNEL_API = "https://api.bilibili.com/x/web-interface/web/channel/multiple/list?channel_id=%s&sort_type=%s&offset=%s&page_size=30";
@@ -324,6 +331,25 @@ public class BiliBiliService {
         List<String> channelOffsets = new ArrayList<>();
     }
 
+    /** 详情动作(点赞/投币/收藏)状态:has/like 等接口有近期窗口与同步延迟,点击瞬间的重查可能和
+     *  加载时(客户端按钮所见)不一致,导致首次点击方向反了、要点两次 —— 翻转方向一律取加载时快照。 */
+    static final class ActionState {
+        final boolean liked;
+        final int coins;
+        final boolean favoured;
+
+        ActionState(boolean liked, int coins, boolean favoured) {
+            this.liked = liked;
+            this.coins = coins;
+            this.favoured = favoured;
+        }
+    }
+
+    private final Cache<String, ActionState> actionStates = Caffeine.newBuilder()
+            .expireAfterWrite(10, java.util.concurrent.TimeUnit.MINUTES)
+            .maximumSize(200)
+            .build();
+
     private final Cache<String, BiliSession> sessions = Caffeine.newBuilder()
             .expireAfterAccess(30, java.util.concurrent.TimeUnit.MINUTES)
             .maximumSize(200)
@@ -337,6 +363,7 @@ public class BiliBiliService {
     private volatile String imgKey;
     private volatile String subKey;
     private volatile LocalDate keyTime;
+    private volatile String cachedBuvid3;
 
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
@@ -1893,9 +1920,11 @@ public class BiliBiliService {
         if (StringUtils.isBlank(cookie) || BILIBILI_CODE.equals(cookie)) {
             cookie = getCookie(cookie);
         } else {
-            cookie = biliCookieRefreshService.refreshIfNeeded(cookie);
+            String refreshed = biliCookieRefreshService.refreshIfNeeded(cookie);
+            cookie = refreshed == null ? cookie : refreshed;
         }
-        headers.set(HttpHeaders.COOKIE, cookie.trim());
+        // 点赞/投币/收藏等风控校验要求真实 buvid3,缺失时统一在此补齐(进程内缓存)
+        headers.set(HttpHeaders.COOKIE, ensureBuvid3(cookie.trim()));
         return new HttpEntity<>(data, headers);
     }
 
@@ -2003,6 +2032,13 @@ public class BiliBiliService {
 
         result.put("danmaku", "https://comment.bilibili.com/" + cid + ".xml");
 
+        if ("gui".equals(client)) {
+            // atv-player 详情动作(点赞/投币/收藏):三个状态查询并发,失败兜底默认态不影响播放
+            java.util.concurrent.CompletableFuture<List<Map<String, Object>>> actionsFuture =
+                    java.util.concurrent.CompletableFuture.supplyAsync(() -> getActions(aid));
+            result.put("actions", actionsFuture.join());
+        }
+
         if (appProperties.isHeartbeat()) {
             heartbeat(aid, cid);
         }
@@ -2084,6 +2120,244 @@ public class BiliBiliService {
             list.add(chapter);
         }
         return list;
+    }
+
+    /** 详情动作(点赞/投币/收藏)按钮清单:未登录(无 csrf)禁用并提示;状态查询失败兜底默认态。 */
+    List<Map<String, Object>> getActions(String aid) {
+        List<Map<String, Object>> actions = new ArrayList<>();
+        String cookie = resolveCookie();
+        String csrf = BiliCookieRefreshUtils.getCookieValue(cookie, "bili_jct");
+        if (StringUtils.isBlank(csrf)) {
+            actions.add(action("like", "like", "点赞", false, false, "未登录 B站,请先在设置中配置 Cookie"));
+            actions.add(action("coin", "coin", "投币", false, false, "未登录 B站,请先在设置中配置 Cookie"));
+            actions.add(action("favorite", "favorite", "收藏", false, false, "未登录 B站,请先在设置中配置 Cookie"));
+            return actions;
+        }
+        // 探针:SESSDATA 失效(如内置共享 cookie 过期)上游回 -101,按钮禁用提示更新而非可点必败
+        JsonNode likeNode = getJsonNode(String.format(HAS_LIKE_API, aid));
+        if (likeNode != null && likeNode.path("code").asInt(0) == -101) {
+            actions.add(action("like", "like", "点赞", false, false, "B站账号未登录或已过期,请更新 Cookie"));
+            actions.add(action("coin", "coin", "投币", false, false, "B站账号未登录或已过期,请更新 Cookie"));
+            actions.add(action("favorite", "favorite", "收藏", false, false, "B站账号未登录或已过期,请更新 Cookie"));
+            return actions;
+        }
+        var coinFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> coinCount(aid));
+        var favFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> isFavoured(aid));
+        boolean liked = likeNode != null && likeNode.path("data").asInt(0) == 1;
+        int coins = coinFuture.join();
+        boolean favoured = favFuture.join();
+
+        actionStates.put(aid, new ActionState(liked, coins, favoured));
+        // 状态入文案 + icon 字段(客户端按 active 切换 filled/outline 图标),点击后即时可见
+        return buildActions(liked, coins, favoured);
+    }
+
+    private List<Map<String, Object>> buildActions(boolean liked, int coins, boolean favoured) {
+        List<Map<String, Object>> actions = new ArrayList<>();
+        actions.add(action("like", "like", liked ? "已点赞" : "点赞", liked, true, liked ? "已点赞,点击取消" : "点赞"));
+        actions.add(action("coin", "coin", coins > 0 ? "已投币×" + coins : "投币", coins > 0, coins < 2,
+                coins <= 0 ? "投 1 枚硬币" : "已投 " + coins + "/2 枚" + (coins < 2 ? ",点击再投 1 枚" : "")));
+        actions.add(action("favorite", "favorite", favoured ? "已收藏" : "收藏", favoured, true,
+                favoured ? "已收藏(默认收藏夹),点击取消" : "收藏到默认收藏夹"));
+        return actions;
+    }
+
+    private Map<String, Object> action(String id, String icon, String label, boolean active, boolean enabled, String tooltip) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", id);
+        map.put("icon", icon);
+        map.put("label", label);
+        map.put("active", active);
+        map.put("enabled", enabled);
+        if (StringUtils.isNotBlank(tooltip)) {
+            map.put("tooltip", tooltip);
+        }
+        return map;
+    }
+
+    /** atv-player 详情动作入口:点赞(toggle)/投币(+1,上限 2)/收藏(toggle 默认收藏夹);返回刷新后的完整按钮清单。 */
+    public Map<String, Object> runAction(String vodId, String action) {
+        String aid = resolveAid(vodId);
+        String cookie = resolveCookie();
+        String csrf = BiliCookieRefreshUtils.getCookieValue(cookie, "bili_jct");
+        if (StringUtils.isBlank(csrf)) {
+            throw new BadRequestException("未登录 B站,请先在设置中配置 Cookie");
+        }
+        // 翻转方向取加载时快照(客户端按钮所见):点击瞬间重查状态接口可能抖动出相反值,
+        // 方向反了就表现为"要点两次";动作成功后的状态由动作本身推导并回写快照
+        ActionState state = actionStates.get(aid, k -> new ActionState(hasLiked(aid), coinCount(aid), isFavoured(aid)));
+        boolean liked = state.liked;
+        int coins = state.coins;
+        boolean favoured = state.favoured;
+        switch (StringUtils.defaultString(action)) {
+            case "like" -> liked = like(aid, csrf, liked);
+            case "coin" -> coins = coin(aid, csrf, coins);
+            case "favorite" -> favoured = favorite(aid, cookie, csrf, favoured);
+            default -> throw new BadRequestException("未知详情动作: " + action);
+        }
+        actionStates.put(aid, new ActionState(liked, coins, favoured));
+        Map<String, Object> result = new HashMap<>();
+        result.put("actions", buildActions(liked, coins, favoured));
+        return result;
+    }
+
+    /** 播放条目 id(aid-cid[-epId] / BVxxx / aid)→ 纯数字 aid。 */
+    private String resolveAid(String vodId) {
+        String id = StringUtils.defaultString(vodId).trim();
+        if (id.isEmpty()) {
+            throw new BadRequestException("缺少视频 ID");
+        }
+        String aid = id.contains("-") ? id.substring(0, id.indexOf('-')) : id;
+        if (aid.length() > 2 && (aid.charAt(0) == 'B' || aid.charAt(0) == 'b') && (aid.charAt(1) == 'V' || aid.charAt(1) == 'v')) {
+            aid = String.valueOf(BiliBiliUtils.bv2av(aid));
+        }
+        if (!StringUtils.isNumeric(aid)) {
+            throw new BadRequestException("无法识别的视频 ID: " + vodId);
+        }
+        return aid;
+    }
+
+    private String resolveCookie() {
+        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(cookie) || BILIBILI_CODE.equals(cookie)) {
+            cookie = getCookie(cookie);
+        } else {
+            String refreshed = biliCookieRefreshService.refreshIfNeeded(cookie);
+            cookie = refreshed == null ? cookie : refreshed;
+        }
+        return ensureBuvid3(cookie.trim());
+    }
+
+    /** 点赞/投币/收藏的风控校验要求 Cookie 携带真实 buvid3:缺失时经 getbuvid 取真值(进程内缓存),失败退随机值。 */
+    private String ensureBuvid3(String cookie) {
+        if (StringUtils.isBlank(cookie) || StringUtils.isNotBlank(BiliCookieRefreshUtils.getCookieValue(cookie, "buvid3"))) {
+            return cookie;
+        }
+        if (StringUtils.isBlank(cachedBuvid3)) {
+            try {
+                JsonNode node = restTemplate.getForObject("https://api.bilibili.com/x/web-frontend/getbuvid", JsonNode.class);
+                if (node != null && node.path("code").asInt(-1) == 0) {
+                    cachedBuvid3 = node.path("data").path("buvid").asText("");
+                }
+            } catch (Exception e) {
+                log.warn("get buvid3 failed: {}", e.getMessage());
+            }
+        }
+        if (StringUtils.isNotBlank(cachedBuvid3)) {
+            return cookie + "; buvid3=" + cachedBuvid3;
+        }
+        return BiliCookieRefreshUtils.ensureBuvid3(cookie);
+    }
+
+    /** @return 动作成功后的新点赞状态(由方向推导,不回查延迟接口) */
+    private boolean like(String aid, String csrf, boolean currentLiked) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("aid", aid);
+        form.add("like", currentLiked ? "2" : "1");
+        form.add("csrf", csrf);
+        // 65006 重复点赞 / 65004 取消失败:has/like 只能判断近期状态,幂等码视作成功
+        postForm(LIKE_API, form, videoReferer(aid), 65006, 65004);
+        return !currentLiked;
+    }
+
+    /** @return 动作成功后的新投币数 */
+    private int coin(String aid, String csrf, int currentCoins) {
+        if (currentCoins >= 2) {
+            throw new BadRequestException("已达投币上限(2 枚)");
+        }
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("aid", aid);
+        form.add("multiply", "1");
+        form.add("select_like", "0");
+        form.add("csrf", csrf);
+        postForm(COIN_ADD_API, form, videoReferer(aid));
+        return currentCoins + 1;
+    }
+
+    /** @return 动作成功后的新收藏状态(方向取快照,list-all 仅用于定位默认收藏夹) */
+    private boolean favorite(String aid, String cookie, String csrf, boolean currentFavoured) {
+        String mid = BiliCookieRefreshUtils.getCookieValue(cookie, "DedeUserID");
+        if (StringUtils.isBlank(mid)) {
+            throw new BadRequestException("Cookie 缺少 DedeUserID,无法定位收藏夹");
+        }
+        JsonNode folders = getJsonNode(String.format(FAV_FOLDER_API, mid, aid));
+        JsonNode list = folders == null ? null : folders.path("data").path("list");
+        String folderId = null;
+        if (list != null && list.isArray()) {
+            for (JsonNode folder : list) {
+                if ("默认收藏夹".equals(folder.path("title").asText(""))) {
+                    folderId = folder.path("id").asText();
+                    break;
+                }
+            }
+            if (folderId == null && !list.isEmpty()) {
+                folderId = list.get(0).path("id").asText();
+            }
+        }
+        if (StringUtils.isBlank(folderId)) {
+            throw new BadRequestException("未找到可用收藏夹");
+        }
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("rid", aid);
+        form.add("type", "2");
+        form.add(currentFavoured ? "del_media_ids" : "add_media_ids", folderId);
+        form.add("csrf", csrf);
+        // 11201 已收藏 / 11202 已取消:状态查询与提交间的并发幂等码视作成功
+        postForm(FAV_DEAL_API, form, videoReferer(aid), 11201, 11202);
+        return !currentFavoured;
+    }
+
+    /** 浏览器从视频页发起这些操作,Referer 对齐视频页(av2bv 失败退站点根)。 */
+    private String videoReferer(String aid) {
+        try {
+            return "https://www.bilibili.com/video/" + BiliBiliUtils.av2bv(Long.parseLong(aid));
+        } catch (Exception e) {
+            return "https://www.bilibili.com";
+        }
+    }
+
+    /** 表单 POST 到 B站(自动携带 Cookie + urlencoded + 视频页 Referer/Origin,贴近浏览器以过风控),toleratedCodes 之外的错误抛 BadRequestException 携带上游 message。 */
+    private JsonNode postForm(String url, MultiValueMap<String, String> form, String referer, int... toleratedCodes) {
+        HttpEntity<MultiValueMap<String, String>> entity = buildHttpEntity(form, true, new HashMap<>(Map.of(
+                HttpHeaders.REFERER, referer,
+                "Origin", "https://www.bilibili.com")));
+        ResponseEntity<JsonNode> response = restTemplate.exchange(url, HttpMethod.POST, entity, JsonNode.class);
+        JsonNode body = response.getBody();
+        int code = body == null ? -1 : body.path("code").asInt(-1);
+        if (code != 0) {
+            for (int tolerated : toleratedCodes) {
+                if (code == tolerated) {
+                    return body;
+                }
+            }
+            throw new BadRequestException("B站返回 " + code + ": " + (body == null ? "空响应" : body.path("message").asText("")));
+        }
+        return body;
+    }
+
+    private JsonNode getJsonNode(String url) {
+        try {
+            return restTemplate.exchange(url, HttpMethod.GET,
+                    buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com")), JsonNode.class).getBody();
+        } catch (Exception e) {
+            log.warn("bilibili get failed: {} {}", url, e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean hasLiked(String aid) {
+        JsonNode node = getJsonNode(String.format(HAS_LIKE_API, aid));
+        return node != null && node.path("data").asInt(0) == 1;
+    }
+
+    private int coinCount(String aid) {
+        JsonNode node = getJsonNode(String.format(COINS_API, aid));
+        return node == null ? 0 : node.path("data").path("multiply").asInt(0);
+    }
+
+    private boolean isFavoured(String aid) {
+        JsonNode node = getJsonNode(String.format(FAVOURED_API, aid));
+        return node != null && node.path("data").path("favoured").asBoolean(false);
     }
 
     public String getSubtitle(String url) {

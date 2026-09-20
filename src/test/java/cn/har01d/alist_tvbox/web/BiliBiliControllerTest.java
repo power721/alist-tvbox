@@ -34,6 +34,21 @@ class BiliBiliControllerTest {
     }
 
     @Test
+    void actionShouldDelegateToService() throws Exception {
+        when(biliBiliService.runAction("116958703918865-40168587741", "like"))
+                .thenReturn(Map.of("actions", java.util.List.of()));
+
+        mockMvc.perform(post("/bilibili/tok/action")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"id\":\"116958703918865-40168587741\",\"action\":\"like\"}"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("{\"actions\":[]}"));
+
+        verify(subscriptionService).checkToken("tok");
+        verify(biliBiliService).runAction("116958703918865-40168587741", "like");
+    }
+
+    @Test
     void refreshCookieShouldDelegateToService() throws Exception {
         when(biliBiliService.refreshCookie()).thenReturn(Map.of("isLogin", true));
 
