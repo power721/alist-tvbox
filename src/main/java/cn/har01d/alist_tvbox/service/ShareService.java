@@ -1337,6 +1337,8 @@ public class ShareService {
                         .trim();
                 throw new BadRequestException(error);
             }
+        } else {
+            touchTempShare(path);
         }
         Site site = siteRepository.findById(1).orElseThrow();
 
@@ -1350,6 +1352,21 @@ public class ShareService {
         }
 
         return path;
+    }
+
+    // 临时分享按"最后使用"滑动续期:add() 命中既有挂载时刷新 time。否则过期
+    // 判断以首次挂载时间为准,追更剧集每 72h 被定时清理一次,下一次播放要重新
+    // enable 百度分享存储(实测 ~4.8s 网络初始化),显著拖慢网盘起播。
+    private void touchTempShare(String path) {
+        try {
+            Share existing = shareRepository.findByPath(path);
+            if (existing != null && existing.isTemp()) {
+                existing.setTime(Instant.now());
+                shareRepository.save(existing);
+            }
+        } catch (Exception e) {
+            log.warn("touch temp share failed: {}", path, e);
+        }
     }
 
     // Short-lived link -> title cache populated at search time (before the Share row
