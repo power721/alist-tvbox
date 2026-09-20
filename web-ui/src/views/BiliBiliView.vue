@@ -176,6 +176,15 @@
             @change="updateDash"
           />
         </el-form-item>
+        <el-form-item label="点赞投币收藏单独线路">
+          <el-switch
+            v-model="actionSeparateLine"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateActionSeparateLine"
+          />
+        </el-form-item>
 <!--        <el-form-item label="视频格式">-->
 <!--          <el-checkbox v-model="checks[0]" label="HDR" size="large"/>-->
 <!--          <el-checkbox v-model="checks[1]" label="4K" size="large"/>-->
@@ -266,6 +275,7 @@ const userInfo = ref<any>({})
 const heartbeat = ref(false)
 const searchable = ref(false)
 const dash = ref(false)
+const actionSeparateLine = ref(false)
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const list = ref<Nav[]>([])
@@ -468,6 +478,12 @@ const updateDash = () => {
   })
 }
 
+const updateActionSeparateLine = () => {
+  axios.post('/api/settings', {name: 'bilibili_action_separate_line', value: actionSeparateLine.value + ''}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateFnval = () => {
   let val = 16
   let num = 64
@@ -569,6 +585,12 @@ const getDash = () => {
   })
 }
 
+const getActionSeparateLine = () => {
+  axios.get('/api/settings/bilibili_action_separate_line').then(({data}) => {
+    actionSeparateLine.value = data.value === 'true'
+  })
+}
+
 const getBilibiliCookie = () => {
   axios.get('/api/settings/bilibili_cookie').then(({data}) => {
     bilibiliCookie.value = data.value
@@ -625,6 +647,7 @@ onMounted(() => {
   getBilibiliCookie()
   getBilibiliRefreshToken()
   getDash()
+  getActionSeparateLine()
   getQn()
   load().then(() => {
     rowDrop()

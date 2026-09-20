@@ -458,4 +458,100 @@ class BiliBiliServiceTest {
         assertTrue(String.valueOf(captor.getValue().getHeaders().getFirst("Referer")).startsWith("https://www.bilibili.com/video/BV"));
         assertEquals("https://www.bilibili.com", captor.getValue().getHeaders().getFirst("Origin"));
     }
+
+    @Test
+    void getDetailAppendsActionsToFirstLineForNonGuiClients() throws Exception {
+        stubInfoApi(videoInfo());
+
+        MovieList detail = service.getDetail("BV195KY6YEeY", "com.fongmi.android.tv");
+
+        // 动作并入第一条 BiliBili 线路(视频条目之后 # 追加),不单开操作线路;「互动状态」占位守在动作之前
+        var movieDetail = detail.getList().get(0);
+        assertFalse(movieDetail.getVod_play_from().contains("操作"), movieDetail.getVod_play_from());
+        String firstLine = movieDetail.getVod_play_url().split("\\$\\$\\$", -1)[0];
+        assertTrue(firstLine.startsWith("视频$"), firstLine);
+        assertTrue(firstLine.endsWith("互动状态$bilistat-116958703918865#点赞$bililike-116958703918865#投币$bilicoin-116958703918865#收藏$bilifav-116958703918865"), firstLine);
+    }
+
+    @Test
+    void getDetailOmitsBiliActionsForGuiClient() throws Exception {
+        stubInfoApi(videoInfo());
+
+        MovieList detail = service.getDetail("BV195KY6YEeY", "gui");
+
+        // atv-player 的动作按钮由 getPlayUrl 的 actions 键下发,首线路不追加动作条目
+        var movieDetail = detail.getList().get(0);
+        assertFalse(movieDetail.getVod_play_url().contains("bililike-"), movieDetail.getVod_play_url());
+        assertFalse(movieDetail.getVod_play_from().contains("操作"), movieDetail.getVod_play_from());
+    }
+
+    @Test
+    void getDetailPutsActionsOnSeparateLineWhenEnabled() throws Exception {
+        stubInfoApi(videoInfo());
+        when(appProperties.isActionSeparateLine()).thenReturn(true);
+
+        MovieList detail = service.getDetail("BV195KY6YEeY", "com.fongmi.android.tv");
+
+        // 开关开启(bilibili_action_separate_line):动作单独「操作」线路置于末位,第一条线路保持纯视频条目
+        var movieDetail = detail.getList().get(0);
+        assertTrue(movieDetail.getVod_play_from().endsWith("$$$操作"), movieDetail.getVod_play_from());
+        String[] lines = movieDetail.getVod_play_url().split("\\$\\$\\$", -1);
+        assertTrue(lines[0].startsWith("视频$"), lines[0]);
+        assertFalse(lines[0].contains("bililike-"), lines[0]);
+        assertEquals("互动状态$bilistat-116958703918865#点赞$bililike-116958703918865#投币$bilicoin-116958703918865#收藏$bilifav-116958703918865",
+                lines[lines.length - 1]);
+    }
+
+    @Test
+    void getActionStatusTextReportsCurrentState() throws Exception {
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":1}");
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/coins", "{\"code\":0,\"data\":{\"multiply\":1}}");
+        stubGetJson("https://api.bilibili.com/x/v2/fav/video/favoured", "{\"code\":0,\"data\":{\"favoured\":true}}");
+
+        assertEquals("点赞: 已点赞  投币: 已投 1/2 枚  收藏: 已收藏", service.getActionStatusText("116958703918865"));
+    }
+
+    @Test
+    void getActionStatusTextShowsReasonWhenNotLoggedIn() throws Exception {
+        when(settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE))
+                .thenReturn(java.util.Optional.of(new cn.har01d.alist_tvbox.entity.Setting(
+                        cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE, "buvid3=abc; SESSDATA=xyz")));
+
+        assertEquals("未登录 B站,请先在设置中配置 Cookie", service.getActionStatusText("116958703918865"));
+    }
+
+    @Test
+    void runActionTextDerivesLikeResult() throws Exception {
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":0}");
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/coins", "{\"code\":0,\"data\":{\"multiply\":0}}");
+        stubGetJson("https://api.bilibili.com/x/v2/fav/video/favoured", "{\"code\":0,\"data\":{\"favoured\":false}}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/web-interface/archive/like"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+
+        assertEquals("点赞成功", service.runActionText("116958703918865-40168587741", "like"));
+    }
+
+    @Test
+    void runActionTextCoinReportsNewCount() throws Exception {
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":0}");
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/coins", "{\"code\":0,\"data\":{\"multiply\":1}}");
+        stubGetJson("https://api.bilibili.com/x/v2/fav/video/favoured", "{\"code\":0,\"data\":{\"favoured\":false}}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/web-interface/coin/add"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+
+        assertEquals("投币成功: 已投 2/2 枚", service.runActionText("116958703918865", "coin"));
+    }
+
+    @Test
+    void runActionTextFavoriteReportsToggle() throws Exception {
+        stubGetJson("https://api.bilibili.com/x/v3/fav/folder/created/list-all",
+                "{\"code\":0,\"data\":{\"list\":[{\"id\":44233921,\"title\":\"默认收藏夹\",\"fav_state\":0}]}}");
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":0}");
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/coins", "{\"code\":0,\"data\":{\"multiply\":0}}");
+        stubGetJson("https://api.bilibili.com/x/v2/fav/video/favoured", "{\"code\":0,\"data\":{\"favoured\":false}}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/v3/fav/resource/deal"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+
+        assertEquals("收藏成功(默认收藏夹)", service.runActionText("BV195KY6YEeY", "favorite"));
+    }
 }

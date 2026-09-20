@@ -21,6 +21,9 @@ public class AppProperties {
     private boolean xiaoya;
     private boolean supportDash;
     private boolean heartbeat;
+    // B站详情点赞/投币/收藏条目展示位:false=并入第一条 BiliBili 线路(默认,选集网格直接可见);
+    // true=单独「操作」线路(置于线路末位)。Setting 键 bilibili_action_separate_line
+    private boolean actionSeparateLine;
     private boolean sort;
     private boolean merge;
     private boolean mix;

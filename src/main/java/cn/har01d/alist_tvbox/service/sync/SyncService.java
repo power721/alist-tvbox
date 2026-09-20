@@ -37,6 +37,7 @@ public class SyncService {
     // Setting 白名单
     private static final Set<String> SETTING_WHITELIST = Set.of(
         "bilibili_cookie", "bilibili_qn", "bilibili_dash", "bilibili_heartbeat", "bilibili_searchable",
+        "bilibili_action_separate_line",
         "tg_search", "tg_search_api_key", "tg_drivers", "tgDriverOrder", "tg_timeout", "tg_sort_field",
         "pan_sou_url", "pan_sou_source", "pan_sou_channels", "pan_sou_username", "pan_sou_password",
         "pan_sou_link_check_enabled", "pan_sou_link_check_max_count", "pan_sou_link_check_types", "panSouPlugins",

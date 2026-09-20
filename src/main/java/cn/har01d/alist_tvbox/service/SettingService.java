@@ -96,6 +96,7 @@ public class SettingService {
         settingRepository.save(new Setting("install_mode", environment.getProperty("INSTALL", "xiaoya")));
         appProperties.setMerge(settingRepository.findById("merge_site_source").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setHeartbeat(settingRepository.findById("bilibili_heartbeat").map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setActionSeparateLine(settingRepository.findById("bilibili_action_separate_line").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setSupportDash(settingRepository.findById("bilibili_dash").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setReplaceAliToken(settingRepository.findById("replace_ali_token").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setEnableHttps(settingRepository.findById("enable_https").map(Setting::getValue).orElse("").equals("true"));
@@ -485,6 +486,9 @@ public class SettingService {
         }
         if ("bilibili_heartbeat".equals(setting.getName())) {
             appProperties.setHeartbeat("true".equals(setting.getValue()));
+        }
+        if ("bilibili_action_separate_line".equals(setting.getName())) {
+            appProperties.setActionSeparateLine("true".equals(setting.getValue()));
         }
         if ("bilibili_searchable".equals(setting.getName())) {
             appProperties.setSearchable("true".equals(setting.getValue()));

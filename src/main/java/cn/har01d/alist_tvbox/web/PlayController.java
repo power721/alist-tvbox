@@ -100,6 +100,24 @@ public class PlayController {
             return biliBiliService.getPlayUrl(bvid, dash, client);
         }
 
+        if (StringUtils.isNotBlank(id) && id.startsWith(BiliBiliService.BILI_STAT_PLAY_PREFIX)) {
+            // B站详情「操作」线路首条「互动状态」:零副作用占位(防内核切线路自动触发第 1 条误执行动作),msg 回显互动状态
+            return Map.of("msg", biliBiliService.getActionStatusText(
+                    id.substring(BiliBiliService.BILI_STAT_PLAY_PREFIX.length())));
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith(BiliBiliService.BILI_LIKE_PLAY_PREFIX)) {
+            return biliActionMsg(id, BiliBiliService.BILI_LIKE_PLAY_PREFIX, "like");
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith(BiliBiliService.BILI_COIN_PLAY_PREFIX)) {
+            return biliActionMsg(id, BiliBiliService.BILI_COIN_PLAY_PREFIX, "coin");
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith(BiliBiliService.BILI_FAV_PLAY_PREFIX)) {
+            return biliActionMsg(id, BiliBiliService.BILI_FAV_PLAY_PREFIX, "favorite");
+        }
+
         if (StringUtils.isNotBlank(id) && id.startsWith("msubadd-")) {
             // 片单条目「加入追剧」(msubadd-{vodId}):按片单条目建订阅,msg 通道回执(播放器把 msg 显示为提示)
             int uid = mediaSubscriptionService.resolveUid(token);
@@ -230,6 +248,16 @@ public class PlayController {
 //        }
 
         return result;
+    }
+
+    /** B站详情「操作」线路「点赞/投币/收藏」:执行回执走 msg 通道(TVBox 端 Toast 可见);
+     *  失败原因(未登录/投满上限/上游错误)同样 msg 回执,不炸 400 —— 播放器把 msg 显示为提示。 */
+    private Object biliActionMsg(String id, String prefix, String action) {
+        try {
+            return Map.of("msg", biliBiliService.runActionText(id.substring(prefix.length()), action));
+        } catch (BadRequestException e) {
+            return Map.of("msg", e.getMessage());
+        }
     }
 
     /** 片单条目「媒体信息」:纯占位条目(防播放器内核进详情自动触发第一集误订阅),静态响应——

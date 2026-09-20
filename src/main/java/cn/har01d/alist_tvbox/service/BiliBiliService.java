@@ -160,6 +160,11 @@ public class BiliBiliService {
     private static final String COINS_API = "https://api.bilibili.com/x/web-interface/archive/coins?aid=%s";
     private static final String FAVOURED_API = "https://api.bilibili.com/x/v2/fav/video/favoured?aid=%s";
     private static final String FAV_FOLDER_API = "https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=%s&type=2&rid=%s";
+    /** TVBox 详情点赞/投币/收藏条目 id 前缀(载荷 aid,条目并入首线路),与追剧 msubstat-/msubcheck- 家族同款形态 */
+    public static final String BILI_STAT_PLAY_PREFIX = "bilistat-";
+    public static final String BILI_LIKE_PLAY_PREFIX = "bililike-";
+    public static final String BILI_COIN_PLAY_PREFIX = "bilicoin-";
+    public static final String BILI_FAV_PLAY_PREFIX = "bilifav-";
     public static final String RELATED_API = "https://api.bilibili.com/x/web-interface/archive/related?bvid=%s";
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/dynamic/region?ps=%d&rid=%s&pn=%d";
     public static final String CHANNEL_API = "https://api.bilibili.com/x/web-interface/web/channel/multiple/list?channel_id=%s&sort_type=%s&offset=%s&page_size=30";
@@ -1718,6 +1723,23 @@ public class BiliBiliService {
         BiliBiliInfo info = cache.get(bvid);
         MovieDetail movieDetail = getMovieDetail(info, client, true);
 
+        // 点赞/投币/收藏条目(「互动状态」零副作用占位守在动作之前,防自动下一集/误按直接撞上有副作用的动作;
+        // gui/atv-player 不下发,动作按钮由 getPlayUrl 的 actions 键下发)。默认并入第一条 BiliBili 线路
+        // (视频条目之后 # 追加,选集网格直接可见,OK影视等内核自动下一集不跨线路、不会越界打断相关视频连播);
+        // 开关 bilibili_action_separate_line=true 时单独「操作」线路,置于线路末位(相关视频/UP主视频之后)
+        boolean separateActionLine = appProperties.isActionSeparateLine();
+        String biliActions = null;
+        if (!"gui".equals(client)) {
+            String actionAid = String.valueOf(info.getAid());
+            biliActions = "互动状态$" + BILI_STAT_PLAY_PREFIX + actionAid
+                    + "#点赞$" + BILI_LIKE_PLAY_PREFIX + actionAid
+                    + "#投币$" + BILI_COIN_PLAY_PREFIX + actionAid
+                    + "#收藏$" + BILI_FAV_PLAY_PREFIX + actionAid;
+            if (!separateActionLine) {
+                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "#" + biliActions);
+            }
+        }
+
         // 相关视频与 UP 主列表并发拉取(原 view→related→UP 串行三连发是详情打开慢的主体);
         // 两个块都改写 movieDetail 的播放字段,并发只拉数据、装配回主线程串行做,防丢更新
         final String bvidKey = bvid;
@@ -1749,6 +1771,10 @@ public class BiliBiliService {
         if (upPlayUrl != null) {
             movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
             movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + upPlayUrl);
+        }
+        if (biliActions != null && separateActionLine) {
+            movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$操作");
+            movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + biliActions);
         }
 
         MovieList result = new MovieList();
@@ -2199,6 +2225,38 @@ public class BiliBiliService {
         Map<String, Object> result = new HashMap<>();
         result.put("actions", buildActions(liked, coins, favoured));
         return result;
+    }
+
+    /** TVBox「操作」线路「点赞/投币/收藏」的 msg 回执文案:新状态由动作结果推导(runAction 成功必回写快照),不回查有延迟的状态接口。 */
+    public String runActionText(String vodId, String action) {
+        runAction(vodId, action);
+        ActionState state = actionStates.getIfPresent(resolveAid(vodId));
+        if (state == null) {
+            return "操作已执行";
+        }
+        return switch (StringUtils.defaultString(action)) {
+            case "like" -> state.liked ? "点赞成功" : "已取消点赞";
+            case "coin" -> "投币成功: 已投 " + state.coins + "/2 枚";
+            case "favorite" -> state.favoured ? "收藏成功(默认收藏夹)" : "已取消收藏";
+            default -> "操作已执行";
+        };
+    }
+
+    /** TVBox「操作」线路首条「互动状态」:零副作用,msg 回显点赞/投币/收藏当前状态;未登录/过期回显原因。 */
+    public String getActionStatusText(String vodId) {
+        String aid = resolveAid(vodId);
+        List<Map<String, Object>> actions = getActions(aid);
+        // 未登录/过期分支:三钮禁用且 tooltip 即原因(不落快照,不能读旧快照冒充当前状态)
+        if (!Boolean.TRUE.equals(actions.get(0).get("enabled"))) {
+            return String.valueOf(actions.get(0).getOrDefault("tooltip", "当前状态不可用"));
+        }
+        ActionState state = actionStates.getIfPresent(aid);
+        if (state == null) {
+            return "当前状态不可用";
+        }
+        return "点赞: " + (state.liked ? "已点赞" : "未点赞")
+                + "  投币: " + (state.coins > 0 ? "已投 " + state.coins + "/2 枚" : "未投币")
+                + "  收藏: " + (state.favoured ? "已收藏" : "未收藏");
     }
 
     /** 播放条目 id(aid-cid[-epId] / BVxxx / aid)→ 纯数字 aid。 */

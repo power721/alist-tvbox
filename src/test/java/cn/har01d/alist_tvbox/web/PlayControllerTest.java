@@ -261,4 +261,36 @@ class PlayControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.msg").value("《showa》未在追剧中"));
     }
+
+    @Test
+    void playShouldReportBilibiliActionStatus() throws Exception {
+        when(biliBiliService.getActionStatusText("116958703918865"))
+                .thenReturn("点赞: 未点赞  投币: 未投币  收藏: 未收藏");
+
+        mockMvc.perform(get("/play/test-token").param("id", "bilistat-116958703918865"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("点赞: 未点赞  投币: 未投币  收藏: 未收藏"));
+        verifyNoInteractions(tvBoxService, proxyService, mediaSubscriptionService);
+    }
+
+    @Test
+    void playShouldRunBilibiliLikeAction() throws Exception {
+        when(biliBiliService.runActionText("116958703918865", "like")).thenReturn("点赞成功");
+
+        mockMvc.perform(get("/play/test-token").param("id", "bililike-116958703918865"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("点赞成功"));
+        verifyNoInteractions(tvBoxService, proxyService, mediaSubscriptionService);
+    }
+
+    @Test
+    void playShouldReportBilibiliActionFailureAsMsg() throws Exception {
+        // 未登录/投满/上游错误走 msg 通道回执(TVBox 端 Toast),不炸 400
+        when(biliBiliService.runActionText("116958703918865", "coin"))
+                .thenThrow(new cn.har01d.alist_tvbox.exception.BadRequestException("已达投币上限(2 枚)"));
+
+        mockMvc.perform(get("/play/test-token").param("id", "bilicoin-116958703918865"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("已达投币上限(2 枚)"));
+    }
 }
