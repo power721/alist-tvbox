@@ -40,9 +40,11 @@ import java.util.regex.Pattern;
 
 /**
  * 玩偶聚合搜索源(atv-spiders/py/玩偶聚合.py 的 Java 移植):聚合玩偶系 MacCMS 网盘站
- * (玩偶/多多/木偶/欧歌/至臻/蜡笔/二小/虎斑/小斑/快映/闪电),并行按站搜索 → 卡片标题
+ * (玩偶/多多/木偶/快映/闪电/表哥/花卷),并行按站搜索 → 卡片标题
  * 与订阅关键词粗匹配 → 抓详情页提取网盘分享链接,产出与 TG 搜索同构的 {@link Message},
  * 供追剧候选池(fillPool/preview)与 TG 结果按 link 去重合并。
+ * <p>2026-09-20 与 py 同步(atv-spiders 9880ef2):移除六死站(欧歌/至臻/二小/蜡笔/虎斑/小斑),
+ * 新增表哥(punycode 域名)与花卷(海报卡片 + down-card-url 详情形状)。
  *
  * <p>站点域名由监控服务(pan-site-monitor)定期下发最新可达地址(按延迟排序),静态域名
  * 表仅作兜底种子;请求时逐域名 failover,成功域名置顶粘住,全域名失败进入冷却期避免反复撞墙。
@@ -51,6 +53,10 @@ import java.util.regex.Pattern;
 @Service
 public class WanouSearchService {
     private static final String DEFAULT_SEARCH_URL = "/index.php/vod/search/page/{page}/wd/{keyword}.html";
+    /** 标准搜索卡片选择器(花卷等海报站可覆写) */
+    private static final String DEFAULT_SEARCH_CARD_CSS = ".module-search-item";
+    /** 标准详情分享链接选择器(花卷走 down-card-url) */
+    private static final String DEFAULT_DETAIL_PAN_CSS = ".module-row-info p";
     /** 域名监控刷新周期 */
     private static final long DOMAIN_REFRESH_MS = 6 * 60 * 60_000L;
     /** 监控拉取失败后的重试间隔 */
@@ -61,17 +67,17 @@ public class WanouSearchService {
     private static final Pattern PASSWORD_IN_TEXT = Pattern.compile("(?:提取码|密码|访问码|pwd)[=:\\s：]*([a-zA-Z0-9]{4,6})");
     private static final String URL_TRAILING = "#，。；：,.;:！？、）)】」』》>\"'";
     /** 标题归一化:画质/站名噪声词 + 分隔符(py 玩偶聚合 _normalize_title) */
-    private static final Pattern TITLE_NOISE = Pattern.compile("(?i)4k|hdr|2160p|1080p|720p|玩偶|木偶|蜡笔");
+    private static final Pattern TITLE_NOISE = Pattern.compile("(?i)4k|hdr|2160p|1080p|720p|玩偶|木偶");
     private static final Pattern TITLE_SEPARATOR = Pattern.compile("[\\s\\-_.·,，。!！?？:：()（）\\[\\]]+");
     /** 关键词侧额外剥掉的集数/季/年份标记(订阅关键词常带"第2季/第12集/2025"后缀,卡片标题通常没有) */
     private static final Pattern KEYWORD_MARKER = Pattern.compile(
             "(?i)(第[0-9一二三四五六七八九十]{1,3}季|season\\d{1,2}|s\\d{1,2}e\\d{1,3}|ep?\\d{1,3}|第\\d{1,3}集|更新?至\\d{1,3}|全\\d{1,3}集|\\d{1,3}集|20\\d{2})");
     /** 站点优先级(py site_priority):同名合并去重时优先保留靠前站点的链接 */
     private static final List<String> SITE_PRIORITY = List.of(
-            "wanou", "duoduo", "muou", "ouge", "zhizhen", "labi", "erxiao", "huban", "xiaoban", "kuaiying", "shandian");
+            "wanou", "duoduo", "muou", "kuaiying", "shandian", "biaoge", "huajuan");
 
     record Site(String id, String name, String monitorKey, List<String> seedDomains,
-                String searchUrl, int timeoutSeconds, boolean clipboardDetail) {
+                String searchUrl, int timeoutSeconds, String searchCardCss, String detailPanCss) {
     }
 
     record Card(String href, String title, String remarks) {
@@ -80,37 +86,25 @@ public class WanouSearchService {
     private static final List<Site> SITES = List.of(
             new Site("muou", "木偶", "木偶",
                     List.of("https://www.muou.site", "https://www.muou.asia", "https://666.666291.xyz", "https://123.666291.xyz"),
-                    null, 10, false),
-            new Site("ouge", "欧歌", "欧哥",
-                    List.of("https://woog.nxog.eu.org", "https://woog.430520.xyz", "https://woog.nxog.fun"),
-                    null, 10, false),
-            new Site("zhizhen", "至臻", "至臻",
-                    List.of("https://www.mihdr.top", "https://www.miqk.cc", "https://mihdr.top"),
-                    null, 10, false),
-            new Site("erxiao", "二小", "二小",
-                    List.of("https://www.2xiaopan.top", "https://wexwp.cc", "https://www.wexwp.cc"),
-                    null, 10, false),
+                    null, 10, null, null),
             new Site("duoduo", "多多", "多多",
-                    List.of("https://tv.yydsys.top", "https://tv.yydsys.cc", "https://yydsys.de5.net", "https://tv.214521.xyz"),
-                    null, 10, false),
-            new Site("labi", "蜡笔", "蜡笔",
-                    List.of("http://xiaocgege.shop", "http://feimo.fun", "http://tvpanpan.site"),
-                    null, 10, false),
-            new Site("huban", "虎斑", "虎斑",
-                    List.of("http://121.205.88.174:16969"),
-                    null, 10, true),
-            new Site("xiaoban", "小斑", "小斑",
-                    List.of("http://121.205.88.174:12512"),
-                    null, 20, true),
+                    List.of("https://yydsys.de5.net", "https://tv.214521.xyz", "https://tv.yydsys.cc", "https://tv.yydsys.top"),
+                    null, 10, null, null),
             new Site("wanou", "玩偶", "玩偶",
                     List.of("https://woggpan.xxooo.cf", "https://wogg.xxooo.cf", "https://woggpan.888484.xyz", "https://www.wogg.net"),
-                    "/vodsearch/-------------.html?wd={keyword}&page={page}", 10, false),
+                    "/vodsearch/-------------.html?wd={keyword}&page={page}", 10, null, null),
             new Site("kuaiying", "快映", null,
                     List.of("http://xsayang.fun:12512"),
-                    null, 10, false),
+                    null, 10, null, null),
             new Site("shandian", "闪电", "闪电",
                     List.of("http://sd.sduc.site", "http://shandian.blog"),
-                    null, 10, false));
+                    null, 10, null, null),
+            new Site("biaoge", "表哥", null,
+                    List.of("http://xn--4yqy17f.xn--yi7aa.vip:3155"),
+                    null, 10, null, null),
+            new Site("huajuan", "花卷", null,
+                    List.of("https://www.hjzhencai.top"),
+                    null, 10, ".module-card-item-poster", ".down-card-url"));
 
     private static final class DomainState {
         volatile List<String> ordered;
@@ -127,7 +121,7 @@ public class WanouSearchService {
     private final Map<String, DomainState> domainStates = new ConcurrentHashMap<>();
     private final AtomicLong monitorRefreshedAt = new AtomicLong(0);
     private final AtomicBoolean monitorRefreshing = new AtomicBoolean(false);
-    /** 站点池线程序号(线程名 wanou-search-N):11 站并发时日志可分辨线程 */
+    /** 站点池线程序号(线程名 wanou-search-N):多站并发时日志可分辨线程 */
     private static final AtomicInteger SEARCH_SEQ = new AtomicInteger();
     private final ExecutorService executor = Executors.newFixedThreadPool(SITES.size(), r -> {
         Thread thread = new Thread(r, "wanou-search-" + SEARCH_SEQ.incrementAndGet());
@@ -206,7 +200,7 @@ public class WanouSearchService {
         }
         List<Message> messages = new ArrayList<>();
         try {
-            List<Card> cards = parseSearchCards(requestWithFailover(site, buildSearchPath(site, keyword)));
+            List<Card> cards = parseSearchCards(site, requestWithFailover(site, buildSearchPath(site, keyword)));
             int maxDetails = appProperties.getSubscription().getWanouMaxDetailPages();
             int details = 0;
             Set<String> seenLinks = new HashSet<>();
@@ -263,17 +257,22 @@ public class WanouSearchService {
         return template.replace("{keyword}", encoded).replace("{page}", "1");
     }
 
-    /** 搜索结果卡片解析(py _parse_search_cards 的 Jsoup 等价实现)。 */
-    List<Card> parseSearchCards(String html) {
+    /** 搜索结果卡片解析(py _parse_search_cards 的 Jsoup 等价实现,卡片选择器按站可覆写:
+     *  花卷是海报卡片 module-card-item-poster,无 video-serial,链接在卡片节点自身)。 */
+    List<Card> parseSearchCards(Site site, String html) {
         Document doc = Jsoup.parse(html);
         List<Card> cards = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (Element card : doc.select(".module-search-item")) {
+        String css = site.searchCardCss() == null ? DEFAULT_SEARCH_CARD_CSS : site.searchCardCss();
+        for (Element card : doc.select(css)) {
             Element serial = card.selectFirst(".video-serial");
             String href = serial == null ? "" : StringUtils.trimToEmpty(serial.attr("href"));
             if (href.isEmpty()) {
                 Element a = card.selectFirst("a[href]");
                 href = a == null ? "" : a.attr("href").trim();
+            }
+            if (href.isEmpty()) {
+                href = card.attr("href").trim();
             }
             String title = serial == null ? "" : serial.attr("title").trim();
             if (title.isEmpty()) {
@@ -286,6 +285,10 @@ public class WanouSearchService {
             }
             Element text = card.selectFirst(".module-item-text");
             String remarks = text == null ? "" : text.text().trim();
+            if (remarks.isEmpty()) {
+                Element note = card.selectFirst(".module-item-note");
+                remarks = note == null ? "" : note.text().trim();
+            }
             if (href.isEmpty() || title.isEmpty() || !seen.add(href)) {
                 continue;
             }
@@ -295,20 +298,15 @@ public class WanouSearchService {
     }
 
     /**
-     * 详情页分享链接提取:虎斑/小斑走 data-clipboard-text(剪贴板属性里是完整分享链),
-     * 其余站点取 module-row-info 下 p 文本的第一个 URL;行内"提取码"折进 ?password= 参数。
+     * 详情页分享链接提取:标准站取 module-row-info 下 p 文本的第一个 URL,花卷走
+     * down-card-url 文本;行内"提取码"折进 ?password= 参数。
      */
     List<String> parseDetailPanUrls(Site site, String html) {
         Document doc = Jsoup.parse(html);
         Set<String> urls = new LinkedHashSet<>();
-        if (site.clipboardDetail()) {
-            for (Element node : doc.select(".module-row-info .module-row-text")) {
-                addShareUrl(urls, node.attr("data-clipboard-text"));
-            }
-        } else {
-            for (Element p : doc.select(".module-row-info p")) {
-                addShareUrl(urls, p.text());
-            }
+        String css = site.detailPanCss() == null ? DEFAULT_DETAIL_PAN_CSS : site.detailPanCss();
+        for (Element node : doc.select(css)) {
+            addShareUrl(urls, node.text());
         }
         return List.copyOf(urls);
     }

@@ -46,14 +46,19 @@ class WanouSearchServiceTest {
             </body></html>
             """;
 
-    private static final String HUBAN_DETAIL_HTML = """
+    private static final String HUAJUAN_SEARCH_HTML = """
+            <html><body><div class="module-items">
+              <a class="module-card-item-poster" href="/voddetail/9.html" title="难哄完整版">
+                <img alt="难哄" data-src="/pic/9.jpg"><div class="module-item-note">全40集 夸克</div>
+              </a>
+              <a class="module-card-item-poster" href="/voddetail/10.html"></a>
+            </div></body></html>
+            """;
+
+    private static final String HUAJUAN_DETAIL_HTML = """
             <html><body>
-              <div class="module-row-info">
-                <div class="module-row-text" data-clipboard-text="https://115.com/s/abc123?password=k3m9#资源"></div>
-              </div>
-              <div class="module-row-info">
-                <div class="module-row-text" data-clipboard-text="磁力 magnets are ignored"></div>
-              </div>
+              <div class="down-card-url">https://pan.quark.cn/s/hj001 提取码：hj45</div>
+              <div class="down-card-url">磁力文本无链接被忽略</div>
             </body></html>
             """;
 
@@ -82,17 +87,29 @@ class WanouSearchServiceTest {
     @Test
     void parseSearchCards() {
         WanouSearchService service = new WanouSearchService(props(), new ObjectMapper());
-        List<WanouSearchService.Card> cards = service.parseSearchCards(SEARCH_HTML);
+        List<WanouSearchService.Card> cards = service.parseSearchCards(WanouSearchService.siteById("muou"), SEARCH_HTML);
         // 重复 href 去重、无标题卡片跳过
         assertEquals(2, cards.size());
         assertEquals("/voddetail/1.html", cards.get(0).href());
         assertEquals("难哄4K", cards.get(0).title());
         assertEquals("全40集 夸克", cards.get(0).remarks());
         // 无 video-serial@title 时回退 img@alt
-        assertEquals("难哄", service.parseSearchCards("""
+        assertEquals("难哄", service.parseSearchCards(WanouSearchService.siteById("muou"), """
                 <div class="module-search-item"><a href="/voddetail/1.html"></a>
                 <img alt="难哄"><div class="module-item-text">HD</div></div>
                 """).get(0).title());
+    }
+
+    @Test
+    void parseSearchCardsPosterShape() {
+        WanouSearchService service = new WanouSearchService(props(), new ObjectMapper());
+        List<WanouSearchService.Card> cards =
+                service.parseSearchCards(WanouSearchService.siteById("huajuan"), HUAJUAN_SEARCH_HTML);
+        // 花卷海报卡片:链接在卡片节点自身、标题 img@alt 优先于 a@title、备注走 module-item-note
+        assertEquals(1, cards.size());
+        assertEquals("/voddetail/9.html", cards.get(0).href());
+        assertEquals("难哄", cards.get(0).title());
+        assertEquals("全40集 夸克", cards.get(0).remarks());
     }
 
     @Test
@@ -111,12 +128,12 @@ class WanouSearchServiceTest {
     }
 
     @Test
-    void parseDetailPanUrlsClipboard() {
+    void parseDetailPanUrlsDownCard() {
         WanouSearchService service = new WanouSearchService(props(), new ObjectMapper());
-        List<String> urls = service.parseDetailPanUrls(WanouSearchService.siteById("huban"), HUBAN_DETAIL_HTML);
+        List<String> urls = service.parseDetailPanUrls(WanouSearchService.siteById("huajuan"), HUAJUAN_DETAIL_HTML);
         assertEquals(1, urls.size());
-        assertEquals("https://115.com/s/abc123?password=k3m9", urls.get(0));
-        assertEquals("8", Message.parseType(urls.get(0)));
+        assertEquals("https://pan.quark.cn/s/hj001?password=hj45", urls.get(0));
+        assertEquals("5", Message.parseType(urls.get(0)));
     }
 
     @Test
@@ -156,7 +173,7 @@ class WanouSearchServiceTest {
                             {"sites":{"玩偶":{"site_name":"玩偶","status":"success","best_url":"https://fresh1.example","urls":[
                                {"url":"https://fresh1.example","latency":0.1,"has_keyword":true},
                                {"url":"https://dead.example","latency":null,"has_keyword":false,"error_type":"http_error"}]},
-                              "欧哥":{"site_name":"欧哥","status":"success","best_url":"https://og1.example","urls":[
+                              "木偶":{"site_name":"木偶","status":"success","best_url":"https://og1.example","urls":[
                                {"url":"https://og1.example","latency":0.3,"has_keyword":true}]}}}}
                             """;
                 }
