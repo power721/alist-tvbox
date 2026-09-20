@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -8,6 +10,7 @@ import okhttp3.FormBody;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
@@ -137,6 +140,51 @@ public class ZhenCangSearchService {
             throw e instanceof RuntimeException runtimeException ? runtimeException : new IllegalStateException(e);
         }
     }
+
+    // ---------- Cookie 有效性检查(网页设置页) ----------
+
+    /**
+     * Cookie 有效性检查(只读):POST 站点自己的用户中心 AJAX {@code /123pan/?user_center=data}
+     * (2026-09-20 实测:登录页 {@code <title>} 为「{用户名}的用户中心-…」,匿名回落
+     * 「用户中心-…」;wp-admin/profile.php 对有效 Cookie 也 302,不可作判据)。
+     * 校验请求参数里的 Cookie(表单当前值),不动任何 Setting。
+     */
+    public SiteCredentialCheckResult checkCredential(SiteCredentialCheckRequest request) {
+        String cookie = normalizeCookie(StringUtils.defaultString(request.cookie()));
+        if (cookie.isEmpty()) {
+            return new SiteCredentialCheckResult("zencang", false, "未填写 Cookie");
+        }
+        String host = SiteSearchSupport.normalizeHost(StringUtils.defaultString(request.host()), DEFAULT_HOST);
+        try {
+            Resp resp = http(new Request.Builder()
+                    .url(host + "/123pan/?user_center=data")
+                    .header("User-Agent", DESKTOP_UA)
+                    .header("Accept", "text/html, */*; q=0.01")
+                    .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+                    .header("X-Requested-With", "XMLHttpRequest")
+                    .header("Origin", host)
+                    .header("Referer", host + "/123pan/balance")
+                    .header("Cookie", cookie)
+                    .post(RequestBody.create(new byte[0]))
+                    .build(), true);
+            String body = resp.code() == 200 ? StringUtils.defaultString(resp.body()) : "";
+            Matcher titled = USER_CENTER_TITLE.matcher(body);
+            if (titled.find()) {
+                return new SiteCredentialCheckResult("zencang", true, "Cookie 有效(账号:" + titled.group(1) + ")");
+            }
+            if (body.contains("用户中心")) {
+                return new SiteCredentialCheckResult("zencang", false, "Cookie 已失效(站点判定未登录)");
+            }
+            return new SiteCredentialCheckResult("zencang", false,
+                    "无法识别登录态(HTTP " + resp.code() + ")");
+        } catch (Exception e) {
+            log.debug("zencang credential check failed: {}", e.getMessage());
+            return new SiteCredentialCheckResult("zencang", false, "站点不可达(" + e.getMessage() + ")");
+        }
+    }
+
+    /** 用户中心页标题:「{用户名}的用户中心」(匿名标题无「的」,不匹配)。 */
+    private static final Pattern USER_CENTER_TITLE = Pattern.compile("<title>[^<]*?(\\S+)的用户中心");
 
     // ---------- 请求 ----------
 

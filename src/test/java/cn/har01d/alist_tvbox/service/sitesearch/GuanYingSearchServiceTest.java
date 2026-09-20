@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -9,6 +11,7 @@ import okhttp3.Request;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -415,5 +418,99 @@ class GuanYingSearchServiceTest {
         // 过期会话被判 nologin → 重登失败(如密码已改)→ 须清除,防下次重启回灌死 Cookie
         assertTrue(store.get(GuanYingSearchService.SESSION_SETTING).isEmpty(),
                 "重登失败须清除过期会话,防重启回灌死 Cookie");
+    }
+
+    @Test
+    void checkCredentialValidAfterPowChallenge() {
+        AtomicInteger homeCalls = new AtomicInteger();
+        GuanYingSearchService service = new GuanYingSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                assertEquals("https://gy.example/", request.url().toString());
+                // 第 1 次:校验遇挑战页;第 2 次:PoW 探测(ensurePow)已过;第 3 次:校验重试
+                if (homeCalls.incrementAndGet() == 1) {
+                    return new Resp(200, List.of(), "<script src='//static.filejin.ru/pow.worker.js'></script>");
+                }
+                return new Resp(200, List.of(), "_obj.site={};");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("uid=42; token=abc", "https://gy.example"));
+        assertEquals("guanying", result.site());
+        assertTrue(result.valid(), result.message());
+        assertEquals(3, homeCalls.get(), "挑战→PoW 探测→重试");
+    }
+
+    @Test
+    void checkCredentialNologinMeansInvalid() {
+        GuanYingSearchService service = new GuanYingSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                assertTrue(request.header("Cookie").contains("uid=42"), "校验须带用户提供的 Cookie");
+                return new Resp(200, List.of(), "<title>未登录，访问受限</title> nologin");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("uid=42", "https://gy.example"));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("未登录"), result.message());
+    }
+
+    @Test
+    void checkCredentialAccountLogsInAndSavesSession() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        GuanYingSearchService service = new GuanYingSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String url = request.url().toString();
+                if (url.equals("https://gy.example/") ) {
+                    return new Resp(200, List.of("browser_verified=ok; Path=/"), "_obj.site={};");
+                }
+                if (url.equals("https://gy.example/user/login/")) {
+                    return new Resp(200, List.of(), "login page");
+                }
+                if (url.equals("https://gy.example/user/login")) {
+                    return new Resp(200, List.of("auth=fresh; Path=/"), "{\"code\":200}");
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(
+                new SiteCredentialCheckRequest("guanying", "", "https://gy.example", "u1", "pw"));
+        assertTrue(result.valid(), result.message());
+        assertTrue(result.message().contains("账号密码可用"), result.message());
+        assertTrue(store.get(GuanYingSearchService.SESSION_SETTING).contains("auth=fresh"),
+                "登录成功须保存会话(剔 PoW 短时效项)");
+    }
+
+    @Test
+    void checkCredentialAggregatesDeadMirrors() {
+        AtomicInteger attempts = new AtomicInteger();
+        GuanYingSearchService service = new GuanYingSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) throws IOException {
+                attempts.incrementAndGet();
+                throw new IOException("Failed to connect to dead.mirror/0.0.0.0:443");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("uid=42", ""));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("8 个站点地址探测失败"), result.message());
+        assertEquals(8, attempts.get(), "内置 8 镜像逐个尝试");
+    }
+
+    @Test
+    void checkCredentialWithoutAnythingReportsMissing() {
+        GuanYingSearchService service = new GuanYingSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                throw new AssertionError("未填凭证不得发任何请求");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("", ""));
+        assertFalse(result.valid());
+        assertEquals("未填写 Cookie 或账号密码", result.message());
+    }
+
+    private static SiteCredentialCheckRequest req(String cookie, String host) {
+        return new SiteCredentialCheckRequest("guanying", cookie, host, "", "");
     }
 }

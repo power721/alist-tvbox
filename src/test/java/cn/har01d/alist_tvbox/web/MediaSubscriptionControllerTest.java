@@ -2,11 +2,18 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.dto.PanLianAccountStatus;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionTransferService;
 import cn.har01d.alist_tvbox.service.PianDanService;
+import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.KuafuSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.Pan123CommunitySearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.ZhenCangSearchService;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -14,21 +21,25 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -48,13 +59,25 @@ class MediaSubscriptionControllerTest {
     private PianDanService pianDanService;
     @Mock
     private PanLianSearchService panLianSearchService;
+    @Mock
+    private WoniuSearchService woniuSearchService;
+    @Mock
+    private GuanYingSearchService guanYingSearchService;
+    @Mock
+    private ZhenCangSearchService zhenCangSearchService;
+    @Mock
+    private Pan123CommunitySearchService pan123CommunitySearchService;
+    @Mock
+    private KuafuSearchService kuafuSearchService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new MediaSubscriptionController(subscriptionService, checkService, transferService, pianDanService, panLianSearchService))
+                        new MediaSubscriptionController(subscriptionService, checkService, transferService, pianDanService,
+                                panLianSearchService, woniuSearchService, guanYingSearchService, zhenCangSearchService,
+                                pan123CommunitySearchService, kuafuSearchService))
                 .setControllerAdvice(new RestErrorHandler())
                 .build();
     }
@@ -74,6 +97,56 @@ class MediaSubscriptionControllerTest {
                 .andExpect(jsonPath("$[0].checkinDone").value(true))
                 .andExpect(jsonPath("$[0].checkinBonus").value(20));
         verify(panLianSearchService).accountStatuses();
+    }
+
+    @Test
+    void siteCredentialCheckDispatchesBySite() throws Exception {
+        when(kuafuSearchService.checkCredential(any(SiteCredentialCheckRequest.class))).thenReturn(
+                new SiteCredentialCheckResult("kuafu", true, "Cookie 有效(登录态正常)"));
+
+        mockMvc.perform(post("/api/media-subscriptions/site-credentials/check")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"site\":\"kuafu\",\"cookie\":\"bbs_sid=x; bbs_token=y\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.site").value("kuafu"))
+                .andExpect(jsonPath("$.valid").value(true))
+                .andExpect(jsonPath("$.message").value("Cookie 有效(登录态正常)"));
+        ArgumentCaptor<SiteCredentialCheckRequest> captor = ArgumentCaptor.forClass(SiteCredentialCheckRequest.class);
+        verify(kuafuSearchService).checkCredential(captor.capture());
+        assertEquals("kuafu", captor.getValue().site());
+        assertEquals("bbs_sid=x; bbs_token=y", captor.getValue().cookie());
+    }
+
+    @Test
+    void siteCredentialCheckPassesAccountFields() throws Exception {
+        when(woniuSearchService.checkCredential(any(SiteCredentialCheckRequest.class))).thenReturn(
+                new SiteCredentialCheckResult("woniu", true, "账号密码可用(已登录并保存会话)"));
+
+        mockMvc.perform(post("/api/media-subscriptions/site-credentials/check")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"site\":\"woniu\",\"username\":\"u1\",\"password\":\"pw\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true));
+        ArgumentCaptor<SiteCredentialCheckRequest> captor = ArgumentCaptor.forClass(SiteCredentialCheckRequest.class);
+        verify(woniuSearchService).checkCredential(captor.capture());
+        assertEquals("u1", captor.getValue().username());
+        assertEquals("pw", captor.getValue().password());
+    }
+
+    @Test
+    void siteCredentialCheckRejectsUnknownSite() throws Exception {
+        mockMvc.perform(post("/api/media-subscriptions/site-credentials/check")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"site\":\"nope\",\"cookie\":\"x=1\"}"))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void siteCredentialCheckRejectsEmptyCredentials() throws Exception {
+        mockMvc.perform(post("/api/media-subscriptions/site-credentials/check")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"site\":\"kuafu\"}"))
+                .andExpect(status().is4xxClientError());
     }
 
     @Test

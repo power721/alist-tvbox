@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -302,6 +304,41 @@ public class Pan123CommunitySearchService {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    // ---------- Cookie 有效性检查(网页设置页) ----------
+
+    /**
+     * Cookie 有效性检查(只读):GET {@code /?user.htm} 个人中心 —— 匿名页只有
+     * {@code user-login} 链接,登录页才有 {@code user-logout}(Xiuno 头部口径,
+     * 2026-09-20 实测)。校验请求参数里的 Cookie(表单当前值),不动任何 Setting。
+     */
+    public SiteCredentialCheckResult checkCredential(SiteCredentialCheckRequest request) {
+        String cookie = StringUtils.trimToEmpty(request.cookie());
+        if (cookie.isEmpty()) {
+            return new SiteCredentialCheckResult("pan123community", false, "未填写 Cookie");
+        }
+        String host = SiteSearchSupport.normalizeHost(StringUtils.defaultString(request.host()), "");
+        if (host.isEmpty()) {
+            host = activeHost();
+        }
+        try {
+            Resp resp = http(baseRequest(host, cookie, host + "/?user.htm")
+                    .header("User-Agent", DESKTOP_UA)
+                    .get().build());
+            String body = resp.code() == 200 ? StringUtils.defaultString(resp.body()) : "";
+            if (body.contains("user-logout")) {
+                return new SiteCredentialCheckResult("pan123community", true, "Cookie 有效(登录态正常)");
+            }
+            if (body.contains("user-login")) {
+                return new SiteCredentialCheckResult("pan123community", false, "Cookie 已失效(站点判定未登录)");
+            }
+            return new SiteCredentialCheckResult("pan123community", false,
+                    "无法识别登录态(HTTP " + resp.code() + ")");
+        } catch (Exception e) {
+            log.debug("pan123community credential check failed: {}", e.getMessage());
+            return new SiteCredentialCheckResult("pan123community", false, "站点不可达(" + e.getMessage() + ")");
         }
     }
 

@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -16,6 +18,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -256,5 +259,52 @@ class ZhenCangSearchServiceTest {
             }
         };
         assertThrows(IllegalStateException.class, () -> service.search("凡人修仙传"));
+    }
+
+    @Test
+    void checkCredentialUserCenterTitleMeansValidWithAccount() {
+        ZhenCangSearchService service = new ZhenCangSearchService(emptySettings(), props()) {
+            @Override
+            protected Resp http(Request request, boolean followRedirects) {
+                assertEquals("https://zc.example/123pan/?user_center=data", request.url().toString());
+                assertEquals("XMLHttpRequest", request.header("X-Requested-With"));
+                assertTrue(request.header("Cookie").contains("wordpress_logged_in_x=y"));
+                return new Resp(200, List.of(),
+                        "<title>power的用户中心-123云盘·臻藏阁</title>");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(
+                new SiteCredentialCheckRequest("zencang", "wordpress_logged_in_x=y", "https://zc.example", "", ""));
+        assertEquals("zencang", result.site());
+        assertTrue(result.valid());
+        assertTrue(result.message().contains("power"), result.message());
+    }
+
+    @Test
+    void checkCredentialAnonymousUserCenterMeansInvalid() {
+        ZhenCangSearchService service = new ZhenCangSearchService(emptySettings(), props()) {
+            @Override
+            protected Resp http(Request request, boolean followRedirects) {
+                return new Resp(200, List.of(), "<title>用户中心-123云盘·臻藏阁</title>");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(
+                new SiteCredentialCheckRequest("zencang", "wordpress_logged_in_x=dead", "https://zc.example", "", ""));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("未登录"), result.message());
+    }
+
+    @Test
+    void checkCredentialWithoutCookieSendsNothing() {
+        ZhenCangSearchService service = new ZhenCangSearchService(emptySettings(), props()) {
+            @Override
+            protected Resp http(Request request, boolean followRedirects) {
+                throw new AssertionError("未填 Cookie 不得发任何请求");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(
+                new SiteCredentialCheckRequest("zencang", "  ", "", "", ""));
+        assertFalse(result.valid());
+        assertEquals("未填写 Cookie", result.message());
     }
 }

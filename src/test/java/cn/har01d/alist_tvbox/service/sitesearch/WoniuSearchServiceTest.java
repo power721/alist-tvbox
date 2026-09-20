@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -461,5 +463,95 @@ class WoniuSearchServiceTest {
         // 过期会话被打码 → 续期失败(如密码已改)→ 须清除,防下次重启回灌同一张死 Cookie
         assertTrue(store.get(WoniuSearchService.SESSION_SETTING).isEmpty(),
                 "重登失败须清除过期会话,防重启回灌死 Cookie");
+    }
+
+    @Test
+    void checkCredentialRedirectMeansInvalid() {
+        WoniuSearchService service = new WoniuSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request, boolean followRedirects) {
+                assertEquals("https://wn.example/user/", request.url().toString());
+                assertFalse(followRedirects, "登录态探测不跟随重定向(302 即失效信号)");
+                assertTrue(request.header("Cookie").contains("user_check=x"));
+                return new Resp(302, List.of(), "");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("user_check=x; user_id=1", "https://wn.example"));
+        assertEquals("woniu", result.site());
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("重定向"), result.message());
+    }
+
+    @Test
+    void checkCredentialUserPageMeansValid() {
+        WoniuSearchService service = new WoniuSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request, boolean followRedirects) {
+                return new Resp(200, List.of(), "<html><title>用户中心</title></html>");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("user_check=x", "https://wn.example"));
+        assertTrue(result.valid());
+        assertEquals("Cookie 有效(登录态正常)", result.message());
+    }
+
+    @Test
+    void checkCredentialAccountLogsInAndSavesSession() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        WoniuSearchService service = new WoniuSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                assertEquals("https://wn.example/user/login.html", request.url().toString());
+                return new Resp(200, List.of(
+                        "user_check=fresh; Path=/", "user_id=42; Path=/", "user_name=u1; Path=/"),
+                        "{\"code\":\"1\"}");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(
+                new SiteCredentialCheckRequest("woniu", "", "https://wn.example", "u1", "pw"));
+        assertTrue(result.valid(), result.message());
+        assertTrue(result.message().contains("账号密码可用"), result.message());
+        assertTrue(store.get(WoniuSearchService.SESSION_SETTING).contains("user_check=fresh"),
+                "登录成功须保存会话");
+    }
+
+    @Test
+    void checkCredentialAccountFailureSurfacesReason() {
+        WoniuSearchService service = new WoniuSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                return new Resp(200, List.of(), "{\"code\":\"0\",\"msg\":\"密码错误\"}");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(
+                new SiteCredentialCheckRequest("woniu", "", "https://wn.example", "u1", "bad"));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("密码错误"), result.message());
+        // 失败进冷却:再检直接回冷却提示,不撞登录接口
+        SiteCredentialCheckResult cooldown = service.checkCredential(
+                new SiteCredentialCheckRequest("woniu", "", "https://wn.example", "u1", "bad"));
+        assertTrue(cooldown.message().contains("冷却"), cooldown.message());
+    }
+
+    @Test
+    void checkCredentialWithoutAnythingReportsMissing() {
+        WoniuSearchService service = new WoniuSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request, boolean followRedirects) {
+                throw new AssertionError("未填凭证不得发任何请求");
+            }
+
+            @Override
+            protected Resp http(Request request) {
+                throw new AssertionError("未填凭证不得发任何请求");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("  ", ""));
+        assertFalse(result.valid());
+        assertEquals("未填写 Cookie 或账号密码", result.message());
+    }
+
+    private static SiteCredentialCheckRequest req(String cookie, String host) {
+        return new SiteCredentialCheckRequest("woniu", cookie, host, "", "");
     }
 }

@@ -5,12 +5,19 @@ import cn.har01d.alist_tvbox.dto.MediaSubscriptionEventDto;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionResourceDto;
 import cn.har01d.alist_tvbox.dto.PanLianAccountStatus;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionTransferService;
 import cn.har01d.alist_tvbox.service.PianDanService;
+import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.KuafuSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.Pan123CommunitySearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.ZhenCangSearchService;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import org.apache.commons.lang3.StringUtils;
@@ -39,23 +46,59 @@ public class MediaSubscriptionController {
     private final MediaSubscriptionTransferService transferService;
     private final PianDanService pianDanService;
     private final PanLianSearchService panLianSearchService;
+    private final WoniuSearchService woniuSearchService;
+    private final GuanYingSearchService guanYingSearchService;
+    private final ZhenCangSearchService zhenCangSearchService;
+    private final Pan123CommunitySearchService pan123CommunitySearchService;
+    private final KuafuSearchService kuafuSearchService;
 
     public MediaSubscriptionController(MediaSubscriptionService subscriptionService,
                                        MediaSubscriptionCheckService checkService,
                                        MediaSubscriptionTransferService transferService,
                                        PianDanService pianDanService,
-                                       PanLianSearchService panLianSearchService) {
+                                       PanLianSearchService panLianSearchService,
+                                       WoniuSearchService woniuSearchService,
+                                       GuanYingSearchService guanYingSearchService,
+                                       ZhenCangSearchService zhenCangSearchService,
+                                       Pan123CommunitySearchService pan123CommunitySearchService,
+                                       KuafuSearchService kuafuSearchService) {
         this.subscriptionService = subscriptionService;
         this.checkService = checkService;
         this.transferService = transferService;
         this.pianDanService = pianDanService;
         this.panLianSearchService = panLianSearchService;
+        this.woniuSearchService = woniuSearchService;
+        this.guanYingSearchService = guanYingSearchService;
+        this.zhenCangSearchService = zhenCangSearchService;
+        this.pan123CommunitySearchService = pan123CommunitySearchService;
+        this.kuafuSearchService = kuafuSearchService;
     }
 
     /** 盘链账号池状态:逐号拉站点配额/签到/账号信息(只读,不触发签到);与设置同权限面,仅 ADMIN。 */
     @GetMapping("/panlian/accounts")
     public List<PanLianAccountStatus> panlianAccounts() {
         return panLianSearchService.accountStatuses();
+    }
+
+    /**
+     * 站点搜索源凭证有效性检查:只读探测登录态(不触发签到/回复),校验表单当前值
+     * (未保存也可先验);观影/蜗牛 Cookie 未填时可用账号密码实测登录(与搜索自动登录
+     * 同链路)。盘链走 /panlian/accounts 真登录态查询,不在此列。
+     */
+    @PostMapping("/site-credentials/check")
+    public SiteCredentialCheckResult checkSiteCredential(@RequestBody SiteCredentialCheckRequest request) {
+        String site = StringUtils.trimToEmpty(request.site());
+        if (StringUtils.isBlank(request.cookie()) && StringUtils.isBlank(request.username())) {
+            throw new BadRequestException("未填写 Cookie 或账号");
+        }
+        return switch (site) {
+            case "woniu" -> woniuSearchService.checkCredential(request);
+            case "guanying" -> guanYingSearchService.checkCredential(request);
+            case "zencang" -> zhenCangSearchService.checkCredential(request);
+            case "pan123community" -> pan123CommunitySearchService.checkCredential(request);
+            case "kuafu" -> kuafuSearchService.checkCredential(request);
+            default -> throw new BadRequestException("未知站点:" + site);
+        };
     }
 
     /** 片单追更:片单导航分类(豆瓣/TMDB 榜单与筛选定义,排除电影类目——追更只对剧集/综艺有意义)。管理端代理,走登录态鉴权,免 vod token。 */

@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -295,5 +297,63 @@ class Pan123CommunitySearchServiceTest {
                     }
                 };
         service.dailyCheckin();
+    }
+
+    @Test
+    void checkCredentialLogoutLinkMeansValid() {
+        Pan123CommunitySearchService service =
+                new Pan123CommunitySearchService(settings("https://123panfx.com", null), props(), new ObjectMapper()) {
+                    @Override
+                    protected Resp http(Request request) {
+                        assertEquals("https://p123.example/?user.htm", request.url().toString());
+                        assertEquals("bbs_sid=s; bbs_token=t", request.header("Cookie"));
+                        return new Resp(200, List.of(), "<a href='/?user-logout.htm'>退出</a> <span>moon</span>");
+                    }
+                };
+        SiteCredentialCheckResult result = service.checkCredential(new SiteCredentialCheckRequest("pan123community", "bbs_sid=s; bbs_token=t", "https://p123.example", "", ""));
+        assertEquals("pan123community", result.site());
+        assertTrue(result.valid());
+    }
+
+    @Test
+    void checkCredentialLoginPageMeansInvalid() {
+        Pan123CommunitySearchService service =
+                new Pan123CommunitySearchService(settings("https://123panfx.com", null), props(), new ObjectMapper()) {
+                    @Override
+                    protected Resp http(Request request) {
+                        return new Resp(200, List.of(), "<a href='/?user-login.htm'>登录</a>");
+                    }
+                };
+        SiteCredentialCheckResult result = service.checkCredential(new SiteCredentialCheckRequest("pan123community", "bbs_sid=dead", "https://p123.example", "", ""));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("未登录"), result.message());
+    }
+
+    @Test
+    void checkCredentialUnrecognizedBodyReportsError() {
+        Pan123CommunitySearchService service =
+                new Pan123CommunitySearchService(settings("https://123panfx.com", null), props(), new ObjectMapper()) {
+                    @Override
+                    protected Resp http(Request request) {
+                        return new Resp(200, List.of(), "<html>空白页</html>");
+                    }
+                };
+        SiteCredentialCheckResult result = service.checkCredential(new SiteCredentialCheckRequest("pan123community", "bbs_sid=s", "https://p123.example", "", ""));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("无法识别"), result.message());
+    }
+
+    @Test
+    void checkCredentialWithoutCookieSendsNothing() {
+        Pan123CommunitySearchService service =
+                new Pan123CommunitySearchService(settings("https://123panfx.com", null), props(), new ObjectMapper()) {
+                    @Override
+                    protected Resp http(Request request) throws IOException {
+                        throw new AssertionError("未填 Cookie 不得发任何请求(含双站探活)");
+                    }
+                };
+        SiteCredentialCheckResult result = service.checkCredential(new SiteCredentialCheckRequest("pan123community", "  ", "", "", ""));
+        assertFalse(result.valid());
+        assertEquals("未填写 Cookie", result.message());
     }
 }

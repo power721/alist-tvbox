@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -86,6 +88,8 @@ public class GuanYingSearchService {
     private final LoginCooldown loginCooldown = new LoginCooldown();
     private volatile String activeHost = "";
     private volatile boolean warnedNoCredentials;
+    /** 最近一次登录失败原因(手动检查账号密码时回显,登录成功清空)。 */
+    private volatile String lastLoginError = "";
 
     public GuanYingSearchService(SettingRepository settingRepository, ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
@@ -362,6 +366,7 @@ public class GuanYingSearchService {
     }
 
     private synchronized boolean login(Config config) {
+        lastLoginError = "";
         if (loginCooldown.blocked() || !config.canLogin()) {
             return false;
         }
@@ -408,6 +413,7 @@ public class GuanYingSearchService {
 
     private boolean loginFailed(String reason) {
         // 走到登录说明旧会话已被判 nologin 或从未建立,过期会话不得留在库里等重启回灌
+        lastLoginError = reason;
         evictSession();
         return loginCooldown.fail("观影", reason, LOGIN_COOLDOWN_MS);
     }
@@ -532,6 +538,95 @@ public class GuanYingSearchService {
             }
         }
         return result;
+    }
+
+    // ---------- Cookie 有效性检查(网页设置页) ----------
+
+    /**
+     * 凭证有效性检查:Cookie 形态过 PoW 后 GET {@code /} —— 匿名/失效会返回
+     * 「未登录，访问受限」页(2026-09-20 实测,与搜索链路的 nologin 判定同特征),
+     * 200 且无 nologin 即登录态正常;Cookie 未填且带账号密码时实测登录验证(与搜索
+     * 自动登录同链路,成功建立并保存会话)。镜像按粘滞线路优先逐个尝试
+     * (内置 8 镜像部分已死——解析到 0.0.0.0),全失败聚合报数。
+     * 校验请求参数里的表单当前值;Cookie 形态只读探测,不动运行态登录 Cookie
+     * (PoW 通过标记是匿名风控标记,随请求补带)。
+     */
+    public SiteCredentialCheckResult checkCredential(SiteCredentialCheckRequest request) {
+        String cookie = StringUtils.trimToEmpty(request.cookie());
+        String username = StringUtils.trimToEmpty(request.username());
+        String password = StringUtils.trimToEmpty(request.password());
+        if (cookie.isEmpty()) {
+            if (username.isEmpty() || password.isEmpty()) {
+                return new SiteCredentialCheckResult("guanying", false, "未填写 Cookie 或账号密码");
+            }
+            Config config = new Config(normalizeHosts(request.host()), username, password, "");
+            if (loginCooldown.blocked()) {
+                return new SiteCredentialCheckResult("guanying", false, "登录冷却中(前次失败),请稍后再试");
+            }
+            if (!login(config)) {
+                return new SiteCredentialCheckResult("guanying", false,
+                        "账号密码登录失败:" + StringUtils.defaultIfBlank(lastLoginError, "站点拒绝"));
+            }
+            return new SiteCredentialCheckResult("guanying", true, "账号密码可用(已登录并保存会话)");
+        }
+        List<String> hosts = normalizeHosts(request.host());
+        Config config = new Config(hosts, "", "", cookie);
+        List<String> ordered = orderedHosts(config);
+        String lastError = "站点不可达";
+        for (String host : ordered) {
+            try {
+                Resp resp = http(buildCheckGet(host, "/", checkCookieHeader(cookie)));
+                String body = StringUtils.defaultString(resp.body());
+                if (detectChallenge(body)) {
+                    if (!ensurePow(config, host, false)) {
+                        continue;
+                    }
+                    resp = http(buildCheckGet(host, "/", checkCookieHeader(cookie)));
+                    body = StringUtils.defaultString(resp.body());
+                    if (detectChallenge(body)) {
+                        continue;
+                    }
+                }
+                if (resp.code() == 200) {
+                    if (isNotLoggedIn(body)) {
+                        return new SiteCredentialCheckResult("guanying", false, "Cookie 已失效(站点判定未登录)");
+                    }
+                    return new SiteCredentialCheckResult("guanying", true, "Cookie 有效(登录态正常)");
+                }
+                lastError = "HTTP " + resp.code();
+            } catch (Exception e) {
+                lastError = e.getMessage();
+                log.debug("guanying credential check failed on {}: {}", host, e.getMessage());
+            }
+        }
+        return new SiteCredentialCheckResult("guanying", false,
+                "全部 " + ordered.size() + " 个站点地址探测失败(" + lastError + ")");
+    }
+
+    /** 校验请求的 Cookie 头:用户提供的 Cookie + 运行态 PoW 通过标记(匿名标记,非登录态)。 */
+    private String checkCookieHeader(String provided) {
+        Map<String, String> merged = parseCookieHeader(provided);
+        synchronized (cookies) {
+            for (String name : List.of("browser_verified", "browser_pow")) {
+                String value = cookies.get(name);
+                if (value != null) {
+                    merged.putIfAbsent(name, value);
+                }
+            }
+        }
+        return SiteSearchSupport.joinCookies(merged);
+    }
+
+    /** 校验专用 GET 构造:与搜索管线同头族,但 Cookie 用显式传入值(不带运行态登录 Cookie)。 */
+    private Request buildCheckGet(String host, String path, String cookieHeader) {
+        return new Request.Builder()
+                .url(host + '/' + StringUtils.stripStart(path, "/"))
+                .header("User-Agent", MOBILE_UA)
+                .header("Accept", ACCEPT)
+                .header("Accept-Language", "zh-CN,zh;q=0.9")
+                .header("Referer", host + "/")
+                .header("Cookie", cookieHeader)
+                .build();
     }
 
     // ---------- 解析 ----------

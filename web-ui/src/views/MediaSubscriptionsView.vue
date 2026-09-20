@@ -880,10 +880,20 @@
         <el-form-item label="密码">
           <el-input v-model="notifyForm.guanyingPassword" type="password" show-password placeholder="与账号配套"/>
         </el-form-item>
-        <el-form-item label="Cookie">
-          <el-input v-model="notifyForm.guanyingCookie" type="textarea" :rows="2"
-                    placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
-        </el-form-item>
+            <el-form-item label="Cookie">
+              <el-input v-model="notifyForm.guanyingCookie" type="textarea" :rows="2"
+                        placeholder="可代替账号密码:浏览器登录后复制 Cookie;无凭证时该搜索源自动关闭"/>
+            </el-form-item>
+            <el-form-item label="有效性">
+              <div style="width:100%">
+                <el-button size="small" :loading="siteCheckLoading.guanying" :disabled="!notifyLoaded"
+                           @click="checkSiteCookie('guanying')">检查登录态</el-button>
+                <el-tag v-if="siteCheckResult.guanying"
+                        :type="siteCheckResult.guanying!.valid ? 'success' : 'danger'"
+                        style="margin-left:8px">{{ siteCheckResult.guanying!.message }}</el-tag>
+                <span class="sub-text">Cookie 优先(自动过浏览器安全验证,镜像逐个尝试);Cookie 未填时用账号密码实测登录,成功自动保存会话;不触发签到</span>
+              </div>
+            </el-form-item>
           </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="蜗牛" name="woniu">
         <el-form-item label="站点">
@@ -895,10 +905,20 @@
         <el-form-item label="密码">
           <el-input v-model="notifyForm.woniuPassword" type="password" show-password placeholder="与账号配套"/>
         </el-form-item>
-        <el-form-item label="Cookie">
-          <el-input v-model="notifyForm.woniuCookie" type="textarea" :rows="2"
-                    placeholder="须含 user_check(登录后复制);未登录网盘链接会被打码,无凭证时该搜索源自动关闭"/>
-        </el-form-item>
+            <el-form-item label="Cookie">
+              <el-input v-model="notifyForm.woniuCookie" type="textarea" :rows="2"
+                        placeholder="须含 user_check(登录后复制);未登录网盘链接会被打码,无凭证时该搜索源自动关闭"/>
+            </el-form-item>
+            <el-form-item label="有效性">
+              <div style="width:100%">
+                <el-button size="small" :loading="siteCheckLoading.woniu" :disabled="!notifyLoaded"
+                           @click="checkSiteCookie('woniu')">检查登录态</el-button>
+                <el-tag v-if="siteCheckResult.woniu"
+                        :type="siteCheckResult.woniu!.valid ? 'success' : 'danger'"
+                        style="margin-left:8px">{{ siteCheckResult.woniu!.message }}</el-tag>
+                <span class="sub-text">Cookie 优先;Cookie 未填时用账号密码实测登录,成功自动保存会话;Cookie 形态只读探测不触发签到</span>
+              </div>
+            </el-form-item>
           </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="123臻藏" name="zencang">
             <el-form-item label="站点">
@@ -907,6 +927,16 @@
             <el-form-item label="Cookie">
               <el-input v-model="notifyForm.zencangCookie" type="textarea" :rows="2"
                         placeholder="浏览器登录 123 云盘·臻藏阁后复制 Cookie(须含 wordpress_logged_in_xxx);正文默认隐藏,无 Cookie 时该搜索源自动关闭"/>
+            </el-form-item>
+            <el-form-item label="有效性">
+              <div style="width:100%">
+                <el-button size="small" :loading="siteCheckLoading.zencang" :disabled="!notifyLoaded"
+                           @click="checkSiteCookie('zencang')">检查 Cookie</el-button>
+                <el-tag v-if="siteCheckResult.zencang"
+                        :type="siteCheckResult.zencang!.valid ? 'success' : 'danger'"
+                        style="margin-left:8px">{{ siteCheckResult.zencang!.message }}</el-tag>
+                <span class="sub-text">只读探测登录态,不触发评论;校验当前表单值,未保存也可先验</span>
+              </div>
             </el-form-item>
             <span class="sub-text">123 云盘主题资源站;仅订阅的候选盘(主网盘/扩展网盘)包含 123 网盘时才参与搜索</span>
           </el-tab-pane>
@@ -918,6 +948,16 @@
               <el-input v-model="notifyForm.pan123communityCookie" type="textarea" :rows="2"
                         placeholder="可选;须含 bbs_sid 和 bbs_token(浏览器登录 123分享社区后复制)。不配也可匿名搜索,只是「回复后可见」帖自动跳过"/>
             </el-form-item>
+            <el-form-item label="有效性">
+              <div style="width:100%">
+                <el-button size="small" :loading="siteCheckLoading.pan123community" :disabled="!notifyLoaded"
+                           @click="checkSiteCookie('pan123community')">检查 Cookie</el-button>
+                <el-tag v-if="siteCheckResult.pan123community"
+                        :type="siteCheckResult.pan123community!.valid ? 'success' : 'danger'"
+                        style="margin-left:8px">{{ siteCheckResult.pan123community!.message }}</el-tag>
+                <span class="sub-text">只读探测登录态,不触发签到/回复;校验当前表单值,未保存也可先验</span>
+              </div>
+            </el-form-item>
             <span class="sub-text">123 云盘分享社区(纯 123 盘产出);仅订阅的候选盘(主网盘/扩展网盘)包含 123 网盘时才参与搜索</span>
           </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="夸父" name="kuafu">
@@ -927,6 +967,16 @@
             <el-form-item label="Cookie">
               <el-input v-model="notifyForm.kuafuCookie" type="textarea" :rows="2"
                         placeholder="可选;须含 bbs_sid 和 bbs_token(浏览器登录夸父资源社后复制)。不配也能取到公开链接与锁贴泄漏链接,只是「回复后可见」帖自动跳过"/>
+            </el-form-item>
+            <el-form-item label="有效性">
+              <div style="width:100%">
+                <el-button size="small" :loading="siteCheckLoading.kuafu" :disabled="!notifyLoaded"
+                           @click="checkSiteCookie('kuafu')">检查 Cookie</el-button>
+                <el-tag v-if="siteCheckResult.kuafu"
+                        :type="siteCheckResult.kuafu!.valid ? 'success' : 'danger'"
+                        style="margin-left:8px">{{ siteCheckResult.kuafu!.message }}</el-tag>
+                <span class="sub-text">只读探测登录态,不触发签到/回复;校验当前表单值,未保存也可先验</span>
+              </div>
             </el-form-item>
             <span class="sub-text">夸父资源社(夸克为主混多盘);仅订阅的候选盘(主网盘/扩展网盘)包含夸克网盘时才参与搜索</span>
           </el-tab-pane>
@@ -1480,6 +1530,54 @@ const loadPanlianAccounts = () => {
     panlianAccounts.value = []
   }).finally(() => {
     panlianStatusLoading.value = false
+  })
+}
+/** 外部站点凭证有效性检查:校验表单当前值(未保存也可先验),结果就地展示;
+ *  观影/蜗牛支持账号密码形态(Cookie 未填时实测登录,成功自动保存会话) */
+const siteFormFields: Record<string, { cookie: string, host: string, username?: string, password?: string }> = {
+  guanying: {cookie: 'guanyingCookie', host: 'guanyingHost', username: 'guanyingUsername', password: 'guanyingPassword'},
+  woniu: {cookie: 'woniuCookie', host: 'woniuHost', username: 'woniuUsername', password: 'woniuPassword'},
+  zencang: {cookie: 'zencangCookie', host: 'zencangHost'},
+  pan123community: {cookie: 'pan123communityCookie', host: 'pan123communityHost'},
+  kuafu: {cookie: 'kuafuCookie', host: 'kuafuHost'},
+}
+const siteCheckLoading = ref<Record<string, boolean>>({})
+const siteCheckResult = ref<Record<string, { valid: boolean, message: string } | undefined>>({})
+const checkSiteCookie = (site: string) => {
+  const fields = siteFormFields[site]
+  if (!fields) {
+    return
+  }
+  const form = notifyForm.value as unknown as Record<string, string>
+  const cookie = String(form[fields.cookie] ?? '').trim()
+  const username = fields.username ? String(form[fields.username] ?? '').trim() : ''
+  const password = fields.password ? String(form[fields.password] ?? '') : ''
+  if (!cookie && !(username && password)) {
+    ElMessage.warning(fields.username ? '未填写 Cookie 或账号密码' : '未填写 Cookie')
+    return
+  }
+  siteCheckLoading.value[site] = true
+  axios.post('/api/media-subscriptions/site-credentials/check', {
+    site,
+    cookie,
+    host: String(form[fields.host] ?? '').trim(),
+    username,
+    password,
+  }).then(response => {
+    const data = response.data
+    const valid = !!data?.valid
+    const message = data?.message || (valid ? '凭证有效' : '凭证无效')
+    siteCheckResult.value[site] = {valid, message}
+    if (valid) {
+      ElMessage.success(message)
+    } else {
+      ElMessage.error(message)
+    }
+  }).catch(() => {
+    siteCheckResult.value[site] = undefined
+    ElMessage.error('检查请求失败')
+  }).finally(() => {
+    siteCheckLoading.value[site] = false
   })
 }
 /** 账号池独立输入行 → JSON 存储值({"username","password"}/{"cookie"},残行丢弃) */
@@ -2577,6 +2675,7 @@ const openNotify = () => {
     if (notifyForm.value.panSouUrl) {
       loadPanSouAuth()
     }
+    siteCheckResult.value = {}
     notifyLoaded.value = true
     notifyVisible.value = true
   }).catch(() => {

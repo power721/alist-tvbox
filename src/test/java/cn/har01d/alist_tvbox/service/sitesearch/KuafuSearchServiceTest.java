@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -325,5 +327,49 @@ class KuafuSearchServiceTest {
             }
         };
         service.dailyCheckin();
+    }
+
+    @Test
+    void checkCredentialLogoutLinkMeansValid() {
+        KuafuSearchService service = new KuafuSearchService(
+                settings("https://www.kfzy.net", null), props(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                assertEquals("https://kf.example/user.htm", request.url().toString());
+                assertEquals("bbs_sid=s; bbs_token=t", request.header("Cookie"));
+                return new Resp(200, List.of(), "<a href='user-logout.htm'>退出</a> <span>夸父用户</span>");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(new SiteCredentialCheckRequest("kuafu", "bbs_sid=s; bbs_token=t", "https://kf.example", "", ""));
+        assertEquals("kuafu", result.site());
+        assertTrue(result.valid());
+    }
+
+    @Test
+    void checkCredentialLoginPageMeansInvalid() {
+        KuafuSearchService service = new KuafuSearchService(
+                settings("https://www.kfzy.net", null), props(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                return new Resp(200, List.of(), "<a href='user-login.htm'>登录</a>");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(new SiteCredentialCheckRequest("kuafu", "bbs_sid=dead", "https://kf.example", "", ""));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("未登录"), result.message());
+    }
+
+    @Test
+    void checkCredentialWithoutCookieSendsNothing() {
+        KuafuSearchService service = new KuafuSearchService(
+                settings("https://www.kfzy.net", null), props(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) throws IOException {
+                throw new AssertionError("未填 Cookie 不得发任何请求");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(new SiteCredentialCheckRequest("kuafu", "", "", "", ""));
+        assertFalse(result.valid());
+        assertEquals("未填写 Cookie", result.message());
     }
 }

@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
+import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -85,6 +87,8 @@ public class WoniuSearchService {
     private volatile boolean seededSession;
     private final LoginCooldown loginCooldown = new LoginCooldown();
     private volatile boolean warnedNoCredentials;
+    /** 最近一次登录失败原因(手动检查账号密码时回显,登录成功清空)。 */
+    private volatile String lastLoginError = "";
 
     public WoniuSearchService(SettingRepository settingRepository, ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
@@ -180,6 +184,7 @@ public class WoniuSearchService {
 
     /** POST /user/login.html:user_name/user_pwd → code=="1",只保留最小凭证集。 */
     private synchronized boolean login(Config config) {
+        lastLoginError = "";
         if (loginCooldown.blocked() || !config.canLogin()) {
             return false;
         }
@@ -222,6 +227,7 @@ public class WoniuSearchService {
 
     private boolean loginFailed(String reason) {
         // 走到登录说明旧会话已被打码或从未建立,过期凭证不得留在库里等重启回灌
+        lastLoginError = reason;
         persistSession("");
         return loginCooldown.fail("蜗牛", reason, RELOGIN_COOLDOWN_MS);
     }
@@ -301,6 +307,58 @@ public class WoniuSearchService {
             body = resp.body();
         }
         return body;
+    }
+
+    // ---------- Cookie 有效性检查(网页设置页) ----------
+
+    /**
+     * 凭证有效性检查:Cookie 形态 GET {@code /user/} 不跟随重定向 —— 匿名/失效会被
+     * 302 到 {@code /user/login.html}(2026-09-20 实测),200 即登录态正常;Cookie 未填
+     * 且带账号密码时实测登录验证(与搜索自动登录同链路,成功建立并保存会话)。
+     * 校验请求参数里的表单当前值;Cookie 形态只读探测,不动任何 Setting。
+     */
+    public SiteCredentialCheckResult checkCredential(SiteCredentialCheckRequest request) {
+        String cookie = normalizeCookie(StringUtils.defaultString(request.cookie()));
+        String username = StringUtils.trimToEmpty(request.username());
+        String password = StringUtils.trimToEmpty(request.password());
+        if (cookie.isEmpty()) {
+            if (username.isEmpty() || password.isEmpty()) {
+                return new SiteCredentialCheckResult("woniu", false, "未填写 Cookie 或账号密码");
+            }
+            Config config = new Config(normalizeHost(StringUtils.defaultString(request.host())), username, password, "");
+            if (loginCooldown.blocked()) {
+                return new SiteCredentialCheckResult("woniu", false, "登录冷却中(前次失败),请稍后再试");
+            }
+            if (!login(config)) {
+                return new SiteCredentialCheckResult("woniu", false,
+                        "账号密码登录失败:" + StringUtils.defaultIfBlank(lastLoginError, "站点拒绝"));
+            }
+            return new SiteCredentialCheckResult("woniu", true, "账号密码可用(已登录并保存会话)");
+        }
+        Config config = new Config(normalizeHost(StringUtils.defaultString(request.host())), "", "", cookie);
+        String lastError = "站点不可达";
+        for (String host : config.hosts()) {
+            try {
+                Resp resp = http(new Request.Builder()
+                        .url(host + "/user/")
+                        .header("User-Agent", USER_AGENT)
+                        .header("Referer", host + "/")
+                        .header("Cookie", cookie)
+                        .build(), false);
+                if (resp.code() >= 300 && resp.code() < 400) {
+                    return new SiteCredentialCheckResult("woniu", false, "Cookie 已失效(站点重定向到登录页)");
+                }
+                if (resp.code() == 200 && StringUtils.isNotBlank(resp.body())) {
+                    return new SiteCredentialCheckResult("woniu", true, "Cookie 有效(登录态正常)");
+                }
+                lastError = "HTTP " + resp.code();
+            } catch (Exception e) {
+                lastError = e.getMessage();
+                log.debug("woniu credential check failed on {}: {}", host, e.getMessage());
+            }
+        }
+        return new SiteCredentialCheckResult("woniu", false,
+                "全部 " + config.hosts().size() + " 个站点地址探测失败(" + lastError + ")");
     }
 
     // ---------- 解析 ----------
@@ -531,6 +589,20 @@ public class WoniuSearchService {
                 .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .build();
+        try (Response response = client.newCall(request).execute()) {
+            String body = response.body() == null ? "" : response.body().string();
+            return new Resp(response.code(), response.headers("Set-Cookie"), body);
+        }
+    }
+
+    /** 服务覆写供单测打桩;登录态探测用(followRedirects=false,302 即失效信号)。 */
+    protected Resp http(Request request, boolean followRedirects) throws IOException {
+        OkHttpClient client = httpClient.newBuilder()
+                .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .followRedirects(followRedirects)
                 .build();
         try (Response response = client.newCall(request).execute()) {
             String body = response.body() == null ? "" : response.body().string();
