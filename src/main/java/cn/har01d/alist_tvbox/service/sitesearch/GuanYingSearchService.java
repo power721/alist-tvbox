@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Dns;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -17,7 +18,9 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.net.InetAddress;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -33,11 +36,16 @@ import java.util.regex.Pattern;
 
 /**
  * 观影搜索源(atv-spiders/py/观影.py 的 Java 移植,追剧搜索源之一):观影是需登录的
- * 网盘分享聚合站,多个电影名中文域名互为镜像(教父.com/星际穿越.com 等 8 个)。
+ * 网盘分享聚合站,多镜像域名互为镜像(教父.com/星际穿越.com/hgeme.com 等,清单以官方
+ * 地址发布页「挂了.com」的 check.js 为准——域名会轮换/退役,已知镜像全失败时自动
+ * 从发布页自发现最新清单重试)。
  *
  * <p>反爬两道:①PoW 工作量证明——响应出现挑战特征(JSON code=419/"浏览器安全验证"/
  * pow.worker 等,注意页面含 {@code _obj.} 即为正常数据页不算挑战)时,取 {@code /res/pow}
- * 的 {N,x,t} 算 {@code y = x^(2^t) mod N}(BigInteger.modPow)提交换 {@code browser_verified};
+ * 的 {N,x,t} 算 {@code y = x^(2^t) mod N}(BigInteger.modPow,2026-09-20 起 t 随机 20-40 万、
+ * 2048-bit 模数,单次求解亚秒级)提交换 {@code browser_verified};另有<b>请求头闸门</b>:
+ * 带 Accept-Language(任何值)PoW 收账后仍会被重新挑战、永不放行(2026-09-21 实测 100% 复现),
+ * 请求族仅 UA/Accept/Referer/Cookie,勿加回;
  * ②登录态——响应含 nologin/未登录 时用账号密码重登。<b>凭证必须用户自配</b>
  * (Setting {@code guanying_username}/{@code guanying_password} 或直接 {@code guanying_cookie},
  * 站点列表 {@code guanying_host} 可覆盖,逗号/竖线/换行分隔),未配置时本源静默关闭。
@@ -62,10 +70,26 @@ public class GuanYingSearchService {
     /** 登录会话持久化:登录态 Cookie 头(k=v; k=v,剔 PoW 短时效项),重启播种免重登 */
     public static final String SESSION_SETTING = "guanying_session";
 
+    /** www 形态才是服务域名(裸域所有路径都 302 到 www,救不了);www A 记录 TTL≈1s 轮换反封锁,
+     * 任一时刻常有镜像解析到 0.0.0.0 下线中,解析层 resolveAliveRecords 剔死记录。
+     * 清单以官方地址发布页(挂了.com)check.js 的 urlData 为准(2026-09-20:楚门的世界/
+     * 泰坦尼克号/阿甘正传已退役,新增 ASCII 域 hgeme.com),域名再轮换由 discoverHosts 自愈。 */
     private static final List<String> DEFAULT_HOSTS = List.of(
-            "https://www.教父.com", "https://www.星际穿越.com", "https://www.楚门的世界.com",
-            "https://www.泰坦尼克号.com", "https://www.盗梦空间.com", "https://www.肖申克的救赎.com",
-            "https://www.阿甘正传.com", "https://www.黑客帝国.com");
+            "https://www.教父.com", "https://www.星际穿越.com", "https://www.盗梦空间.com",
+            "https://www.黑客帝国.com", "https://www.肖申克的救赎.com", "https://www.hgeme.com");
+    /** 官方地址发布页:check.js 是静态资源不过 auth,内嵌 urlData 最新镜像清单。 */
+    private static final String PUBLISH_HOST = SiteSearchSupport.normalizeHost("https://www.挂了.com", "");
+    private static final Pattern CHECK_JS_URLS = Pattern.compile("url:\\s*'(https?://[^']+)'");
+    /** 发布页抓取节流:站点全挂时不能每次搜索都打发布页,失败后冷却再抓。 */
+    private static final long DISCOVERY_RETRY_MS = 10 * 60_000L;
+    /** 风控态原因文案:PoW 已被站点收账(success:true)却仍被要求验证。 */
+    private static final String POW_REJECTED_CAUSE = "PoW 通过仍被要求验证(站点反爬未放行)";
+    /**
+     * PoW 熔断时长:PoW 被收账(success:true)仍遭挑战 = 反爬不认账(2026-09-21 实测根因=请求带
+     * Accept-Language 头,任何值都拦、不带则放行,已从请求族移除;此态再现说明反爬规则又变),
+     * 所有镜像同一后端,熔断期内不再发起任何求解防连环刺激。
+     */
+    private static final long POW_BREAK_MS = 60_000L;
     private static final String MOBILE_UA =
             "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
     private static final String ACCEPT = "text/html,application/xhtml+xml,application/json,text/plain,*/*";
@@ -90,6 +114,13 @@ public class GuanYingSearchService {
     private volatile boolean warnedNoCredentials;
     /** 最近一次登录失败原因(手动检查账号密码时回显,登录成功清空)。 */
     private volatile String lastLoginError = "";
+    /** 发布页发现的最新镜像(缓存,空 = 从未发现成功)。 */
+    private volatile List<String> discoveredHosts = List.of();
+    private volatile long lastDiscoveryAttempt;
+    /** 登录单轮尝试的失败原因(UNREACHABLE/REJECTED 供 loginFailed 回显,仅 synchronized login 内读写)。 */
+    private String loginRoundError = "";
+    /** PoW 风控熔断至时刻(毫秒):期间 ensurePow 直接拒绝求解。 */
+    private volatile long powBreakUntil;
 
     public GuanYingSearchService(SettingRepository settingRepository, ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
@@ -98,6 +129,9 @@ public class GuanYingSearchService {
 
     private record Config(List<String> hosts, String username, String password, String cookie) implements SiteCredentials {
     }
+
+    /** 登录单轮尝试的三态:成功 / 站点明确拒绝(换镜像也不会变)/ 全镜像不可达。 */
+    private enum LoginOutcome { SUCCESS, REJECTED, UNREACHABLE }
 
     record Item(String dtype, String rid, String title, String remarks) {
     }
@@ -180,7 +214,31 @@ public class GuanYingSearchService {
     // ---------- 请求管线:多镜像 failover + PoW/登录自动恢复 ----------
 
     private Resp requestResponse(Config config, String path, Map<String, String> params) {
-        for (String host : orderedHosts(config)) {
+        Resp resp = tryHosts(orderedHosts(config), config, path, params);
+        if (resp == null) {
+            // 已知镜像全失败:域名可能又轮换/退役了,从发布页自发现最新清单再试一轮
+            List<String> fresh = freshDiscoveredHosts(config);
+            if (!fresh.isEmpty()) {
+                resp = tryHosts(fresh, config, path, params);
+            }
+        }
+        return resp;
+    }
+
+    /** PoW 风控熔断是否生效。 */
+    private boolean powBreakActive() {
+        return System.currentTimeMillis() < powBreakUntil;
+    }
+
+    private void tripPowBreak() {
+        powBreakUntil = System.currentTimeMillis() + POW_BREAK_MS;
+    }
+
+    private Resp tryHosts(List<String> hosts, Config config, String path, Map<String, String> params) {
+        // PoW 已收账仍被挑战 = 反爬不认账(根因曾为 Accept-Language 头,已移除):所有镜像
+        // 同一后端,熔断期内不再求解,继续换镜像无意义
+        boolean powRejected = false;
+        for (String host : hosts) {
             boolean powRetried = false;
             boolean authRetried = false;
             for (int attempt = 0; attempt < 3; attempt++) {
@@ -193,7 +251,12 @@ public class GuanYingSearchService {
                 String body = StringUtils.defaultString(resp.body());
                 mergeCookies(resp.setCookies());
                 if (detectChallenge(body)) {
-                    if (powRetried || !ensurePow(config, host, true)) {
+                    if (powRetried) {
+                        tripPowBreak();
+                        powRejected = true;
+                        break;
+                    }
+                    if (powBreakActive() || !ensurePow(config, host, true)) {
                         break;
                     }
                     powRetried = true;
@@ -218,8 +281,66 @@ public class GuanYingSearchService {
                 activeHost = host; // 成功镜像粘滞
                 return resp;
             }
+            if (powRejected) {
+                break;
+            }
         }
         return null;
+    }
+
+    // ---------- 发布页自发现 ----------
+
+    /**
+     * 官方地址发布页(挂了.com)自发现:站点会轮换/退役镜像域名(2026-09-20 实测楚门的世界/
+     * 泰坦尼克号/阿甘正传被除名、新增 hgeme.com),发布页 check.js 的 urlData 恒为最新清单。
+     * 仅在已知镜像全失败后调用,10 分钟节流;解析失败保留上次缓存。
+     */
+    List<String> discoverHosts() {
+        long now = System.currentTimeMillis();
+        if (now - lastDiscoveryAttempt < DISCOVERY_RETRY_MS) {
+            return discoveredHosts;
+        }
+        lastDiscoveryAttempt = now;
+        try {
+            Resp resp = http(buildGet(PUBLISH_HOST, "/check.js", null));
+            List<String> hosts = new ArrayList<>();
+            Matcher matcher = CHECK_JS_URLS.matcher(StringUtils.defaultString(resp.body()));
+            while (matcher.find()) {
+                String host = SiteSearchSupport.normalizeHost(matcher.group(1), "");
+                if (!host.isEmpty()) {
+                    hosts.add(host);
+                }
+            }
+            if (!hosts.isEmpty()) {
+                log.info("观影发布页发现 {} 个最新镜像", hosts.size());
+                discoveredHosts = List.copyOf(hosts);
+            } else {
+                log.debug("观影发布页未解析到镜像清单(改版?)");
+            }
+        } catch (Exception e) {
+            log.debug("guanying publish page discovery failed: {}", e.getMessage());
+        }
+        return discoveredHosts;
+    }
+
+    /** 发布页新发现且本轮未试过的镜像(剔除 orderedHosts 含粘滞);自定义站点列表不自动混入;风控熔断中换镜像无意义。 */
+    private List<String> freshDiscoveredHosts(Config config) {
+        if (powBreakActive() || !usesDefaultHosts(config)) {
+            return List.of();
+        }
+        List<String> known = orderedHosts(config);
+        List<String> fresh = new ArrayList<>();
+        for (String host : discoverHosts()) {
+            if (!known.contains(host)) {
+                fresh.add(host);
+            }
+        }
+        return fresh;
+    }
+
+    /** 自定义站点列表(可能指向私有部署)不自动混入官方镜像,防登录 Cookie 跨实例泄漏。 */
+    private boolean usesDefaultHosts(Config config) {
+        return config.hosts().containsAll(normalizeHosts(""));
     }
 
     private String requestText(Config config, String path, Map<String, String> params) {
@@ -253,7 +374,6 @@ public class GuanYingSearchService {
                 .url(url.toString())
                 .header("User-Agent", MOBILE_UA)
                 .header("Accept", ACCEPT)
-                .header("Accept-Language", "zh-CN,zh;q=0.9")
                 .header("Referer", host + "/")
                 .header("Cookie", cookieHeader())
                 .build();
@@ -312,6 +432,9 @@ public class GuanYingSearchService {
     }
 
     private synchronized boolean ensurePow(Config config, String host, boolean force) {
+        if (System.currentTimeMillis() < powBreakUntil) {
+            return false;
+        }
         try {
             if (force) {
                 dropCookies("browser_pow", "browser_verified");
@@ -367,48 +490,75 @@ public class GuanYingSearchService {
 
     private synchronized boolean login(Config config) {
         lastLoginError = "";
+        loginRoundError = "";
         if (loginCooldown.blocked() || !config.canLogin()) {
             return false;
         }
-        try {
-            if (!ensurePow(config, config.hosts().get(0), false)) {
-                return loginFailed("PoW 验证未通过");
+        // 镜像 A 记录秒级轮换,任一镜像可能正解析到 0.0.0.0:逐镜像尝试,坏镜像不阻断登录
+        LoginOutcome outcome = loginAcross(orderedHosts(config), config);
+        if (outcome == LoginOutcome.UNREACHABLE) {
+            // 已知镜像全失败:域名可能又轮换/退役了,从发布页自发现最新清单再试一轮
+            List<String> fresh = freshDiscoveredHosts(config);
+            if (!fresh.isEmpty()) {
+                outcome = loginAcross(fresh, config);
             }
-            // 登录页 GET 下发的会话 Cookie(如 PHPSESSID/csrf)必须并入全局态再发登录 POST,
-            // 否则要求登录页会话的站点会永远拒绝账号密码(其余每次 http() 都 mergeCookies,唯独这里漏了)
-            Resp page = http(buildGet(config.hosts().get(0), "/user/login/", null));
-            mergeCookies(page.setCookies());
-            Resp resp = http(new Request.Builder()
-                    .url(config.hosts().get(0) + "/user/login")
-                    .header("User-Agent", MOBILE_UA)
-                    .header("Accept", ACCEPT)
-                    .header("Referer", config.hosts().get(0) + "/user/login/")
-                    .header("Cookie", cookieHeader())
-                    .post(new FormBody.Builder()
-                            .add("code", "")
-                            .add("siteid", "1")
-                            .add("dosubmit", "1")
-                            .add("cookietime", "10506240")
-                            .add("username", config.username())
-                            .add("password", config.password())
-                            .build())
-                    .build());
-            mergeCookies(resp.setCookies());
-            JsonNode payload = objectMapper.readTree(StringUtils.defaultString(resp.body()));
-            if (payload.path("code").asInt(0) == 200) {
-                log.info("观影登录成功(username={})", config.username());
-                if (config.cookie().isBlank()) {
-                    persistSession();
-                }
-                return true;
-            }
-            if (payload.path("captcha").asBoolean(false)) {
-                return loginFailed("触发点选验证码,请改配 Cookie(" + COOKIE_SETTING + ")");
-            }
-            return loginFailed("账号密码被拒绝:" + payload.path("msg").asText(payload.path("message").asText("")));
-        } catch (Exception e) {
-            return loginFailed(e.getMessage());
         }
+        if (outcome == LoginOutcome.SUCCESS) {
+            return true;
+        }
+        return loginFailed(StringUtils.defaultIfBlank(loginRoundError, "站点不可达"));
+    }
+
+    /** 单轮登录尝试:SUCCESS 成功 / REJECTED 站点明确拒绝(验证码/账密被拒,换镜像无意义)/ UNREACHABLE 全不可达。 */
+    private LoginOutcome loginAcross(List<String> hosts, Config config) {
+        String lastError = "";
+        for (String host : hosts) {
+            try {
+                if (!ensurePow(config, host, false)) {
+                    lastError = powBreakActive() ? POW_REJECTED_CAUSE : "PoW 验证未通过";
+                    continue;
+                }
+                // 登录页 GET 下发的会话 Cookie(如 PHPSESSID/csrf)必须并入全局态再发登录 POST,
+                // 否则要求登录页会话的站点会永远拒绝账号密码(其余每次 http() 都 mergeCookies,唯独这里漏了)
+                Resp page = http(buildGet(host, "/user/login/", null));
+                mergeCookies(page.setCookies());
+                Resp resp = http(new Request.Builder()
+                        .url(host + "/user/login")
+                        .header("User-Agent", MOBILE_UA)
+                        .header("Accept", ACCEPT)
+                        .header("Referer", host + "/user/login/")
+                        .header("Cookie", cookieHeader())
+                        .post(new FormBody.Builder()
+                                .add("code", "")
+                                .add("siteid", "1")
+                                .add("dosubmit", "1")
+                                .add("cookietime", "10506240")
+                                .add("username", config.username())
+                                .add("password", config.password())
+                                .build())
+                        .build());
+                mergeCookies(resp.setCookies());
+                JsonNode payload = objectMapper.readTree(StringUtils.defaultString(resp.body()));
+                if (payload.path("code").asInt(0) == 200) {
+                    log.info("观影登录成功(username={})", config.username());
+                    if (config.cookie().isBlank()) {
+                        persistSession();
+                    }
+                    return LoginOutcome.SUCCESS;
+                }
+                if (payload.path("captcha").asBoolean(false)) {
+                    loginRoundError = "触发点选验证码,请改配 Cookie(" + COOKIE_SETTING + ")";
+                    return LoginOutcome.REJECTED;
+                }
+                loginRoundError = "账号密码被拒绝:" + payload.path("msg").asText(payload.path("message").asText(""));
+                return LoginOutcome.REJECTED;
+            } catch (Exception e) {
+                lastError = StringUtils.defaultIfBlank(e.getMessage(), e.getClass().getSimpleName());
+                log.debug("guanying login failed on {}: {}", host, lastError);
+            }
+        }
+        loginRoundError = StringUtils.defaultIfBlank(lastError, "站点不可达");
+        return LoginOutcome.UNREACHABLE;
     }
 
     private boolean loginFailed(String reason) {
@@ -457,7 +607,10 @@ public class GuanYingSearchService {
         synchronized (cookies) {
             if (!seededConfigCookie) {
                 for (Map.Entry<String, String> entry : parseCookieHeader(config.cookie()).entrySet()) {
-                    cookies.putIfAbsent(entry.getKey(), entry.getValue());
+                    // PoW 短时效标记不是凭证:浏览器整串复制来的陈旧值会遮蔽本轮求解换来的新值,不播种
+                    if (!TRANSIENT_COOKIES.contains(entry.getKey().toLowerCase())) {
+                        cookies.putIfAbsent(entry.getKey(), entry.getValue());
+                    }
                 }
                 // 播种落库会话只在进程生命周期发生一次:被 nologin 换掉/清除后的内存态不回灌旧 Cookie
                 if (config.cookie().isBlank()) {
@@ -546,8 +699,12 @@ public class GuanYingSearchService {
      * 凭证有效性检查:Cookie 形态过 PoW 后 GET {@code /} —— 匿名/失效会返回
      * 「未登录，访问受限」页(2026-09-20 实测,与搜索链路的 nologin 判定同特征),
      * 200 且无 nologin 即登录态正常;Cookie 未填且带账号密码时实测登录验证(与搜索
-     * 自动登录同链路,成功建立并保存会话)。镜像按粘滞线路优先逐个尝试
-     * (内置 8 镜像部分已死——解析到 0.0.0.0),全失败聚合报数。
+     * 自动登录同链路,成功建立并保存会话)。镜像按粘滞线路优先逐个尝试(www 域名
+     * TTL≈1s 轮换,任一时刻部分镜像解析到 0.0.0.0 下线中),全失败按原因分组计数回显
+     * 并从官方发布页(挂了.com)自发现最新镜像再试一轮,不再只报最后一个镜像的原始
+     * 异常(曾让 8 镜像瞬时全死被误读为域名无法识别)。PoW 已被站点收账却仍被要求
+     * 验证 = 反爬不认账(2026-09-21 根因=Accept-Language 头触发,已移除请求族;此态再现即
+     * 反爬规则又变),立即熔断不再打剩余镜像(同一后端)。
      * 校验请求参数里的表单当前值;Cookie 形态只读探测,不动运行态登录 Cookie
      * (PoW 通过标记是匿名风控标记,随请求补带)。
      */
@@ -571,20 +728,48 @@ public class GuanYingSearchService {
         }
         List<String> hosts = normalizeHosts(request.host());
         Config config = new Config(hosts, "", "", cookie);
-        List<String> ordered = orderedHosts(config);
-        String lastError = "站点不可达";
-        for (String host : ordered) {
+        Map<String, Integer> causes = new LinkedHashMap<>();
+        SiteCredentialCheckResult result = probeCookieRound(orderedHosts(config), config, cookie, causes);
+        if (result == null) {
+            // 已知镜像全失败:域名可能又轮换/退役了,从发布页自发现最新清单再试一轮
+            List<String> fresh = freshDiscoveredHosts(config);
+            if (!fresh.isEmpty()) {
+                result = probeCookieRound(fresh, config, cookie, causes);
+            }
+        }
+        if (result != null) {
+            return result;
+        }
+        int attempted = causes.values().stream().mapToInt(Integer::intValue).sum();
+        return new SiteCredentialCheckResult("guanying", false,
+                "全部 " + attempted + " 个站点地址探测失败:" + summarizeCauses(causes));
+    }
+
+    /** Cookie 探测一轮:命中登录态/失效立即返回结果,全失败返回 null(失败原因记入 causes)。 */
+    private SiteCredentialCheckResult probeCookieRound(List<String> hosts, Config config, String cookie,
+            Map<String, Integer> causes) {
+        for (String host : hosts) {
             try {
                 Resp resp = http(buildCheckGet(host, "/", checkCookieHeader(cookie)));
                 String body = StringUtils.defaultString(resp.body());
                 if (detectChallenge(body)) {
                     if (!ensurePow(config, host, false)) {
+                        if (powBreakActive()) {
+                            causes.merge(POW_REJECTED_CAUSE, 1, Integer::sum);
+                            break;
+                        }
+                        causes.merge("PoW 求解/提交失败", 1, Integer::sum);
                         continue;
                     }
                     resp = http(buildCheckGet(host, "/", checkCookieHeader(cookie)));
                     body = StringUtils.defaultString(resp.body());
                     if (detectChallenge(body)) {
-                        continue;
+                        // PoW 已被站点收账(success:true)却仍要求验证 = 反爬不认账
+                        // (2026-09-21 实测根因=请求带 Accept-Language,任何值都拦、不带则放行,
+                        // 已移除;此态再现说明反爬规则又变);所有镜像同一后端,熔断立即停止
+                        tripPowBreak();
+                        causes.merge(POW_REJECTED_CAUSE, 1, Integer::sum);
+                        break;
                     }
                 }
                 if (resp.code() == 200) {
@@ -593,24 +778,47 @@ public class GuanYingSearchService {
                     }
                     return new SiteCredentialCheckResult("guanying", true, "Cookie 有效(登录态正常)");
                 }
-                lastError = "HTTP " + resp.code();
+                causes.merge("HTTP " + resp.code(), 1, Integer::sum);
             } catch (Exception e) {
-                lastError = e.getMessage();
+                causes.merge(failureCause(e), 1, Integer::sum);
                 log.debug("guanying credential check failed on {}: {}", host, e.getMessage());
             }
         }
-        return new SiteCredentialCheckResult("guanying", false,
-                "全部 " + ordered.size() + " 个站点地址探测失败(" + lastError + ")");
+        return null;
+    }
+
+    /** 聚合报错的单条原因:空消息退异常类名,长消息(OkHttp 连接串含 host)截断防刷屏。 */
+    private static String failureCause(Exception e) {
+        String msg = StringUtils.defaultIfBlank(e.getMessage(), e.getClass().getSimpleName());
+        return StringUtils.abbreviate(msg, 60);
+    }
+
+    /** 原因计数汇总:N×原因 顿号连接;空(防御,PoW 失败路径也会记账)给通用文案。 */
+    private static String summarizeCauses(Map<String, Integer> causes) {
+        if (causes.isEmpty()) {
+            return "站点不可达";
+        }
+        StringBuilder summary = new StringBuilder();
+        for (Map.Entry<String, Integer> entry : causes.entrySet()) {
+            if (summary.length() > 0) {
+                summary.append('、');
+            }
+            summary.append(entry.getValue()).append('×').append(entry.getKey());
+        }
+        return summary.toString();
     }
 
     /** 校验请求的 Cookie 头:用户提供的 Cookie + 运行态 PoW 通过标记(匿名标记,非登录态)。 */
     private String checkCookieHeader(String provided) {
         Map<String, String> merged = parseCookieHeader(provided);
+        // 表单/浏览器整串复制来的 browser_verified/browser_pow 是绑定其浏览器挑战的陈旧短时效值,
+        // 会遮蔽本轮 PoW 刚换来的新值导致重访必被挑战(2026-09-21 实测真凶),一律剔除以运行态为准
+        merged.keySet().removeIf(name -> TRANSIENT_COOKIES.contains(name.toLowerCase()));
         synchronized (cookies) {
             for (String name : List.of("browser_verified", "browser_pow")) {
                 String value = cookies.get(name);
                 if (value != null) {
-                    merged.putIfAbsent(name, value);
+                    merged.put(name, value);
                 }
             }
         }
@@ -623,7 +831,6 @@ public class GuanYingSearchService {
                 .url(host + '/' + StringUtils.stripStart(path, "/"))
                 .header("User-Agent", MOBILE_UA)
                 .header("Accept", ACCEPT)
-                .header("Accept-Language", "zh-CN,zh;q=0.9")
                 .header("Referer", host + "/")
                 .header("Cookie", cookieHeader)
                 .build();
@@ -753,6 +960,7 @@ public class GuanYingSearchService {
 
     protected Resp http(Request request) throws IOException {
         OkHttpClient client = httpClient.newBuilder()
+                .dns(GuanYingSearchService::resolveAliveRecords)
                 .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -761,5 +969,29 @@ public class GuanYingSearchService {
             String body = response.body() == null ? "" : response.body().string();
             return new Resp(response.code(), response.headers("Set-Cookie"), body);
         }
+    }
+
+    /**
+     * 站点镜像 A 记录秒级 TTL 轮换:任一时刻常有镜像解析到 0.0.0.0(下线中)。全 0 答案
+     * 直接以可读原因失败,避免上层报 "Failed to connect to .../0.0.0.0:443" 被误读为
+     * 中文域名无法识别(punycode 转换本身是好的)。
+     */
+    static List<InetAddress> resolveAliveRecords(String host) throws UnknownHostException {
+        List<InetAddress> alive = filterAliveRecords(Dns.SYSTEM.lookup(host));
+        if (alive.isEmpty()) {
+            throw new UnknownHostException("域名被解析到 0.0.0.0(镜像轮换下线或被 DNS 拦截)");
+        }
+        return alive;
+    }
+
+    /** DNS 答案里剔 0.0.0.0/::(isAnyLocalAddress)死记录;混有真实 IP 的答案只保留真实部分。 */
+    static List<InetAddress> filterAliveRecords(List<InetAddress> records) {
+        List<InetAddress> alive = new ArrayList<>();
+        for (InetAddress record : records) {
+            if (!record.isAnyLocalAddress()) {
+                alive.add(record);
+            }
+        }
+        return alive;
     }
 }

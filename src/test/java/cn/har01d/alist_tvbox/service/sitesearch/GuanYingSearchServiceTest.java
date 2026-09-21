@@ -8,10 +8,13 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.Request;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,7 +103,7 @@ class GuanYingSearchServiceTest {
 
     @Test
     void normalizeHosts() {
-        assertEquals(8, GuanYingSearchService.normalizeHosts("").size());
+        assertEquals(6, GuanYingSearchService.normalizeHosts("").size(), "内置镜像表同步官方发布页清单");
         assertEquals("https://" + java.net.IDN.toASCII("观影.example"),
                 GuanYingSearchService.normalizeHosts("观影.example").get(0));
         List<String> two = GuanYingSearchService.normalizeHosts("a.example, https://b.example/path");
@@ -487,14 +490,159 @@ class GuanYingSearchServiceTest {
         GuanYingSearchService service = new GuanYingSearchService(settings(), new ObjectMapper()) {
             @Override
             protected Resp http(Request request) throws IOException {
+                if (request.url().encodedPath().equals("/check.js")) {
+                    return new Resp(200, List.of(), ""); // 发布页发现不到新镜像
+                }
                 attempts.incrementAndGet();
                 throw new IOException("Failed to connect to dead.mirror/0.0.0.0:443");
             }
         };
         SiteCredentialCheckResult result = service.checkCredential(req("uid=42", ""));
         assertFalse(result.valid());
-        assertTrue(result.message().contains("8 个站点地址探测失败"), result.message());
-        assertEquals(8, attempts.get(), "内置 8 镜像逐个尝试");
+        assertTrue(result.message().contains("6 个站点地址探测失败"), result.message());
+        assertTrue(result.message().contains("6×"), "同因失败分组计数:" + result.message());
+        assertEquals(6, attempts.get(), "内置 6 镜像逐个尝试");
+    }
+
+    @Test
+    void checkCredentialGroupsFailureCauses() {
+        AtomicInteger attempts = new AtomicInteger();
+        GuanYingSearchService service = new GuanYingSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) throws IOException {
+                if (request.url().encodedPath().equals("/check.js")) {
+                    return new Resp(200, List.of(), "");
+                }
+                // 前 2 个镜像 DNS 轮换下线(0.0.0.0),其余连接失败:须分组计数而非只回显最后一个
+                throw attempts.incrementAndGet() <= 2
+                        ? new UnknownHostException("域名被解析到 0.0.0.0(镜像轮换下线或被 DNS 拦截)")
+                        : new IOException("failed to connect to mirror/1.2.3.4:443");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("uid=42", ""));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("2×域名被解析到 0.0.0.0"), result.message());
+        assertTrue(result.message().contains("4×failed to connect"), result.message());
+    }
+
+    @Test
+    void checkCredentialRecoversViaPublishPageDiscovery() {
+        AtomicInteger deadAttempts = new AtomicInteger();
+        GuanYingSearchService service = new GuanYingSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) throws IOException {
+                String url = request.url().toString();
+                if (request.url().encodedPath().equals("/check.js")) {
+                    // 官方发布页清单:已知 6 镜像全退役,只剩新镜像 gy3
+                    return new Resp(200, List.of(), "const urlData = [\n  { url: 'https://gy3.example' },\n];");
+                }
+                if (url.startsWith("https://gy3.example/")) {
+                    return new Resp(200, List.of(), "_obj.site={};");
+                }
+                deadAttempts.incrementAndGet();
+                throw new IOException("Failed to connect to dead.mirror/0.0.0.0:443");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("uid=42", ""));
+        assertTrue(result.valid(), result.message());
+        assertEquals(6, deadAttempts.get(), "已知镜像全失败后才走发布页发现");
+    }
+
+    @Test
+    void searchRecoversViaPublishPageDiscovery() {
+        AtomicInteger deadAttempts = new AtomicInteger();
+        GuanYingSearchService service = new GuanYingSearchService(
+                settings("guanying_cookie", "auth=token"), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) throws IOException {
+                String url = request.url().toString();
+                if (request.url().encodedPath().equals("/check.js")) {
+                    return new Resp(200, List.of(), "const urlData = [ { url: 'https://gy3.example' } ];");
+                }
+                if (url.startsWith("https://gy3.example/res/downurl/")) {
+                    return new Resp(200, List.of(), "{\"panlist\":{\"url\":[\"https://pan.quark.cn/s/gy1\"],"
+                            + "\"name\":[\"夸克4K\"],\"p\":[\"\"]},\"downlist\":{\"list\":{\"m\":[],\"t\":[]}}}");
+                }
+                if (url.startsWith("https://gy3.example/")) {
+                    return new Resp(200, List.of(), "<html><script>_obj.search={\"l\":{\"i\":[\"11\"],"
+                            + "\"title\":[\"难哄\"],\"d\":[\"tv\"],\"year\":[\"2025\"],\"info\":[\"\"]}};_obj.x=1;</script></html>");
+                }
+                deadAttempts.incrementAndGet();
+                throw new IOException("Failed to connect to dead.mirror/0.0.0.0:443");
+            }
+        };
+        List<Message> messages = service.search("难哄");
+        assertEquals(1, messages.size());
+        assertEquals("https://pan.quark.cn/s/gy1", messages.get(0).getLink());
+        assertTrue(deadAttempts.get() >= 6, "已知镜像失败后自发现新镜像续命:" + deadAttempts.get());
+    }
+
+    @Test
+    void loginRecoversViaPublishPageDiscovery() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        GuanYingSearchService service = new GuanYingSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) throws IOException {
+                String url = request.url().toString();
+                if (request.url().encodedPath().equals("/check.js")) {
+                    return new Resp(200, List.of(), "const urlData = [ { url: 'https://gy3.example' } ];");
+                }
+                if (url.equals("https://gy3.example/user/login/")) {
+                    return new Resp(200, List.of(), "login page");
+                }
+                if (url.equals("https://gy3.example/user/login")) {
+                    return new Resp(200, List.of("auth=fresh; Path=/"), "{\"code\":200}");
+                }
+                if (url.startsWith("https://gy3.example/")) {
+                    return new Resp(200, List.of(), "_obj.site={};");
+                }
+                throw new IOException("Failed to connect to dead.mirror/0.0.0.0:443");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(
+                new SiteCredentialCheckRequest("guanying", "", "", "u1", "pw"));
+        assertTrue(result.valid(), result.message());
+        assertTrue(store.get(GuanYingSearchService.SESSION_SETTING).contains("auth=fresh"),
+                "发布页发现的镜像登录成功须保存会话");
+    }
+
+    @Test
+    void filterAliveRecordsDropsDeadAddresses() throws Exception {
+        assertEquals(List.of(InetAddress.getByName("64.118.159.152")),
+                GuanYingSearchService.filterAliveRecords(
+                        List.of(InetAddress.getByName("0.0.0.0"), InetAddress.getByName("64.118.159.152"))));
+        assertTrue(GuanYingSearchService.filterAliveRecords(
+                List.of(InetAddress.getByName("0.0.0.0"), InetAddress.getByName("::"))).isEmpty(),
+                "全 0 答案 = 镜像轮换下线");
+    }
+
+    @Test
+    void loginFallsBackWhenFirstMirrorDead() {
+        Map<String, String> store = new ConcurrentHashMap<>();
+        AtomicInteger deadMirrorAttempts = new AtomicInteger();
+        GuanYingSearchService service = new GuanYingSearchService(writableSettings(store), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) throws IOException {
+                String url = request.url().toString();
+                if (url.startsWith("https://gy1.example")) {
+                    deadMirrorAttempts.incrementAndGet();
+                    throw new IOException("域名被解析到 0.0.0.0(镜像轮换下线或被 DNS 拦截)");
+                }
+                if (url.equals("https://gy2.example/user/login/")) {
+                    return new Resp(200, List.of(), "login page");
+                }
+                if (url.equals("https://gy2.example/user/login")) {
+                    return new Resp(200, List.of("auth=fresh; Path=/"), "{\"code\":200}");
+                }
+                return new Resp(200, List.of(), "_obj.site={};");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(
+                new SiteCredentialCheckRequest("guanying", "", "https://gy1.example,https://gy2.example", "u1", "pw"));
+        assertTrue(result.valid(), result.message());
+        assertTrue(deadMirrorAttempts.get() >= 1, "首镜像死时须换下一镜像而非直接判登录失败");
+        assertTrue(store.get(GuanYingSearchService.SESSION_SETTING).contains("auth=fresh"),
+                "可用镜像登录成功须保存会话");
     }
 
     @Test
@@ -508,6 +656,96 @@ class GuanYingSearchServiceTest {
         SiteCredentialCheckResult result = service.checkCredential(req("", ""));
         assertFalse(result.valid());
         assertEquals("未填写 Cookie 或账号密码", result.message());
+    }
+
+    @Test
+    void checkCredentialBreaksWhenPowVerificationRejected() {
+        AtomicInteger solveCalls = new AtomicInteger();
+        GuanYingSearchService service = new GuanYingSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String path = request.url().encodedPath();
+                if (path.equals("/check.js")) {
+                    return new Resp(200, List.of(), "");
+                }
+                if (path.equals("/res/pow") && request.method().equals("GET")) {
+                    return new Resp(200, List.of("browser_pow=p1; Path=/"),
+                            "{\"N\":\"" + P_N + "\",\"x\":\"" + P_X + "\",\"t\":\"137\"}");
+                }
+                if (path.equals("/res/pow") && request.method().equals("POST")) {
+                    solveCalls.incrementAndGet();
+                    return new Resp(200, List.of("browser_verified=1; Path=/"), "{\"success\":true}");
+                }
+                // GET / 恒为挑战页:PoW 明明被收账(success:true)仍被要求验证 = 反爬不认账
+                return new Resp(200, List.of(), "<title>浏览器安全验证</title> pow.worker filejin");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(req("uid=42", ""));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("PoW 通过仍被要求验证"), result.message());
+        assertEquals(1, solveCalls.get(), "不认账态只解一次 PoW,熔断不再打剩余 5 镜像");
+        assertTrue(result.message().contains("1 个站点地址探测失败"), result.message());
+    }
+
+    @Test
+    void searchStopsAcrossMirrorsWhenPowRejected() {
+        AtomicInteger searchCalls = new AtomicInteger();
+        AtomicInteger solveCalls = new AtomicInteger();
+        GuanYingSearchService service = new GuanYingSearchService(
+                settings("guanying_cookie", "auth=token"), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String path = request.url().encodedPath();
+                if (path.equals("/check.js")) {
+                    return new Resp(200, List.of(), "");
+                }
+                if (path.equals("/res/pow") && request.method().equals("GET")) {
+                    return new Resp(200, List.of("browser_pow=p1; Path=/"),
+                            "{\"N\":\"" + P_N + "\",\"x\":\"" + P_X + "\",\"t\":\"137\"}");
+                }
+                if (path.equals("/res/pow") && request.method().equals("POST")) {
+                    solveCalls.incrementAndGet();
+                    return new Resp(200, List.of("browser_verified=1; Path=/"), "{\"success\":true}");
+                }
+                if (path.equals("/search")) {
+                    searchCalls.incrementAndGet();
+                }
+                return new Resp(200, List.of(), "<title>浏览器安全验证</title> pow.worker filejin");
+            }
+        };
+        assertTrue(service.search("难哄").isEmpty());
+        assertEquals(2, searchCalls.get(), "首个镜像初始+PoW 后重试各一次,风控熔断不再打剩余镜像");
+        assertEquals(1, solveCalls.get(), "整轮搜索只解一次 PoW");
+    }
+
+    @Test
+    void checkCredentialStaleBrowserVerifiedMustNotShadowFresh() {
+        GuanYingSearchService service = new GuanYingSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                String path = request.url().encodedPath();
+                if (path.equals("/res/pow") && request.method().equals("GET")) {
+                    return new Resp(200, List.of("browser_pow=p1; Path=/"),
+                            "{\"N\":\"" + P_N + "\",\"x\":\"" + P_X + "\",\"t\":\"137\"}");
+                }
+                if (path.equals("/res/pow") && request.method().equals("POST")) {
+                    return new Resp(200, List.of("browser_verified=fresh123; Path=/"), "{\"success\":true}");
+                }
+                String cookie = StringUtils.defaultString(request.header("Cookie"));
+                if (path.equals("/") && cookie.contains("browser_verified=fresh123")) {
+                    // 放行页:只有带本轮 PoW 换来的新 browser_verified 才放行
+                    assertFalse(cookie.contains("browser_verified=stale999"), "陈旧值遮蔽新值=真凶: " + cookie);
+                    assertTrue(cookie.contains("app_auth=abc"), "登录 Cookie 保留: " + cookie);
+                    return new Resp(200, List.of(), "_obj.site={};");
+                }
+                // 无新 browser_verified(含携带陈旧值的)一律挑战,与线上反爬同语义
+                return new Resp(200, List.of(), "<title>浏览器安全验证</title> pow.worker filejin");
+            }
+        };
+        SiteCredentialCheckResult result = service.checkCredential(
+                req("app_auth=abc; browser_verified=stale999", ""));
+        assertTrue(result.valid(), result.message());
+        assertTrue(result.message().contains("Cookie 有效"), result.message());
     }
 
     private static SiteCredentialCheckRequest req(String cookie, String host) {
