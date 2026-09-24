@@ -1795,6 +1795,13 @@ public class BiliBiliService {
             }
         }
 
+        // 合集线路:ugc_season 随 view 接口已在 cache 里(info),零额外请求;置于相关视频之前(合集是同系列正片,续看价值高于推荐流)
+        String seasonPlayUrl = buildUgcSeasonPlayUrl(info, client);
+        if (seasonPlayUrl != null) {
+            movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$合集·" + fixTitle(info.getUgcSeason().getTitle()));
+            movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + seasonPlayUrl);
+        }
+
         // 相关视频与 UP 主列表并发拉取(原 view→related→UP 串行三连发是详情打开慢的主体);
         // 两个块都改写 movieDetail 的播放字段,并发只拉数据、装配回主线程串行做,防丢更新
         final String bvidKey = bvid;
@@ -1838,6 +1845,40 @@ public class BiliBiliService {
         result.setLimit(result.getList().size());
         log.debug("--- detail --- {}", result);
         return result;
+    }
+
+    /** 详情页「合集」线路条目:aid-cid 载荷与相关视频线路同款;当前视频 ▶ 前缀定位;
+     * 多 section(正片/花絮)时条目名带【分区名】;无合集返回 null 不出线路。 */
+    private String buildUgcSeasonPlayUrl(BiliBiliInfo info, String client) {
+        BiliBiliInfo.UgcSeason season = info.getUgcSeason();
+        if (season == null || season.getSections() == null || season.getSections().isEmpty()) {
+            return null;
+        }
+        boolean multipleSections = season.getSections().size() > 1;
+        String current = info.getBvid();
+        StringBuilder playUrl = new StringBuilder();
+        for (BiliBiliInfo.UgcSeason.Section section : season.getSections()) {
+            if (section.getEpisodes() == null) {
+                continue;
+            }
+            for (BiliBiliInfo.UgcSeason.Episode episode : section.getEpisodes()) {
+                if (!playUrl.isEmpty()) {
+                    playUrl.append('#');
+                }
+                String title = fixTitle(episode.getTitle());
+                if (multipleSections) {
+                    title = "【" + fixTitle(section.getTitle()) + "】" + title;
+                }
+                if ("gui".equals(client)) {
+                    title += "(" + seconds2String(episode.getDuration()) + ")";
+                }
+                if (episode.getBvid() != null && episode.getBvid().equals(current)) {
+                    title = "▶ " + title;
+                }
+                playUrl.append(title).append('$').append(episode.getAid()).append('-').append(episode.getCid());
+            }
+        }
+        return playUrl.isEmpty() ? null : playUrl.toString();
     }
 
     private List<BiliBiliInfo> fetchRelatedList(String bvid) {
