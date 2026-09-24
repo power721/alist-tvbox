@@ -243,6 +243,29 @@ class MediaSubscriptionCheckServiceTest {
         assertEquals(20, service.parseEpisode("某剧.更新至20集", null));
     }
 
+    // ---------- 国漫年番「话/序章」双编号回归(线上:凡人修仙传 sub17,2026-09-21) ----------
+    // 挂载源「1-155集 4K」把全剧集号与篇章序号并列:「73星海飞驰序章1」= 全剧第 73 集 + 序章 1,
+    // 「81-第81话 星海飞驰5」= 第 81 集 + 星海飞驰篇第 5 话。末号规则取尾部篇章号,73-100 话全部
+    // 塌进 1-24 槽:第 1 集实播第 73 集、真正的第 1 集文件(第01话)反被「&39;」转义数字绑去第 39 集。
+
+    @Test
+    void donghuaEpisodeMarkAnchorsOverArcChapterNumbers() {
+        assertEquals(73, service.parseEpisode("73星海飞驰序章1-4K 超清.mp4", null));
+        assertEquals(74, service.parseEpisode("74话 星海飞驰序章2-4K 超清.mp4", null));
+        assertEquals(81, service.parseEpisode("81-第81话 星海飞驰5-4K 超清-AVC.mp4", null));
+        assertEquals(100, service.parseEpisode("100-第100话 星海飞驰24-4K 超清.mp4", null));
+        assertEquals(25, service.parseEpisode("第25话.魔道争锋.2021.4K超高清SDR.国语中字.mp4", null));
+        assertEquals(52, service.parseEpisode("第52话.再别天南.2022.4K超高清SDR.国语中字.mkv", null));
+        // 「&39;」(转义单引号)数字不再毒化:显式话标优先
+        assertEquals(1, service.parseEpisode("第01话.风起天南.A Record of A Mortal&39;s Journey.2020.4K超高清SDR.国语中字.mp4", null));
+        assertEquals(177, service.parseEpisode("177-第177话 慕兰之战01-4K 超高清-HEVC-2026-06-13.mp4", null));
+        // 「序章1」作唯一编号(单集特别篇)保持原语义
+        assertEquals(1, service.parseEpisode("剧场版序章1.mp4", null));
+        // 「更新至N集」不带「第」且是集字,仍走末号规则,裸锚定只开放给「话」
+        assertEquals(20, service.parseEpisode("某剧.更新至20集", null));
+        assertEquals(37, service.parseEpisode("某剧.全37集.mp4", null));
+    }
+
     // ---------- 综艺期号回归(线上:心动的信号 第九季) ----------
     // 正片标题拖长文案(「第2期上:告白夜来临～如益CP十指相扣」),文案数字(188男大=身高)
     // 被末号规则当集号:第 3 期纯享解析成 188、先导片 60fps 解析成 60,假集号推高观测上限,

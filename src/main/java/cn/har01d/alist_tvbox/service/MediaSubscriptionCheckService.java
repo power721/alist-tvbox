@@ -109,9 +109,16 @@ public class MediaSubscriptionCheckService {
     private static final Set<String> PAN_TYPES = Set.of("0", "1", "2", "3", "5", "6", "7", "8", "9", "10", "12");
     private static final Pattern SEASON_EPISODE = Pattern.compile("[Ss](\\d{1,2})[Ee](\\d{1,4})");
     private static final Pattern NUMBER = Pattern.compile("(\\d{1,4})");
-    /** 文件名里的显式集标「第N集/第N期」:综艺/国产剧把集号连单位写明,锚定它可免疫文案数字毒化
-     * (线上:「第3期上纯享:…主动贴贴188男大.mkv」末号规则取 188,真实集号是第 3 期)。 */
-    private static final Pattern EPISODE_MARK = Pattern.compile("第\\s*(\\d{1,4})\\s*[集期]");
+    /** 文件名里的显式集标「第N集/第N期/第N话」:综艺/国产剧把集号连单位写明,锚定它可免疫文案数字毒化
+     * (线上:「第3期上纯享:…主动贴贴188男大.mkv」末号规则取 188,真实集号是第 3 期)。
+     * 国漫年番的「话」常不带「第」(线上凡人修仙传挂载源:「74话 星海飞驰序章2」「81-第81话 星海飞驰5」,
+     * 尾部篇章序号把末号规则带偏,73-100 话全部塌进 1-24 槽、第 1 集实播第 73 集)——「话」的裸形态
+     * 允许无「第」,「集/期」仍要求「第」前缀:「更新至20集」「全37集」这类进度宣称词紧跟裸数字,
+     * 裸放会把进度值当集号。 */
+    private static final Pattern EPISODE_MARK = Pattern.compile("第\\s*(\\d{1,4})\\s*[集期话]|(?<!第)(\\d{1,4})\\s*话");
+    /** 篇章序章号「序章N/序篇N」:年番把全剧集号与篇章序号并列写在文件名里
+     * ({@code 73星海飞驰序章1} = 全剧第 73 集的星海飞驰篇序章 1),序章号不是集号,末号规则扫描前剥离。 */
+    private static final Pattern PROLOGUE_MARK = Pattern.compile("序[章篇]\\s*\\d{1,3}");
     /** 全局主网盘 Setting key(逗号分隔分享类型码;订阅级 main_drives 覆盖) */
     public static final String MSUB_MAIN_DRIVES = "msub_main_drives";
     /** 全局扩展网盘 Setting key(逗号分隔分享类型码):主网盘以外允许入候选池的盘,未配置时候选仅收主网盘 */
@@ -6862,11 +6869,12 @@ public class MediaSubscriptionCheckService {
             }
             return ep >= 1 && ep <= 9999 ? ep : -1; // SxxEyy 是显式集标,四位集号直接信(柯南 S01E1173)
         }
-        // 「第N集/第N期」同为显式集标,排在末号规则之前:综艺正片标题常拖长文案
+        // 「第N集/第N期/第N话/N话」同为显式集标,排在末号规则之前:综艺正片标题常拖长文案
         // (「第2期上:告白夜来临～如益CP十指相扣」),文案里的数字(188男大/520告白)会盖过真集号
         Matcher mark = EPISODE_MARK.matcher(base);
         if (mark.find()) {
-            int ep = Integer.parseInt(mark.group(1));
+            String digits = mark.group(1) != null ? mark.group(1) : mark.group(2);
+            int ep = Integer.parseInt(digits);
             return plausibleEpisodeNumber(ep) ? ep : -1;
         }
         String cleaned = TECH_TAGS.matcher(base).replaceAll(" ");
@@ -6876,6 +6884,15 @@ public class MediaSubscriptionCheckService {
         // 仅当前文已有数字才剥尾缀,纯「(1)」形态(唯一数字在括号内)保持原语义。
         if (cleaned.matches("(?s).*\\d.*\\(\\s*\\d{1,2}\\s*\\)\\s*$")) {
             cleaned = cleaned.replaceFirst("\\(\\s*\\d{1,2}\\s*\\)\\s*$", "").trim();
+        }
+        // 年番「全剧集号+篇章序章号」双编号形态:「73星海飞驰序章1」= 全剧第 73 集 + 星海飞驰篇序章 1,
+        // 末号规则把尾部序章号当集号(线上:73 号文件绑到第 1 集,第 1 集实播第 73 集)。仅当前文
+        // 还有其他编号才剥序章段;「序章1」作唯一编号的形态(单集特别篇)保持原语义。
+        if (PROLOGUE_MARK.matcher(cleaned).find()) {
+            String withoutPrologue = PROLOGUE_MARK.matcher(cleaned).replaceAll(" ");
+            if (withoutPrologue.matches("(?s).*\\d.*")) {
+                cleaned = withoutPrologue;
+            }
         }
         int episode = -1;
         Matcher numbers = NUMBER.matcher(cleaned);
