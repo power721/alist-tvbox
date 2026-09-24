@@ -49,6 +49,8 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2InfoResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliVideoInfo;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliVideoInfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliWatchLaterResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliWatchLaterResult;
 import cn.har01d.alist_tvbox.dto.bili.ChannelArchive;
 import cn.har01d.alist_tvbox.dto.bili.ChannelArchives;
 import cn.har01d.alist_tvbox.dto.bili.ChannelList;
@@ -139,6 +141,7 @@ public class BiliBiliService {
     private static final String SEASON_RANK_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/index/result?st=1&style_id=%s&season_version=-1&spoken_language_type=-1&area=-1&is_finish=%s&copyright=-1&season_status=-1&season_month=-1&year=%s&order=0&sort=0&page=%d&season_type=%s&pagesize=30&type=1";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s&view_at=%s";
+    private static final String WATCHLATER_API = "https://api.bilibili.com/x/v2/history/toview/web";
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
     private static final String PLAY_API = "https://api.bilibili.com/x/player/wbi/playurl";
     private static final String PLAY_API_NOT_DASH = "https://api.bilibili.com/x/player/wbi/playurl";
@@ -692,6 +695,32 @@ public class BiliBiliService {
         movieDetail.setVod_play_from(BILI_BILI);
         movieDetail.setVod_play_url("视频$" + buildPlayUrl(id));
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
+        return movieDetail;
+    }
+
+    private MovieDetail getMovieDetail(BiliBiliWatchLaterResult.Video info) {
+        String id = info.getBvid();
+        if (id == null || id.isEmpty()) {
+            id = String.valueOf(info.getAid());
+        }
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id(id);
+        movieDetail.setVod_name(info.getTitle());
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(fixCover(info.getPic()));
+        movieDetail.setVod_play_from(BILI_BILI);
+        movieDetail.setVod_play_url("视频$" + buildPlayUrl(id));
+        String remarks = seconds2String(info.getDuration());
+        if (info.getProgress() > 0 && info.getProgress() < info.getDuration()) {
+            remarks = "已看" + seconds2String(info.getProgress()) + "/" + remarks;
+        }
+        movieDetail.setVod_remarks(remarks);
+        if (info.getOwner() != null) {
+            movieDetail.setVod_director(info.getOwner().getName());
+        }
+        if (info.getAddAt() > 0) {
+            movieDetail.setVod_time(Instant.ofEpochSecond(info.getAddAt()).toString());
+        }
         return movieDetail;
     }
 
@@ -1661,6 +1690,32 @@ public class BiliBiliService {
         return result;
     }
 
+    /**
+     * 稍后再看:单接口全量返回(无游标),首页后无更多;未登录(code -101)等异常态回空列表,不炸分类。
+     */
+    public MovieList getWatchLater(int page) {
+        MovieList result = new MovieList();
+        result.setPage(page);
+        result.setPagecount(1);
+        if (page > 1) {
+            return result;
+        }
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        ResponseEntity<BiliBiliWatchLaterResponse> response = restTemplate.exchange(WATCHLATER_API, HttpMethod.GET, entity, BiliBiliWatchLaterResponse.class);
+        log.debug("getWatchLater: {}", response.getBody());
+        BiliBiliWatchLaterResult data = response.getBody() == null ? null : response.getBody().getData();
+        if (data == null || data.getList() == null) {
+            return result;
+        }
+        for (BiliBiliWatchLaterResult.Video info : data.getList()) {
+            result.getList().add(getMovieDetail(info));
+        }
+        result.setLimit(result.getList().size());
+        result.setTotal(result.getList().size());
+        log.debug("{}", result);
+        return result;
+    }
+
     public MovieList getDetail(String bvid, String client) throws IOException {
         log.debug("--- getDetail --- {}", bvid);
         BiliSession s = sessionOf(client);
@@ -2573,6 +2628,8 @@ public class BiliBiliService {
             return getPopular(page);
         } else if ("history".equals(parts[0])) {
             return getHistory(page, s);
+        } else if ("watchlater".equals(parts[0])) {
+            return getWatchLater(page);
         } else if ("fav".equals(parts[0])) {
             return getFavList(tid, filter.getType(), filter.getSort(), page, s);
         } else if ("channel".equals(parts[0])) {

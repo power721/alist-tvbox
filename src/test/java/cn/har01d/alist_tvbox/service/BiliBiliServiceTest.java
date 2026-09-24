@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2InfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliWatchLaterResponse;
 import cn.har01d.alist_tvbox.dto.bili.Data;
 import cn.har01d.alist_tvbox.dto.bili.Resp;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -553,5 +554,49 @@ class BiliBiliServiceTest {
                 .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
 
         assertEquals("收藏成功(默认收藏夹)", service.runActionText("BV195KY6YEeY", "favorite"));
+    }
+
+    @Test
+    void getWatchLaterMapsItemsWithProgress() throws Exception {
+        String json = "{\"code\":0,\"data\":{\"count\":2,\"list\":["
+                + "{\"aid\":1,\"bvid\":\"BV1aa\",\"title\":\"看了一半\",\"pic\":\"http://pic/1.jpg\",\"duration\":600,\"progress\":120,\"add_at\":1700000000,\"owner\":{\"mid\":9,\"name\":\"up主\"}},"
+                + "{\"aid\":2,\"bvid\":\"BV2bb\",\"title\":\"还没看\",\"pic\":\"http://pic/2.jpg\",\"duration\":300,\"progress\":0,\"add_at\":1700000001,\"owner\":{\"mid\":9,\"name\":\"up主\"}}"
+                + "]}}";
+        BiliBiliWatchLaterResponse response = new ObjectMapper().readValue(json, BiliBiliWatchLaterResponse.class);
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/v2/history/toview/web"), eq(HttpMethod.GET), any(), eq(BiliBiliWatchLaterResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        MovieList result = service.getWatchLater(1);
+
+        assertEquals(2, result.getList().size());
+        assertEquals(2, result.getTotal());
+        assertEquals(1, result.getPagecount());
+        assertEquals("BV1aa", result.getList().get(0).getVod_id());
+        assertEquals("看了一半", result.getList().get(0).getVod_name());
+        assertEquals("已看02:00/10:00", result.getList().get(0).getVod_remarks());
+        assertEquals("up主", result.getList().get(0).getVod_director());
+        assertEquals("05:00", result.getList().get(1).getVod_remarks());
+    }
+
+    @Test
+    void getWatchLaterBeyondFirstPageIsEmpty() {
+        MovieList result = service.getWatchLater(2);
+
+        assertTrue(result.getList().isEmpty());
+        assertEquals(1, result.getPagecount());
+        Mockito.verify(restTemplate, Mockito.never())
+                .exchange(anyString(), eq(HttpMethod.GET), any(), eq(BiliBiliWatchLaterResponse.class));
+    }
+
+    @Test
+    void getWatchLaterToleratesNotLoggedIn() {
+        BiliBiliWatchLaterResponse response = new BiliBiliWatchLaterResponse();
+        response.setCode(-101);
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/v2/history/toview/web"), eq(HttpMethod.GET), any(), eq(BiliBiliWatchLaterResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        MovieList result = service.getWatchLater(1);
+
+        assertTrue(result.getList().isEmpty());
     }
 }

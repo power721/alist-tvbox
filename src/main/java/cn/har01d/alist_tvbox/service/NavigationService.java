@@ -36,6 +36,7 @@ public class NavigationService {
             addIndex(list);
             addUps(list);
             addFollow(list);
+            addWatchlater(list);
             addTypes(list);
         }
     }
@@ -76,6 +77,13 @@ public class NavigationService {
         }
         if (list.stream().filter(e -> "collect$0".equals(e.getValue())).findAny().isEmpty()) {
             navigationRepository.save(new Navigation("我的收藏", "collect$0", 1, true, true, 17));
+        }
+    }
+
+    private void addWatchlater(List<Navigation> list) {
+        if (list.stream().filter(e -> "watchlater$0".equals(e.getValue())).findAny().isEmpty()) {
+            // order 取历史记录同值:稳定排序下落在历史记录之后
+            navigationRepository.save(new Navigation("稍后再看", "watchlater$0", 1, true, true, 15));
         }
     }
 
@@ -155,6 +163,7 @@ public class NavigationService {
         list.add(new Navigation("收藏夹", "fav$0", 1, false, true, order++));
         list.add(new Navigation("频道", "channel$0", 1, false, true, order++));
         list.add(new Navigation("历史记录", "history$0", 1, false, true, order++));
+        list.add(new Navigation("稍后再看", "watchlater$0", 1, false, true, order++));
         list.add(new Navigation("全站热榜", "0", 1, true, true, order++));
         list.add(new Navigation("电影热榜", "season$2", 1, true, true, order++));
         list.add(new Navigation("电视剧热榜", "season$5", 1, true, true, order++));
