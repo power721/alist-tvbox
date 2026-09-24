@@ -11,6 +11,8 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionResource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResourceRepository;
 import cn.har01d.alist_tvbox.entity.OfflineDownloadTask;
 import cn.har01d.alist_tvbox.entity.OfflineDownloadTaskRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.service.offline.OfflineDownloadHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -18,6 +20,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 
@@ -40,6 +43,10 @@ import java.util.Objects;
  * 115 客户端自建的任务。本地行永不物理删(配额计数、urlHash 查重、FAILED 记忆都依赖行),
  * 清理完成只置 {@code cleanup_state=DONE} —— 提交短路随之放行同磁力重提(这正是删任务的目的)。
  * <p>
+ * 调度:每日 05:40 主调度 + 每小时补偿检查(23h 节流共用闸门)——电视盒子晚上用完关机是
+ * 主力画像,单时刻 cron 常年错过会让 TTL 过期任务永不清理;连续失败超限进入 7 天冷却,
+ * 冷却期满重试一轮(cookie 换新后自愈),不永久放弃。
+ * <p>
  * 多盘差异(按 {@link OfflineDownloadHandler#supportsTaskManagement()} 分叉):115/迅雷有任务
  * 删除契约,删任务+文件一体,固化分享仅 cookie 115;光鸭无契约(重复提交直接建新任务、无
  * 「任务已存在」限制),任务记录留存、经内嵌 AList 删产物文件回收空间,PENDING 只按滞留天数兜底
@@ -49,7 +56,12 @@ import java.util.Objects;
 @Service
 public class OfflineCleanupService {
     static final String CLEANUP_FAILED = "FAILED";
+    static final String LAST_RUN_SETTING = "offline_cleanup_last_run";
     private static final int MAX_CLEANUP_ATTEMPTS = 5;
+    /** 连续失败超限后的冷却时长:冷却期满重置计数重试一轮(cookie 换新等环境修复后自愈)。 */
+    private static final long RETRY_COOLDOWN_HOURS = 7 * 24L;
+    /** 清理最小间隔(23h<24h):常开设备稳定在每日 05:40 主调度执行,错过主调度的设备在下次在线的整点后补偿。 */
+    private static final Duration MIN_INTERVAL = Duration.ofHours(23);
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_FAILED = "FAILED";
@@ -67,6 +79,7 @@ public class OfflineCleanupService {
     private final AppProperties appProperties;
     private final AListService aListService;
     private final SiteService siteService;
+    private final SettingRepository settingRepository;
 
     public OfflineCleanupService(OfflineDownloadService offlineDownloadService,
                                  OfflineDownloadTaskRepository taskRepository,
@@ -77,7 +90,8 @@ public class OfflineCleanupService {
                                  MediaSubscriptionCheckService checkService,
                                  AppProperties appProperties,
                                  AListService aListService,
-                                 SiteService siteService) {
+                                 SiteService siteService,
+                                 SettingRepository settingRepository) {
         this.offlineDownloadService = offlineDownloadService;
         this.taskRepository = taskRepository;
         this.driverAccountRepository = driverAccountRepository;
@@ -88,13 +102,64 @@ public class OfflineCleanupService {
         this.appProperties = appProperties;
         this.aListService = aListService;
         this.siteService = siteService;
+        this.settingRepository = settingRepository;
     }
 
-    /** 每日 05:40(用户定规避开 6 点高峰:06:00 例行清理/06:05 起签到族全挤在该小时);autoDelete 与固化开关全关时零动作。 */
+    /**
+     * 每日 05:40 主调度(用户定规避开 6 点高峰:06:00 例行清理/06:05 起签到族全挤在该小时);
+     * autoDelete 与固化开关全关时零动作。
+     */
     @Scheduled(cron = "0 40 5 * * *")
     public void dailyCleanup() {
+        runIfDue();
+    }
+
+    /**
+     * 每小时 :10 补偿检查:主调度的单时刻 cron 在非 24 小时在线的设备(电视盒子晚上用完关机是
+     * 本产品主力画像)上会常年错过——TTL 早已过期的任务永不清理。距上次清理超 23h 即补跑,
+     * 与主调度共用节流,常开设备仍稳定每天一次;从未跑过(升级上来无 marker)立即执行。
+     */
+    @Scheduled(cron = "0 10 * * * *")
+    public void catchUpCleanup() {
+        runIfDue();
+    }
+
+    /** 23h 节流闸门:两个调度入口共用;跑完(含配置未启用的空跑)持久化执行时间,重启不重复。 */
+    private void runIfDue() {
+        Instant last = lastRunTime();
+        if (last != null && last.plus(MIN_INTERVAL).isAfter(Instant.now())) {
+            log.debug("offline cleanup ran {} ago, skip", Duration.between(last, Instant.now()));
+            return;
+        }
+        try {
+            doCleanup();
+        } finally {
+            writeLastRun(Instant.now());
+        }
+    }
+
+    private Instant lastRunTime() {
+        try {
+            return settingRepository.findById(LAST_RUN_SETTING).map(Setting::getValue)
+                    .map(Instant::parse).orElse(null);
+        } catch (Exception e) {
+            log.debug("read offline cleanup last-run failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void writeLastRun(Instant time) {
+        try {
+            settingRepository.save(new Setting(LAST_RUN_SETTING, time.toString()));
+        } catch (Exception e) {
+            log.warn("record offline cleanup last-run failed: {}", e.getMessage());
+        }
+    }
+
+    private void doCleanup() {
         OfflineDownloadService.CleanupConfig config = offlineDownloadService.cleanupConfig();
         if (config == null || (!config.autoDelete() && !config.selfShare())) {
+            log.debug("skip offline cleanup: config disabled (autoDelete/selfShare both off or offline not configured)");
             return;
         }
         OfflineDownloadHandler handler = offlineDownloadService.getHandler(config.driverType());
@@ -133,7 +198,14 @@ public class OfflineCleanupService {
             return false;
         }
         if (CLEANUP_FAILED.equals(task.getCleanupState()) && task.getCleanupAttempts() >= MAX_CLEANUP_ATTEMPTS) {
-            return false; // 重试超限:放弃,留人工排查
+            if (!olderThan(task.getUpdatedTime(), RETRY_COOLDOWN_HOURS)) {
+                return false; // 连续失败冷却中:每天一次调度 5 次即耗尽,防无效重试刷 115 接口
+            }
+            // 冷却期满重试一轮:失败根因多为 cookie 过期,用户换新 cookie 后应自愈,不能永久放弃
+            log.warn("offline task {} exceeded {} cleanup attempts, cooldown elapsed - retrying",
+                    task.getId(), MAX_CLEANUP_ATTEMPTS);
+            task.setCleanupAttempts(0);
+            taskRepository.save(task);
         }
         switch (StringUtils.defaultString(task.getStatus())) {
             case STATUS_FAILED -> {

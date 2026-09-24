@@ -12,6 +12,8 @@ import cn.har01d.alist_tvbox.entity.MediaSubscriptionResource;
 import cn.har01d.alist_tvbox.entity.MediaSubscriptionResourceRepository;
 import cn.har01d.alist_tvbox.entity.OfflineDownloadTask;
 import cn.har01d.alist_tvbox.entity.OfflineDownloadTaskRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.service.offline.OfflineDownloadHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,6 +66,8 @@ class OfflineCleanupServiceTest {
     private AListService aListService;
     @Mock
     private SiteService siteService;
+    @Mock
+    private SettingRepository settingRepository;
 
     private OfflineCleanupService service;
     private DriverAccount account;
@@ -74,7 +78,7 @@ class OfflineCleanupServiceTest {
         appProperties = new AppProperties();
         service = new OfflineCleanupService(offlineDownloadService, taskRepository, driverAccountRepository,
                 subscriptionRepository, resourceRepository, episodeSourceRepository, checkService, appProperties,
-                aListService, siteService);
+                aListService, siteService, settingRepository);
         account = new DriverAccount();
         account.setId(12);
         account.setType(DriverType.PAN115);
@@ -83,6 +87,9 @@ class OfflineCleanupServiceTest {
         lenient().when(handler.supportsTaskManagement()).thenReturn(true); // 115/迅雷/123 形态;光鸭走 false 用例
         lenient().when(handler.deletesFilesWithTask()).thenReturn(true); // 115/迅雷:任务+文件一体删
         lenient().when(taskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        // 调度节流 marker:默认无记录(=从未跑过/升级首跑),单测内 mock 不持久化
+        lenient().when(settingRepository.findById(OfflineCleanupService.LAST_RUN_SETTING)).thenReturn(Optional.empty());
+        lenient().when(settingRepository.save(any(Setting.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     private void enable(boolean autoDelete, int ttlHours, boolean selfShare) {
@@ -495,11 +502,102 @@ class OfflineCleanupServiceTest {
         enable(true, 24, false);
         OfflineDownloadTask task = task("FAILED", 9, "失败产物");
         task.setCleanupState("FAILED");
-        task.setCleanupAttempts(5); // 重试超限:放弃
+        task.setCleanupAttempts(5); // 连续失败超限(47h 前):7 天冷却期内不再尝试
         when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
 
         service.dailyCleanup();
 
         verify(handler, never()).deleteTask(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void retryCooldownHealsAfterSevenDays() {
+        // 冷却期满(cookie 换新等环境修复后):重置计数重试一轮,不再永久放弃
+        enable(true, 24, false);
+        OfflineDownloadTask task = task("FAILED", 9, "失败产物");
+        task.setCleanupState("FAILED");
+        task.setCleanupAttempts(5);
+        task.setUpdatedTime(Instant.now().minusSeconds(8 * 24 * 3600)); // 最后失败在 8 天前
+        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+
+        service.dailyCleanup();
+
+        verify(handler).deleteTask(account, HASH, "失败产物", true);
+        assertEquals("DONE", task.getCleanupState());
+    }
+
+    @Test
+    void retryCooldownFailureRestartsAttemptCount() {
+        // 冷却期满后重试又失败:attempts 从重置后的 1 重新数,而非无限累积
+        enable(true, 24, false);
+        OfflineDownloadTask task = task("FAILED", 9, "失败产物");
+        task.setCleanupState("FAILED");
+        task.setCleanupAttempts(5);
+        task.setUpdatedTime(Instant.now().minusSeconds(8 * 24 * 3600));
+        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        org.mockito.Mockito.doThrow(new RuntimeException("still broken"))
+                .when(handler).deleteTask(any(), any(), any(), anyBoolean());
+
+        service.dailyCleanup();
+
+        assertEquals("FAILED", task.getCleanupState());
+        assertEquals(1, task.getCleanupAttempts());
+    }
+
+    // ---------- 调度节流与错过补偿 ----------
+
+    @Test
+    void cleanupSkippedWithinMinInterval() {
+        // 23h 内跑过:主调度与补偿调度都被节流(常开设备每天恰好一次)
+        lenient().when(settingRepository.findById(OfflineCleanupService.LAST_RUN_SETTING))
+                .thenReturn(Optional.of(new Setting(OfflineCleanupService.LAST_RUN_SETTING,
+                        Instant.now().minusSeconds(10 * 3600).toString())));
+
+        service.dailyCleanup();
+        service.catchUpCleanup();
+
+        verify(taskRepository, never()).findCleanupCandidates(anyInt());
+    }
+
+    @Test
+    void catchUpRunsWhenOverdueOrNeverRun() {
+        // 上次清理在 30h 前(昨天 05:40 后设备关机错过今天主调度):补偿调度接管
+        when(settingRepository.findById(OfflineCleanupService.LAST_RUN_SETTING))
+                .thenReturn(Optional.of(new Setting(OfflineCleanupService.LAST_RUN_SETTING,
+                        Instant.now().minusSeconds(30 * 3600).toString())));
+        enable(true, 24, false);
+        OfflineDownloadTask task = task("FAILED", 9, "失败产物");
+        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+
+        service.catchUpCleanup();
+
+        verify(handler).deleteTask(account, HASH, "失败产物", true);
+        verify(settingRepository).save(org.mockito.ArgumentMatchers.argThat((Setting s) ->
+                OfflineCleanupService.LAST_RUN_SETTING.equals(s.getName()) && s.getValue() != null));
+    }
+
+    @Test
+    void catchUpRunsOnFirstSightWithoutMarker() {
+        // 升级上来从未跑过(无 marker):首次补偿检查立即执行存量清理
+        when(settingRepository.findById(OfflineCleanupService.LAST_RUN_SETTING)).thenReturn(Optional.empty());
+        enable(true, 24, false);
+        OfflineDownloadTask task = task("FAILED", 9, "失败产物");
+        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+
+        service.catchUpCleanup();
+
+        verify(handler).deleteTask(account, HASH, "失败产物", true);
+    }
+
+    @Test
+    void catchUpRecordsMarkerEvenWhenConfigDisabled() {
+        // 配置未启用空跑也记 marker:防每小时补偿调度反复穿透到配置检查
+        when(offlineDownloadService.cleanupConfig()).thenReturn(null);
+
+        service.catchUpCleanup();
+
+        verify(settingRepository).save(org.mockito.ArgumentMatchers.argThat((Setting s) ->
+                OfflineCleanupService.LAST_RUN_SETTING.equals(s.getName())));
+        verify(taskRepository, never()).findCleanupCandidates(anyInt());
     }
 }
