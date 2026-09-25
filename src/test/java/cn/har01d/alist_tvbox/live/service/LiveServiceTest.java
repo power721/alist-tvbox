@@ -39,6 +39,18 @@ class LiveServiceTest {
     @Mock
     private SoopService soopService;
     @Mock
+    private AcfunService acfunService;
+    @Mock
+    private InkeService inkeService;
+    @Mock
+    private HuajiaoService huajiaoService;
+    @Mock
+    private SixRoomService sixRoomService;
+    @Mock
+    private KugouLiveService kugouLiveService;
+    @Mock
+    private LookLiveService lookLiveService;
+    @Mock
     private LiveFollowService liveFollowService;
     @Mock
     private SubscriptionService subscriptionService;
@@ -49,7 +61,8 @@ class LiveServiceTest {
     @BeforeEach
     void setUp() {
         liveService = new LiveService(huyaService, douyuService, bilibiliService, ccService, kuaishouService,
-                douyinService, twitchService, soopService, liveFollowService, subscriptionService, appProperties);
+                douyinService, twitchService, soopService, acfunService, inkeService, huajiaoService,
+                sixRoomService, kugouLiveService, lookLiveService, liveFollowService, subscriptionService, appProperties);
     }
 
     @Test
@@ -86,8 +99,8 @@ class LiveServiceTest {
         assertEquals("huya", filter.get(0).getValue().get(1).getV());
         assertEquals("斗鱼", filter.get(0).getValue().get(2).getN());
         assertEquals("douyu", filter.get(0).getValue().get(2).getV());
-        // 全部支持的平台都在筛选项里,不只四大平台
-        assertEquals(1 + 8, filter.get(0).getValue().size());
+        // 全部支持的平台都在筛选项里(8 老平台 + 6 个 pure_live 同源新平台),不只四大平台
+        assertEquals(1 + 14, filter.get(0).getValue().size());
     }
 
     private void stubPlatformTypes() {
@@ -99,6 +112,12 @@ class LiveServiceTest {
         when(douyinService.getType()).thenReturn("douyin");
         when(twitchService.getType()).thenReturn("twitch");
         when(soopService.getType()).thenReturn("soop");
+        when(acfunService.getType()).thenReturn("acfun");
+        when(inkeService.getType()).thenReturn("inke");
+        when(huajiaoService.getType()).thenReturn("huajiao");
+        when(sixRoomService.getType()).thenReturn("sixroom");
+        when(kugouLiveService.getType()).thenReturn("kugoulive");
+        when(lookLiveService.getType()).thenReturn("look");
     }
 
     @Test

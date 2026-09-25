@@ -87,7 +87,13 @@ const platformNames: Record<string, string> = {
   ks: "快手",
   kuaishou: "快手",
   soop: "SOOP",
-  twitch: "Twitch"
+  twitch: "Twitch",
+  acfun: "AcFun",
+  inke: "映客",
+  huajiao: "花椒",
+  sixroom: "六间房",
+  kugoulive: "酷狗直播",
+  look: "LOOK直播"
 };
 
 interface Category {
@@ -320,7 +326,7 @@ const loadFollows = () => {
 
 // 关注列表平台筛选:只展示有关注的平台,顺序与平台分类一致
 const followPlatform = ref("");
-const followPlatformOrder = ["bilibili", "douyu", "huya", "douyin", "cc", "kuaishou", "twitch", "soop"];
+const followPlatformOrder = ["bilibili", "douyu", "huya", "douyin", "cc", "kuaishou", "twitch", "soop", "acfun", "inke", "huajiao", "sixroom", "kugoulive", "look"];
 const followPlatforms = computed(() => {
   const present = new Set(follows.value.map(follow => follow.platform));
   return followPlatformOrder.filter(platform => present.has(platform));
