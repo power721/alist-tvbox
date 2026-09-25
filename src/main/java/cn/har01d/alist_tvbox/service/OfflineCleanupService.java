@@ -214,8 +214,12 @@ public class OfflineCleanupService {
                     return deleteRemote(task, account, handler, managed, true);
                 }
             }
-            case STATUS_PENDING -> processPending(task, account, handler, managed, config);
-            case STATUS_COMPLETED -> processCompleted(task, account, handler, managed, config);
+            case STATUS_PENDING -> {
+                return processPending(task, account, handler, managed, config);
+            }
+            case STATUS_COMPLETED -> {
+                return processCompleted(task, account, handler, managed, config);
+            }
             default -> {
                 // 未知状态不动
             }
@@ -228,50 +232,52 @@ public class OfflineCleanupService {
      * 已完成且订阅仍在 → 等巡检收割(PENDING 归属闸门靠这行),不动;仍在下载 → 跳过,
      * 提交超滞留阈值才清;终态失败/查无 → 删任务。行保持 PENDING 不翻转状态:收割归属闸门按
      * PENDING 行对账,翻转会挡住产物登记;同集换磁力提交后 settle 会自然把行收走。
+     * <p>
+     * 返回是否实际删除(汇总计数用):与 {@link #processCompleted} 一样把 deleteRemote 的
+     * 结果传出——否则 "N candidate(s), 0 cleaned" 汇总行与实际删除数矛盾,误导排障。
      */
-    private void processPending(OfflineDownloadTask task, DriverAccount account, OfflineDownloadHandler handler,
-                                boolean managed, OfflineDownloadService.CleanupConfig config) {
+    private boolean processPending(OfflineDownloadTask task, DriverAccount account, OfflineDownloadHandler handler,
+                                   boolean managed, OfflineDownloadService.CleanupConfig config) {
         if (!config.autoDelete()) {
-            return;
+            return false;
         }
         // 无 btih(ed2k)或该盘无任务管理契约(光鸭,预测名对不上任务列表会误判查无):只按滞留天数兜底
         if (StringUtils.isBlank(task.getInfoHash()) || !managed) {
-            if (olderThan(task.getCreatedTime(), stuckDays() * 24L)) {
-                deleteRemote(task, account, handler, managed, true);
-            }
-            return;
+            return olderThan(task.getCreatedTime(), stuckDays() * 24L)
+                    && deleteRemote(task, account, handler, managed, true);
         }
         boolean subAlive = task.getSubscriptionId() != null
                 && subscriptionRepository.existsById(task.getSubscriptionId());
         switch (handler.taskStatus(account, task.getInfoHash(), task.getTaskName())) {
             case SUCCEEDED -> {
                 if (!subAlive) {
-                    deleteRemote(task, account, handler, managed, true); // 订阅已删,无人收割:删
+                    return deleteRemote(task, account, handler, managed, true); // 订阅已删,无人收割:删
                 }
             }
             case RUNNING -> {
                 if (olderThan(task.getCreatedTime(), stuckDays() * 24L)) {
                     log.info("offline task {} stuck over {} days, clean it up", task.getId(), stuckDays());
-                    deleteRemote(task, account, handler, managed, true);
+                    return deleteRemote(task, account, handler, managed, true);
                 }
             }
-            case FAILED, ABSENT -> deleteRemote(task, account, handler, managed, true);
+            case FAILED, ABSENT -> {
+                return deleteRemote(task, account, handler, managed, true);
+            }
             default -> {
             }
         }
+        return false;
     }
 
     /** COMPLETED:通用入口按完成时间+TTL;msub 行按引用状态(固化开关 → 固化后删 / 追平门禁)。 */
-    private void processCompleted(OfflineDownloadTask task, DriverAccount account, OfflineDownloadHandler handler,
-                                  boolean managed, OfflineDownloadService.CleanupConfig config) {
+    private boolean processCompleted(OfflineDownloadTask task, DriverAccount account, OfflineDownloadHandler handler,
+                                     boolean managed, OfflineDownloadService.CleanupConfig config) {
         if (task.getSubscriptionId() == null) {
             // 通用入口(/parse、/offline_download)即看即走:无进度可依,TTL 兜底
-            if (config.autoDelete() && olderThan(
+            return config.autoDelete() && olderThan(
                     firstNonNull(task.getCompletedTime(), task.getUpdatedTime(), task.getCreatedTime()),
-                    config.ttlHours())) {
-                deleteRemote(task, account, handler, managed, true);
-            }
-            return;
+                    config.ttlHours())
+                    && deleteRemote(task, account, handler, managed, true);
         }
         List<MediaSubscriptionResource> rows = resourceRepository.findByLink("offline:" + task.getTaskName()).stream()
                 .filter(row -> MediaSubscriptionResource.STATE_MOUNTED.equals(row.getState()))
@@ -279,10 +285,7 @@ public class OfflineCleanupService {
                 .toList();
         if (rows.isEmpty()) {
             // 行已退役/订阅已删:无播放要保护,直接删
-            if (config.autoDelete()) {
-                deleteRemote(task, account, handler, managed, true);
-            }
-            return;
+            return config.autoDelete() && deleteRemote(task, account, handler, managed, true);
         }
         if (config.selfShare()) {
             if (StringUtils.isBlank(task.getShareUrl())) {
@@ -290,35 +293,30 @@ public class OfflineCleanupService {
                     String shareUrl = checkService.selfifyOfflineProduct(task.getSubscriptionId(), account, task.getTaskName());
                     if (shareUrl == null) {
                         // 订阅已删(残行来自其它订阅):仅当再无任何挂载行才删
-                        if (config.autoDelete() && rows.stream()
-                                .allMatch(row -> Objects.equals(row.getSubscriptionId(), task.getSubscriptionId()))) {
-                            deleteRemote(task, account, handler, managed, true);
-                        }
-                        return;
+                        return config.autoDelete() && rows.stream()
+                                .allMatch(row -> Objects.equals(row.getSubscriptionId(), task.getSubscriptionId()))
+                                && deleteRemote(task, account, handler, managed, true);
                     }
                     task.setShareUrl(shareUrl);
                     taskRepository.save(task);
                 } catch (Exception e) {
                     log.warn("selfify offline product {} failed, keep files and retry next day: {}",
                             task.getTaskName(), e.getMessage());
-                    return; // 固化失败:文件原地保留,次日重试,绝不先删
+                    return false; // 固化失败:文件原地保留,次日重试,绝不先删
                 }
             }
             if (!config.autoDelete()) {
-                return; // 纯固化模式:分享银行化即可,不删
+                return false; // 纯固化模式:分享银行化即可,不删
             }
             // 删除守卫:其它订阅的磁力行仍挂载同产物(未固化/未追平)→ 推迟
             if (rows.stream().anyMatch(row -> !Objects.equals(row.getSubscriptionId(), task.getSubscriptionId()))) {
                 log.info("offline product {} still referenced by other subscriptions, defer cleanup", task.getTaskName());
-                return;
+                return false;
             }
-            deleteRemote(task, account, handler, managed, true);
-            return;
+            return deleteRemote(task, account, handler, managed, true);
         }
         // 固化开关关:追平门禁——覆盖集在所有仍挂载它的订阅里全部看完才删
-        if (config.autoDelete() && allCaughtUp(rows)) {
-            deleteRemote(task, account, handler, managed, true);
-        }
+        return config.autoDelete() && allCaughtUp(rows) && deleteRemote(task, account, handler, managed, true);
     }
 
     /** 追平门禁判定:观看进度口径与 🆕 追平角标同源(播放记录实时聚合,未看完的当前集折算前一集)。 */
