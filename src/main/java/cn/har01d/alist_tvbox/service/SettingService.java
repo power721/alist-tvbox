@@ -108,6 +108,7 @@ public class SettingService {
                 .map(Setting::getValue).filter(StringUtils::isNotBlank).orElse("token"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setLiveHotMode(normalizeLiveHotMode(settingRepository.findById("live_hot_mode").map(Setting::getValue).orElse(null)));
+        appProperties.setLiveHiddenPlatforms(parseList(settingRepository.findById("live_hidden_platforms").map(Setting::getValue).orElse("")));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
         appProperties.setTgSearchApiKey(settingRepository.findById("tg_search_api_key").map(Setting::getValue).orElse(""));
@@ -505,6 +506,10 @@ public class SettingService {
         if ("live_hot_mode".equals(setting.getName())) {
             setting.setValue(normalizeLiveHotMode(setting.getValue()));
             appProperties.setLiveHotMode(setting.getValue());
+        }
+        if ("live_hidden_platforms".equals(setting.getName())) {
+            setting.setValue(String.join(",", parseList(setting.getValue())));
+            appProperties.setLiveHiddenPlatforms(parseList(setting.getValue()));
         }
         if ("replace_ali_token".equals(setting.getName())) {
             appProperties.setReplaceAliToken("true".equals(setting.getValue()));

@@ -81,6 +81,9 @@ public class LiveService {
         followCategory.setType_flag(0);
         list.add(followCategory);
         for (LivePlatform platform : platforms) {
+            if (isHidden(platform)) {
+                continue;
+            }
             Category category = new Category();
             category.setType_id(platform.getType());
             category.setType_name(platform.getName());
@@ -94,6 +97,9 @@ public class LiveService {
         List<FilterValue> values = new ArrayList<>();
         values.add(new FilterValue("全部", ""));
         for (LivePlatform platform : platforms) {
+            if (isHidden(platform)) {
+                continue;
+            }
             values.add(new FilterValue(platform.getName(), platform.getType()));
         }
         result.getFilters().put(LiveFollowService.CATEGORY_ID, List.of(new Filter("platform", "平台", values)));
@@ -102,12 +108,23 @@ public class LiveService {
         return result;
     }
 
+    /** web 管理端配置的隐藏平台(live_hidden_platforms):不进分类/聚合搜索/关注筛选,detail 保留供已关注房间直达。 */
+    private boolean isHidden(LivePlatform platform) {
+        List<String> hidden = appProperties.getLiveHiddenPlatforms();
+        String type = platform.getType();
+        // 不可变 List.of 对 null 查询会抛 NPE,mock 场景 getType() 可能为 null
+        return hidden != null && type != null && hidden.contains(type);
+    }
+
     public MovieList list(String id, String ac, String sort, Integer pg) throws IOException {
         MovieList result = new MovieList();
         if (id.contains("-")) {
             String[] parts = id.split("-");
             for (LivePlatform platform : platforms) {
                 if (platform.getType().equals(parts[0])) {
+                    if (isHidden(platform)) {
+                        return result;
+                    }
                     if (HOT_CATEGORY_ID.equals(parts[1])) {
                         return hotRooms(platform);
                     }
@@ -124,7 +141,7 @@ public class LiveService {
             }
 
             for (LivePlatform platform : platforms) {
-                if (platform.getType().equals(id)) {
+                if (platform.getType().equals(id) && !isHidden(platform)) {
                     List<MovieDetail> list = new ArrayList<>();
                     if ("folder".equals(mode)) {
                         MovieDetail hot = new MovieDetail();
@@ -193,6 +210,9 @@ public class LiveService {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
         for (LivePlatform platform : platforms) {
+            if (isHidden(platform)) {
+                continue;
+            }
             try {
                 MovieList platformResult = platform.search(wd);
                 if (platformResult != null) {

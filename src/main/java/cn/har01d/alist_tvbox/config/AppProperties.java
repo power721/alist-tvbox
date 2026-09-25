@@ -34,6 +34,8 @@ public class AppProperties {
     private boolean enabledToken;
     // 直播平台首页热门展示方式:mix=热门直播间混排在分类文件夹前;folder=入口为"热门直播间"文件夹;none=仅分类文件夹
     private String liveHotMode = "folder";
+    // 隐藏的直播平台 type 列表:不进平台分类/聚合搜索/关注筛选,detail 保留(已关注房间仍可直达播放)
+    private List<String> liveHiddenPlatforms = List.of();
     private boolean playbackSyncEnabled = false;
     // 同步分区粒度:uid(不分桶)/ token(按 vod token)/ subscription(按 vod token/id)
     private String playbackSyncScope = "token";

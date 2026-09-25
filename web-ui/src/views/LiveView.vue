@@ -76,6 +76,9 @@ const followsLoading = ref(false);
 const followLoading = ref(false);
 const playGroups = ref<string[]>([]);
 const hotMode = ref("folder");
+// 隐藏平台多选(live_hidden_platforms):选项用完整平台清单而非当前分类(后端已过滤,已隐藏项须仍可展示/取消)
+const hiddenPlatforms = ref<string[]>([]);
+const platformOptions = computed(() => followPlatformOrder.map(id => ({value: id, label: platformNames[id] || id})));
 const danmaku = ref<DanmakuConfig>({enabled: true, rows: 0, speed: 1, fontSize: 100, opacity: 100, color: "", showOnline: true});
 const platformNames: Record<string, string> = {
   bili: "B站",
@@ -443,6 +446,14 @@ const updateHotMode = () => {
   });
 };
 
+const updateHiddenPlatforms = () => {
+  axios.post("/api/settings", {name: "live_hidden_platforms", value: hiddenPlatforms.value.join(",")}).then(() => {
+    ElMessage.success("更新成功");
+    // 隐藏的平台立即从分类 tab 消失
+    loadCategories(category.value.type_id);
+  });
+};
+
 const updateDanmakuConfig = () => {
   axios.put("/api/live/danmaku-config", {...danmaku.value, color: danmaku.value.color || ""}).then(() => {
     ElMessage.success("更新成功,播放中最迟 2 秒生效");
@@ -623,6 +634,11 @@ onMounted(async () => {
       hotMode.value = data.value;
     }
   });
+  axios.get("/api/settings/live_hidden_platforms").then(({data}) => {
+    if (data?.value) {
+      hiddenPlatforms.value = data.value.split(",").filter((v: string) => v);
+    }
+  });
 });
 
 onUnmounted(() => {
@@ -659,6 +675,17 @@ onUnmounted(() => {
               <el-option label="热门混排" value="mix"/>
               <el-option label="热门文件夹" value="folder"/>
               <el-option label="仅分类" value="none"/>
+            </el-select>
+            <el-select
+              v-model="hiddenPlatforms"
+              multiple
+              collapse-tags
+              clearable
+              placeholder="隐藏平台"
+              style="width: 200px"
+              @change="updateHiddenPlatforms"
+            >
+              <el-option v-for="p of platformOptions" :key="p.value" :label="p.label" :value="p.value"/>
             </el-select>
           </div>
           <el-row>
