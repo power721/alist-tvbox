@@ -639,6 +639,9 @@ public class DouyinService implements LivePlatform {
                     while (flvKeys.hasNext()) {
                         String key = flvKeys.next();
                         String url = flvPullUrl.path(key).asText();
+                        if (isAudioOnlyVariant(key, url)) {
+                            continue;
+                        }
                         playUrlList.add("FLV-" + key + "$" + url);
                     }
                 }
@@ -648,6 +651,9 @@ public class DouyinService implements LivePlatform {
                     while (hlsKeys.hasNext()) {
                         String key = hlsKeys.next();
                         String url = hlsPullUrlMap.path(key).asText();
+                        if (isAudioOnlyVariant(key, url)) {
+                            continue;
+                        }
                         playUrlList.add("HLS-" + key + "$" + url);
                     }
                 }
@@ -702,7 +708,11 @@ public class DouyinService implements LivePlatform {
             Iterator<String> flvKeys = flvPullUrl.fieldNames();
             while (flvKeys.hasNext()) {
                 String key = flvKeys.next();
-                flvList.add(flvPullUrl.path(key).asText());
+                String url = flvPullUrl.path(key).asText();
+                // ao 键必须先剔再索引:它混在画质表里会撑大 size,level 索引整体错位拿错流
+                if (!isAudioOnlyVariant(key, url)) {
+                    flvList.add(url);
+                }
             }
         }
 
@@ -710,7 +720,10 @@ public class DouyinService implements LivePlatform {
             Iterator<String> hlsKeys = hlsPullUrlMap.fieldNames();
             while (hlsKeys.hasNext()) {
                 String key = hlsKeys.next();
-                hlsList.add(hlsPullUrlMap.path(key).asText());
+                String url = hlsPullUrlMap.path(key).asText();
+                if (!isAudioOnlyVariant(key, url)) {
+                    hlsList.add(url);
+                }
             }
         }
 
@@ -761,9 +774,49 @@ public class DouyinService implements LivePlatform {
                 urls.add(hlsUrl);
             }
 
-            if (!urls.isEmpty()) {
-                playUrlList.add(name + "$" + String.join("#", urls));
+            if (urls.isEmpty()) {
+                continue;
             }
+            if (isAudioOnlyVariant(sdkKey, flvUrl, hlsUrl)) {
+                continue;
+            }
+            playUrlList.add(name + "$" + String.join("#", urls));
+        }
+    }
+
+    /**
+     * 抖音画质表里可能带 ao 条目:纯音频拉流(only_audio=1),不是可选视频画质。
+     * 混进画质菜单会出现裸 "ao" 条目且选中后无视频轨(pure_live 56cd4d97 同款判定:
+     * 键名归一化命中 ao/audio/audioonly,或全部 URL 带 only_audio=1/true)。
+     */
+    static boolean isAudioOnlyVariant(String key, String... urls) {
+        String token = key == null ? "" : key.toLowerCase().replaceAll("[^a-z0-9]+", "");
+        if (token.equals("ao") || token.equals("audio") || token.equals("audioonly")) {
+            return true;
+        }
+        if (urls == null || urls.length == 0) {
+            return false;
+        }
+        // 与 pure_live 同口径:非空 URL 全部带 only_audio 才判音频流(键名之外的保守第二信源)
+        int checked = 0;
+        for (String url : urls) {
+            if (url == null || url.isEmpty()) {
+                continue;
+            }
+            checked++;
+            String value = queryParam(url, "only_audio");
+            if (!"1".equals(value) && !"true".equalsIgnoreCase(value)) {
+                return false;
+            }
+        }
+        return checked > 0;
+    }
+
+    private static String queryParam(String url, String name) {
+        try {
+            return UriComponentsBuilder.fromUriString(url).build().getQueryParams().getFirst(name);
+        } catch (Exception e) {
+            return null;
         }
     }
 

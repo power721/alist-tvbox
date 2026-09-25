@@ -288,16 +288,28 @@ public class DouyuService implements LivePlatform {
         var cdns = stream.getCdnsWithName();
         List<cn.har01d.alist_tvbox.live.model.DouyuLiveStream.BitRate> rates =
                 stream.getMultirates() != null ? stream.getMultirates() : java.util.Collections.emptyList();
+        java.util.Set<Integer> rateIds = new java.util.HashSet<>();
+        for (var bitRate : rates) {
+            rateIds.add(bitRate.getRate());
+        }
         // 每条线路取全清晰度:实测(2026-09-10)斗鱼已把每房 CDN 收敛到 1~2 条(hw-h5/hs-h5),
         // 全档成本回到 4~10 次请求可接受;曾按「默认线路全档、其余单档」砍请求,CDN 收敛后
         // 第二条线路的清晰度菜单价值 > 省下的几次请求,恢复全档
         for (var cdn : cdns) {
             List<String> urls = new ArrayList<>();
             for (var bitRate : rates) {
-                String playUrlItem = getPlayUrl(id, args, bitRate.getRate(), cdn.getCdn());
-                if (StringUtils.isNotBlank(playUrlItem)) {
-                    urls.add(bitRate.getName() + "$" + playUrlItem);
+                PlayResult result = getPlayUrl(id, args, bitRate.getRate(), cdn.getCdn());
+                if (StringUtils.isBlank(result.url())) {
+                    continue;
                 }
+                // 服务端回落(pure_live 03234c7d acknowledged quality 同款信源):请求档未被确认且
+                // 确认档在本房目录内 → 跳过该条目,防「原画」条目实际给 4M 流的名实不符与重复;
+                // 确认档不在目录(如单档房被回落)时保留,宁可名实不符不丢流
+                if (result.ackRate() >= 0 && result.ackRate() != bitRate.getRate() && rateIds.contains(result.ackRate())) {
+                    log.debug("douyu room {} rate {} fell back to {}", id, bitRate.getRate(), result.ackRate());
+                    continue;
+                }
+                urls.add(bitRate.getName() + "$" + result.url());
             }
             if (!urls.isEmpty()) {
                 playFrom.add(cdn.getName());
@@ -309,7 +321,11 @@ public class DouyuService implements LivePlatform {
         movieDetail.setVod_play_url(String.join("$$$", playUrl));
     }
 
-    private String getPlayUrl(String id, PlayArgs args, int rate, String cdn) {
+    /** 播放条目与其服务端确认档位(getH5PlayV1 响应 data.rate):确认档≠请求档即发生了回落。 */
+    record PlayResult(String url, int ackRate) {
+    }
+
+    private PlayResult getPlayUrl(String id, PlayArgs args, int rate, String cdn) {
         String dataUse = args.form() + args.extraParams() + "&cdn=" + cdn + "&rate=" + rate;
         HttpHeaders headers = playHeaders(id, args);
         HttpEntity<String> request = new HttpEntity<>(dataUse, headers);
@@ -323,11 +339,11 @@ public class DouyuService implements LivePlatform {
         ObjectNode data = (ObjectNode) response.getBody().get("data");
         if (data == null || data.path("rtmp_url").isMissingNode() || data.path("rtmp_live").isMissingNode()) {
             // 该清晰度无流(错误响应无 data):返回空串让调用方跳过此条目,不让整次 detail 崩掉
-            return "";
+            return new PlayResult("", -1);
         }
         String rtmpUrl = data.get("rtmp_url").asText();
         String rtmpLive = data.get("rtmp_live").asText();
-        return combinePlayUrl(rtmpUrl, rtmpLive);
+        return new PlayResult(combinePlayUrl(rtmpUrl, rtmpLive), data.path("rate").asInt(-1));
     }
 
     /** rtmp_live 偶为完整签名 URL 必须直接用;再拼 rtmp_url 会得到语法合法但不可播的双 URL(pure_live 实证坑)。 */

@@ -102,19 +102,17 @@ public class BilibiliService implements LivePlatform {
     }
 
     /**
-     * 热门推荐三级链路(pure_live 验证的同款顺序):
-     * ① webMain/getMoreRecList 官方 web 首页推荐流,免 WBI 签名,重试 2 次(间隔 180ms);
-     * ② room/v1/Area/getListByAreaID 匿名分区接口兜底;
-     * ③ 原 index/getList 首页流最终保底。
-     * 登录态 cookie 下主源只返回少量个性化推荐:与匿名兜底结果合并(个性化排前、按房间号去重),
-     * 而不是二选一丢弃。
+     * 热门推荐三级链路(pure_live fb93afc2 口径:热门页承诺热度排序,推荐流 online 值刻意无序不可作主源):
+     * ① room/v1/Area/getListByAreaID 匿名分区接口,契约自带 sort=online,免 WBI 签名,客户端再按人气降序防御;
+     * ② webMain/getMoreRecList 官方 web 首页推荐流兜底(免 WBI 签名,重试 2 次);
+     * ③ 原 index/getList 首页流最终保底(需 buvid3+Referer)。
      */
     private List<BilibiliRoomInfo> recommendRooms() {
-        List<BilibiliRoomInfo> merged = new ArrayList<>(moreRecRooms());
+        List<BilibiliRoomInfo> merged = new ArrayList<>(areaRooms());
         if (merged.size() >= MIN_RECOMMEND_ROOMS) {
             return merged;
         }
-        for (BilibiliRoomInfo room : areaRooms()) {
+        for (BilibiliRoomInfo room : moreRecRooms()) {
             if (merged.stream().noneMatch(item -> item.getRoomid() == room.getRoomid())) {
                 merged.add(room);
             }
@@ -163,10 +161,13 @@ public class BilibiliService implements LivePlatform {
                     room.setTitle(item.path("title").asText());
                     room.setCover(item.path("user_cover").asText(item.path("cover").asText()));
                     room.setUname(item.path("uname").asText());
+                    room.setOnline(item.path("online").asInt());
                     if (room.getRoomid() > 0) {
                         rooms.add(room);
                     }
                 }
+                // 接口契约自带 sort=online,降序仅作接口不守序时的防御(pure_live fb93afc2 同款)
+                rooms.sort(java.util.Comparator.comparingInt(BilibiliRoomInfo::getOnline).reversed());
                 return rooms;
             }
         } catch (Exception e) {
@@ -271,7 +272,8 @@ public class BilibiliService implements LivePlatform {
 
             Map<String, Object> map = new HashMap<>();
             map.put("platform", "web");
-            map.put("sort_type", "");
+            // sort_type=online:分区页按在线人数排序(second/getList 默认序非热度序,pure_live fb93afc2 同款)
+            map.put("sort_type", "online");
             map.put("vajra_business_key", "");
             map.put("web_location", "444.253");
             map.put("wts", System.currentTimeMillis() / 1000);
