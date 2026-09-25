@@ -273,7 +273,7 @@ jobs:
           name: build-artifacts
 
       - name: Create release and upload artifacts
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body_path: RELEASE_NOTES.md
           files: |
