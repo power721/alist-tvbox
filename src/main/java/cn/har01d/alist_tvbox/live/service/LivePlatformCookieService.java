@@ -28,6 +28,7 @@ public class LivePlatformCookieService {
 
     static {
         COOKIE_KEYS.put("douyin", DouyinService.COOKIE_SETTING);
+        COOKIE_KEYS.put("douyu", DouyuService.COOKIE_SETTING);
         COOKIE_KEYS.put("bili", "bilibili_cookie");
         COOKIE_KEYS.put("soop", SoopService.COOKIE_SETTING);
     }
@@ -78,9 +79,30 @@ public class LivePlatformCookieService {
         return switch (platform) {
             case "bili" -> verifyBili(value);
             case "douyin" -> verifyDouyin(value);
+            case "douyu" -> verifyDouyu(value);
             case "soop" -> verifySoop(value);
             default -> new String[]{"false", "不支持的平台: " + platform};
         };
+    }
+
+    /** 斗鱼无公开账号接口(pure_live 同口径不核验登录),带 cookie 请求 getEncryption 验证连通与描述符有效性。 */
+    private String[] verifyDouyu(String cookie) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.COOKIE, cookie);
+            headers.set(HttpHeaders.USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36");
+            headers.set(HttpHeaders.REFERER, "https://www.douyu.com/");
+            JsonNode root = restTemplate.exchange(
+                    "https://www.douyu.com/wgapi/livenc/liveweb/websec/getEncryption?did=10000000000000000000000000001501",
+                    HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class).getBody();
+            if (root.path("error").asInt(-1) == 0 && root.path("data").path("enc_data").isTextual()) {
+                return new String[]{"true", "请求连通正常(斗鱼无公开账号接口,仅验证连通)"};
+            }
+            return new String[]{"false", "斗鱼返回结构异常: error=" + root.path("error").asInt(-1)};
+        } catch (Exception e) {
+            log.warn("verify douyu cookie failed", e);
+            return new String[]{"false", "验证请求失败: " + e.getMessage()};
+        }
     }
 
     private String[] verifyBili(String cookie) {

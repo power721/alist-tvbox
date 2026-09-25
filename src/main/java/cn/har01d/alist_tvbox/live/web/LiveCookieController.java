@@ -24,6 +24,7 @@ import java.util.Map;
 public class LiveCookieController {
     private static final Map<String, String[]> PLATFORM_META = Map.of(
             "douyin", new String[]{"抖音", "风控自愈:浏览器 F12 复制 ttwid 等整串 cookie"},
+            "douyu", new String[]{"斗鱼", "登录后解锁原画等高画质;匿名流限低档且 5-30 分钟中断。F12 复制整串 cookie"},
             "bili", new String[]{"B站", "登录态可提高接口配额,弹幕以登录身份进房"},
             "soop", new String[]{"SOOP", "登录后可观看受限直播间"});
 
