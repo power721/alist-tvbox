@@ -42,6 +42,9 @@ class NewLivePlatformProbeTest {
             System.out.printf("[%s] home: %d rooms%n", name, home.getList().size());
             var categories = service.category();
             System.out.printf("[%s] category: %d%n", name, categories.getCategories().size());
+            int withCover = (int) categories.getCategories().stream().filter(c -> c.getCover() != null && !c.getCover().isEmpty()).count();
+            System.out.printf("[%s] category covers: %d/%d (first=%s)%n", name, withCover, categories.getCategories().size(),
+                    abbreviate(categories.getCategories().stream().map(c -> c.getCover()).filter(c -> c != null && !c.isEmpty()).findFirst().orElse("-"), 60));
             if (!categories.getCategories().isEmpty()) {
                 var list = service.list(categories.getCategories().get(0).getType_id(), null, null, 1);
                 System.out.printf("[%s] list(%s): %d rooms, pagecount=%d%n",

@@ -80,15 +80,33 @@ public class KugouLiveService implements LivePlatform {
     @Override
     public CategoryList category() throws IOException {
         Map<String, String> names = loadCategories();
+        // 分类页 HTML 与回退清单均无官方图:推荐流房间封面轮询填充(单次请求,秀场分类视觉索引)
+        List<String> covers = new ArrayList<>();
+        try {
+            for (JsonNode entry : directory(1, null).path("list")) {
+                JsonNode raw = "star".equals(entry.path("uiType").asText()) ? entry.path("data") : entry;
+                MovieDetail card = parseCard(raw);
+                if (card != null && card.getVod_pic() != null && !card.getVod_pic().isEmpty()) {
+                    covers.add(card.getVod_pic());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("酷狗分类封面获取失败: {}", e.getMessage());
+        }
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
-        names.forEach((id, name) -> {
+        int index = 0;
+        for (var entry : names.entrySet()) {
             Category category = new Category();
-            category.setType_id(getType() + "-" + id);
-            category.setType_name(name);
+            category.setType_id(getType() + "-" + entry.getKey());
+            category.setType_name(entry.getValue());
             category.setType_flag(0);
+            if (!covers.isEmpty()) {
+                category.setCover(covers.get(index % covers.size()));
+            }
+            index++;
             list.add(category);
-        });
+        }
         result.setCategories(list);
         result.setTotal(list.size());
         result.setLimit(list.size());

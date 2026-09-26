@@ -89,6 +89,15 @@ public class HuajiaoService implements LivePlatform {
         category.setType_id(getType() + "-" + AREA_ID);
         category.setType_name("热门");
         category.setType_flag(0);
+        try {
+            // 单分类无官方图:推荐流首个房间封面兜底(匿名限流下可能取不到,无图不炸)
+            List<MovieDetail> feeds = parseFeeds(directoryData(0));
+            if (!feeds.isEmpty() && feeds.get(0).getVod_pic() != null) {
+                category.setCover(feeds.get(0).getVod_pic());
+            }
+        } catch (Exception e) {
+            log.warn("花椒分类封面获取失败: {}", e.getMessage());
+        }
         result.getCategories().add(category);
         result.setTotal(1);
         result.setLimit(1);

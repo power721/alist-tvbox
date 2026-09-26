@@ -49,7 +49,8 @@ public class AcfunService implements LivePlatform {
     /** 游客会话(userId+token)内存缓存,5 分钟过期(pure_live 同款短会话)。 */
     private volatile VisitorSession visitor;
     private volatile long visitorExpiresAt;
-    private volatile Map<String, String> categoryNames;
+    /** 分类元数据缓存:key=filterType_filterId,value=[名称, 封面]。 */
+    private volatile Map<String, String[]> categoryMeta;
 
     public AcfunService(RestTemplateBuilder builder, ObjectMapper objectMapper) {
         this.restTemplate = builder.defaultHeader("User-Agent", USER_AGENT).build();
@@ -76,14 +77,15 @@ public class AcfunService implements LivePlatform {
 
     @Override
     public CategoryList category() throws IOException {
-        Map<String, String> names = loadCategories();
+        Map<String, String[]> names = loadCategories();
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
-        names.forEach((id, name) -> {
+        names.forEach((id, meta) -> {
             Category category = new Category();
             category.setType_id(getType() + "-" + id);
-            category.setType_name(name);
+            category.setType_name(meta[0]);
             category.setType_flag(0);
+            category.setCover(meta[1]);
             list.add(category);
         });
         result.setCategories(list);
@@ -305,24 +307,25 @@ public class AcfunService implements LivePlatform {
         return result;
     }
 
-    /** 分类来自目录首响应的 channelFilters(liveChannelDisplayFilters[].displayFilters[])。 */
-    private Map<String, String> loadCategories() throws IOException {
-        Map<String, String> cached = categoryNames;
+    /** 分类来自目录首响应的 channelFilters(liveChannelDisplayFilters[].displayFilters[]),自带分类封面。 */
+    private Map<String, String[]> loadCategories() throws IOException {
+        var cached = categoryMeta;
         if (cached != null) {
             return cached;
         }
-        Map<String, String> names = new LinkedHashMap<>();
+        Map<String, String[]> names = new LinkedHashMap<>();
         JsonNode root = getJson(ORIGIN + "/api/channel/list?count=1&pcursor=&filters=");
         for (JsonNode group : root.path("channelFilters").path("liveChannelDisplayFilters")) {
             for (JsonNode filter : group.path("displayFilters")) {
                 String key = filter.path("filterType").asInt() + "_" + filter.path("filterId").asInt();
                 String name = filter.path("name").asText("");
                 if (!name.isEmpty()) {
-                    names.putIfAbsent(key, name);
+                    String cover = filter.path("cover").asText("");
+                    names.putIfAbsent(key, new String[]{name, cover.startsWith("//") ? "https:" + cover : cover});
                 }
             }
         }
-        categoryNames = names;
+        categoryMeta = names;
         return names;
     }
 

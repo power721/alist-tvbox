@@ -111,11 +111,31 @@ public class SixRoomService implements LivePlatform {
     public CategoryList category() throws IOException {
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
+        // 分类无官方图:用大厅(90 秒缓存,零额外请求)按分类过滤后的首个房间头像当封面
+        List<JsonNode> rooms = null;
+        try {
+            rooms = directory();
+        } catch (Exception e) {
+            log.warn("六间房大厅获取失败,分类无封面: {}", e.getMessage());
+        }
+        final List<JsonNode> hall = rooms;
         CATEGORIES.forEach((id, meta) -> {
             Category category = new Category();
             category.setType_id(getType() + "-" + id);
             category.setType_name(meta[0]);
             category.setType_flag(0);
+            if (hall != null) {
+                String area = meta[1];
+                for (JsonNode row : hall) {
+                    if (area == null || area.equals(row.path("anchor_area").asText().trim())) {
+                        String avatar = image(row.path("picuser").asText(""));
+                        if (!avatar.isEmpty()) {
+                            category.setCover(avatar);
+                        }
+                        break;
+                    }
+                }
+            }
             list.add(category);
         });
         result.setCategories(list);
@@ -346,11 +366,25 @@ public class SixRoomService implements LivePlatform {
         return detail;
     }
 
-    /** 房间页解主播 uid:canonical 必须回指本房间(否则视为不存在),再匹配 rid/roomid 成对脚本。 */
+    /** 解主播 uid:大厅快照自带 rid→uid 映射优先(零额外请求);房间页 canonical 校验+rid 脚本正则兜底
+     *  (下播房页面无主播脚本数据,正则两条形态都可能落空,大厅未收录即失败)。 */
     private String resolveUserId(String roomId) {
         String cached = userIdCache.get(roomId);
         if (cached != null) {
             return cached;
+        }
+        try {
+            for (JsonNode row : directory()) {
+                if (roomId.equals(row.path("rid").asText().trim())) {
+                    String uid = row.path("uid").asText().trim();
+                    if (uid.matches("\\d{2,13}")) {
+                        userIdCache.put(roomId, uid);
+                        return uid;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("六间房大厅 uid 反查失败,回落房间页: {}", e.getMessage());
         }
         String html = getBody(WEB_ORIGIN + "/" + roomId);
         String canonicalRoomId = null;

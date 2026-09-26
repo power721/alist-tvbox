@@ -82,6 +82,7 @@ public class InkeService implements LivePlatform {
         top.setType_flag(0);
         list.add(top);
         try {
+            top.setCover(firstCover(getApi("Live_top_pc").path("list")));
             for (JsonNode group : getApi("Live_channel_pc").path("list")) {
                 String key = group.path("tab_key").asText("");
                 String name = group.path("channel_name").asText("");
@@ -92,6 +93,8 @@ public class InkeService implements LivePlatform {
                 category.setType_id(getType() + "-" + key);
                 category.setType_name(name);
                 category.setType_flag(0);
+                // 分组无自带分类图,用组内首个在播主播头像当封面(秀场分类视觉索引)
+                category.setCover(firstCover(group.path("list")));
                 list.add(category);
             }
         } catch (Exception e) {
@@ -103,6 +106,19 @@ public class InkeService implements LivePlatform {
         result.setLimit(list.size());
         log.debug("category result: {}", result);
         return result;
+    }
+
+    /** 行数组首个房间的 portrait 头像(image() 归一),无可用行返回 null。 */
+    private String firstCover(JsonNode rooms) {
+        if (rooms.isArray()) {
+            for (JsonNode room : rooms) {
+                String portrait = image(room.path("portrait").asText(""));
+                if (!portrait.isEmpty()) {
+                    return portrait;
+                }
+            }
+        }
+        return null;
     }
 
     @Override
@@ -386,6 +402,9 @@ public class InkeService implements LivePlatform {
         }
         if (value.startsWith("//")) {
             value = "https:" + value;
+        } else if (value.startsWith("http://")) {
+            // ikstatic 双协议均可用,https 防网页端混合内容拦截
+            value = "https://" + value.substring(7);
         }
         try {
             URI uri = URI.create(value);

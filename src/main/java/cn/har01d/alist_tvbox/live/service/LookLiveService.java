@@ -97,11 +97,15 @@ public class LookLiveService implements LivePlatform {
     public CategoryList category() throws IOException {
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
+        // 分类无官方图:video/audio 分类各用自己推荐流的首房间封面(all 复用视频流首图)
+        String videoCover = recommendCover(false);
+        String audioCover = recommendCover(true);
         CATEGORIES.forEach((id, name) -> {
             Category category = new Category();
             category.setType_id(getType() + "-" + id);
             category.setType_name(name);
             category.setType_flag(0);
+            category.setCover("audio".equals(id) ? audioCover : videoCover);
             list.add(category);
         });
         result.setCategories(list);
@@ -109,6 +113,18 @@ public class LookLiveService implements LivePlatform {
         result.setLimit(list.size());
         log.debug("category result: {}", result);
         return result;
+    }
+
+    /** 推荐流首房间封面(失败返回 null,不炸分类)。 */
+    private String recommendCover(boolean audio) {
+        try {
+            for (MovieDetail card : parseFeed(recommend(audio, 1), audio, new LinkedHashSet<>())) {
+                return card.getVod_pic();
+            }
+        } catch (Exception e) {
+            log.warn("LOOK分类封面获取失败(audio={}): {}", audio, e.getMessage());
+        }
+        return null;
     }
 
     @Override
