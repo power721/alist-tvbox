@@ -85,6 +85,8 @@ class LiveServiceTest {
 
     @Test
     void categoryAddsPlatformFilterToFollowTab() throws IOException {
+        // 本用例锁定"全部注册平台都进筛选"的语义,清掉默认隐藏(花椒默认隐藏因平台匿名接口限流)
+        appProperties.setLiveHiddenPlatforms(List.of());
         stubPlatformTypes();
         when(huyaService.getName()).thenReturn("虎牙");
         when(douyuService.getName()).thenReturn("斗鱼");

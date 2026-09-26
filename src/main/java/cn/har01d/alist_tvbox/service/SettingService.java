@@ -108,7 +108,9 @@ public class SettingService {
                 .map(Setting::getValue).filter(StringUtils::isNotBlank).orElse("token"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setLiveHotMode(normalizeLiveHotMode(settingRepository.findById("live_hot_mode").map(Setting::getValue).orElse(null)));
-        appProperties.setLiveHiddenPlatforms(parseList(settingRepository.findById("live_hidden_platforms").map(Setting::getValue).orElse("")));
+        // 未配置过时保留 AppProperties 默认值(默认隐藏花椒,见其注释);配置存在则完全以用户值为准
+        settingRepository.findById("live_hidden_platforms")
+                .ifPresent(s -> appProperties.setLiveHiddenPlatforms(parseList(s.getValue())));
         appProperties.setLivePlatformOrder(parseList(settingRepository.findById("live_platform_order").map(Setting::getValue).orElse("")));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
