@@ -137,7 +137,9 @@ public class LiveProxyService {
     /**
      * 酷狗流续租代理:直播直连断流即停(播放器对直播 progressive 流不重连),上游断开/签名失效时
      * 重调 streamaddr 换新地址续写,与播放器的连接由本服务维持。FLV 重连会重发 9+4 字节头,
-     * 续写前剥掉防双重 header;下播(重签失败/重试耗尽)或客户端断开时结束。
+     * 续写前剥掉防双重 header;下播(重签失败)或客户端断开时结束。
+     * 实测部分房间单连接寿命随机(50s-6min+ 断,房间仍在播),重签可立即续上——重试上限
+     * 100 次(间隔 1s)覆盖数小时观看,重签失败=下播自然结束。
      */
     private void proxyKugouStream(String target, HttpServletResponse response) throws IOException {
         String roomId = kugouRoomId(target);
@@ -170,7 +172,7 @@ public class LiveProxyService {
                     // 播放器断开,无需续流
                     return;
                 }
-                if (roomId == null || ++renewals > 10) {
+                if (roomId == null || ++renewals > 100) {
                     log.warn("kugou stream renew exhausted: {} renewals={}", target, renewals);
                     return;
                 }
