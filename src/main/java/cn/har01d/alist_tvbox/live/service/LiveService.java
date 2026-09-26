@@ -40,7 +40,7 @@ public class LiveService {
     private final SubscriptionService subscriptionService;
     private final AppProperties appProperties;
 
-    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService, TwitchService twitchService, SoopService soopService, AcfunService acfunService, InkeService inkeService, HuajiaoService huajiaoService, SixRoomService sixRoomService, KugouLiveService kugouLiveService, LookLiveService lookLiveService, LiveFollowService liveFollowService, SubscriptionService subscriptionService, AppProperties appProperties) {
+    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService, TwitchService twitchService, SoopService soopService, AcfunService acfunService, InkeService inkeService, HuajiaoService huajiaoService, SixRoomService sixRoomService, KugouLiveService kugouLiveService, LookLiveService lookLiveService, YyService yyService, LiveFollowService liveFollowService, SubscriptionService subscriptionService, AppProperties appProperties) {
         this.huyaService = huyaService;
         platforms.add(huyaService);
         platforms.add(douyuService);
@@ -48,15 +48,15 @@ public class LiveService {
         platforms.add(ccService);
         platforms.add(kuaishouService);
         platforms.add(douyinService);
-        platforms.add(twitchService);
-        platforms.add(soopService);
-        // pure_live 同源新平台(2026-09-25 接入):全部匿名可用,单平台故障由聚合层兜底
+        platforms.add(kugouLiveService);
         platforms.add(acfunService);
         platforms.add(inkeService);
-        platforms.add(huajiaoService);
         platforms.add(sixRoomService);
-        platforms.add(kugouLiveService);
+        platforms.add(yyService);
+        platforms.add(twitchService);
+        platforms.add(soopService);
         platforms.add(lookLiveService);
+        platforms.add(huajiaoService);
         this.liveFollowService = liveFollowService;
         this.subscriptionService = subscriptionService;
         this.appProperties = appProperties;

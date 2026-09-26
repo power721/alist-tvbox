@@ -68,6 +68,11 @@ public class KugouLiveService implements LivePlatform {
     public String getType() {
         return "kugoulive";
     }
+    /** 流地址经直播代理中转+断流自动重签续流。 */
+    @Override
+    public boolean isProxied() {
+        return true;
+    }
 
     @Override
     public String getName() {
@@ -183,7 +188,7 @@ public class KugouLiveService implements LivePlatform {
         boolean live = liveType != -1 && !data.path("liveSessionId").asText("").isEmpty();
         detail.setVod_remarks(live ? "直播中" : "未开播");
         if (live) {
-            parsePlayUrls(detail, id);
+            parsePlayUrls(detail, id, client);
         }
         result.getList().add(detail);
         result.setTotal(1);
@@ -220,7 +225,7 @@ public class KugouLiveService implements LivePlatform {
     }
 
     /** 播放地址:lines[].streamProfiles[] 按 (协议,rate) 分组,rate 降序输出画质条目。 */
-    private void parsePlayUrls(MovieDetail detail, String roomId) {
+    private void parsePlayUrls(MovieDetail detail, String roomId, String client) {
         try {
             String url = API_ORIGIN + "/video/pc/live/pull/mutiline/streamaddr?std_rid=" + roomId
                     + "&std_plat=7&std_kid=0&streamType=1-2-4-5-8&ua=fx-flash&targetLiveTypes=1-5-6"
@@ -246,19 +251,31 @@ public class KugouLiveService implements LivePlatform {
                     }
                 }
             }
-            List<String> playUrl = new ArrayList<>();
+            List<String> directEntries = new ArrayList<>();
+            List<String> proxyEntries = new ArrayList<>();
             grouped.entrySet().stream()
                     .sorted((a, b) -> Integer.compare(rates.get(b.getKey()), rates.get(a.getKey())))
                     // 一档只出一条地址:# 在 TVBox 语法里是分集分隔符,join 多地址会被当连续剧集;
                     // 实测 lines 会返回相同 URL 的重复项,只取首条。
-                    // 流地址包代理:上游断连/签名失效时代理端自动重签续流(直播直连断流即停,播放器不重连);
-                    // 无代理实例(探针)时降级直链
-                    .forEach(entry -> playUrl.add(entry.getKey().replace(":", "·") + "$"
-                            + (proxyService == null ? entry.getValue().get(0)
-                            : proxyService.buildProxyUrl(entry.getValue().get(0)))));
-            if (!playUrl.isEmpty()) {
-                detail.setVod_play_from("线路1");
-                detail.setVod_play_url(String.join("#", playUrl));
+                    // 直连条目=原始地址(签名 txTime 约 12h);代理条目=包代理,上游断连/签名失效时
+                    // 代理端自动重签续流(buildProxyUrl 降级或探针无代理实例时不产代理条目);
+                    // dual=直连优先双线路(网页端恒走代理),直连断流由播放器自动切代理线路
+                    .forEach(entry -> {
+                        String label = entry.getKey().replace(":", "·");
+                        String stream = entry.getValue().get(0);
+                        directEntries.add(label + "$" + stream);
+                        if (proxyService != null) {
+                            String proxyUrl = proxyService.buildProxyUrl(stream);
+                            if (!proxyUrl.equals(stream)) {
+                                proxyEntries.add(label + "$" + proxyUrl);
+                            }
+                        }
+                    });
+            if (!directEntries.isEmpty()) {
+                String mode = proxyService != null && proxyService.isDualProxyMode() && !"web".equals(client) ? "dual" : "proxy";
+                String[] lines = buildPlayLines(directEntries, proxyEntries, mode);
+                detail.setVod_play_from(lines[0]);
+                detail.setVod_play_url(lines[1]);
             }
         } catch (Exception e) {
             log.warn("酷狗播放地址获取失败: {}", roomId, e);

@@ -70,6 +70,11 @@ public class HuyaService implements LivePlatform {
     public String getType() {
         return "huya";
     }
+    /** 流地址经 /p 通用代理中转。 */
+    @Override
+    public boolean isProxied() {
+        return true;
+    }
 
     @Override
     public String getName() {

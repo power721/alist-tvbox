@@ -112,6 +112,7 @@ public class SettingService {
         settingRepository.findById("live_hidden_platforms")
                 .ifPresent(s -> appProperties.setLiveHiddenPlatforms(parseList(s.getValue())));
         appProperties.setLivePlatformOrder(parseList(settingRepository.findById("live_platform_order").map(Setting::getValue).orElse("")));
+        appProperties.setLiveProxyMode(normalizeLiveProxyMode(settingRepository.findById("live_proxy_mode").map(Setting::getValue).orElse(null)));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
         appProperties.setTgSearchApiKey(settingRepository.findById("tg_search_api_key").map(Setting::getValue).orElse(""));
@@ -484,6 +485,10 @@ public class SettingService {
         return "mix".equals(value) || "none".equals(value) ? value : "folder";
     }
 
+    private String normalizeLiveProxyMode(String value) {
+        return "dual".equals(value) ? "dual" : "proxy";
+    }
+
     public Setting update(Setting setting) {
         if ("merge_site_source".equals(setting.getName())) {
             appProperties.setMerge("true".equals(setting.getValue()));
@@ -517,6 +522,10 @@ public class SettingService {
         if ("live_platform_order".equals(setting.getName())) {
             setting.setValue(String.join(",", parseList(setting.getValue())));
             appProperties.setLivePlatformOrder(parseList(setting.getValue()));
+        }
+        if ("live_proxy_mode".equals(setting.getName())) {
+            setting.setValue(normalizeLiveProxyMode(setting.getValue()));
+            appProperties.setLiveProxyMode(setting.getValue());
         }
         if ("replace_ali_token".equals(setting.getName())) {
             appProperties.setReplaceAliToken("true".equals(setting.getValue()));

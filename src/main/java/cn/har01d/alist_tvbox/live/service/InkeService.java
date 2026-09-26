@@ -81,6 +81,11 @@ public class InkeService implements LivePlatform {
     public String getType() {
         return "inke";
     }
+    /** 流地址经直播代理中转+断流自动续租。 */
+    @Override
+    public boolean isProxied() {
+        return true;
+    }
 
     @Override
     public String getName() {
@@ -257,17 +262,21 @@ public class InkeService implements LivePlatform {
         try {
             List<String> urls = showcaseMedia(uid, broadcastId);
             if (!urls.isEmpty()) {
-                detail.setVod_play_from("线路1");
-                // 只取首条(# 在 TVBox 语法是分集分隔符);流地址包代理+ink=uid:
-                // 上游断连/换场次时代理端经 uid 重查 stream_addr 续流(映客流 URL 本身无主播身份)
+                // 只取首条(# 在 TVBox 语法是分集分隔符);代理条目包代理+ink=uid:
+                // 上游断连/换场次时代理端经 uid 重查 stream_addr 续流(映客流 URL 本身无主播身份);
+                // dual=直连优先双线路(网页端恒走代理),直连失败由播放器自动切代理线路
                 String stream = urls.get(0);
+                List<String> proxyEntries = new ArrayList<>();
                 if (proxyService != null) {
                     String proxyUrl = proxyService.buildProxyUrl(stream);
-                    detail.setVod_play_url("FLV$" + (proxyUrl.equals(stream)
-                            ? stream : proxyUrl + "&ink=" + uid));
-                } else {
-                    detail.setVod_play_url("FLV$" + stream);
+                    if (!proxyUrl.equals(stream)) {
+                        proxyEntries.add("FLV$" + proxyUrl + "&ink=" + uid);
+                    }
                 }
+                String mode = proxyService != null && proxyService.isDualProxyMode() && !"web".equals(client) ? "dual" : "proxy";
+                String[] lines = buildPlayLines(List.of("FLV$" + stream), proxyEntries, mode);
+                detail.setVod_play_from(lines[0]);
+                detail.setVod_play_url(lines[1]);
             } else {
                 log.warn("映客目录反查无可用流地址: uid={} bid={}", uid, broadcastId);
             }

@@ -71,6 +71,11 @@ public class TwitchService implements LivePlatform {
     public String getType() {
         return "twitch";
     }
+    /** 清单域名对浏览器 Origin/Referer 403,网页端经直播代理中转。 */
+    @Override
+    public boolean isProxied() {
+        return true;
+    }
 
     @Override
     public String getName() {

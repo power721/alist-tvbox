@@ -73,6 +73,11 @@ public class SoopService implements LivePlatform {
     public String getType() {
         return "soop";
     }
+    /** CDN 无 CORS 头,网页端经直播代理中转。 */
+    @Override
+    public boolean isProxied() {
+        return true;
+    }
 
     @Override
     public String getName() {

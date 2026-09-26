@@ -50,7 +50,8 @@ public class LiveController {
             result.add(Map.of(
                     "type", platform.getType(),
                     "name", platform.getName(),
-                    "hidden", hidden != null && hidden.contains(platform.getType())));
+                    "hidden", hidden != null && hidden.contains(platform.getType()),
+                    "proxied", platform.isProxied()));
         }
         return result;
     }

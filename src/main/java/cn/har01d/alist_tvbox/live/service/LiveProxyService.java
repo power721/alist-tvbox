@@ -33,17 +33,20 @@ public class LiveProxyService {
     private static final String KUGOU_MEDIA_HOST = ".liveplay.live.kugou.com";
     private static final String INKE_MEDIA_HOST = ".ikstatic.cn";
     private static final String LOOK_MEDIA_HOST = ".live.126.net";
+    private static final String YY_MEDIA_HOST = ".yy.com";
     private final OkHttpClient okHttpClient;
     private final SubscriptionService subscriptionService;
     private final AppProperties appProperties;
     private final KugouLiveService kugouLiveService;
     private final InkeService inkeService;
     private final LookLiveService lookService;
+    private final YyService yyService;
 
     public LiveProxyService(SubscriptionService subscriptionService, AppProperties appProperties,
                             @org.springframework.context.annotation.Lazy KugouLiveService kugouLiveService,
                             @org.springframework.context.annotation.Lazy InkeService inkeService,
-                            @org.springframework.context.annotation.Lazy LookLiveService lookService) {
+                            @org.springframework.context.annotation.Lazy LookLiveService lookService,
+                            @org.springframework.context.annotation.Lazy YyService yyService) {
         this.okHttpClient = new OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
@@ -53,6 +56,12 @@ public class LiveProxyService {
         this.kugouLiveService = kugouLiveService;
         this.inkeService = inkeService;
         this.lookService = lookService;
+        this.yyService = yyService;
+    }
+
+    /** dual 代理模式(直连优先双线路):各平台 detail 据此产出「直连+代理」两条线路。 */
+    public boolean isDualProxyMode() {
+        return appProperties != null && "dual".equals(appProperties.getLiveProxyMode());
     }
 
     /**
@@ -104,6 +113,23 @@ public class LiveProxyService {
             } else {
                 proxyWithRenew(url, response, "https://look.163.com/",
                         () -> lookService.renewStreamUrl(roomId, false));
+            }
+            return;
+        }
+        if (isYyStream(target) && request.getParameter("yy") != null) {
+            // YY 流地址签名 t 租约仅约 10 分钟(detail 15 分钟缓存内必然过期):
+            // 每次连接先重取当前地址,断流再续租;HLS 清单每次重取,分片独立签名即刻有效,
+            // 分片经 rewrite 生成的代理地址不带 yy 参数,落到下方通用转发
+            String roomId = request.getParameter("yy");
+            if (target.contains(".m3u8")) {
+                String rate = request.getParameter("yyr");
+                String fresh = rate == null ? null : yyService.renewHlsUrl(roomId, rate);
+                proxyManifest(fresh == null ? target : fresh, response, "https://wap.yy.com/");
+            } else {
+                String gear = request.getParameter("yyq");
+                String fresh = yyService.renewStreamUrl(roomId, gear);
+                proxyWithRenew(fresh == null ? target : fresh, response, "https://www.yy.com/",
+                        () -> yyService.renewStreamUrl(roomId, gear));
             }
             return;
         }
@@ -193,6 +219,10 @@ public class LiveProxyService {
 
     static boolean isLookStream(String target) {
         return hostMatches(target, LOOK_MEDIA_HOST);
+    }
+
+    static boolean isYyStream(String target) {
+        return hostMatches(target, YY_MEDIA_HOST);
     }
 
     private static boolean hostMatches(String target, String suffix) {

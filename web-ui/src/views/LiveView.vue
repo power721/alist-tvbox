@@ -78,7 +78,7 @@ const followLoading = ref(false);
 const playGroups = ref<string[]>([]);
 const hotMode = ref("folder");
 // 平台管理 tab(独立于 type-filter 的快捷隐藏框,统一入口):拖拽排序 + 可见性开关
-const platformRows = ref<{type: string, label: string, visible: boolean}[]>([]);
+const platformRows = ref<{type: string, label: string, visible: boolean, proxied: boolean}[]>([]);
 const platformSaving = ref(false);
 const danmaku = ref<DanmakuConfig>({enabled: true, rows: 0, speed: 1, fontSize: 100, opacity: 100, color: "", showOnline: true});
 const platformNames: Record<string, string> = {
@@ -97,7 +97,8 @@ const platformNames: Record<string, string> = {
   huajiao: "花椒",
   sixroom: "六间房",
   kugoulive: "酷狗直播",
-  look: "LOOK直播"
+  look: "LOOK直播",
+  yy: "YY直播"
 };
 
 interface Category {
@@ -335,7 +336,7 @@ const loadFollows = () => {
 
 // 关注列表平台筛选:只展示有关注的平台,顺序与平台分类一致
 const followPlatform = ref("");
-const followPlatformOrder = ["bilibili", "douyu", "huya", "douyin", "cc", "kuaishou", "twitch", "soop", "acfun", "inke", "huajiao", "sixroom", "kugoulive", "look"];
+const followPlatformOrder = ["bilibili", "douyu", "huya", "douyin", "cc", "kuaishou", "twitch", "soop", "acfun", "inke", "huajiao", "sixroom", "kugoulive", "look", "yy"];
 const followPlatforms = computed(() => {
   const present = new Set(follows.value.map(follow => follow.platform));
   return followPlatformOrder.filter(platform => present.has(platform));
@@ -442,6 +443,15 @@ const loadDanmakuConfig = () => {
   });
 };
 
+// 直播代理模式(全局):proxy=流地址全部经本服务代理(断流自动续租,耗服务器带宽);
+// dual=直连+代理双线路,客户端默认直连平台 CDN(零服务器带宽),断流由播放器自动切换代理线路续播
+const proxyMode = ref("proxy");
+const updateProxyMode = () => {
+  axios.post("/api/settings", {name: "live_proxy_mode", value: proxyMode.value}).then(() => {
+    ElMessage.success("直播代理模式已更新,重新进详情生效");
+  });
+};
+
 const updateHotMode = () => {
   axios.post("/api/settings", {name: "live_hot_mode", value: hotMode.value}).then(() => {
     ElMessage.success("更新成功");
@@ -455,8 +465,13 @@ const updateHotMode = () => {
 const loadPlatforms = () => {
   axios.get("/api/live/platforms").then(({data}) => {
     if (Array.isArray(data)) {
-      platformRows.value = data.map((p: { type: string, name: string, hidden: boolean }) =>
-        ({type: p.type, label: p.name, visible: !p.hidden}));
+      platformRows.value = data.map((p: { type: string, name: string, hidden: boolean, proxied?: boolean }) =>
+        ({type: p.type, label: p.name, visible: !p.hidden, proxied: !!p.proxied}));
+    }
+  });
+  axios.get("/api/settings/live_proxy_mode").then(({data}) => {
+    if (data?.value) {
+      proxyMode.value = data.value;
     }
   });
 };
@@ -863,14 +878,29 @@ onUnmounted(() => {
         </el-form>
       </el-tab-pane>
       <el-tab-pane label="平台管理" name="platforms" v-if="store.admin">
-        <div style="max-width: 560px; margin: 0 auto; text-align: left">
+        <div style="max-width: 760px; margin: 0 auto; text-align: left">
           <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
                     title="拖动或箭头调整平台顺序(分类与聚合搜索按此顺序),开关控制平台可见性;已关注房间不受隐藏影响仍可播放"/>
+          <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span>直播代理模式:</span>
+            <el-select v-model="proxyMode" style="width: 260px" @change="updateProxyMode">
+              <el-option label="全代理(最稳,耗服务器带宽)" value="proxy"/>
+              <el-option label="直连优先(省带宽,断流自动转代理)" value="dual"/>
+            </el-select>
+            <span style="color: var(--el-text-color-secondary); font-size: 12px">
+              直连优先=带「代理」标记的平台优先直连平台 CDN,直连失败由播放器自动切代理线路续播(网页端不受影响)
+            </span>
+          </div>
           <VueDraggable v-model="platformRows" :animation="150" handle=".drag-handle">
             <div v-for="(row, index) in platformRows" :key="row.type"
                  style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--el-border-color-lighter)">
               <el-icon class="drag-handle" style="cursor: move; color: var(--el-text-color-secondary)"><Rank/></el-icon>
-              <span style="flex: 1">{{ row.label }}</span>
+              <span style="flex: 1">{{ row.label }}
+                <el-tag v-if="row.proxied" size="small" type="info" effect="plain" style="margin-left: 6px"
+                        title="该平台的播放流量经本服务代理中转(防断流续租/跨域/防盗链),会占用服务器带宽">
+                  代理
+                </el-tag>
+              </span>
               <span style="color: var(--el-text-color-secondary); font-size: 12px">{{ row.type }}</span>
               <el-button size="small" text :icon="ArrowUp" :disabled="index === 0" @click="movePlatform(index, -1)"/>
               <el-button size="small" text :icon="ArrowDown" :disabled="index === platformRows.length - 1" @click="movePlatform(index, 1)"/>
