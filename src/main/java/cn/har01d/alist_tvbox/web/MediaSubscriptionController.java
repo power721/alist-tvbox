@@ -5,6 +5,9 @@ import cn.har01d.alist_tvbox.dto.MediaSubscriptionEventDto;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionRequest;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionResourceDto;
 import cn.har01d.alist_tvbox.dto.PanLianAccountStatus;
+import cn.har01d.alist_tvbox.dto.PanLianCaptcha;
+import cn.har01d.alist_tvbox.dto.PanLianCaptchaLoginRequest;
+import cn.har01d.alist_tvbox.dto.PanLianCaptchaLoginResult;
 import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
 import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
@@ -78,6 +81,25 @@ public class MediaSubscriptionController {
     @GetMapping("/panlian/accounts")
     public List<PanLianAccountStatus> panlianAccounts() {
         return panLianSearchService.accountStatuses();
+    }
+
+    /**
+     * 盘链图形验证码(2026-09-26 起站点登录强制):拉取验证码图供人工输码,
+     * 与账号池状态同权限面(ADMIN),image 为 data URI 直接渲染。
+     */
+    @GetMapping("/panlian/captcha")
+    public PanLianCaptcha panlianCaptcha() throws Exception {
+        return panLianSearchService.fetchCaptcha();
+    }
+
+    /** 盘链人工验证码登录:用户输码后带 captcha_id/captcha_code 完成登录并落库会话,仅 ADMIN。 */
+    @PostMapping("/panlian/captcha-login")
+    public PanLianCaptchaLoginResult panlianCaptchaLogin(@RequestBody PanLianCaptchaLoginRequest request) {
+        if (StringUtils.isAnyBlank(request.username(), request.password())) {
+            throw new BadRequestException("请填写账号与密码");
+        }
+        return panLianSearchService.loginWithCaptcha(request.username(), request.password(),
+                request.captchaId(), request.captchaCode());
     }
 
     /**

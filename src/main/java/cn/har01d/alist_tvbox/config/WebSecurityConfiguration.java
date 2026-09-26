@@ -92,8 +92,10 @@ public class WebSecurityConfiguration {
                         // 用户级设置(白名单键):按登录用户存 {key}:u{uid},读取回退全局值
                         .requestMatchers("/api/user-settings/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
-                        // 盘链账号池状态暴露账号邮箱与配额,收紧到 ADMIN(先于 media-subscriptions 通配)
-                        .requestMatchers("/api/media-subscriptions/panlian/accounts")
+                        // 盘链账号池状态暴露账号邮箱与配额、验证码登录提交账号密码,收紧到 ADMIN(先于 media-subscriptions 通配)
+                        .requestMatchers("/api/media-subscriptions/panlian/accounts",
+                                "/api/media-subscriptions/panlian/captcha",
+                                "/api/media-subscriptions/panlian/captcha-login")
                         .hasAuthority(Role.ADMIN.name())
                         .requestMatchers("/api/media-subscriptions", "/api/media-subscriptions/**")
                         .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())

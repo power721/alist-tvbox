@@ -15,6 +15,11 @@ final class LoginCooldown {
         return System.currentTimeMillis() < until;
     }
 
+    /** 解除冷却(人工验证码登录成功后清障,恢复自动链路)。 */
+    void reset() {
+        until = 0;
+    }
+
     /** 记一次失败并进入冷却;恒返回 false,供 loginFailed 链路直接透传。 */
     boolean fail(String site, String reason, long cooldownMs) {
         until = System.currentTimeMillis() + cooldownMs;

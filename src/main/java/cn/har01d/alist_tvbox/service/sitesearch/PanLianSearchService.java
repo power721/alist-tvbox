@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.dto.PanLianAccountStatus;
+import cn.har01d.alist_tvbox.dto.PanLianCaptcha;
+import cn.har01d.alist_tvbox.dto.PanLianCaptchaLoginResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -48,10 +50,12 @@ import java.util.regex.Pattern;
  * 存量 {@code panlian_username}/{@code panlian_password} 与 {@code panlian_cookie}
  * 自动并入池(按身份去重)。池内各账号独立登录态、独立每日签到(+20)、独立配额记账;
  * 搜索轮换起步,某号解锁配额用尽当场切下一号续链,全池用尽才停。凭证必须用户自配,
- * 不内置任何共享账号;全空时本源静默关闭。账号密码登录:表单 POST
- * {@code /api/auth/login},失效自动重登,连续失败 5 分钟冷却。登录取得的会话 Cookie
- * (实测 30 天有效)按账号键落库 Setting {@code panlian_sessions}(值含凭证,只存不展示),
- * 重启播种回内存免重登,被站点拒收且重登失败才清除 —— 失效前不重复登录。
+ * 不内置任何共享账号;全空时本源静默关闭。<b>2026-09-26 起站点登录强制图形验证码
+ * ({@code GET /api/auth/captcha} 取图,登录表单加 captcha_id/captcha_code)</b>,账号
+ * 密码形态无法再无头自动重登:自动链路遇验证码报错进冷却并在账号状态里引导,由用户
+ * 在网页设置页发起 {@link #loginWithCaptcha} 人工输码完成登录;会话 Cookie 仍实测
+ * 30 天有效,登录一次落库 Setting {@code panlian_sessions} 后重启免重登,被站点拒收
+ * 且无法自动重登(验证码/凭证错)才依赖再次人工登录。
  *
  * <p><b>配额</b>:站点按天计解锁配额(基础 30 + 每日签到 +20,按号叠加),本源另做
  * 三层防御:单次搜索解锁预算上限、解锁结果短缓存(同一检查周期重复搜索不重扣,
@@ -121,6 +125,8 @@ public class PanLianSearchService {
         volatile String quotaExhaustedDay = "";
         /** 站点侧真实身份(/api/auth/login 响应或 /api/me/profile 解析缓存):用户名/邮箱/Cookie 三形态同账号靠它去重 */
         volatile String userId = "";
+        /** 最近一次登录失败的归因(captcha/rate_limited/email/credentials),账号状态页据此给出精准引导 */
+        volatile String loginBlocker = "";
     }
 
     private record Account(String key, String username, String password, String cookie, AccountState state)
@@ -145,6 +151,21 @@ public class PanLianSearchService {
         static UnlockOutcome quota() {
             return new UnlockOutcome("", false, true);
         }
+    }
+
+    /** 登录结果:成功带新会话 Cookie 与 user_id;失败带归因(blocker)与用户可读原因。 */
+    private record LoginResult(boolean success, String cookie, String userId, LoginReject reject) {
+        static LoginResult ok(String cookie, String userId) {
+            return new LoginResult(true, cookie, userId, null);
+        }
+
+        static LoginResult fail(LoginReject reject) {
+            return new LoginResult(false, "", "", reject);
+        }
+    }
+
+    /** 登录被拒归因:blocker ∈ captcha / rate_limited / email / credentials / error。 */
+    record LoginReject(String blocker, String reason) {
     }
 
     public PanLianSearchService(SettingRepository settingRepository, ObjectMapper objectMapper) {
@@ -492,7 +513,7 @@ public class PanLianSearchService {
         boolean exhaustedToday = LocalDate.now().toString().equals(account.state().quotaExhaustedDay);
         if (!ensureSession(config, account)) {
             return new PanLianAccountStatus(identity, null, null, account.cookieBased(),
-                    "login_failed", "登录失败(账号密码被拒或站点故障,冷却中重试)", exhaustedToday,
+                    "login_failed", loginFailureMessage(account), exhaustedToday,
                     false, 0, 0, 0, 0);
         }
         try {
@@ -543,6 +564,16 @@ public class PanLianSearchService {
             return text.contains("登录") || text.contains("登陆") || text.contains("未授权");
         }
         return false;
+    }
+
+    /** 登录失败状态的用户可读提示:按最近一次失败归因引导(验证码→本页人工登录,邮箱→改 Cookie)。 */
+    private static String loginFailureMessage(Account account) {
+        return switch (StringUtils.defaultString(account.state().loginBlocker)) {
+            case "captcha" -> "站点登录已启用图形验证码,请在下方完成验证码登录";
+            case "rate_limited" -> "密码错误次数过多被站点限流,请稍后再试";
+            case "email" -> "账号需邮箱确认/二次验证,请改用 Cookie 形态";
+            default -> "登录失败(账号密码被拒或站点故障,冷却中重试)";
+        };
     }
 
     /**
@@ -725,53 +756,172 @@ public class PanLianSearchService {
             if (StringUtils.isNotBlank(state.sessionCookie)) {
                 return true;
             }
-            try {
-                RequestBody body = new FormBody.Builder()
-                        .add("username", account.username())
-                        .add("password", account.password())
-                        .add("remember", "1")
-                        .build();
-                Resp resp = http(new Request.Builder()
-                        .url(config.host() + "/api/auth/login")
-                        .header("User-Agent", userAgent())
-                        .header("Accept", "application/json, text/plain, */*")
-                        .header("Accept-Language", "zh-TW,zh;q=0.9,zh-CN;q=0.8,en;q=0.7")
-                        .header("Origin", config.host())
-                        .header("Referer", config.host() + "/login")
-                        .post(body)
-                        .build());
-                if (resp.code() != 200) {
-                    return loginFailed(account, "login api http " + resp.code());
-                }
-                JsonNode payload = objectMapper.readTree(StringUtils.defaultString(resp.body()));
-                if (!payload.path("success").asBoolean(false)) {
-                    String reason = payload.path("message").asText(payload.path("msg").asText(""));
-                    return loginFailed(account, "账号密码被拒绝:" + reason);
-                }
-                String cookie = SiteSearchSupport.joinCookies(SiteSearchSupport.parseCookies(resp.setCookies()));
-                if (cookie.isBlank()) {
-                    return loginFailed(account, "登录成功但未取到 Cookie");
-                }
-                state.sessionCookie = cookie;
-                String userId = payload.path("data").path("user_id").asText("").trim();
-                if (!userId.isEmpty()) {
-                    state.userId = userId;
-                }
-                log.info("盘链账号 {} 登录成功", account.username());
-                persistSession(account, cookie);
+            LoginResult result = doLogin(config, account, "", "");
+            if (result.success()) {
+                applyLoginSuccess(account, result);
                 return true;
-            } catch (Exception e) {
-                return loginFailed(account, e.getMessage());
             }
+            return loginFailed(account, result.reject());
         }
     }
 
-    private boolean loginFailed(Account account, String reason) {
+    /**
+     * 图形验证码获取(匿名可用):{@code GET /api/auth/captcha} → data.id + base64 图,
+     * id 单次有效,配套 {@link #loginWithCaptcha} 提交。
+     */
+    public PanLianCaptcha fetchCaptcha() throws IOException {
+        Config config = loadConfig();
+        Account anonymous = new Account("anon", "", "", "", new AccountState());
+        JsonNode payload = getJson(config, anonymous, "/api/auth/captcha", Map.of());
+        String id = payload.path("data").path("id").asText("").trim();
+        String image = payload.path("data").path("image").asText("").trim();
+        if (!payload.path("success").asBoolean(false) || id.isEmpty() || image.isEmpty()) {
+            throw new IllegalStateException("验证码获取失败:" + payload.path("message").asText("站点无响应"));
+        }
+        return new PanLianCaptcha(id, image, payload.path("data").path("ttl").asInt(300));
+    }
+
+    /**
+     * 人工验证码登录(2026-09-26 站点登录强制图形验证码后的补救通道):用户在网页端
+     * 看图输码,后端带 captcha_id/captcha_code 完成登录。与池内同账号键({@code u:username})
+     * 复用运行态,成功后会话落库、清冷却,搜索链路立即可用;失败只回原因 —— 验证码错
+     * 刷新图片即可重试,不进入自动链路的冷却/清会话口径(旧会话未必已死)。
+     */
+    public PanLianCaptchaLoginResult loginWithCaptcha(String username, String password, String captchaId, String captchaCode) {
+        if (StringUtils.isAnyBlank(username, password, captchaId, captchaCode)) {
+            return PanLianCaptchaLoginResult.fail("请填写账号、密码与图形验证码");
+        }
+        Config config = loadConfig();
+        String key = "u:" + username.trim();
+        AccountState state = accountStates.computeIfAbsent(key, this::seedState);
+        Account account = new Account(key, username.trim(), password, "", state);
+        synchronized (state) {
+            LoginResult result = doLogin(config, account, captchaId.trim(), captchaCode.trim());
+            if (result.success()) {
+                applyLoginSuccess(account, result);
+                return PanLianCaptchaLoginResult.ok(state.userId);
+            }
+            return PanLianCaptchaLoginResult.fail(result.reject().reason());
+        }
+    }
+
+    /**
+     * 登录核心(表单 POST {@code /api/auth/login}):captchaId/captchaCode 非空随表单提交
+     * (2026-09-26 起站点强制,字段名 captcha_id/captcha_code,实测缺码即 400
+     * {@code error_type=VALIDATION, details.captcha_error=true})。
+     */
+    private LoginResult doLogin(Config config, Account account, String captchaId, String captchaCode) {
+        try {
+            FormBody.Builder form = new FormBody.Builder()
+                    .add("username", account.username())
+                    .add("password", account.password())
+                    .add("remember", "1");
+            if (StringUtils.isNotBlank(captchaId)) {
+                form.add("captcha_id", captchaId);
+            }
+            if (StringUtils.isNotBlank(captchaCode)) {
+                form.add("captcha_code", captchaCode);
+            }
+            Resp resp = http(new Request.Builder()
+                    .url(config.host() + "/api/auth/login")
+                    .header("User-Agent", userAgent())
+                    .header("Accept", "application/json, text/plain, */*")
+                    .header("Accept-Language", "zh-TW,zh;q=0.9,zh-CN;q=0.8,en;q=0.7")
+                    .header("Origin", config.host())
+                    .header("Referer", config.host() + "/login")
+                    .post(form.build())
+                    .build());
+            if (resp.code() != 200) {
+                // 站点以 400+结构化 JSON 拒绝(实测缺验证码即 400):body 仍是可归因错误,不浪费
+                LoginResult parsed = parseLoginResponse(resp, captchaCode);
+                if (parsed != null) {
+                    return parsed;
+                }
+                return LoginResult.fail(new LoginReject("error", "login api http " + resp.code()));
+            }
+            LoginResult parsed = parseLoginResponse(resp, captchaCode);
+            if (parsed != null) {
+                return parsed;
+            }
+            return LoginResult.fail(new LoginReject("error", "登录响应不是有效 JSON"));
+        } catch (Exception e) {
+            String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            return LoginResult.fail(new LoginReject("error", reason));
+        }
+    }
+
+    /** 登录响应解析:body 是含 success 字段的结构化 JSON 才给结论,否则返回 null 交上游兜底。 */
+    private LoginResult parseLoginResponse(Resp resp, String captchaCode) {
+        if (StringUtils.isBlank(resp.body())) {
+            return null;
+        }
+        try {
+            JsonNode payload = objectMapper.readTree(resp.body());
+            if (!payload.isObject() || !payload.has("success")) {
+                return null;
+            }
+            if (!payload.path("success").asBoolean(false)) {
+                return LoginResult.fail(parseLoginReject(payload, StringUtils.isNotBlank(captchaCode)));
+            }
+            String cookie = SiteSearchSupport.joinCookies(SiteSearchSupport.parseCookies(resp.setCookies()));
+            if (cookie.isBlank()) {
+                return LoginResult.fail(new LoginReject("error", "登录成功但未取到 Cookie"));
+            }
+            return LoginResult.ok(cookie, payload.path("data").path("user_id").asText("").trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 登录被拒归因(实测/前端 bundle 契约):captcha_error(缺码或码错)、RATE_LIMITED
+     * (密码错太多次,details.retry_after_seconds)、email_verify_required(新设备邮箱
+     * 确认,confirm_id)、email_code_required(账号邮箱二次验证),其余按账号密码被拒。
+     * 结构化标志优先于验证码文案判定:邮箱验证码的报文同样含「验证码」字样,只看文案会误判。
+     */
+    static LoginReject parseLoginReject(JsonNode payload, boolean captchaSent) {
+        String message = payload.path("message").asText(payload.path("msg").asText(""));
+        JsonNode details = payload.path("details");
+        if (details.path("email_verify_required").asBoolean(false)) {
+            return new LoginReject("email",
+                    "站点要求邮箱确认登录(新设备保护),请在浏览器完成一次后改用 Cookie 形态:" + message);
+        }
+        if (details.path("email_code_required").asBoolean(false)) {
+            return new LoginReject("email",
+                    "账号开启了邮箱验证码二次验证,自动登录不支持,请改用 Cookie 形态:" + message);
+        }
+        if ("RATE_LIMITED".equals(payload.path("error_type").asText("")) || details.path("retry_after_seconds").isNumber()) {
+            long retry = details.path("retry_after_seconds").asLong(0);
+            return new LoginReject("rate_limited",
+                    "密码错误次数过多被限流" + (retry > 0 ? "," + retry + " 秒后再试" : "") + ":" + message);
+        }
+        if (details.path("captcha_error").asBoolean(false) || message.contains("验证码")) {
+            String prefix = captchaSent ? "图形验证码错误" : "站点登录需图形验证码";
+            return new LoginReject("captcha", prefix + ":" + message);
+        }
+        return new LoginReject("credentials", "账号密码被拒绝:" + message);
+    }
+
+    /** 登录成功落运行态+落库:会话 Cookie/user_id 就位,清失败归因与冷却。 */
+    private void applyLoginSuccess(Account account, LoginResult result) {
+        AccountState state = account.state();
+        state.sessionCookie = result.cookie();
+        if (StringUtils.isNotBlank(result.userId())) {
+            state.userId = result.userId();
+        }
+        state.loginBlocker = "";
+        state.cooldown.reset();
+        log.info("盘链账号 {} 登录成功", account.username());
+        persistSession(account, result.cookie());
+    }
+
+    private boolean loginFailed(Account account, LoginReject reject) {
         AccountState state = account.state();
         state.sessionCookie = "";
+        state.loginBlocker = reject.blocker();
         // 走到登录说明旧会话已被站点拒收或从未建立,过期 Cookie 不得留在库里等重启回灌
         persistSession(account, "");
-        return state.cooldown.fail("盘链[" + account.display() + "]", reason, LOGIN_COOLDOWN_MS);
+        return state.cooldown.fail("盘链[" + account.display() + "]", reject.reason(), LOGIN_COOLDOWN_MS);
     }
 
     /**

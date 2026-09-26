@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service.sitesearch;
 
 import cn.har01d.alist_tvbox.dto.PanLianAccountStatus;
+import cn.har01d.alist_tvbox.dto.PanLianCaptcha;
+import cn.har01d.alist_tvbox.dto.PanLianCaptchaLoginResult;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -874,5 +876,152 @@ class PanLianSearchServiceTest {
         // 过期会话被拒 → 重登失败(如密码已改)→ 须清除,防下次重启回灌同一张死 Cookie
         JsonNode persisted = mapper.readTree(store.getOrDefault(PanLianSearchService.SESSIONS_SETTING, "{}"));
         assertTrue(persisted.path("u:a@b.com").isMissingNode(), "重登失败须清除过期会话,防重启回灌死 Cookie");
+    }
+
+    @Test
+    void parseLoginRejectClassifiesCaptchaRateLimitAndEmail() {
+        ObjectMapper mapper = new ObjectMapper();
+        // 实测契约:缺验证码 HTTP 400 + VALIDATION/captcha_error
+        JsonNode captcha = mapper.valueToTree(Map.of(
+                "success", false, "message", "请先输入图形验证码",
+                "error_type", "VALIDATION", "details", Map.of("captcha_error", true)));
+        assertEquals("captcha", PanLianSearchService.parseLoginReject(captcha, false).blocker());
+        assertTrue(PanLianSearchService.parseLoginReject(captcha, false).reason().contains("站点登录需图形验证码"));
+        // 手动登录已带码仍报 captcha_error = 码错,文案引导重输
+        assertTrue(PanLianSearchService.parseLoginReject(captcha, true).reason().contains("图形验证码错误"));
+        // 限流:RATE_LIMITED + retry_after_seconds
+        JsonNode limited = mapper.valueToTree(Map.of(
+                "success", false, "message", "密码错误次数过多", "error_type", "RATE_LIMITED",
+                "details", Map.of("retry_after_seconds", 300)));
+        assertEquals("rate_limited", PanLianSearchService.parseLoginReject(limited, true).blocker());
+        // 新设备邮箱确认
+        JsonNode verify = mapper.valueToTree(Map.of(
+                "success", false, "message", "需要邮箱确认", "error_type", "AUTH",
+                "details", Map.of("email_verify_required", true, "confirm_id", "c1")));
+        assertEquals("email", PanLianSearchService.parseLoginReject(verify, true).blocker());
+        // 邮箱二次验证
+        JsonNode code = mapper.valueToTree(Map.of(
+                "success", false, "message", "需要邮箱验证码", "error_type", "AUTH",
+                "details", Map.of("email_code_required", true)));
+        assertEquals("email", PanLianSearchService.parseLoginReject(code, true).blocker());
+        // 普通密码错误
+        JsonNode bad = mapper.valueToTree(Map.of("success", false, "message", "密码错误"));
+        assertEquals("credentials", PanLianSearchService.parseLoginReject(bad, true).blocker());
+    }
+
+    @Test
+    void fetchCaptchaParsesIdAndImage() throws Exception {
+        PanLianSearchService service = new PanLianSearchService(settings(), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                assertEquals("/api/auth/captcha", request.url().encodedPath());
+                return new Resp(200, List.of(), "{\"success\":true,\"data\":{"
+                        + "\"id\":\"cap-123\",\"image\":\"data:image/png;base64,iVBOR\",\"ttl\":300}}");
+            }
+        };
+        PanLianCaptcha captcha = service.fetchCaptcha();
+        assertEquals("cap-123", captcha.captchaId());
+        assertEquals("data:image/png;base64,iVBOR", captcha.image());
+        assertEquals(300, captcha.ttlSeconds());
+    }
+
+    @Test
+    void captchaLoginSendsFieldsPersistsAndPoolReusesWithoutRelogin() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, String> store = new ConcurrentHashMap<>();
+        store.put("panlian_accounts", "[{\"username\":\"u@x.com\",\"password\":\"secret\"}]");
+        AtomicInteger logins = new AtomicInteger();
+        PanLianSearchService service = new PanLianSearchService(writableSettings(store), mapper) {
+            @Override
+            protected Resp http(Request request) {
+                String path = request.url().encodedPath();
+                if ("POST".equals(request.method()) && path.equals("/api/auth/login")) {
+                    logins.incrementAndGet();
+                    assertTrue(request.body() instanceof FormBody, "登录必须表单编码");
+                    FormBody form = (FormBody) request.body();
+                    Map<String, String> fields = new HashMap<>();
+                    for (int i = 0; i < form.size(); i++) {
+                        fields.put(form.name(i), form.value(i));
+                    }
+                    assertEquals("cap-123", fields.get("captcha_id"), "验证码会话 id 须随表单提交");
+                    assertEquals("AB12", fields.get("captcha_code"), "用户输入的码须随表单提交");
+                    return new Resp(200, List.of("admin_session=captcha-sess; Path=/; Max-Age=2592000"),
+                            "{\"success\":true,\"data\":{\"user_id\":77}}");
+                }
+                if ("GET".equals(request.method()) && path.equals("/api/auth/captcha")) {
+                    return new Resp(200, List.of(),
+                            "{\"success\":true,\"data\":{\"id\":\"cap-123\",\"image\":\"data:image/png;base64,x\",\"ttl\":300}}");
+                }
+                if ("POST".equals(request.method()) && path.equals("/api/tasks/checkin")) {
+                    return new Resp(200, List.of(), "{\"success\":true,\"data\":{}}");
+                }
+                if ("GET".equals(request.method()) && path.equals("/api/videos")) {
+                    assertTrue(request.header("Cookie").contains("admin_session=captcha-sess"),
+                            "验证码登录建立的会话须立即被搜索链路复用");
+                    return new Resp(200, List.of(), "{\"success\":true,\"data\":{\"list\":[]}}");
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        PanLianCaptchaLoginResult result = service.loginWithCaptcha("u@x.com", "secret", "cap-123", "AB12");
+        assertTrue(result.success());
+        assertEquals("77", result.userId());
+        JsonNode persisted = mapper.readTree(store.get(PanLianSearchService.SESSIONS_SETTING));
+        assertEquals("admin_session=captcha-sess", persisted.path("u:u@x.com").path("cookie").asText(),
+                "验证码登录成功须落库会话");
+        assertEquals("77", persisted.path("u:u@x.com").path("userId").asText());
+        // 池内同账号键复用运行态:登录后搜索不再撞登录接口
+        assertTrue(service.search("难哄").isEmpty());
+        assertEquals(1, logins.get(), "池内搜索复用验证码登录建立的会话");
+    }
+
+    @Test
+    void wrongCaptchaKeepsPersistedSessionAndReportsRetryable() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, String> store = new ConcurrentHashMap<>();
+        store.put(PanLianSearchService.SESSIONS_SETTING,
+                "{\"u:a@b.com\":{\"cookie\":\"admin_session=maybe-alive\",\"userId\":\"5\"}}");
+        PanLianSearchService service = new PanLianSearchService(writableSettings(store), mapper) {
+            @Override
+            protected Resp http(Request request) {
+                if ("POST".equals(request.method()) && request.url().encodedPath().equals("/api/auth/login")) {
+                    // 码错:实测口径 400 + captcha_error
+                    return new Resp(400, List.of(), "{\"success\":false,\"message\":\"图形验证码错误\","
+                            + "\"error_type\":\"VALIDATION\",\"details\":{\"captcha_error\":true}}");
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        PanLianCaptchaLoginResult result = service.loginWithCaptcha("a@b.com", "secret", "cap-1", "ZZ99");
+        assertFalse(result.success());
+        assertTrue(result.message().contains("图形验证码错误"), "码错须提示重输:" + result.message());
+        JsonNode persisted = mapper.readTree(store.get(PanLianSearchService.SESSIONS_SETTING));
+        assertEquals("admin_session=maybe-alive", persisted.path("u:a@b.com").path("cookie").asText(),
+                "手动登录码错不清落库会话(旧会话未必已死,刷新图片即可重试)");
+    }
+
+    @Test
+    void autoReloginCaptchaBlockedGuidesManualLoginAndCoolsDown() {
+        PanLianSearchService service = new PanLianSearchService(
+                settings("panlian_username", "a@b.com", "panlian_password", "secret"), new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                if ("POST".equals(request.method()) && request.url().encodedPath().equals("/api/auth/login")) {
+                    // 实测契约:自动重登无码 → 400 VALIDATION captcha_error
+                    return new Resp(400, List.of(), "{\"success\":false,\"message\":\"请先输入图形验证码\","
+                            + "\"error_type\":\"VALIDATION\",\"details\":{\"captcha_error\":true}}");
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        List<PanLianAccountStatus> statuses = service.accountStatuses();
+        assertEquals(1, statuses.size());
+        assertEquals("login_failed", statuses.get(0).status());
+        assertTrue(statuses.get(0).message().contains("图形验证码"),
+                "状态页须引导到验证码登录:" + statuses.get(0).message());
+        // 冷却生效:再次查询不得连环撞登录接口
+        service.accountStatuses();
+        // 登录仍被冷却拦截 → 无新增请求(桩 404 兜底,若再撞登录会返回同款 400 而非改变状态)
+        assertEquals("login_failed", service.accountStatuses().get(0).status());
     }
 }
