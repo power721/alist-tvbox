@@ -5,6 +5,7 @@
       <div class="page-actions">
         <el-button @click="loadAll">刷新</el-button>
         <el-button @click="openNotify">设置</el-button>
+        <el-button v-if="store.admin" @click="openWanouDomains">域名状态</el-button>
         <el-button @click="exportSubs">导出</el-button>
         <el-button @click="importVisible = true">导入</el-button>
         <el-button @click="openNavigation">片单追更</el-button>
@@ -805,11 +806,7 @@
               </el-select>
               <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
             </el-form-item>
-            <el-form-item v-if="store.admin" label="玩偶站点域名">
-              <el-button size="small" @click="openWanouDomains">域名状态</el-button>
-              <span class="sub-text" style="margin-left:8px">内置每小时自动探测玩偶聚合各站域名(可达+延迟),自动采用延迟最低的可达域名</span>
-            </el-form-item>
-            <span v-if="store.admin" class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关);盘聚是项目内命名,实际站点为 SeedHub 系聚合站,免登录无需配置;盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
+            <span v-if="store.admin" class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关;域名状态入口在主页「域名状态」按钮,每小时自动探测并采用延迟最低的可达域名);盘聚是项目内命名,实际站点为 SeedHub 系聚合站,免登录无需配置;盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
           </el-tab-pane>
           <el-tab-pane label="资源筛选" name="poolFilter">
             <el-form-item label="清晰度门槛">

@@ -319,14 +319,15 @@ class WanouSearchServiceTest {
         List<String> fetchCalls = new ArrayList<>();
         WanouSearchService service = probeStubService(fetchCalls);
         List<WanouSearchService.SiteProbe> probes = service.probeAllDomains();
-        // 9 站全部出结果;muou 可达、最优域名 = 延迟最低的 muou.asia
-        assertEquals(9, probes.size());
+        // 10 站全部出结果;muou 可达、最优域名 = 延迟最低的 muou.asia
+        assertEquals(10, probes.size());
         WanouSearchService.SiteProbe muou = probes.stream()
                 .filter(p -> p.siteId().equals("muou")).findFirst().orElseThrow();
         assertTrue(muou.bestUrl() != null && muou.bestUrl().endsWith("muou.asia"));
-        // 探测结果按采用优先级排序:可达按延迟升序,不可达垫底
+        // 探测结果按采用优先级排序:可达按延迟升序,不可达垫底(保持种子原相对顺序)
         assertEquals(List.of("https://www.muou.asia", "https://123.666291.xyz",
-                "https://www.muou.site", "https://666.666291.xyz"),
+                "https://www.muou.site", "https://666.666291.xyz",
+                "https://www.muoua.top", "https://333.333291.xyz"),
                 muou.domains().stream().map(WanouSearchService.DomainProbe::url).toList());
         assertTrue(muou.domains().get(0).latencyMs() <= muou.domains().get(1).latencyMs());
         assertEquals("HTTP 504", muou.domains().get(3).error());
@@ -336,13 +337,13 @@ class WanouSearchServiceTest {
         var muouDto = dtos.stream().filter(d -> d.siteId().equals("muou")).findFirst().orElseThrow();
         assertTrue(muouDto.ok());
         assertTrue(muouDto.bestUrl().endsWith("muou.asia"));
-        assertEquals(4, muouDto.domains().size());
+        assertEquals(6, muouDto.domains().size());
         assertTrue(muouDto.domains().get(3).latencyMs() >= 0);
-        // 全域名失败站点:bestUrl=null、ok=false,但域名池保持完整
+        // 全域名失败站点:bestUrl=null、ok=false,但域名池保持完整(快映现 3 种子)
         var kuaiying = dtos.stream().filter(d -> d.siteId().equals("kuaiying")).findFirst().orElseThrow();
         assertFalse(kuaiying.ok());
         assertNull(kuaiying.bestUrl());
-        assertEquals(1, kuaiying.domains().size());
+        assertEquals(3, kuaiying.domains().size());
         // 探测重排后搜索第一发即最优域名(自动采用,零 failover 撞墙)
         assertEquals("<html>ok</html>",
                 service.requestWithFailover(WanouSearchService.siteById("muou"),

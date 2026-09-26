@@ -181,7 +181,7 @@ public class AppProperties {
         private int probeTransientStreak = 3;
         /** 失效黑名单窗口(天):窗口外的判死记录不再拦截入池,该链可重新试错一次(再判死刷新时间) */
         private int deadLinkTtlDays = 90;
-        /** 玩偶聚合搜索源(玩偶/多多/木偶等 9 站聚合,搜索+详情页提取分享链接):追剧候选池补充来源 */
+        /** 玩偶聚合搜索源(玩偶/多多/木偶等 10 站聚合,搜索+详情页提取分享链接):追剧候选池补充来源 */
         private boolean wanouEnabled = true;
         /** 玩偶聚合:站点最新域名监控接口(空=只用内置静态域名) */
         private String wanouMonitorUrl = "https://pan-site-monitor.douer.me/api/data";

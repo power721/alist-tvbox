@@ -46,13 +46,15 @@ import java.util.stream.Collectors;
 
 /**
  * 玩偶聚合搜索源(atv-spiders/py/玩偶聚合.py 的 Java 移植):聚合玩偶系 MacCMS 网盘站
- * (玩偶/多多/木偶/快映/闪电/表哥/花卷/欧歌/虎斑),并行按站搜索 → 卡片标题
+ * (玩偶/多多/木偶/快映/闪电/表哥/花卷/欧歌/虎斑/二小),并行按站搜索 → 卡片标题
  * 与订阅关键词粗匹配 → 抓详情页提取网盘分享链接,产出与 TG 搜索同构的 {@link Message},
  * 供追剧候选池(fillPool/preview)与 TG 结果按 link 去重合并。
  * <p>2026-09-20 与 py 同步(atv-spiders 9880ef2):移除六死站(欧歌/至臻/二小/蜡笔/虎斑/小斑),
  * 新增表哥(punycode 域名)与花卷(海报卡片 + down-card-url 详情形状)。
  * <p>2026-09-26 与 py 对齐:欧歌(woog 新入口)与虎斑(裸 IP 轮换入口,38.76.197.172/xhban.xyz
  * 均 302 到 43.248.128.118)实测复活回归,两站详情形状为 module-row-info 容器文本自身(非其下 p)。
+ * 同晚按用户提供的玩偶配置 v2(12 站生态配置,比 py 更新的域名清单)补齐各站全部备用域名,
+ * 二小随新入口 2xiaopan.one 复活回归(蜡笔/至臻实测仍死未接);表哥在该配置中又名「龙龙/longlong」。
  *
  * <p>站点域名池 = 静态种子 ∪ 监控服务(pan-site-monitor)下发的候选(含其标记失败的域名,
  * 可能复活);本服务定时主动探测各域名可达性与延迟,按延迟升序重排——搜索直接从最优域名
@@ -89,7 +91,7 @@ public class WanouSearchService {
             "(?i)(第[0-9一二三四五六七八九十]{1,3}季|season\\d{1,2}|s\\d{1,2}e\\d{1,3}|ep?\\d{1,3}|第\\d{1,3}集|更新?至\\d{1,3}|全\\d{1,3}集|\\d{1,3}集|20\\d{2})");
     /** 站点优先级(py site_priority):同名合并去重时优先保留靠前站点的链接 */
     private static final List<String> SITE_PRIORITY = List.of(
-            "wanou", "duoduo", "muou", "kuaiying", "shandian", "biaoge", "huajuan", "ouge", "hban");
+            "wanou", "duoduo", "muou", "kuaiying", "shandian", "biaoge", "huajuan", "ouge", "hban", "erxiao");
 
     record Site(String id, String name, String monitorKey, List<String> seedDomains,
                 String searchUrl, int timeoutSeconds, String searchCardCss, String detailPanCss) {
@@ -111,19 +113,22 @@ public class WanouSearchService {
 
     private static final List<Site> SITES = List.of(
             new Site("muou", "木偶", "木偶",
-                    List.of("https://www.muou.site", "https://www.muou.asia", "https://666.666291.xyz", "https://123.666291.xyz"),
+                    List.of("https://www.muou.site", "https://www.muou.asia", "https://666.666291.xyz",
+                            "https://123.666291.xyz", "https://www.muoua.top", "https://333.333291.xyz"),
                     null, 10, null, null),
             new Site("duoduo", "多多", "多多",
-                    List.of("https://yydsys.de5.net", "https://tv.214521.xyz", "https://tv.yydsys.cc", "https://tv.yydsys.top"),
+                    List.of("https://yydsys.de5.net", "https://tv.214521.xyz", "https://tv.yydsys.cc",
+                            "https://tv.yydsys.top", "https://pan.yydsys.de"),
                     null, 10, null, null),
             new Site("wanou", "玩偶", "玩偶",
-                    List.of("https://woggpan.xxooo.cf", "https://wogg.xxooo.cf", "https://woggpan.888484.xyz", "https://www.wogg.net"),
+                    List.of("https://woggpan.xxooo.cf", "https://wogg.xxooo.cf", "https://woggpan.888484.xyz",
+                            "https://www.wogg.net", "https://www.wogg.live"),
                     "/vodsearch/-------------.html?wd={keyword}&page={page}", 10, null, null),
             new Site("kuaiying", "快映", null,
-                    List.of("http://xsayang.fun:12512"),
+                    List.of("http://xsayang.fun:12512", "http://38.76.197.172:12521", "http://103.45.162.207:12512"),
                     null, 10, null, null),
             new Site("shandian", "闪电", "闪电",
-                    List.of("http://sd.sduc.site", "http://shandian.blog"),
+                    List.of("http://sd.sduc.site", "http://shandian.blog", "http://sduc.cloud"),
                     null, 10, null, null),
             new Site("biaoge", "表哥", null,
                     List.of("http://xn--4yqy17f.xn--yi7aa.vip:3155"),
@@ -133,12 +138,18 @@ public class WanouSearchService {
                     null, 10, ".module-card-item-poster", ".down-card-url"),
             // 欧歌/虎斑:2026-09-26 随 py 复活回归;详情形状是 module-row-info 容器文本自身(标准站是其下 p)
             new Site("ouge", "欧歌", "欧哥",
-                    List.of("https://woog.nxog.eu.org", "https://woog.430520.xyz", "https://woog.nxog.fun"),
+                    List.of("https://woog.nxog.eu.org", "https://woog.430520.xyz", "https://woog.nxog.fun",
+                            "https://ogkk.nxog.eu.org"),
                     null, 10, null, ".module-row-info"),
             // 虎斑只挂裸 IP 且入口轮流换(38.76.197.172/xhban.xyz 均 302 到 43.248.128.118),探测按可达性自动跟随现行入口
             new Site("hban", "虎斑", "虎斑",
-                    List.of("http://43.248.128.118:16969", "http://38.76.197.172:16969", "http://xhban.xyz:20720"),
-                    null, 10, null, ".module-row-info"));
+                    List.of("http://43.248.128.118:16969", "http://38.76.197.172:16969",
+                            "http://xhban.xyz:20720", "http://xhban.xyz"),
+                    null, 10, null, ".module-row-info"),
+            // 二小:2026-09-26 随玩偶配置 v2 复活回归(新入口 2xiaopan.one 实测 200);蜡笔/至臻同期实测仍死未接
+            new Site("erxiao", "二小", "二小",
+                    List.of("https://www.2xiaopan.one", "https://www.2xiaopan.top", "https://www.wexwp.cc"),
+                    null, 10, null, null));
 
     private static final class DomainState {
         volatile List<String> ordered;
