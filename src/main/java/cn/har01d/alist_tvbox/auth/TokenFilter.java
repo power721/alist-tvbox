@@ -13,7 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -34,9 +34,9 @@ import java.util.Set;
 public class TokenFilter extends OncePerRequestFilter {
     private final TokenService tokenService;
 
-    @Lazy
+    // @Lazy 类代理需运行期生成 CGLIB 类,native image 下启动失败,故用 ObjectProvider 延迟
     @Autowired(required = false)
-    private SubscriptionService subscriptionService;
+    private ObjectProvider<SubscriptionService> subscriptionService;
     private volatile String apiKey;
     private volatile String basicAuthCredentials;
 
@@ -121,8 +121,9 @@ public class TokenFilter extends OncePerRequestFilter {
             sendError(response, e);
         } finally {
             SecurityContextHolder.clearContext();
-            if (subscriptionService != null) {
-                subscriptionService.clearRequestContext();
+            SubscriptionService service = getSubscriptionService();
+            if (service != null) {
+                service.clearRequestContext();
             }
         }
     }
@@ -158,7 +159,8 @@ public class TokenFilter extends OncePerRequestFilter {
      * checkToken 同时会设置请求级 tenant/currentToken,控制器里会再走一遍,幂等。
      */
     private boolean hasValidVodTokenInPath(String uri) {
-        if (subscriptionService == null) {
+        SubscriptionService service = getSubscriptionService();
+        if (service == null) {
             return false;
         }
         String[] parts = uri.split("/");
@@ -166,11 +168,15 @@ public class TokenFilter extends OncePerRequestFilter {
             return false;
         }
         try {
-            subscriptionService.checkToken(parts[2]);
+            service.checkToken(parts[2]);
             return true;
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private SubscriptionService getSubscriptionService() {
+        return subscriptionService == null ? null : subscriptionService.getIfAvailable();
     }
 
     private String getToken(HttpServletRequest request) {

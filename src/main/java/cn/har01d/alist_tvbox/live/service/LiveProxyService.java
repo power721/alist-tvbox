@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -37,16 +38,18 @@ public class LiveProxyService {
     private final OkHttpClient okHttpClient;
     private final SubscriptionService subscriptionService;
     private final AppProperties appProperties;
-    private final KugouLiveService kugouLiveService;
-    private final InkeService inkeService;
-    private final LookLiveService lookService;
-    private final YyService yyService;
+    // 四平台服务反向依赖本服务成环,以 ObjectProvider 延迟化解:
+    // @Lazy 类代理需运行期生成 CGLIB 类,native image 下无反射注册直接启动失败
+    private final ObjectProvider<KugouLiveService> kugouLiveService;
+    private final ObjectProvider<InkeService> inkeService;
+    private final ObjectProvider<LookLiveService> lookService;
+    private final ObjectProvider<YyService> yyService;
 
     public LiveProxyService(SubscriptionService subscriptionService, AppProperties appProperties,
-                            @org.springframework.context.annotation.Lazy KugouLiveService kugouLiveService,
-                            @org.springframework.context.annotation.Lazy InkeService inkeService,
-                            @org.springframework.context.annotation.Lazy LookLiveService lookService,
-                            @org.springframework.context.annotation.Lazy YyService yyService) {
+                            ObjectProvider<KugouLiveService> kugouLiveService,
+                            ObjectProvider<InkeService> inkeService,
+                            ObjectProvider<LookLiveService> lookService,
+                            ObjectProvider<YyService> yyService) {
         this.okHttpClient = new OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
@@ -90,14 +93,14 @@ public class LiveProxyService {
 
         if (isKugouStream(target)) {
             proxyWithRenew(target, response, "https://fanxing.kugou.com/",
-                    () -> kugouLiveService.renewStreamUrl(kugouRoomId(target), kugouProtocol(target)));
+                    () -> kugouLiveService.getObject().renewStreamUrl(kugouRoomId(target), kugouProtocol(target)));
             return;
         }
         if (isInkeStream(target)) {
             // 映客流 URL 无法反解主播身份,uid 由条目生成时追加在代理 URL 的 ink 参数里
             String uid = request.getParameter("ink");
             proxyWithRenew(target, response, "https://www.inke.cn/",
-                    () -> uid == null ? null : inkeService.renewStreamUrl(uid));
+                    () -> uid == null ? null : inkeService.getObject().renewStreamUrl(uid));
             return;
         }
         if (isLookStream(target) && request.getParameter("look") != null) {
@@ -106,13 +109,13 @@ public class LiveProxyService {
             // look 参数,落到下方通用转发,不产生多余重签
             String roomId = request.getParameter("look");
             boolean hls = target.contains(".m3u8");
-            String fresh = lookService.renewStreamUrl(roomId, hls);
+            String fresh = lookService.getObject().renewStreamUrl(roomId, hls);
             String url = fresh == null ? target : fresh;
             if (hls) {
                 proxyManifest(url, response, "https://look.163.com/");
             } else {
                 proxyWithRenew(url, response, "https://look.163.com/",
-                        () -> lookService.renewStreamUrl(roomId, false));
+                        () -> lookService.getObject().renewStreamUrl(roomId, false));
             }
             return;
         }
@@ -123,13 +126,13 @@ public class LiveProxyService {
             String roomId = request.getParameter("yy");
             if (target.contains(".m3u8")) {
                 String rate = request.getParameter("yyr");
-                String fresh = rate == null ? null : yyService.renewHlsUrl(roomId, rate);
+                String fresh = rate == null ? null : yyService.getObject().renewHlsUrl(roomId, rate);
                 proxyManifest(fresh == null ? target : fresh, response, "https://wap.yy.com/");
             } else {
                 String gear = request.getParameter("yyq");
-                String fresh = yyService.renewStreamUrl(roomId, gear);
+                String fresh = yyService.getObject().renewStreamUrl(roomId, gear);
                 proxyWithRenew(fresh == null ? target : fresh, response, "https://www.yy.com/",
-                        () -> yyService.renewStreamUrl(roomId, gear));
+                        () -> yyService.getObject().renewStreamUrl(roomId, gear));
             }
             return;
         }

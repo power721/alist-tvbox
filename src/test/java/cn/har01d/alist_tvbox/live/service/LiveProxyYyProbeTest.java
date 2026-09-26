@@ -53,7 +53,7 @@ class LiveProxyYyProbeTest {
         SubscriptionService subscriptionService = mock(SubscriptionService.class);
         when(subscriptionService.getCurrentToken()).thenReturn("probe-token");
         LiveProxyService proxyService = new LiveProxyService(subscriptionService, new AppProperties(),
-                null, null, null, yyService);
+                null, null, null, fixedProvider(yyService));
 
         // 模拟代理请求:清单目标地址 + yy/yyr 续租参数(条目生成端同款拼法)
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/live-proxy/probe-token");
@@ -142,5 +142,15 @@ class LiveProxyYyProbeTest {
             return "";
         }
         return value.length() <= max ? value : value.substring(0, max) + "...";
+    }
+
+    /** 固定实例的 ObjectProvider(生产环境由 Spring 注入,此处包真实 YyService 供代理续租分支调用)。 */
+    private static <T> org.springframework.beans.factory.ObjectProvider<T> fixedProvider(T instance) {
+        return new org.springframework.beans.factory.ObjectProvider<>() {
+            @Override
+            public T getObject() {
+                return instance;
+            }
+        };
     }
 }
