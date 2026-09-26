@@ -4,6 +4,8 @@ import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.dto.PanLianAccountStatus;
 import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
 import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
+import cn.har01d.alist_tvbox.dto.WanouDomainStatus;
+import cn.har01d.alist_tvbox.dto.WanouSiteStatus;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionTransferService;
@@ -12,6 +14,7 @@ import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.KuafuSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.Pan123CommunitySearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.ZhenCangSearchService;
 import cn.har01d.alist_tvbox.tvbox.Category;
@@ -69,6 +72,8 @@ class MediaSubscriptionControllerTest {
     private Pan123CommunitySearchService pan123CommunitySearchService;
     @Mock
     private KuafuSearchService kuafuSearchService;
+    @Mock
+    private WanouSearchService wanouSearchService;
 
     private MockMvc mockMvc;
 
@@ -77,9 +82,40 @@ class MediaSubscriptionControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new MediaSubscriptionController(subscriptionService, checkService, transferService, pianDanService,
                                 panLianSearchService, woniuSearchService, guanYingSearchService, zhenCangSearchService,
-                                pan123CommunitySearchService, kuafuSearchService))
+                                pan123CommunitySearchService, kuafuSearchService, wanouSearchService))
                 .setControllerAdvice(new RestErrorHandler())
                 .build();
+    }
+
+    @Test
+    void wanouDomainStatusReturnsProbeSnapshot() throws Exception {
+        when(wanouSearchService.domainStatusDtos()).thenReturn(List.of(
+                new WanouSiteStatus("muou", "木偶", true, "https://www.muou.asia", List.of(
+                        new WanouDomainStatus("https://www.muou.asia", true, 320, null),
+                        new WanouDomainStatus("https://www.muou.site", false, 8000, "HTTP 504")))));
+
+        mockMvc.perform(get("/api/media-subscriptions/wanou/domains"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].siteId").value("muou"))
+                .andExpect(jsonPath("$[0].siteName").value("木偶"))
+                .andExpect(jsonPath("$[0].ok").value(true))
+                .andExpect(jsonPath("$[0].bestUrl").value("https://www.muou.asia"))
+                .andExpect(jsonPath("$[0].domains[0].url").value("https://www.muou.asia"))
+                .andExpect(jsonPath("$[0].domains[0].latencyMs").value(320))
+                .andExpect(jsonPath("$[0].domains[1].error").value("HTTP 504"));
+    }
+
+    @Test
+    void wanouDomainProbeTriggersFullProbeThenReturnsResult() throws Exception {
+        when(wanouSearchService.domainStatusDtos()).thenReturn(List.of(
+                new WanouSiteStatus("wanou", "玩偶", false, null, List.of())));
+
+        mockMvc.perform(post("/api/media-subscriptions/wanou/domains/probe"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].siteId").value("wanou"))
+                .andExpect(jsonPath("$[0].ok").value(false));
+
+        verify(wanouSearchService).probeAllDomains();
     }
 
     @Test

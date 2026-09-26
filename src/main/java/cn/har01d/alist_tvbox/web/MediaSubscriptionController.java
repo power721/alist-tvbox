@@ -10,6 +10,8 @@ import cn.har01d.alist_tvbox.dto.PanLianCaptchaLoginRequest;
 import cn.har01d.alist_tvbox.dto.PanLianCaptchaLoginResult;
 import cn.har01d.alist_tvbox.dto.SiteCredentialCheckRequest;
 import cn.har01d.alist_tvbox.dto.SiteCredentialCheckResult;
+import cn.har01d.alist_tvbox.dto.WanouSiteStatus;
+import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionCheckService;
 import cn.har01d.alist_tvbox.service.MediaSubscriptionService;
@@ -54,6 +56,7 @@ public class MediaSubscriptionController {
     private final ZhenCangSearchService zhenCangSearchService;
     private final Pan123CommunitySearchService pan123CommunitySearchService;
     private final KuafuSearchService kuafuSearchService;
+    private final WanouSearchService wanouSearchService;
 
     public MediaSubscriptionController(MediaSubscriptionService subscriptionService,
                                        MediaSubscriptionCheckService checkService,
@@ -64,7 +67,8 @@ public class MediaSubscriptionController {
                                        GuanYingSearchService guanYingSearchService,
                                        ZhenCangSearchService zhenCangSearchService,
                                        Pan123CommunitySearchService pan123CommunitySearchService,
-                                       KuafuSearchService kuafuSearchService) {
+                                       KuafuSearchService kuafuSearchService,
+                                       WanouSearchService wanouSearchService) {
         this.subscriptionService = subscriptionService;
         this.checkService = checkService;
         this.transferService = transferService;
@@ -75,6 +79,7 @@ public class MediaSubscriptionController {
         this.zhenCangSearchService = zhenCangSearchService;
         this.pan123CommunitySearchService = pan123CommunitySearchService;
         this.kuafuSearchService = kuafuSearchService;
+        this.wanouSearchService = wanouSearchService;
     }
 
     /** 盘链账号池状态:逐号拉站点配额/签到/账号信息(只读,不触发签到);与设置同权限面,仅 ADMIN。 */
@@ -121,6 +126,19 @@ public class MediaSubscriptionController {
             case "kuafu" -> kuafuSearchService.checkCredential(request);
             default -> throw new BadRequestException("未知站点:" + site);
         };
+    }
+
+    /** 玩偶聚合站点域名状态:最近一轮定时探测快照(可达性+延迟,首条即当前采用域名)。 */
+    @GetMapping("/wanou/domains")
+    public List<WanouSiteStatus> wanouDomainStatus() {
+        return wanouSearchService.domainStatusDtos();
+    }
+
+    /** 玩偶聚合站点域名立即探测:并行测全部候选域名并按延迟重排采用顺序,返回最新结果。 */
+    @PostMapping("/wanou/domains/probe")
+    public List<WanouSiteStatus> probeWanouDomains() {
+        wanouSearchService.probeAllDomains();
+        return wanouSearchService.domainStatusDtos();
     }
 
     /** 片单追更:片单导航分类(豆瓣/TMDB 榜单与筛选定义,排除电影类目——追更只对剧集/综艺有意义)。管理端代理,走登录态鉴权,免 vod token。 */

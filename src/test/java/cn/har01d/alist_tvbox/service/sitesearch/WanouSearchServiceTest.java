@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -137,6 +139,25 @@ class WanouSearchServiceTest {
     }
 
     @Test
+    void parseDetailPanUrlsRowInfoShape() {
+        // 欧歌/虎斑详情形状:分享链接在 module-row-info 容器文本自身(标准站是其下 p)
+        WanouSearchService service = new WanouSearchService(props(), new ObjectMapper());
+        List<String> urls = service.parseDetailPanUrls(WanouSearchService.siteById("ouge"), """
+                <html><body>
+                  <div class="module-row-info">https://pan.quark.cn/s/og001 提取码：8xk2</div>
+                  <div class="module-row-info">https://www.123pan.com/s/og-123</div>
+                </body></html>
+                """);
+        assertEquals(2, urls.size());
+        assertEquals("https://pan.quark.cn/s/og001?password=8xk2", urls.get(0));
+        assertEquals("https://www.123pan.com/s/og-123", urls.get(1));
+        // 虎斑同形状(detailPanCss 同为 .module-row-info)
+        assertEquals(1, service.parseDetailPanUrls(WanouSearchService.siteById("hban"), """
+                <div class="module-row-info">https://pan.baidu.com/s/1HbAn001</div>
+                """).size());
+    }
+
+    @Test
     void failoverSkipsDeadDomainAndSticksToWinner() throws IOException {
         List<String> calls = new ArrayList<>();
         WanouSearchService service = new WanouSearchService(props(), new ObjectMapper()) {
@@ -251,5 +272,98 @@ class WanouSearchServiceTest {
         assertTrue(WanouSearchService.isChallenge(null, ""));
         org.junit.jupiter.api.Assertions.assertFalse(WanouSearchService.isChallenge(null,
                 "<html><div class=\"module-search-item\">card</div></html>"));
+    }
+
+    /** 探测打桩:muou 四个种子域名按 url 分流 —— 延迟各不相同、一枚 HTTP 504、其余站全失败(不发真实网络);
+     *  fetch 只认 muou.asia(验证探测重排后搜索第一发即最优域名)。 */
+    private static WanouSearchService probeStubService(List<String> fetchCalls) {
+        return new WanouSearchService(props(), new ObjectMapper()) {
+            @Override
+            protected String probeFetch(String url) {
+                try {
+                    if (url.equals("https://www.muou.site")) {
+                        Thread.sleep(120);
+                        return null;
+                    }
+                    if (url.equals("https://www.muou.asia")) {
+                        Thread.sleep(30);
+                        return null;
+                    }
+                    if (url.equals("https://666.666291.xyz")) {
+                        return "HTTP 504";
+                    }
+                    if (url.equals("https://123.666291.xyz")) {
+                        Thread.sleep(60);
+                        return null;
+                    }
+                    return "timeout";
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return "interrupted";
+                }
+            }
+
+            @Override
+            protected String fetch(String url, int timeoutSeconds) throws IOException {
+                fetchCalls.add(url);
+                if (url.startsWith("https://www.muou.asia")) {
+                    return "<html>ok</html>";
+                }
+                throw new IOException("boom");
+            }
+        };
+    }
+
+    @Test
+    void probeReordersDomainsByLatencyWithDeadLast() throws IOException {
+        List<String> fetchCalls = new ArrayList<>();
+        WanouSearchService service = probeStubService(fetchCalls);
+        List<WanouSearchService.SiteProbe> probes = service.probeAllDomains();
+        // 9 站全部出结果;muou 可达、最优域名 = 延迟最低的 muou.asia
+        assertEquals(9, probes.size());
+        WanouSearchService.SiteProbe muou = probes.stream()
+                .filter(p -> p.siteId().equals("muou")).findFirst().orElseThrow();
+        assertTrue(muou.bestUrl() != null && muou.bestUrl().endsWith("muou.asia"));
+        // 探测结果按采用优先级排序:可达按延迟升序,不可达垫底
+        assertEquals(List.of("https://www.muou.asia", "https://123.666291.xyz",
+                "https://www.muou.site", "https://666.666291.xyz"),
+                muou.domains().stream().map(WanouSearchService.DomainProbe::url).toList());
+        assertTrue(muou.domains().get(0).latencyMs() <= muou.domains().get(1).latencyMs());
+        assertEquals("HTTP 504", muou.domains().get(3).error());
+        // 状态快照与 DTO 形状
+        assertEquals(probes.size(), service.domainStatuses().size());
+        var dtos = service.domainStatusDtos();
+        var muouDto = dtos.stream().filter(d -> d.siteId().equals("muou")).findFirst().orElseThrow();
+        assertTrue(muouDto.ok());
+        assertTrue(muouDto.bestUrl().endsWith("muou.asia"));
+        assertEquals(4, muouDto.domains().size());
+        assertTrue(muouDto.domains().get(3).latencyMs() >= 0);
+        // 全域名失败站点:bestUrl=null、ok=false,但域名池保持完整
+        var kuaiying = dtos.stream().filter(d -> d.siteId().equals("kuaiying")).findFirst().orElseThrow();
+        assertFalse(kuaiying.ok());
+        assertNull(kuaiying.bestUrl());
+        assertEquals(1, kuaiying.domains().size());
+        // 探测重排后搜索第一发即最优域名(自动采用,零 failover 撞墙)
+        assertEquals("<html>ok</html>",
+                service.requestWithFailover(WanouSearchService.siteById("muou"),
+                        "/index.php/vod/search/page/1/wd/x.html"));
+        assertEquals("https://www.muou.asia/index.php/vod/search/page/1/wd/x.html", fetchCalls.get(0));
+    }
+
+    @Test
+    void probeAllDeadKeepsPoolOrderAndDoesNotThrow() {
+        WanouSearchService service = new WanouSearchService(props(), new ObjectMapper()) {
+            @Override
+            protected String probeFetch(String url) {
+                return "timeout";
+            }
+        };
+        List<WanouSearchService.SiteProbe> probes = service.probeAllDomains();
+        // 全域名失败:不出异常、每站 bestUrl=null,域名池保持种子原序(等下轮探测或监控下发复活)
+        assertTrue(probes.stream().allMatch(p -> p.bestUrl() == null));
+        WanouSearchService.SiteProbe wanou = probes.stream()
+                .filter(p -> p.siteId().equals("wanou")).findFirst().orElseThrow();
+        assertEquals(WanouSearchService.siteById("wanou").seedDomains(),
+                wanou.domains().stream().map(WanouSearchService.DomainProbe::url).toList());
     }
 }
