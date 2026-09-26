@@ -44,10 +44,37 @@ public class InkeService implements LivePlatform {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final LiveProxyService proxyService;
 
-    public InkeService(RestTemplateBuilder builder, ObjectMapper objectMapper) {
+    public InkeService(RestTemplateBuilder builder, ObjectMapper objectMapper, LiveProxyService proxyService) {
         this.restTemplate = builder.defaultHeader("User-Agent", USER_AGENT).build();
         this.objectMapper = objectMapper;
+        this.proxyService = proxyService;
+    }
+
+    /**
+     * 供直播代理续租:重查该主播当前场次的流地址(上游断连时换新签名 URL 续流)。
+     * 重新走 live_share_pc(场次 liveid 每场变化,不能复用旧 bid)→ 目录三源反查 stream_addr。
+     */
+    public String renewStreamUrl(String uid) {
+        try {
+            JsonNode root = objectMapper.readTree(getBody(API_ORIGIN + "/live_share_pc?uid=" + uid));
+            int code = errorCode(root);
+            if (code != 0) {
+                // 下播(1099999920)或其他错误码:无流可续
+                return null;
+            }
+            JsonNode info = root.path("data");
+            boolean live = "1".equals(info.path("status").asText()) || info.path("status").asBoolean(false);
+            if (!live) {
+                return null;
+            }
+            List<String> urls = showcaseMedia(uid, idText(info.path("liveid")));
+            return urls.isEmpty() ? null : urls.get(0);
+        } catch (Exception e) {
+            log.warn("映客流地址续租失败: {}", uid, e);
+            return null;
+        }
     }
 
     @Override
@@ -231,7 +258,16 @@ public class InkeService implements LivePlatform {
             List<String> urls = showcaseMedia(uid, broadcastId);
             if (!urls.isEmpty()) {
                 detail.setVod_play_from("线路1");
-                detail.setVod_play_url("FLV$" + String.join("#", urls));
+                // 只取首条(# 在 TVBox 语法是分集分隔符);流地址包代理+ink=uid:
+                // 上游断连/换场次时代理端经 uid 重查 stream_addr 续流(映客流 URL 本身无主播身份)
+                String stream = urls.get(0);
+                if (proxyService != null) {
+                    String proxyUrl = proxyService.buildProxyUrl(stream);
+                    detail.setVod_play_url("FLV$" + (proxyUrl.equals(stream)
+                            ? stream : proxyUrl + "&ink=" + uid));
+                } else {
+                    detail.setVod_play_url("FLV$" + stream);
+                }
             } else {
                 log.warn("映客目录反查无可用流地址: uid={} bid={}", uid, broadcastId);
             }

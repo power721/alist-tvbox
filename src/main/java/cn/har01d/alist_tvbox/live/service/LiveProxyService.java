@@ -31,13 +31,16 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class LiveProxyService {
     private static final String KUGOU_MEDIA_HOST = ".liveplay.live.kugou.com";
+    private static final String INKE_MEDIA_HOST = ".ikstatic.cn";
     private final OkHttpClient okHttpClient;
     private final SubscriptionService subscriptionService;
     private final AppProperties appProperties;
     private final KugouLiveService kugouLiveService;
+    private final InkeService inkeService;
 
     public LiveProxyService(SubscriptionService subscriptionService, AppProperties appProperties,
-                            @org.springframework.context.annotation.Lazy KugouLiveService kugouLiveService) {
+                            @org.springframework.context.annotation.Lazy KugouLiveService kugouLiveService,
+                            @org.springframework.context.annotation.Lazy InkeService inkeService) {
         this.okHttpClient = new OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
@@ -45,6 +48,7 @@ public class LiveProxyService {
         this.subscriptionService = subscriptionService;
         this.appProperties = appProperties;
         this.kugouLiveService = kugouLiveService;
+        this.inkeService = inkeService;
     }
 
     /**
@@ -72,7 +76,15 @@ public class LiveProxyService {
         }
 
         if (isKugouStream(target)) {
-            proxyKugouStream(target, response);
+            proxyWithRenew(target, response, "https://fanxing.kugou.com/",
+                    () -> kugouLiveService.renewStreamUrl(kugouRoomId(target), kugouProtocol(target)));
+            return;
+        }
+        if (isInkeStream(target)) {
+            // 映客流 URL 无法反解主播身份,uid 由条目生成时追加在代理 URL 的 ink 参数里
+            String uid = request.getParameter("ink");
+            proxyWithRenew(target, response, "https://www.inke.cn/",
+                    () -> uid == null ? null : inkeService.renewStreamUrl(uid));
             return;
         }
 
@@ -125,27 +137,38 @@ public class LiveProxyService {
     }
 
     static boolean isKugouStream(String target) {
+        return hostMatches(target, KUGOU_MEDIA_HOST);
+    }
+
+    static boolean isInkeStream(String target) {
+        return hostMatches(target, INKE_MEDIA_HOST);
+    }
+
+    private static boolean hostMatches(String target, String suffix) {
         try {
             String host = URI.create(target).getHost();
-            // 与 KugouLiveService.validateMediaUrl 同口径:裸域与子域都认
-            return host != null && (host.endsWith(KUGOU_MEDIA_HOST) || host.equals(KUGOU_MEDIA_HOST.substring(1)));
+            // 与各平台流地址校验同口径:裸域与子域都认
+            return host != null && (host.endsWith(suffix) || host.equals(suffix.substring(1)));
         } catch (Exception e) {
             return false;
         }
     }
 
+    private static String kugouProtocol(String target) {
+        return target.contains(".m3u8") ? "hls" : "flv";
+    }
+
     /**
-     * 酷狗流续租代理:直播直连断流即停(播放器对直播 progressive 流不重连),上游断开/签名失效时
-     * 重调 streamaddr 换新地址续写,与播放器的连接由本服务维持。FLV 重连会重发 9+4 字节头,
-     * 续写前剥掉防双重 header;下播(重签失败)或客户端断开时结束。
-     * 实测部分房间单连接寿命随机(50s-6min+ 断,房间仍在播),重签可立即续上——重试上限
-     * 100 次(间隔 1s)覆盖数小时观看,重签失败=下播自然结束。
+     * 断流续租代理(酷狗/映客同症状同药方):直播直连断流即停(播放器对直播 progressive 流不重连),
+     * 上游断开时经 renewer 重取流地址续写,与播放器的连接由本服务维持。FLV 重连会重发 9+4 字节头,
+     * 续写前剥掉防双重 header;renewer 返回 null(下播/签名失败)或客户端断开时结束。
+     * 实测部分平台房间单连接寿命随机(几十秒到几分钟断,房间仍在播),重签可立即续上——重试上限
+     * 100 次(间隔 1s)覆盖数小时观看。
      */
-    private void proxyKugouStream(String target, HttpServletResponse response) throws IOException {
-        String roomId = kugouRoomId(target);
-        String protocol = target.contains(".m3u8") ? "hls" : "flv";
+    private void proxyWithRenew(String target, HttpServletResponse response, String referer,
+                                java.util.function.Supplier<String> renewer) throws IOException {
         response.setStatus(HttpServletResponse.SC_OK);
-        response.setContentType("flv".equals(protocol) ? "video/x-flv" : "application/vnd.apple.mpegurl");
+        response.setContentType(kugouProtocol(target).equals("hls") ? "application/vnd.apple.mpegurl" : "video/x-flv");
         response.setHeader("Cache-Control", "no-store");
         String url = target;
         boolean first = true;
@@ -153,13 +176,13 @@ public class LiveProxyService {
         while (true) {
             Request request = new Request.Builder().url(url)
                     .header("User-Agent", Constants.USER_AGENT)
-                    .header("Referer", "https://fanxing.kugou.com/")
+                    .header("Referer", referer)
                     .build();
             try (Response upstream = okHttpClient.newCall(request).execute()) {
                 if (!upstream.isSuccessful() || upstream.body() == null) {
                     throw new IOException("upstream HTTP " + upstream.code());
                 }
-                if (!first && "flv".equals(protocol)) {
+                if (!first && kugouProtocol(url).equals("flv")) {
                     skipFlvHeader(upstream.body().byteStream());
                 }
                 upstream.body().byteStream().transferTo(response.getOutputStream());
@@ -172,15 +195,15 @@ public class LiveProxyService {
                     // 播放器断开,无需续流
                     return;
                 }
-                if (roomId == null || ++renewals > 100) {
-                    log.warn("kugou stream renew exhausted: {} renewals={}", target, renewals);
-                    return;
+                String renewed = null;
+                if (++renewals <= 100) {
+                    renewed = renewer.get();
                 }
-                log.debug("kugou stream interrupted, renewing #{}: {}", renewals, e.toString());
-                String renewed = kugouLiveService.renewStreamUrl(roomId, protocol);
                 if (renewed == null) {
+                    log.warn("live stream renew exhausted or offline: {} renewals={}", target, renewals);
                     return;
                 }
+                log.debug("live stream interrupted, renewing #{}: {}", renewals, e.toString());
                 url = renewed;
                 first = false;
                 try {

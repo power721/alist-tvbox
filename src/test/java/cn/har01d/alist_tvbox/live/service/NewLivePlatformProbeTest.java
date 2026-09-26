@@ -24,7 +24,7 @@ class NewLivePlatformProbeTest {
         for (String platform : PLATFORMS) {
             LivePlatform service = switch (platform.trim()) {
                 case "acfun" -> new AcfunService(builder, objectMapper);
-                case "inke" -> new InkeService(builder, objectMapper);
+                case "inke" -> new InkeService(builder, objectMapper, null);
                 case "huajiao" -> new HuajiaoService(builder, objectMapper);
                 case "sixroom" -> new SixRoomService(builder, objectMapper);
                 case "kugoulive" -> new KugouLiveService(builder, objectMapper, null);
