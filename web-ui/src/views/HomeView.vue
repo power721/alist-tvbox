@@ -57,13 +57,13 @@ onMounted(() => {
     <div class="page-card">
       <div v-if="store.xiaoya">
         <el-text size="large">小雅集成版</el-text>
-        <el-text v-if="store.installMode==='native'" size="small">内存优化</el-text>
+        <el-text v-if="store.native" size="small">内存优化</el-text>
         <el-text v-if="store.hostmode" size="small">host网络模式</el-text>
         <a :href="url" class="hint" target="_blank">{{ url }}</a>
       </div>
       <div v-else-if="store.docker">
         <el-text size="large">纯净版</el-text>
-        <el-text v-if="store.installMode==='native'" size="small">内存优化</el-text>
+        <el-text v-if="store.native" size="small">内存优化</el-text>
         <a :href="url" class="hint" target="_blank">{{ url }}</a>
       </div>
       <div v-else>

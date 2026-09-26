@@ -5,6 +5,7 @@ export const store = reactive({
   hostmode: false,
   docker: false,
   standalone: false,
+  native: false,
   admin: false,
   installMode: '',
   baseUrl: '',

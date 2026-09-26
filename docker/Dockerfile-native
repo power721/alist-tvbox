@@ -2,7 +2,7 @@ FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
-ENV INSTALL=native NATIVE=true
+ENV INSTALL=xiaoya NATIVE=true
 
 WORKDIR /opt/atv/
 
