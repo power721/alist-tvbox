@@ -183,8 +183,9 @@ public class AppProperties {
         private int deadLinkTtlDays = 90;
         /** 玩偶聚合搜索源(玩偶/多多/木偶等 10 站聚合,搜索+详情页提取分享链接):追剧候选池补充来源 */
         private boolean wanouEnabled = true;
-        /** 玩偶聚合:站点最新域名监控接口(空=只用内置静态域名) */
-        private String wanouMonitorUrl = "https://pan-site-monitor.douer.me/api/data";
+        /** 玩偶聚合:站点最新域名监控接口(可选;默认空=不拉,种子+内置探测已覆盖。pan-site-monitor
+         *  2026-09 起停更,下发域名无增量还注入死 IP,恢复更新后可显式配置启用) */
+        private String wanouMonitorUrl = "";
         /** 玩偶聚合:内置定时域名探测(可达性+延迟,自动采用延迟最低的可达域名);监控接口仅作新域名来源 */
         private boolean wanouProbeEnabled = true;
         /** 玩偶聚合:单站每次搜索最多抓取的详情页数 */
