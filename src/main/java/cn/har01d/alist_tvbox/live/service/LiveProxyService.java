@@ -245,11 +245,15 @@ public class LiveProxyService {
      * 续写前剥掉防双重 header;renewer 返回 null(下播/签名失败)或客户端断开时结束。
      * 实测部分平台房间单连接寿命随机(几十秒到几分钟断,房间仍在播),重签可立即续上——重试上限
      * 100 次(间隔 1s)覆盖数小时观看。
+     * 上游断开两种形态都要续:RST/超时抛 IOException 走 catch;CDN 优雅关闭(FIN)则 transferTo
+     * 正常返回——直播 FLV 不存在"正常结束",EOF 同样必须经 renewer 复核(实测单连接 23 分钟被
+     * FIN 截断,无任何 warn 即旧版误判下播直接结束);只有 HLS 清单是短响应,EOF 即完成。
      */
-    private void proxyWithRenew(String target, HttpServletResponse response, String referer,
-                                java.util.function.Supplier<String> renewer) throws IOException {
+    void proxyWithRenew(String target, HttpServletResponse response, String referer,
+                        java.util.function.Supplier<String> renewer) throws IOException {
+        boolean hls = kugouProtocol(target).equals("hls");
         response.setStatus(HttpServletResponse.SC_OK);
-        response.setContentType(kugouProtocol(target).equals("hls") ? "application/vnd.apple.mpegurl" : "video/x-flv");
+        response.setContentType(hls ? "application/vnd.apple.mpegurl" : "video/x-flv");
         response.setHeader("Cache-Control", "no-store");
         String url = target;
         boolean first = true;
@@ -263,12 +267,24 @@ public class LiveProxyService {
                 if (!upstream.isSuccessful() || upstream.body() == null) {
                     throw new IOException("upstream HTTP " + upstream.code());
                 }
-                if (!first && kugouProtocol(url).equals("flv")) {
+                if (!first && !hls) {
                     skipFlvHeader(upstream.body().byteStream());
                 }
                 upstream.body().byteStream().transferTo(response.getOutputStream());
-                // 上游正常 EOF = 直播结束
-                return;
+                if (hls) {
+                    // 清单为短响应,EOF 即完成
+                    return;
+                }
+                // FLV 流"正常 EOF"=上游掐连接(房间多半还在播)或真下播,一律经 renewer 复核
+                String renewed = renewOnce(target, renewer, ++renewals);
+                if (renewed == null) {
+                    return;
+                }
+                url = renewed;
+                first = false;
+                if (!sleepInterruptibly()) {
+                    return;
+                }
             } catch (IOException e) {
                 boolean downstream = e.toString().contains("ClientAbortException") || e.getCause() instanceof IOException
                         && e.getCause().toString().contains("ClientAbortException");
@@ -276,24 +292,39 @@ public class LiveProxyService {
                     // 播放器断开,无需续流
                     return;
                 }
-                String renewed = null;
-                if (++renewals <= 100) {
-                    renewed = renewer.get();
-                }
+                String renewed = renewOnce(target, renewer, ++renewals);
                 if (renewed == null) {
-                    log.warn("live stream renew exhausted or offline: {} renewals={}", target, renewals);
                     return;
                 }
                 log.debug("live stream interrupted, renewing #{}: {}", renewals, e.toString());
                 url = renewed;
                 first = false;
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
+                if (!sleepInterruptibly()) {
                     return;
                 }
             }
+        }
+    }
+
+    /** 续租一轮:超限或 renewer 返回 null(下播/重签失败)返回 null,调用方终止。 */
+    private String renewOnce(String target, java.util.function.Supplier<String> renewer, int renewal) {
+        String renewed = renewal <= 100 ? renewer.get() : null;
+        if (renewed == null) {
+            log.warn("live stream ended or renew exhausted: {} renewals={}", target, renewal);
+        } else {
+            log.debug("live stream renewing #{}: {}", renewal, target);
+        }
+        return renewed;
+    }
+
+    /** 续租间隔 1s;线程被中断返回 false(调用方终止)。 */
+    private boolean sleepInterruptibly() {
+        try {
+            Thread.sleep(1000);
+            return true;
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 

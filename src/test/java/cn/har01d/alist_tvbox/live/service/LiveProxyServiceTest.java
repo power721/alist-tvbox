@@ -119,4 +119,49 @@ class LiveProxyServiceTest {
         assertEquals("线路1", fallback[0]);
         assertTrue(fallback[1].startsWith("蓝光$https://cdn.example"), "应回落直连条目");
     }
+
+    /**
+     * 复现线上形态:CDN 对单连接寿命截断可以是优雅关闭(FIN)——transferTo 正常返回不抛异常,
+     * 旧版把 EOF 当"直播结束"直接终止(实测 23 分钟停止且无任何 warn)。断言:上游两段流各自
+     * 正常 EOF 后,续租被触发并续写(重连剥 13 字节 FLV 头),renewer 返回 null(下播)才终止。
+     */
+    @Test
+    void flvUpstreamGracefulEofStillRenews() throws Exception {
+        com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        byte[] chunk = new byte[8192];
+        new java.security.SecureRandom().nextBytes(chunk);
+        java.util.concurrent.atomic.AtomicInteger hits = new java.util.concurrent.atomic.AtomicInteger();
+        server.createContext("/a.flv", exchange -> {
+            exchange.sendResponseHeaders(200, 0);
+            exchange.getResponseBody().write(chunk);
+            exchange.getResponseBody().close();
+        });
+        server.createContext("/b.flv", exchange -> {
+            exchange.sendResponseHeaders(200, 0);
+            exchange.getResponseBody().write(chunk);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        try {
+            String base = "http://127.0.0.1:" + server.getAddress().getPort();
+            cn.har01d.alist_tvbox.service.SubscriptionService subscriptionService =
+                    org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.SubscriptionService.class);
+            LiveProxyService proxy = new LiveProxyService(subscriptionService,
+                    new cn.har01d.alist_tvbox.config.AppProperties(), null, null, null, null);
+            org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
+            java.util.List<String> renewed = java.util.List.of(base + "/b.flv");
+
+            proxy.proxyWithRenew(base + "/a.flv", response, "https://fanxing.kugou.com/",
+                    () -> hits.incrementAndGet() <= renewed.size() ? renewed.get(hits.get() - 1) : null);
+
+            // 两次上游 EOF:第一次续租换 b.flv 续写(剥 13 字节重发头),第二次 renewer 返回 null 终止
+            assertEquals(2, hits.get(), "EOF 后应触发续租复核,下播才终止");
+            assertEquals(chunk.length + chunk.length - 13, response.getContentAsByteArray().length,
+                    "续写应剥掉重连的 13 字节 FLV 头");
+            assertEquals("video/x-flv", response.getContentType());
+        } finally {
+            server.stop(0);
+        }
+    }
 }
