@@ -1,9 +1,13 @@
 package cn.har01d.alist_tvbox.live.web;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.LiveFollowDto;
+import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.live.service.LiveFollowService;
+import cn.har01d.alist_tvbox.live.service.LivePlatform;
 import cn.har01d.alist_tvbox.live.service.LiveProxyService;
 import cn.har01d.alist_tvbox.live.service.LiveService;
+import cn.har01d.alist_tvbox.service.SettingService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -15,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -23,12 +29,40 @@ public class LiveController {
     private final LiveFollowService liveFollowService;
     private final LiveProxyService liveProxyService;
     private final SubscriptionService subscriptionService;
+    private final SettingService settingService;
+    private final AppProperties appProperties;
 
-    public LiveController(LiveService liveService, LiveFollowService liveFollowService, LiveProxyService liveProxyService, SubscriptionService subscriptionService) {
+    public LiveController(LiveService liveService, LiveFollowService liveFollowService, LiveProxyService liveProxyService, SubscriptionService subscriptionService, SettingService settingService, AppProperties appProperties) {
         this.liveService = liveService;
         this.liveFollowService = liveFollowService;
         this.liveProxyService = liveProxyService;
         this.subscriptionService = subscriptionService;
+        this.settingService = settingService;
+        this.appProperties = appProperties;
+    }
+
+    /** 平台可见性/顺序管理(/api/** 默认仅管理员):GET 返回生效顺序全量清单(含隐藏标记)。 */
+    @GetMapping("/api/live/platforms")
+    public List<Map<String, Object>> platforms() {
+        List<String> hidden = appProperties.getLiveHiddenPlatforms();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (LivePlatform platform : liveService.orderedPlatforms()) {
+            result.add(Map.of(
+                    "type", platform.getType(),
+                    "name", platform.getName(),
+                    "hidden", hidden != null && hidden.contains(platform.getType())));
+        }
+        return result;
+    }
+
+    /** 保存平台顺序与隐藏清单:order 全量 type 序列,hidden 为要隐藏的子集,保存后即时生效。 */
+    @PostMapping("/api/live/platforms")
+    public Map<String, Object> savePlatforms(@RequestBody Map<String, List<String>> body) {
+        List<String> order = body.getOrDefault("order", List.of());
+        List<String> hidden = body.getOrDefault("hidden", List.of());
+        settingService.update(new Setting("live_platform_order", String.join(",", order.stream().filter(v -> v != null && !v.isBlank()).toList())));
+        settingService.update(new Setting("live_hidden_platforms", String.join(",", hidden.stream().filter(v -> v != null && !v.isBlank()).toList())));
+        return Map.of("success", true);
     }
 
     @GetMapping("/live")

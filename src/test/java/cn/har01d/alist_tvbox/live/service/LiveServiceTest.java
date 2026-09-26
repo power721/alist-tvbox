@@ -129,6 +129,28 @@ class LiveServiceTest {
         verify(douyuService).detail("douyu$1", null);
     }
 
+    @Test
+    void platformOrderRearrangesCategoriesAndSearchButUnknownPlatformsAppend() throws IOException {
+        stubPlatformTypes();
+        appProperties.setLivePlatformOrder(List.of("douyu", "huya"));
+
+        // 在册平台按配置序在前,未列入的平台按注册序追加尾部
+        CategoryList categories = liveService.category();
+        List<String> ids = categories.getCategories().stream().map(Category::getType_id).toList();
+        assertEquals("follow", ids.get(0));
+        assertEquals("douyu", ids.get(1));
+        assertEquals("huya", ids.get(2));
+        assertTrue(ids.indexOf("bilibili") > 2);
+
+        // 聚合搜索结果同样按配置顺序聚拢
+        when(huyaService.getName()).thenReturn("虎牙");
+        when(douyuService.getName()).thenReturn("斗鱼");
+        when(huyaService.search("test")).thenReturn(movieList("huya$1"));
+        when(douyuService.search("test")).thenReturn(movieList("douyu$1"));
+        MovieList searchResult = liveService.search("test");
+        assertEquals(List.of("douyu$1", "huya$1"), searchResult.getList().stream().map(MovieDetail::getVod_id).toList());
+    }
+
     private void stubPlatformTypes() {
         when(huyaService.getType()).thenReturn("huya");
         when(douyuService.getType()).thenReturn("douyu");

@@ -36,6 +36,8 @@ public class AppProperties {
     private String liveHotMode = "folder";
     // 隐藏的直播平台 type 列表:不进平台分类/聚合搜索/关注筛选,detail 保留(已关注房间仍可直达播放)
     private List<String> liveHiddenPlatforms = List.of();
+    // 平台展示顺序(live_platform_order):配置的平台按序在前,未列入的新平台按注册序追加
+    private List<String> livePlatformOrder = List.of();
     private boolean playbackSyncEnabled = false;
     // 同步分区粒度:uid(不分桶)/ token(按 vod token)/ subscription(按 vod token/id)
     private String playbackSyncScope = "token";
