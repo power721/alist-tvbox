@@ -259,7 +259,7 @@ public class KugouLiveService implements LivePlatform {
                     // 实测 lines 会返回相同 URL 的重复项,只取首条。
                     // 直连条目=原始地址(签名 txTime 约 12h);代理条目=包代理,上游断连/签名失效时
                     // 代理端自动重签续流(buildProxyUrl 降级或探针无代理实例时不产代理条目);
-                    // dual=直连优先双线路(网页端恒走代理),直连断流由播放器自动切代理线路
+                    // dual=直连优先+代理双线路(线路1同档直连/代理交错分集,线路2纯代理,网页端恒走代理),直连断流由播放器自动切代理线路
                     .forEach(entry -> {
                         String label = entry.getKey().replace(":", "·");
                         String stream = entry.getValue().get(0);

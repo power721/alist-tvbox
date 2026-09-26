@@ -303,7 +303,7 @@ public class YyService implements LivePlatform {
         }
         detail.setVod_remarks(directEntries.isEmpty() ? "未开播" : "直播中 " + playCount(intValue(item.path("users").asText())));
         if (!directEntries.isEmpty()) {
-            // 代理条目续租:签名租约仅约10分钟,代理端每次连接重取当前地址;dual=直连优先双线路(网页端恒走代理)
+            // 代理条目续租:签名租约仅约10分钟,代理端每次连接重取当前地址;dual=直连优先+代理双线路(线路1同档直连/代理交错分集,线路2纯代理,网页端恒走代理)
             String mode = proxyService != null && proxyService.isDualProxyMode() && !"web".equals(client) ? "dual" : "proxy";
             String[] lines = buildPlayLines(directEntries, proxyEntries, mode);
             detail.setVod_play_from(lines[0]);

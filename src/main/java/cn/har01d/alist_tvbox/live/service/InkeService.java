@@ -264,7 +264,7 @@ public class InkeService implements LivePlatform {
             if (!urls.isEmpty()) {
                 // 只取首条(# 在 TVBox 语法是分集分隔符);代理条目包代理+ink=uid:
                 // 上游断连/换场次时代理端经 uid 重查 stream_addr 续流(映客流 URL 本身无主播身份);
-                // dual=直连优先双线路(网页端恒走代理),直连失败由播放器自动切代理线路
+                // dual=直连优先+代理双线路(线路1同档直连/代理交错分集,线路2纯代理,网页端恒走代理)
                 String stream = urls.get(0);
                 List<String> proxyEntries = new ArrayList<>();
                 if (proxyService != null) {

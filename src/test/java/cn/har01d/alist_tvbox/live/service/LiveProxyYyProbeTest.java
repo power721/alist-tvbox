@@ -117,16 +117,23 @@ class LiveProxyYyProbeTest {
         var detail = yyService.detail(home.getList().get(0).getVod_id(), null).getList().get(0);
         System.out.printf("[yy-dual] playFrom=%s%n", detail.getVod_play_from());
         System.out.printf("[yy-dual] playUrl=%s%n", abbreviate(detail.getVod_play_url() == null ? "" : detail.getVod_play_url(), 200));
-        assertEquals("直连$$$代理", detail.getVod_play_from(), "dual 模式应产出双线路");
+        assertEquals("直连优先$$$代理", detail.getVod_play_from(), "dual 模式应为双线路(直连优先+代理)");
         String[] lines = detail.getVod_play_url().split("\\$\\$\\$");
         assertEquals(2, lines.length, "应有两条线路");
-        assertTrue(lines[0].contains("yy.com"), "直连线路应为平台原始地址: " + abbreviate(lines[0], 80));
-        assertFalse(lines[0].contains("live-proxy"), "直连线路不应是代理地址");
-        assertTrue(lines[1].contains("/live-proxy/probe-token?"), "代理线路应包代理: " + abbreviate(lines[1], 80));
-        assertTrue(lines[1].contains("&yy="), "代理线路应带续租参数");
-        // 网页端恒走代理(浏览器直连受 CORS 限制):client=web 不出双线路
+        // 线路1=同档「直连,代理」交错分集:OK 影视类内核直连失败切下一集落到同档代理条目
+        String[] episodes = lines[0].split("#");
+        assertTrue(episodes.length >= 2, "线路1应有多条分集条目");
+        assertTrue(episodes[0].contains("·直连$") && episodes[0].contains("yy.com"), "首条应为直连: " + episodes[0]);
+        assertFalse(episodes[0].contains("live-proxy"), "直连条目不应是代理地址");
+        assertTrue(episodes[1].contains("·代理$") && episodes[1].contains("/live-proxy/probe-token?") && episodes[1].contains("&yy="),
+                "第二条应为同档代理条目: " + episodes[1]);
+        // 线路2=纯代理全档:FongMi 类内核错误自动切线路(fallbackToNextLine)落到该线路
+        assertFalse(lines[1].contains("·直连"), "线路2应为纯代理: " + abbreviate(lines[1], 80));
+        assertTrue(lines[1].contains("/live-proxy/probe-token?"), "线路2应包代理: " + abbreviate(lines[1], 80));
+        // 网页端恒走代理(浏览器直连受 CORS 限制):client=web 不出交错分集
         var webDetail = yyService.detail(home.getList().get(0).getVod_id(), "web").getList().get(0);
-        assertEquals("线路1", webDetail.getVod_play_from(), "网页端应保持单线路全代理");
+        assertEquals("线路1", webDetail.getVod_play_from());
+        assertFalse(webDetail.getVod_play_url().contains("·直连"), "网页端应为纯代理条目");
         assertTrue(webDetail.getVod_play_url().contains("/live-proxy/"), "网页端应为代理地址");
     }
 

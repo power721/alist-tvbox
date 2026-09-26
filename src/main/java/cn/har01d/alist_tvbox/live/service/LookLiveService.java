@@ -337,7 +337,7 @@ public class LookLiveService implements LivePlatform {
                 : liveStatus == -10 ? "受限房" : "未知状态");
         if (!directEntries.isEmpty()) {
             // 代理条目续租:LOOK 地址含场次 hash,换场次后旧地址 404,代理端每次请求重取当前地址;
-            // dual=直连优先双线路(网页端恒走代理);探针无代理实例时降级直链
+            // dual=直连优先+代理双线路(线路1同档直连/代理交错分集,线路2纯代理,网页端恒走代理);探针无代理实例时降级直链
             String mode = proxyService != null && proxyService.isDualProxyMode() && !"web".equals(client) ? "dual" : "proxy";
             String[] lines = buildPlayLines(directEntries, proxyEntries, mode);
             detail.setVod_play_from(lines[0]);

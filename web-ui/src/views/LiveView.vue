@@ -888,7 +888,7 @@ onUnmounted(() => {
               <el-option label="直连优先(省带宽,断流自动转代理)" value="dual"/>
             </el-select>
             <span style="color: var(--el-text-color-secondary); font-size: 12px">
-              直连优先=带「代理」标记的平台优先直连平台 CDN,直连失败由播放器自动切代理线路续播(网页端不受影响)
+              直连优先=带「代理」标记的平台出「直连优先+代理」两条线路:直连线路优先直连平台 CDN(零服务器带宽),失败自动落到代理续播(OK影视切下一集/FongMi切线路均兼容;网页端不受影响)
             </span>
           </div>
           <VueDraggable v-model="platformRows" :animation="150" handle=".drag-handle">

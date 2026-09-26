@@ -99,10 +99,14 @@ class LiveProxyServiceTest {
         java.util.List<String> direct = java.util.List.of("蓝光$https://cdn.example/1.flv", "流畅$https://cdn.example/2.flv");
         java.util.List<String> proxy = java.util.List.of("蓝光$http://h/live-proxy?u=1", "流畅$http://h/live-proxy?u=2");
 
-        // dual=「直连$$$代理」双线路,条目组用 $$$ 分隔
+        // dual=双线路:线路1「直连优先」同档直连/代理交错分集(OK 影视切下一集兜底),
+        // 线路2「代理」纯代理全档(FongMi 错误切线路兜底),标签带后缀
         String[] dual = platform.buildPlayLines(direct, proxy, "dual");
-        assertEquals("直连$$$代理", dual[0]);
-        assertEquals("蓝光$https://cdn.example/1.flv#流畅$https://cdn.example/2.flv"
+        assertEquals("直连优先$$$代理", dual[0]);
+        assertEquals("蓝光·直连$https://cdn.example/1.flv"
+                + "#蓝光·代理$http://h/live-proxy?u=1"
+                + "#流畅·直连$https://cdn.example/2.flv"
+                + "#流畅·代理$http://h/live-proxy?u=2"
                 + "$$$蓝光$http://h/live-proxy?u=1#流畅$http://h/live-proxy?u=2", dual[1]);
 
         // proxy 模式=单线路全代理
