@@ -394,8 +394,25 @@ public class EmbyService {
         try {
             HttpHeaders headers = setHeaders(emby, info);
             HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?IncludePeople=false&IncludeMedia=true&IncludeGenres=false&IncludeStudios=false&IncludeArtists=false&IncludeItemTypes=" + type + "&Limit=30&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&Recursive=true&EnableTotalRecordCount=false&ImageTypeLimit=1&searchTerm=" + wd;
-            var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
+            // official parameter name is SearchTerm; some proxied sites bind query names case-sensitively
+            // and silently drop the lower-case searchTerm form
+            var uri = UriComponentsBuilder.fromUriString(emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items")
+                    .queryParam("IncludePeople", "false")
+                    .queryParam("IncludeMedia", "true")
+                    .queryParam("IncludeGenres", "false")
+                    .queryParam("IncludeStudios", "false")
+                    .queryParam("IncludeArtists", "false")
+                    .queryParam("IncludeItemTypes", type)
+                    .queryParam("Limit", "30")
+                    .queryParam("Fields", "PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating")
+                    .queryParam("Recursive", "true")
+                    .queryParam("EnableTotalRecordCount", "false")
+                    .queryParam("ImageTypeLimit", "1")
+                    .queryParam("SearchTerm", wd)
+                    .encode()
+                    .build()
+                    .toUri();
+            var response = restTemplate.exchange(uri, HttpMethod.GET, entity, EmbyItems.class).getBody();
             for (var item : response.getItems()) {
                 var movie = getSearchDetail(item, emby);
                 list.add(movie);
