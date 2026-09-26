@@ -486,7 +486,8 @@ public class SettingService {
     }
 
     private String normalizeLiveProxyMode(String value) {
-        return "dual".equals(value) ? "dual" : "proxy";
+        // 默认直连优先(dual):未配置/非法值回落默认,显式配置"proxy"才全代理
+        return "proxy".equals(value) ? "proxy" : "dual";
     }
 
     public Setting update(Setting setting) {

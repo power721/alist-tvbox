@@ -445,7 +445,7 @@ const loadDanmakuConfig = () => {
 
 // 直播代理模式(全局):proxy=流地址全部经本服务代理(断流自动续租,耗服务器带宽);
 // dual=直连+代理双线路,客户端默认直连平台 CDN(零服务器带宽),断流由播放器自动切换代理线路续播
-const proxyMode = ref("proxy");
+const proxyMode = ref("dual");
 const updateProxyMode = () => {
   axios.post("/api/settings", {name: "live_proxy_mode", value: proxyMode.value}).then(() => {
     ElMessage.success("直播代理模式已更新,重新进详情生效");

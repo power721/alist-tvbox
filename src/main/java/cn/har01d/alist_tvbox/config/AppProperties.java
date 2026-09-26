@@ -41,9 +41,9 @@ public class AppProperties {
     // 平台展示顺序(live_platform_order):配置的平台按序在前,未列入的新平台按注册序追加
     private List<String> livePlatformOrder = List.of();
     // 直播流代理模式:proxy=流地址全部经本服务代理中转(断流自动续租无感,消耗服务器带宽);
-    // dual=「直连+代理」双线路,客户端默认直连平台 CDN(零服务器带宽),直连失败/断流由播放器
-    // 自动切换代理线路续播(FongMi 点播错误自动换线路;网页端不受影响恒走代理)
-    private String liveProxyMode = "proxy";
+    // dual=「直连优先+代理」双线路,客户端默认直连平台 CDN(零服务器带宽),直连失败由内核自动
+    // 落到代理(OK影视切下一集/FongMi切线路均兼容;网页端不受影响恒走代理)。默认直连优先省带宽
+    private String liveProxyMode = "dual";
     private boolean playbackSyncEnabled = false;
     // 同步分区粒度:uid(不分桶)/ token(按 vod token)/ subscription(按 vod token/id)
     private String playbackSyncScope = "token";

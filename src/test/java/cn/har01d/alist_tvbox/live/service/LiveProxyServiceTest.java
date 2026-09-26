@@ -51,11 +51,11 @@ class LiveProxyServiceTest {
         cn.har01d.alist_tvbox.config.AppProperties properties = new cn.har01d.alist_tvbox.config.AppProperties();
         cn.har01d.alist_tvbox.service.SubscriptionService subscriptionService = org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.SubscriptionService.class);
         LiveProxyService proxy = new LiveProxyService(subscriptionService, properties, null, null, null, null);
-        assertFalse(proxy.isDualProxyMode(), "默认应为全代理模式");
-        properties.setLiveProxyMode("dual");
-        assertTrue(proxy.isDualProxyMode(), "dual 配置应生效");
+        assertTrue(proxy.isDualProxyMode(), "默认应为直连优先模式(dual)");
         properties.setLiveProxyMode("proxy");
-        assertFalse(proxy.isDualProxyMode(), "回落 proxy 应生效");
+        assertFalse(proxy.isDualProxyMode(), "显式全代理配置应生效");
+        properties.setLiveProxyMode("dual");
+        assertTrue(proxy.isDualProxyMode(), "切回直连优先应生效");
     }
 
     @Test
