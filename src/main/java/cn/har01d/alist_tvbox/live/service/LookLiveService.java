@@ -72,10 +72,49 @@ public class LookLiveService implements LivePlatform {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final LiveProxyService proxyService;
 
-    public LookLiveService(RestTemplateBuilder builder, ObjectMapper objectMapper) {
+    public LookLiveService(RestTemplateBuilder builder, ObjectMapper objectMapper, LiveProxyService proxyService) {
         this.restTemplate = builder.defaultHeader("User-Agent", USER_AGENT).build();
         this.objectMapper = objectMapper;
+        this.proxyService = proxyService;
+    }
+
+    /**
+     * 供直播代理续租:重取房间当前流地址(LOOK 地址含场次 hash,换场次/重推后旧地址 404,
+     * detail 15 分钟缓存会持续给死地址)。hls=true 返回清单地址,否则 FLV;下播/异常返回 null。
+     */
+    public String renewStreamUrl(String roomId, boolean hls) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("liveRoomNo", roomId);
+            JsonNode data = post("/weapi/livestream/room/get/v3", payload);
+            if (!roomId.equals(data.path("anchor").path("liveRoomNo").asText().trim())
+                    || data.path("liveStatus").asInt(-99) != 1) {
+                return null;
+            }
+            String raw = data.path("roomInfo").path("liveUrl")
+                    .path(hls ? "hlsPullUrl" : "httpPullUrl").asText("").trim();
+            if (raw.isEmpty()) {
+                return null;
+            }
+            // 与 addVariant 同款白名单(host/路径指纹),不合法地址不续
+            try {
+                java.net.URI uri = java.net.URI.create(raw);
+                String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase();
+                String path = uri.getPath() == null ? "" : uri.getPath();
+                if (!MEDIA_HOST.matcher(host).matches()
+                        || !(hls ? HLS_PATH : FLV_PATH).matcher(path).matches()) {
+                    return null;
+                }
+            } catch (Exception e) {
+                return null;
+            }
+            return raw.startsWith("https://") ? raw : "https://" + raw.replaceFirst("^\\w+://", "");
+        } catch (Exception e) {
+            log.warn("LOOK流地址续租失败: {}", roomId, e);
+            return null;
+        }
     }
 
     @Override
@@ -290,6 +329,21 @@ public class LookLiveService implements LivePlatform {
                 : liveStatus == 0 || liveStatus == -1 ? "未开播"
                 : liveStatus == -10 ? "受限房" : "未知状态");
         if (!entries.isEmpty()) {
+            // 流地址包代理+look=roomId:LOOK 地址含场次 hash,换场次后旧地址 404(detail 缓存放大),
+            // 代理端每次请求重取房间当前地址;探针无代理实例时降级直链
+            if (proxyService != null) {
+                List<String> proxied = new ArrayList<>();
+                for (int i = 0; i < entries.size(); i++) {
+                    String entry = entries.get(i);
+                    int sep = entry.indexOf('$');
+                    String url = entry.substring(sep + 1);
+                    String proxyUrl = proxyService.buildProxyUrl(url);
+                    proxied.add(entry.substring(0, sep + 1) + (proxyUrl.equals(url)
+                            ? url : proxyUrl + "&look=" + roomId));
+                }
+                entries.clear();
+                entries.addAll(proxied);
+            }
             detail.setVod_play_from("线路1");
             detail.setVod_play_url(String.join("#", entries));
         }

@@ -28,7 +28,7 @@ class NewLivePlatformProbeTest {
                 case "huajiao" -> new HuajiaoService(builder, objectMapper);
                 case "sixroom" -> new SixRoomService(builder, objectMapper);
                 case "kugoulive" -> new KugouLiveService(builder, objectMapper, null);
-                case "look" -> new LookLiveService(builder, objectMapper);
+                case "look" -> new LookLiveService(builder, objectMapper, null);
                 default -> throw new IllegalArgumentException("unknown platform: " + platform);
             };
             probePlatform(service);

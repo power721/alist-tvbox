@@ -32,15 +32,18 @@ import java.util.concurrent.TimeUnit;
 public class LiveProxyService {
     private static final String KUGOU_MEDIA_HOST = ".liveplay.live.kugou.com";
     private static final String INKE_MEDIA_HOST = ".ikstatic.cn";
+    private static final String LOOK_MEDIA_HOST = ".live.126.net";
     private final OkHttpClient okHttpClient;
     private final SubscriptionService subscriptionService;
     private final AppProperties appProperties;
     private final KugouLiveService kugouLiveService;
     private final InkeService inkeService;
+    private final LookLiveService lookService;
 
     public LiveProxyService(SubscriptionService subscriptionService, AppProperties appProperties,
                             @org.springframework.context.annotation.Lazy KugouLiveService kugouLiveService,
-                            @org.springframework.context.annotation.Lazy InkeService inkeService) {
+                            @org.springframework.context.annotation.Lazy InkeService inkeService,
+                            @org.springframework.context.annotation.Lazy LookLiveService lookService) {
         this.okHttpClient = new OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
@@ -49,6 +52,7 @@ public class LiveProxyService {
         this.appProperties = appProperties;
         this.kugouLiveService = kugouLiveService;
         this.inkeService = inkeService;
+        this.lookService = lookService;
     }
 
     /**
@@ -87,6 +91,22 @@ public class LiveProxyService {
                     () -> uid == null ? null : inkeService.renewStreamUrl(uid));
             return;
         }
+        if (isLookStream(target) && request.getParameter("look") != null) {
+            // LOOK 地址含场次 hash,换场次/重推后旧地址 404(detail 15 分钟缓存放大):
+            // 清单请求每次重取房间当前地址(HLS 天然续租);分片经 rewrite 生成的代理地址不带
+            // look 参数,落到下方通用转发,不产生多余重签
+            String roomId = request.getParameter("look");
+            boolean hls = target.contains(".m3u8");
+            String fresh = lookService.renewStreamUrl(roomId, hls);
+            String url = fresh == null ? target : fresh;
+            if (hls) {
+                proxyManifest(url, response, "https://look.163.com/");
+            } else {
+                proxyWithRenew(url, response, "https://look.163.com/",
+                        () -> lookService.renewStreamUrl(roomId, false));
+            }
+            return;
+        }
 
         Request.Builder builder = new Request.Builder().url(target)
                 .header("User-Agent", Constants.USER_AGENT);
@@ -104,19 +124,7 @@ public class LiveProxyService {
                 return;
             }
             if (contentType.contains("mpegurl") || target.contains(".m3u8")) {
-                byte[] body = upstream.body().bytes();
-                String text = new String(body, StandardCharsets.UTF_8);
-                if (text.startsWith("#EXTM3U")) {
-                    byte[] rewritten = rewrite(text, target).getBytes(StandardCharsets.UTF_8);
-                    response.setContentType("application/vnd.apple.mpegurl");
-                    response.setContentLength(rewritten.length);
-                    response.getOutputStream().write(rewritten);
-                    return;
-                }
-                // 不是 m3u8 内容则按普通响应写出
-                response.setContentType(contentType.isEmpty() ? "application/octet-stream" : contentType);
-                response.setContentLength(body.length);
-                response.getOutputStream().write(body);
+                writeManifest(upstream, response, target);
                 return;
             }
 
@@ -136,12 +144,55 @@ public class LiveProxyService {
         }
     }
 
+    /** 拉取 m3u8 清单并写出(分片地址重写为本代理地址),供通用转发与 LOOK 重取清单两条路径复用。 */
+    private void proxyManifest(String url, HttpServletResponse response, String referer) throws IOException {
+        Request.Builder builder = new Request.Builder().url(url)
+                .header("User-Agent", Constants.USER_AGENT);
+        if (referer != null) {
+            builder.header("Referer", referer);
+        }
+        try (Response upstream = okHttpClient.newCall(builder.build()).execute()) {
+            response.setStatus(upstream.code());
+            response.setHeader("Cache-Control", "no-store");
+            if (upstream.body() == null) {
+                return;
+            }
+            writeManifest(upstream, response, url);
+        } catch (IOException e) {
+            log.warn("live manifest proxy failed: {} {}", e.toString(), url);
+            if (!response.isCommitted()) {
+                response.setStatus(HttpServletResponse.SC_BAD_GATEWAY);
+            }
+        }
+    }
+
+    private void writeManifest(Response upstream, HttpServletResponse response, String baseUrl) throws IOException {
+        String contentType = upstream.header("Content-Type", "");
+        byte[] body = upstream.body().bytes();
+        String text = new String(body, StandardCharsets.UTF_8);
+        if (text.startsWith("#EXTM3U")) {
+            byte[] rewritten = rewrite(text, baseUrl).getBytes(StandardCharsets.UTF_8);
+            response.setContentType("application/vnd.apple.mpegurl");
+            response.setContentLength(rewritten.length);
+            response.getOutputStream().write(rewritten);
+            return;
+        }
+        // 不是 m3u8 内容则按普通响应写出
+        response.setContentType(contentType.isEmpty() ? "application/octet-stream" : contentType);
+        response.setContentLength(body.length);
+        response.getOutputStream().write(body);
+    }
+
     static boolean isKugouStream(String target) {
         return hostMatches(target, KUGOU_MEDIA_HOST);
     }
 
     static boolean isInkeStream(String target) {
         return hostMatches(target, INKE_MEDIA_HOST);
+    }
+
+    static boolean isLookStream(String target) {
+        return hostMatches(target, LOOK_MEDIA_HOST);
     }
 
     private static boolean hostMatches(String target, String suffix) {
