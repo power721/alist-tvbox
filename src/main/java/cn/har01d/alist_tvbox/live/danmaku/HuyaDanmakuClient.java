@@ -167,7 +167,9 @@ public class HuyaDanmakuClient extends AbstractDanmakuClient {
 
     private static String colorOf(long argb) {
         int rgb = (int) (argb & 0xFFFFFF);
-        if (rgb == 0) {
+        // fontColor=255(0x0000FF) 是虎牙普通弹幕的默认字段值,官网按白色渲染,
+        // 并非观众选了蓝色;只有真实的彩色弹幕(贵族/变色卡等)才透传颜色。
+        if (rgb == 0 || rgb == 0x0000FF) {
             return null;
         }
         return String.format("#%06X", rgb);
