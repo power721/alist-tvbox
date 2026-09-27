@@ -99,8 +99,8 @@ public class OfflineDownloadService {
         String offlineFolderId = handler.ensureOfflineFolder(account);
         settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(),
                 offlineFolderId, normalized.autoDelete(), normalized.ttlHours(), normalized.selfShare()))));
-        log.info("offline download config saved: driverType={}, accountId={}, offlineFolderId={}, autoDelete={}, selfShare={}",
-                driverType, account.getId(), offlineFolderId, normalized.autoDeleteEnabled(), normalized.selfShareEnabled());
+        log.info("offline download config saved: driverType={}, accountId={}, offlineFolderId={}, autoDelete={}, ttlHours={}, selfShare={}",
+                driverType, account.getId(), offlineFolderId, normalized.autoDeleteEnabled(), normalized.ttlHours(), normalized.selfShareEnabled());
         return new OfflineDownloadConfigDto(true, driverType, account.getId(), account.getName(), Storage.getMountPath(account),
                 normalized.autoDelete(), normalized.ttlHours(), normalized.selfShare());
     }

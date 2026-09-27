@@ -181,9 +181,19 @@ public class OfflineCleanupService {
         for (Map.Entry<Integer, List<OfflineDownloadTask>> entry : byAccount.entrySet()) {
             DriverAccount account = driverAccountRepository.findById(entry.getKey()).orElse(null);
             if (account == null) {
-                // 账号已删:无凭证可清,挂载也不在了,行标 DONE 免得永久占候选
+                // 账号行已删:常见形态是换 cookie 删号重建(同一网盘,新行 id 变)——按当前配置
+                // 账号的离线根尝试补删产物文件(路径不在则 AList 报错,无害),行标 DONE 免占候选
+                String fallbackRoot = currentOfflineRootPathOrNull();
                 for (OfflineDownloadTask task : entry.getValue()) {
-                    log.warn("offline task {} belongs to deleted account {}, mark cleaned", task.getId(), entry.getKey());
+                    log.warn("offline task {} belongs to deleted account {}, fallback file delete via alist: {}",
+                            task.getId(), entry.getKey(), task.getTaskName());
+                    if (fallbackRoot != null && StringUtils.isNotBlank(task.getTaskName())) {
+                        try {
+                            aListService.remove(siteService.getById(1), fallbackRoot + "/" + task.getTaskName());
+                        } catch (Exception e) {
+                            log.debug("fallback file delete for task {} failed (path gone?): {}", task.getId(), e.getMessage());
+                        }
+                    }
                     task.setCleanupState(OfflineDownloadService.CLEANUP_DONE);
                     task.setCleanupAttempts(0);
                     task.setCleanupTime(Instant.now());
@@ -220,6 +230,15 @@ public class OfflineCleanupService {
         }
         log.info("offline cleanup finished: {} candidate(s), {} cleaned (autoDelete={}, selfShare={})",
                 tasks.size(), cleaned, config.autoDelete(), config.selfShare());
+    }
+
+    /** 账号已删行的兜底文件删除用:当前配置账号的离线根;离线未配置/配置账号异常返回 null。 */
+    private String currentOfflineRootPathOrNull() {
+        try {
+            return offlineDownloadService.offlineRootPath();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private boolean process(OfflineDownloadTask task, DriverAccount account, OfflineDownloadHandler handler,

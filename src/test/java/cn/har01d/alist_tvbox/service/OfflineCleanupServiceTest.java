@@ -624,16 +624,20 @@ class OfflineCleanupServiceTest {
 
     @Test
     void rowsOfDeletedAccountAreMarkedCleaned() {
-        // 行所属账号已删:无凭证可清,标 DONE 免得永久占候选
+        // 行所属账号已删(换 cookie 删号重建同网盘形态):按当前配置账号离线根兜底删文件,行标 DONE
         enable(true, 24, false);
         OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
         task.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
         when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(driverAccountRepository.findById(12)).thenReturn(Optional.empty());
+        when(offlineDownloadService.offlineRootPath()).thenReturn("/新挂载/alist-tvbox-offline");
+        cn.har01d.alist_tvbox.entity.Site site = new cn.har01d.alist_tvbox.entity.Site();
+        when(siteService.getById(1)).thenReturn(site);
 
         service.dailyCleanup();
 
         verify(handler, never()).deleteTask(any(), any(), any(), anyBoolean());
+        verify(aListService).remove(site, "/新挂载/alist-tvbox-offline/即看即走");
         assertEquals("DONE", task.getCleanupState());
     }
 
