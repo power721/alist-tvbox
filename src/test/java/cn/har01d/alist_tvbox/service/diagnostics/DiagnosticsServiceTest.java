@@ -289,4 +289,44 @@ class DiagnosticsServiceTest {
         assertTrue(text.contains("[数据库] 状态: 查询失败:"));
         assertTrue(text.contains("告警"));
     }
+
+
+    /** 离线清理链路状态入报告:自动清理参数 + 行分布 + 上次清理时间(候选恒空/调度错过的排障锚点)。 */
+    @Test
+    void buildReportRendersOfflineCleanupStatus() {
+        SettingRepository settingRepository = mock(SettingRepository.class);
+        org.springframework.jdbc.core.JdbcTemplate jdbcTemplate = mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        org.springframework.jdbc.core.JdbcTemplate alistJdbcTemplate = mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        AListLocalService aListLocalService = mock(AListLocalService.class);
+        MediaSubscriptionRepository subscriptionRepository = mock(MediaSubscriptionRepository.class);
+        MediaSubscriptionNotifyTaskRepository notifyTaskRepository = mock(MediaSubscriptionNotifyTaskRepository.class);
+        DriverAccountRepository driverAccountRepository = mock(DriverAccountRepository.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<org.flywaydb.core.Flyway> flywayProvider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        java.util.Map<String, String> settings = new java.util.HashMap<>();
+        settings.put("offline_download_config",
+                "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":9,\"autoDelete\":true,\"ttlHours\":1}");
+        when(settingRepository.findById(anyString())).thenAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            String value = settings.get(key);
+            return value == null ? Optional.<cn.har01d.alist_tvbox.entity.Setting>empty()
+                    : Optional.of(new cn.har01d.alist_tvbox.entity.Setting(key, value));
+        });
+        when(settingRepository.findAll()).thenReturn(List.of());
+        when(subscriptionRepository.countByStatus(anyString())).thenReturn(0L);
+        when(subscriptionRepository.findAll()).thenReturn(List.of());
+        when(notifyTaskRepository.countByStatus(anyString())).thenReturn(0L);
+        when(driverAccountRepository.findAll()).thenReturn(List.of());
+
+        // jdbcTemplate 未打桩:行分布两查询空跑 → 已清 0/待清理 0;无 marker → 上次清理: 从未
+        DiagnosticsService service = new DiagnosticsService(settingRepository, jdbcTemplate, alistJdbcTemplate,
+                aListLocalService, subscriptionRepository, notifyTaskRepository, driverAccountRepository,
+                new SearchSourceThrottle(), flywayProvider, new cn.har01d.alist_tvbox.config.AppProperties());
+        DiagnosticsReportDto report = service.buildReport();
+        String text = report.getText();
+        assertTrue(text.contains("自动清理: 开(通用保留 1h)"), text);
+        assertTrue(text.contains("已清 0, 待清理 0"), text);
+        assertTrue(text.contains("上次清理: 从未"), text);
+    }
 }

@@ -192,7 +192,11 @@ public class DiagnosticsService {
         return section;
     }
 
-    /** 离线下载配置(Setting offline_download_config JSON):开关+网盘类型;账号 id 不必进报告。 */
+    /**
+     * 离线下载配置(Setting offline_download_config JSON)+ 清理链路状态:开关/网盘类型/自动清理
+     * 参数、任务行分布、上次清理时间——「设置了自动清理但文件不删」的排障全靠这一行定位
+     * (候选恒空=行已 DONE 或换账号;上次清理久远=调度错过;账号 id 等敏感值不进报告)。
+     */
     private String offlineDownloadSummary() {
         String value = setting("offline_download_config", "");
         if (value.isBlank()) {
@@ -210,9 +214,66 @@ public class DiagnosticsService {
                 case "PAN115" -> "115";
                 default -> driver;
             };
-            return "开(" + name + ")";
+            StringBuilder sb = new StringBuilder("开(").append(name).append(")");
+            boolean autoDelete = config.path("autoDelete").asBoolean(false);
+            boolean selfShare = config.path("selfShare").asBoolean(false);
+            if (autoDelete || selfShare) {
+                sb.append(", 自动清理: 开");
+                if (config.hasNonNull("ttlHours")) {
+                    sb.append("(通用保留 ").append(config.path("ttlHours").asInt()).append("h)");
+                }
+                if (selfShare) {
+                    sb.append(", 固化: 开");
+                }
+                sb.append("; ").append(cleanupRowSummary());
+            } else {
+                sb.append(", 自动清理: 关");
+            }
+            return sb.toString();
         } catch (Exception e) {
             return "开(配置解析失败)";
+        }
+    }
+
+    /** 清理任务行分布 + 上次清理距今;查询失败静默省略(离线行不存在的旧实例正常)。 */
+    private String cleanupRowSummary() {
+        try {
+            Map<String, Long> counts = new LinkedHashMap<>();
+            jdbcTemplate.query("select CLEANUP_STATE, count(*) CNT from OFFLINE_DOWNLOAD_TASK group by CLEANUP_STATE",
+                    rs -> {
+                        String state = rs.getString(1);
+                        counts.put(state == null ? "pending" : state, rs.getLong(2));
+                    });
+            long done = counts.getOrDefault("DONE", 0L);
+            long failed = counts.getOrDefault("FAILED", 0L);
+            long pending = counts.values().stream().mapToLong(Number::longValue).sum() - done - failed;
+            StringBuilder sb = new StringBuilder("已清 ").append(done).append(", 待清理 ").append(pending);
+            if (failed > 0) {
+                sb.append(", 清理失败 ").append(failed);
+            }
+            jdbcTemplate.query("select min(coalesce(COMPLETED_TIME, UPDATED_TIME, CREATED_TIME))"
+                            + " from OFFLINE_DOWNLOAD_TASK where CLEANUP_STATE is null or CLEANUP_STATE <> 'DONE'",
+                    rs -> {
+                        if (rs.next() && rs.getTimestamp(1) != null) {
+                            long hours = (System.currentTimeMillis() - rs.getTimestamp(1).getTime()) / 3600000L;
+                            sb.append("(最早 ").append(hours >= 24 ? hours / 24 + " 天前" : hours + " 小时前").append(")");
+                        }
+                    });
+            String lastRun = setting("offline_cleanup_last_run", "");
+            if (!lastRun.isBlank()) {
+                try {
+                    long hours = (System.currentTimeMillis() - java.time.Instant.parse(lastRun).toEpochMilli()) / 3600000L;
+                    sb.append("; 上次清理 ").append(hours <= 0 ? "刚刚" : hours >= 24 ? hours / 24 + " 天前" : hours + " 小时前");
+                } catch (Exception ignore) {
+                    // marker 损坏只省略时间
+                }
+            } else {
+                sb.append("; 上次清理: 从未");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            log.debug("offline cleanup row summary failed: {}", e.getMessage());
+            return "";
         }
     }
 

@@ -137,12 +137,13 @@ class OfflineCleanupServiceTest {
         when(offlineDownloadService.cleanupConfig())
                 .thenReturn(new OfflineDownloadService.CleanupConfig(12, "PAN115", false, 24, false));
         service.dailyCleanup();
-        verify(taskRepository, never()).findCleanupCandidates(anyInt());
+        verify(taskRepository, never()).findCleanupCandidates();
     }
 
     @Test
     void unmanagedDriverCleansFilesViaAlistWithoutTaskDeletion() {
         // 光鸭形态(无任务删除契约):不删任务记录,经内嵌 AList 删产物文件回收空间
+        account.setType(DriverType.GUANGYA); // handler 按行账号类型取
         when(offlineDownloadService.cleanupConfig())
                 .thenReturn(new OfflineDownloadService.CleanupConfig(12, "GUANGYA", true, 24, false));
         when(offlineDownloadService.getHandler("GUANGYA")).thenReturn(handler);
@@ -151,10 +152,10 @@ class OfflineCleanupServiceTest {
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
         OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
         task.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         cn.har01d.alist_tvbox.entity.Site site = new cn.har01d.alist_tvbox.entity.Site();
         when(siteService.getById(1)).thenReturn(site);
-        when(offlineDownloadService.offlineRootPath()).thenReturn("/挂载/alist-tvbox-offline");
+        when(offlineDownloadService.offlineRootPath(account)).thenReturn("/挂载/alist-tvbox-offline");
 
         service.dailyCleanup();
 
@@ -166,6 +167,7 @@ class OfflineCleanupServiceTest {
     @Test
     void unmanagedDriverPendingFallsBackToStuckDaysOnly() {
         // 光鸭 PENDING:预测产物名对不上任务列表会误判查无,不活体检查只按滞留天数
+        account.setType(DriverType.GUANGYA);
         when(offlineDownloadService.cleanupConfig())
                 .thenReturn(new OfflineDownloadService.CleanupConfig(12, "GUANGYA", true, 24, false));
         when(offlineDownloadService.getHandler("GUANGYA")).thenReturn(handler);
@@ -173,14 +175,14 @@ class OfflineCleanupServiceTest {
         when(handler.deletesFilesWithTask()).thenReturn(false);
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
         OfflineDownloadTask task = task("PENDING", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.dailyCleanup();
         verify(handler, never()).taskStatus(any(), any(), any());
         verify(handler, never()).deleteTask(any(), any(), any(), anyBoolean());
 
         task.setCreatedTime(Instant.now().minusSeconds(8 * 24 * 3600));
-        when(offlineDownloadService.offlineRootPath()).thenReturn("/挂载/alist-tvbox-offline");
+        when(offlineDownloadService.offlineRootPath(account)).thenReturn("/挂载/alist-tvbox-offline");
         when(siteService.getById(1)).thenReturn(new cn.har01d.alist_tvbox.entity.Site());
         service.dailyCleanup();
         verify(handler, never()).deleteTask(any(), any(), any(), anyBoolean()); // 光鸭仍不删任务记录
@@ -190,6 +192,7 @@ class OfflineCleanupServiceTest {
     @Test
     void selfShareSwitchIsIgnoredForNon115Drivers() {
         // 固化仅 cookie 115:光鸭开着固化开关也忽略,走追平门禁
+        account.setType(DriverType.GUANGYA);
         when(offlineDownloadService.cleanupConfig())
                 .thenReturn(new OfflineDownloadService.CleanupConfig(12, "GUANGYA", true, 24, true));
         when(offlineDownloadService.getHandler("GUANGYA")).thenReturn(handler);
@@ -197,7 +200,7 @@ class OfflineCleanupServiceTest {
         when(handler.deletesFilesWithTask()).thenReturn(false);
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
         OfflineDownloadTask task = task("COMPLETED", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         MediaSubscriptionResource row = mountedRow(9, "产物");
         when(resourceRepository.findByLink("offline:产物")).thenReturn(List.of(row));
         MediaSubscription sub = subscription(9);
@@ -206,7 +209,7 @@ class OfflineCleanupServiceTest {
                 List.of(MediaSubscriptionEpisodeSource.STATE_LISTED, MediaSubscriptionEpisodeSource.STATE_VERIFIED)))
                 .thenReturn(List.of(3));
         when(checkService.watchedEpisode(sub)).thenReturn(3); // 追平
-        when(offlineDownloadService.offlineRootPath()).thenReturn("/挂载/alist-tvbox-offline");
+        when(offlineDownloadService.offlineRootPath(account)).thenReturn("/挂载/alist-tvbox-offline");
         when(siteService.getById(1)).thenReturn(new cn.har01d.alist_tvbox.entity.Site());
 
         service.dailyCleanup();
@@ -221,7 +224,7 @@ class OfflineCleanupServiceTest {
     void failedTaskIsCleanedImmediatelyWithFiles() {
         enable(true, 24, false);
         OfflineDownloadTask task = task("FAILED", 9, "失败产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.dailyCleanup();
 
@@ -234,7 +237,7 @@ class OfflineCleanupServiceTest {
     void failedTaskIsKeptWhenAutoDeleteOff() {
         enable(false, 24, true);
         OfflineDownloadTask task = task("FAILED", 9, "失败产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.dailyCleanup();
 
@@ -248,7 +251,7 @@ class OfflineCleanupServiceTest {
     void pendingSucceededWithAliveSubscriptionWaitsForHarvest() {
         enable(true, 24, false);
         OfflineDownloadTask task = task("PENDING", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(subscriptionRepository.existsById(9)).thenReturn(true);
         when(handler.taskStatus(account, HASH, "产物")).thenReturn(OfflineDownloadHandler.TaskStatus.SUCCEEDED);
 
@@ -261,7 +264,7 @@ class OfflineCleanupServiceTest {
     void pendingSucceededWithDeadSubscriptionIsCleaned() {
         enable(true, 24, false);
         OfflineDownloadTask task = task("PENDING", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(subscriptionRepository.existsById(9)).thenReturn(false);
         when(handler.taskStatus(account, HASH, "产物")).thenReturn(OfflineDownloadHandler.TaskStatus.SUCCEEDED);
 
@@ -276,7 +279,7 @@ class OfflineCleanupServiceTest {
         enable(true, 24, false);
         OfflineDownloadTask task = task("PENDING", 9, "产物");
         task.setCreatedTime(Instant.now().minusSeconds(2 * 24 * 3600)); // 未超 7 天滞留阈值
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(handler.taskStatus(account, HASH, "产物")).thenReturn(OfflineDownloadHandler.TaskStatus.RUNNING);
 
         service.dailyCleanup();
@@ -284,7 +287,7 @@ class OfflineCleanupServiceTest {
 
         task.setCreatedTime(Instant.now().minusSeconds(8 * 24 * 3600)); // 超阈值:按滞留清
         task.setCleanupState(null);
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         service.dailyCleanup();
         verify(handler).deleteTask(account, HASH, "产物", true);
     }
@@ -293,7 +296,7 @@ class OfflineCleanupServiceTest {
     void pendingFailedOrAbsentIsCleaned() {
         enable(true, 24, false);
         OfflineDownloadTask task = task("PENDING", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(handler.taskStatus(account, HASH, "产物")).thenReturn(OfflineDownloadHandler.TaskStatus.FAILED);
 
         service.dailyCleanup();
@@ -307,7 +310,7 @@ class OfflineCleanupServiceTest {
         OfflineDownloadTask task = task("PENDING", 9, "ed2k 产物");
         task.setInfoHash(null); // ed2k 无 btih,对不上任务列表
         task.setCreatedTime(Instant.now().minusSeconds(2 * 24 * 3600));
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.dailyCleanup();
         verify(handler, never()).deleteTask(any(), any(), any(), anyBoolean());
@@ -324,7 +327,7 @@ class OfflineCleanupServiceTest {
         enable(true, 24, false);
         OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
         task.setCompletedTime(Instant.now().minusSeconds(30 * 3600)); // 完成 30h > TTL 24h
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.dailyCleanup();
         verify(handler).deleteTask(account, HASH, "即看即走", true);
@@ -332,7 +335,7 @@ class OfflineCleanupServiceTest {
         // TTL 内不删:提交 48h 前但完成仅 2h(起算点=完成时间,不是提交时间)
         OfflineDownloadTask fresh = task("COMPLETED", null, "即看即走");
         fresh.setCompletedTime(Instant.now().minusSeconds(2 * 3600));
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(fresh));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(fresh));
         service.dailyCleanup();
         verify(handler, times(1)).deleteTask(any(), any(), any(), anyBoolean()); // 仍只有第一次的删除
     }
@@ -342,7 +345,7 @@ class OfflineCleanupServiceTest {
         enable(false, 24, true);
         OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
         task.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.dailyCleanup();
         verify(handler, never()).deleteTask(any(), any(), any(), anyBoolean());
@@ -354,7 +357,7 @@ class OfflineCleanupServiceTest {
     void msubRowWithoutLiveMagnetRowsIsCleaned() {
         enable(true, 24, false);
         OfflineDownloadTask task = task("COMPLETED", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(resourceRepository.findByLink("offline:产物")).thenReturn(List.of()); // 行已退役/订阅已删
 
         service.dailyCleanup();
@@ -366,7 +369,7 @@ class OfflineCleanupServiceTest {
     void msubRowWaitsUntilCaughtUpWhenSelfShareOff() {
         enable(true, 24, false);
         OfflineDownloadTask task = task("COMPLETED", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         MediaSubscriptionResource row = mountedRow(9, "产物");
         when(resourceRepository.findByLink("offline:产物")).thenReturn(List.of(row));
         MediaSubscription sub = subscription(9);
@@ -388,7 +391,7 @@ class OfflineCleanupServiceTest {
     void msubRowSelfifiedThenCleanedWhenSelfShareOn() {
         enable(true, 24, true);
         OfflineDownloadTask task = task("COMPLETED", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(resourceRepository.findByLink("offline:产物")).thenReturn(List.of(mountedRow(9, "产物")));
         when(checkService.selfifyOfflineProduct(9, account, "产物"))
                 .thenReturn("https://115.com/s/abc123?password=x1y2");
@@ -405,7 +408,7 @@ class OfflineCleanupServiceTest {
     void msubRowKeptWhenSelfifyFails() {
         enable(true, 24, true);
         OfflineDownloadTask task = task("COMPLETED", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(resourceRepository.findByLink("offline:产物")).thenReturn(List.of(mountedRow(9, "产物")));
         when(checkService.selfifyOfflineProduct(9, account, "产物"))
                 .thenThrow(new IllegalStateException("建分享失败"));
@@ -421,7 +424,7 @@ class OfflineCleanupServiceTest {
     void selfShareAloneBanksShareWithoutDeletion() {
         enable(false, 24, true); // 纯固化模式:银行化但不删
         OfflineDownloadTask task = task("COMPLETED", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(resourceRepository.findByLink("offline:产物")).thenReturn(List.of(mountedRow(9, "产物")));
         when(checkService.selfifyOfflineProduct(9, account, "产物"))
                 .thenReturn("https://115.com/s/abc123?password=x1y2");
@@ -438,7 +441,7 @@ class OfflineCleanupServiceTest {
         enable(true, 24, true);
         OfflineDownloadTask task = task("COMPLETED", 9, "产物");
         task.setShareUrl("https://115.com/s/old?password=1"); // 上轮已固化
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(resourceRepository.findByLink("offline:产物")).thenReturn(List.of(mountedRow(9, "产物")));
 
         service.dailyCleanup();
@@ -451,7 +454,7 @@ class OfflineCleanupServiceTest {
     void deletionDeferredWhenOtherSubscriptionStillMountsSameProduct() {
         enable(true, 24, true);
         OfflineDownloadTask task = task("COMPLETED", 9, "产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         when(resourceRepository.findByLink("offline:产物"))
                 .thenReturn(List.of(mountedRow(9, "产物"), mountedRow(33, "产物"))); // 另一订阅也在挂
         when(checkService.selfifyOfflineProduct(9, account, "产物"))
@@ -471,10 +474,10 @@ class OfflineCleanupServiceTest {
         when(handler.deletesFilesWithTask()).thenReturn(false);
         OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
         task.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         cn.har01d.alist_tvbox.entity.Site site = new cn.har01d.alist_tvbox.entity.Site();
         when(siteService.getById(1)).thenReturn(site);
-        when(offlineDownloadService.offlineRootPath()).thenReturn("/挂载/alist-tvbox-offline");
+        when(offlineDownloadService.offlineRootPath(account)).thenReturn("/挂载/alist-tvbox-offline");
 
         service.dailyCleanup();
 
@@ -487,7 +490,7 @@ class OfflineCleanupServiceTest {
     void deleteFailureMarksRowFailedForRetry() {
         enable(true, 24, false);
         OfflineDownloadTask task = task("FAILED", 9, "失败产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         org.mockito.Mockito.doThrow(new RuntimeException("network down"))
                 .when(handler).deleteTask(any(), any(), any(), anyBoolean());
 
@@ -503,7 +506,7 @@ class OfflineCleanupServiceTest {
         OfflineDownloadTask task = task("FAILED", 9, "失败产物");
         task.setCleanupState("FAILED");
         task.setCleanupAttempts(5); // 连续失败超限(47h 前):7 天冷却期内不再尝试
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.dailyCleanup();
 
@@ -518,7 +521,7 @@ class OfflineCleanupServiceTest {
         task.setCleanupState("FAILED");
         task.setCleanupAttempts(5);
         task.setUpdatedTime(Instant.now().minusSeconds(8 * 24 * 3600)); // 最后失败在 8 天前
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.dailyCleanup();
 
@@ -534,7 +537,7 @@ class OfflineCleanupServiceTest {
         task.setCleanupState("FAILED");
         task.setCleanupAttempts(5);
         task.setUpdatedTime(Instant.now().minusSeconds(8 * 24 * 3600));
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
         org.mockito.Mockito.doThrow(new RuntimeException("still broken"))
                 .when(handler).deleteTask(any(), any(), any(), anyBoolean());
 
@@ -556,7 +559,7 @@ class OfflineCleanupServiceTest {
         service.dailyCleanup();
         service.catchUpCleanup();
 
-        verify(taskRepository, never()).findCleanupCandidates(anyInt());
+        verify(taskRepository, never()).findCleanupCandidates();
     }
 
     @Test
@@ -567,7 +570,7 @@ class OfflineCleanupServiceTest {
                         Instant.now().minusSeconds(30 * 3600).toString())));
         enable(true, 24, false);
         OfflineDownloadTask task = task("FAILED", 9, "失败产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.catchUpCleanup();
 
@@ -582,7 +585,7 @@ class OfflineCleanupServiceTest {
         when(settingRepository.findById(OfflineCleanupService.LAST_RUN_SETTING)).thenReturn(Optional.empty());
         enable(true, 24, false);
         OfflineDownloadTask task = task("FAILED", 9, "失败产物");
-        when(taskRepository.findCleanupCandidates(12)).thenReturn(List.of(task));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
 
         service.catchUpCleanup();
 
@@ -598,6 +601,68 @@ class OfflineCleanupServiceTest {
 
         verify(settingRepository).save(org.mockito.ArgumentMatchers.argThat((Setting s) ->
                 OfflineCleanupService.LAST_RUN_SETTING.equals(s.getName())));
-        verify(taskRepository, never()).findCleanupCandidates(anyInt());
+        verify(taskRepository, never()).findCleanupCandidates();
+    }
+
+    // ---------- 多账号:候选按行账号,不依赖当前配置账号 ----------
+
+    @Test
+    void cleansRowsOfFormerConfiguredAccountAfterSwitch() {
+        // 线上形态:离线配置已切到账号 13,但 5 天前用账号 12 提交的任务仍在——按行账号照样清
+        when(offlineDownloadService.cleanupConfig())
+                .thenReturn(new OfflineDownloadService.CleanupConfig(13, "PAN115", true, 1, false));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
+        task.setCompletedTime(Instant.now().minusSeconds(5 * 24 * 3600)); // 5 天前完成,TTL 1h 早已过期
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
+
+        service.dailyCleanup();
+
+        verify(handler).deleteTask(account, HASH, "即看即走", true);
+        assertEquals("DONE", task.getCleanupState());
+    }
+
+    @Test
+    void rowsOfDeletedAccountAreMarkedCleaned() {
+        // 行所属账号已删:无凭证可清,标 DONE 免得永久占候选
+        enable(true, 24, false);
+        OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
+        task.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.empty());
+
+        service.dailyCleanup();
+
+        verify(handler, never()).deleteTask(any(), any(), any(), anyBoolean());
+        assertEquals("DONE", task.getCleanupState());
+    }
+
+    @Test
+    void mixedAccountsAreProcessedPerAccountHandler() {
+        // 混合盘型行:各行走各账号类型的 handler(115 删任务;123 补删文件路径按行账号根目录)
+        DriverAccount pan123 = new DriverAccount();
+        pan123.setId(30);
+        pan123.setType(DriverType.PAN123);
+        OfflineDownloadHandler handler123 = org.mockito.Mockito.mock(OfflineDownloadHandler.class);
+        enable(true, 24, false); // 配置账号 12/115,与行的账号无关
+        OfflineDownloadTask old = task("COMPLETED", null, "旧账号产物");
+        old.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
+        OfflineDownloadTask other = task("COMPLETED", null, "123产物");
+        other.setId(2);
+        other.setAccountId(30);
+        other.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(old, other));
+        when(offlineDownloadService.getHandler("PAN123")).thenReturn(handler123);
+        when(handler123.supportsTaskManagement()).thenReturn(true);
+        when(handler123.deletesFilesWithTask()).thenReturn(false);
+        when(driverAccountRepository.findById(30)).thenReturn(Optional.of(pan123));
+        when(offlineDownloadService.offlineRootPath(pan123)).thenReturn("/123挂载/alist-tvbox-offline");
+        when(siteService.getById(1)).thenReturn(new cn.har01d.alist_tvbox.entity.Site());
+
+        service.dailyCleanup();
+
+        verify(handler).deleteTask(account, HASH, "旧账号产物", true);
+        verify(handler123).deleteTask(pan123, HASH, "123产物", true);
+        verify(aListService).remove(any(), eq("/123挂载/alist-tvbox-offline/123产物"));
     }
 }

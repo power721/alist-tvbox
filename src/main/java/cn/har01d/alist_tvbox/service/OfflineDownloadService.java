@@ -162,6 +162,11 @@ public class OfflineDownloadService {
         return buildRootPath(account);
     }
 
+    /** 按指定账号的离线产物根目录:清理兜底删文件用——候选行可能属于已切换前的旧配置账号。 */
+    public String offlineRootPath(DriverAccount account) {
+        return buildRootPath(account);
+    }
+
     /** 离线配置账号的盘型代码(DriveId,磁力产物资源行的 type 用);未配置返回 null。 */
     public Integer configuredDriveType() {
         try {
