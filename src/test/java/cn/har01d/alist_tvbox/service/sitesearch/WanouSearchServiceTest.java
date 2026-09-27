@@ -319,8 +319,8 @@ class WanouSearchServiceTest {
         List<String> fetchCalls = new ArrayList<>();
         WanouSearchService service = probeStubService(fetchCalls);
         List<WanouSearchService.SiteProbe> probes = service.probeAllDomains();
-        // 10 站全部出结果;muou 可达、最优域名 = 延迟最低的 muou.asia
-        assertEquals(10, probes.size());
+        // 11 站全部出结果;muou 可达、最优域名 = 延迟最低的 muou.asia
+        assertEquals(11, probes.size());
         WanouSearchService.SiteProbe muou = probes.stream()
                 .filter(p -> p.siteId().equals("muou")).findFirst().orElseThrow();
         assertTrue(muou.bestUrl() != null && muou.bestUrl().endsWith("muou.asia"));

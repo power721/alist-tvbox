@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 
 /**
  * 玩偶聚合搜索源(atv-spiders/py/玩偶聚合.py 的 Java 移植):聚合玩偶系 MacCMS 网盘站
- * (玩偶/多多/木偶/快映/闪电/表哥/花卷/欧歌/虎斑/二小),并行按站搜索 → 卡片标题
+ * (玩偶/多多/木偶/快映/闪电/表哥/花卷/欧歌/虎斑/二小/蜡笔),并行按站搜索 → 卡片标题
  * 与订阅关键词粗匹配 → 抓详情页提取网盘分享链接,产出与 TG 搜索同构的 {@link Message},
  * 供追剧候选池(fillPool/preview)与 TG 结果按 link 去重合并。
  * <p>2026-09-20 与 py 同步(atv-spiders 9880ef2):移除六死站(欧歌/至臻/二小/蜡笔/虎斑/小斑),
@@ -55,6 +55,8 @@ import java.util.stream.Collectors;
  * 均 302 到 43.248.128.118)实测复活回归,两站详情形状为 module-row-info 容器文本自身(非其下 p)。
  * 同晚按用户提供的玩偶配置 v2(12 站生态配置,比 py 更新的域名清单)补齐各站全部备用域名,
  * 二小随新入口 2xiaopan.one 复活回归(蜡笔/至臻实测仍死未接);表哥在该配置中又名「龙龙/longlong」。
+ * <p>2026-09-27 蜡笔随 py 蜡笔.py 复活回归:tvpanpan.site 实测存活,xiaocgege.shop 双域名 CF 409
+ * 降为恢复候选(feimo.fun 域名过期剔除);标准搜索卡片/详情形状,站内搜索已改默认 path-info 路由。
  *
  * <p>站点域名池 = 静态种子 ∪ 监控服务(pan-site-monitor)下发的候选(含其标记失败的域名,
  * 可能复活);本服务定时主动探测各域名可达性与延迟,按延迟升序重排——搜索直接从最优域名
@@ -91,7 +93,7 @@ public class WanouSearchService {
             "(?i)(第[0-9一二三四五六七八九十]{1,3}季|season\\d{1,2}|s\\d{1,2}e\\d{1,3}|ep?\\d{1,3}|第\\d{1,3}集|更新?至\\d{1,3}|全\\d{1,3}集|\\d{1,3}集|20\\d{2})");
     /** 站点优先级(py site_priority):同名合并去重时优先保留靠前站点的链接 */
     private static final List<String> SITE_PRIORITY = List.of(
-            "wanou", "duoduo", "muou", "kuaiying", "shandian", "biaoge", "huajuan", "ouge", "hban", "erxiao");
+            "wanou", "duoduo", "muou", "kuaiying", "shandian", "biaoge", "huajuan", "ouge", "hban", "erxiao", "labi");
 
     record Site(String id, String name, String monitorKey, List<String> seedDomains,
                 String searchUrl, int timeoutSeconds, String searchCardCss, String detailPanCss) {
@@ -149,6 +151,11 @@ public class WanouSearchService {
             // 二小:2026-09-26 随玩偶配置 v2 复活回归(新入口 2xiaopan.one 实测 200);蜡笔/至臻同期实测仍死未接
             new Site("erxiao", "二小", "二小",
                     List.of("https://www.2xiaopan.one", "https://www.2xiaopan.top", "https://www.wexwp.cc"),
+                    null, 10, null, null),
+            // 蜡笔:2026-09-27 随 py 蜡笔.py 复活回归(标准卡片/详情形状与默认搜索路由)——tvpanpan.site 实测存活,
+            // xiaocgege.shop 双域名 CF 409 降为恢复候选,feimo.fun 域名过期剔除
+            new Site("labi", "蜡笔", "蜡笔",
+                    List.of("http://tvpanpan.site", "http://www.xiaocgege.shop", "http://xiaocgege.shop"),
                     null, 10, null, null));
 
     private static final class DomainState {
