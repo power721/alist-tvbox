@@ -59,8 +59,10 @@ import java.util.stream.Collectors;
  * 降为恢复候选(feimo.fun 域名过期剔除);标准搜索卡片/详情形状,站内搜索已改默认 path-info 路由。
  *
  * <p>站点域名池 = 静态种子 ∪ 监控服务(pan-site-monitor)下发的候选(含其标记失败的域名,
- * 可能复活);本服务定时主动探测各域名可达性与延迟,按延迟升序重排——搜索直接从最优域名
- * 起步,请求时逐域名 failover 与成功粘滞作为探测间隙内的兜底,全域名失败进入冷却期。
+ * 可能复活);本服务定时主动探测各域名可达性与延迟(判定参考自建 domain-monitor:200 且
+ * 非挑战页/停放页、长度下限、MacCMS 特征——muou.site 实测 200+DNSPod 停放页即被拦),
+ * 按延迟升序重排——搜索直接从最优域名起步,请求时逐域名 failover 与成功粘滞作为探测
+ * 间隙内的兜底(搜索期同样跳过停放页),全域名失败进入冷却期。
  */
 @Slf4j
 @Service
@@ -80,6 +82,16 @@ public class WanouSearchService {
     private static final long DOMAIN_PROBE_INTERVAL_MS = 60 * 60_000L;
     /** 单域名探测超时(秒) */
     private static final int DOMAIN_PROBE_TIMEOUT_SECONDS = 8;
+    /** 探测有效页的最小长度(参考自建 domain-monitor:停放/劫持页普遍短小) */
+    private static final int PROBE_MIN_BODY_LENGTH = 1000;
+    /** 域名停放/过期页标记(参考自建 domain-monitor 与 py 蜡笔 _PARKED_MARKERS):200+停放页不算可达 */
+    private static final List<String> PARKED_MARKERS = List.of(
+            "domain is expired", "domain has expired", "domains expired", "domain is parked",
+            "is for sale", "buy this domain", "域名已过期", "域名过期", "域名到期", "域名已到期");
+    /** MacCMS 站点首页特征(参考自建 domain-monitor hasCms 判定):无特征的 200 页不是站点本体 */
+    private static final List<String> CMS_MARKERS = List.of(
+            "maccms", "vod_", "template/", "class=\"stui-", "class=\"module-",
+            "/static/js/player", "dyxs2", "static/picture/logo");
     /** 探测线程序号(线程名 wanou-probe-N) */
     private static final AtomicInteger PROBE_SEQ = new AtomicInteger();
     private static final Pattern URL_IN_TEXT = Pattern.compile("https?://[^\\s\\u3400-\\u4dbf\\u4e00-\\u9fff\\u3000-\\u303f\\uff01-\\uff5e<>\"']+");
@@ -102,7 +114,7 @@ public class WanouSearchService {
     record Card(String href, String title, String remarks) {
     }
 
-    /** 单域名探测结果:ok=首页可达(200 且非挑战页),latencyMs=完整请求耗时,error=失败原因。 */
+    /** 单域名探测结果:ok=首页可达(200 且非挑战页/停放页、有 CMS 特征),latencyMs=完整请求耗时,error=失败原因。 */
     record DomainProbe(String url, boolean ok, long latencyMs, String error) {
     }
 
@@ -619,7 +631,7 @@ public class WanouSearchService {
         return new DomainProbe(url, error == null, latencyMs, error);
     }
 
-    /** 探测请求:返回 null=可达(200 且非挑战页),否则返回失败原因(HTTP 码/挑战页/异常摘要)。 */
+    /** 探测请求:返回 null=可达(200 且非挑战页/停放页,有 CMS 特征),否则返回失败原因。 */
     protected String probeFetch(String url) {
         Request request = new Request.Builder()
                 .url(url)
@@ -635,7 +647,16 @@ public class WanouSearchService {
                 return "HTTP " + response.code();
             }
             String body = response.body() == null ? "" : response.body().string();
-            return isChallenge(null, body) ? "challenge" : null;
+            if (isChallenge(null, body)) {
+                return "challenge";
+            }
+            if (isParked(body)) {
+                return "停放页";
+            }
+            if (body.length() <= PROBE_MIN_BODY_LENGTH) {
+                return "内容过短";
+            }
+            return hasCmsFeature(body) ? null : "无站点特征";
         } catch (IOException e) {
             return StringUtils.abbreviate(StringUtils.defaultString(e.getMessage(), e.getClass().getSimpleName()), 80);
         }
@@ -663,6 +684,10 @@ public class WanouSearchService {
                 log.debug("wanou fetch blocked by challenge page: {}", url);
                 return null;
             }
+            if (isParked(body)) {
+                log.debug("wanou fetch skipped parked page: {}", url);
+                return null;
+            }
             return body;
         }
     }
@@ -675,6 +700,18 @@ public class WanouSearchService {
         return body == null || body.isBlank()
                 || body.contains("challenges.cloudflare.com")
                 || body.contains("Just a moment");
+    }
+
+    /** 域名停放/过期页判定(muou.site 实测 200+DNSPod 停放页形态;py 蜡笔 _is_parked 同款)。 */
+    static boolean isParked(String body) {
+        String lower = StringUtils.lowerCase(StringUtils.defaultString(body));
+        return PARKED_MARKERS.stream().anyMatch(lower::contains);
+    }
+
+    /** MacCMS 站点特征判定(自建 domain-monitor hasCms 同款标记)。 */
+    static boolean hasCmsFeature(String body) {
+        String lower = StringUtils.lowerCase(StringUtils.defaultString(body));
+        return CMS_MARKERS.stream().anyMatch(lower::contains);
     }
 
     private static String rootOf(String url) {

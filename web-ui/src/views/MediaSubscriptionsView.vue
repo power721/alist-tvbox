@@ -680,7 +680,9 @@
             <template #default="scope">
               <el-table :data="scope.row.domains" size="small" style="margin: 0 0 8px 24px">
                 <el-table-column label="域名" min-width="240" show-overflow-tooltip>
-                  <template #default="d">{{ d.row.url }}</template>
+                  <template #default="d">
+                    <el-link type="primary" :href="d.row.url" target="_blank" rel="noopener">{{ d.row.url }}</el-link>
+                  </template>
                 </el-table-column>
                 <el-table-column label="状态" width="90">
                   <template #default="d">
@@ -718,7 +720,10 @@
             </template>
           </el-table-column>
           <el-table-column label="当前采用域名" min-width="240" show-overflow-tooltip>
-            <template #default="scope">{{ scope.row.bestUrl || '—(全域名不可达,等待下轮探测)' }}</template>
+            <template #default="scope">
+              <el-link v-if="scope.row.bestUrl" type="primary" :href="scope.row.bestUrl" target="_blank" rel="noopener">{{ scope.row.bestUrl }}</el-link>
+              <span v-else class="sub-text">—(全域名不可达,等待下轮探测)</span>
+            </template>
           </el-table-column>
           <el-table-column label="可达/总数" width="95">
             <template #default="scope">
