@@ -13,11 +13,16 @@ import org.springframework.boot.restclient.RestTemplateBuilder;
  */
 @EnabledIfSystemProperty(named = "live.probe", matches = "1")
 class NewLivePlatformProbeTest {
-    private static final String[] DEFAULT_PLATFORMS = {"acfun", "inke", "huajiao", "sixroom", "kugoulive", "look", "yy"};
+    // 花椒已随 pure_live 3.1.6 下线(feed 实测 0 房间),不再探测
+    private static final String[] DEFAULT_PLATFORMS = {"acfun", "inke", "sixroom", "kugoulive", "look", "yy"};
     private static final String[] PLATFORMS = System.getProperty("live.probe.platforms", String.join(",", DEFAULT_PLATFORMS)).split(",");
 
     private final RestTemplateBuilder builder = new RestTemplateBuilder();
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    // 与生产 Spring mapper 同款宽松(忽略未知字段):裸 mapper 严格模式会对斗鱼等响应的多余字段炸 UnrecognizedProperty
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+            com.fasterxml.jackson.databind.json.JsonMapper.builder()
+                    .disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                    .build();
 
     @Test
     void probe() throws Exception {
@@ -25,11 +30,18 @@ class NewLivePlatformProbeTest {
             LivePlatform service = switch (platform.trim()) {
                 case "acfun" -> new AcfunService(builder, objectMapper);
                 case "inke" -> new InkeService(builder, objectMapper, null);
-                case "huajiao" -> new HuajiaoService(builder, objectMapper);
                 case "sixroom" -> new SixRoomService(builder, objectMapper);
                 case "kugoulive" -> new KugouLiveService(builder, objectMapper, null);
                 case "look" -> new LookLiveService(builder, objectMapper, null);
                 case "yy" -> new YyService(builder, objectMapper, null);
+                // 老平台冒烟入口:快手主播原生搜索(2753a910 对齐)与斗鱼匿名播放链路
+                // (mock 仓库 = 无 Cookie 匿名态,findById 默认 Optional.empty;斗鱼要挂 Jackson2 转换器,
+                //  裸 builder 默认 Jackson3 不认 ObjectNode 响应,TelegramServiceTest 同款整表替换)
+                case "ks", "kuaishou" -> new KuaishouService(builder, objectMapper);
+                case "douyu" -> new DouyuService(
+                        builder.messageConverters(new org.springframework.http.converter.json.MappingJackson2HttpMessageConverter(objectMapper)),
+                        objectMapper,
+                        org.mockito.Mockito.mock(cn.har01d.alist_tvbox.entity.SettingRepository.class));
                 default -> throw new IllegalArgumentException("unknown platform: " + platform);
             };
             probePlatform(service);
@@ -70,7 +82,7 @@ class NewLivePlatformProbeTest {
                     }
                 }
             }
-            var search = service.search("游戏");
+            var search = service.search(System.getProperty("live.probe.keyword", "游戏"));
             System.out.printf("[%s] search: %d results%n", name, search.getList().size());
         } catch (Exception e) {
             System.out.printf("[%s] FAILED: %s%n", name, e);

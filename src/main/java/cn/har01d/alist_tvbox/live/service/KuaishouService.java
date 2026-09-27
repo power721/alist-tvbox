@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -35,6 +37,7 @@ public class KuaishouService implements LivePlatform {
     private static final String GAME_BOARD_API = "https://live.kuaishou.com/live_api/gameboard/list";
     private static final String NON_GAME_BOARD_API = "https://live.kuaishou.com/live_api/non-gameboard/list";
     private static final String HOME_LIST_API = "https://live.kuaishou.com/live_api/home/list";
+    private static final String AUTHOR_SEARCH_API = "https://live.kuaishou.com/live_api/search/author";
     private static final String ROOM_PAGE_API = "https://live.kuaishou.com/u/";
     private static final String SITE_URL = "https://live.kuaishou.com/";
     private static final String DID_REGISTER_API = "https://log-sdk.ksapisrv.com/rest/wd/common/log/collect/misc2?v=3.9.49&kpn=KS_GAME_LIVE_PC";
@@ -238,8 +241,55 @@ public class KuaishouService implements LivePlatform {
 
     @Override
     public MovieList search(String wd) throws IOException {
-        // 快手无法搜索主播，只能搜索游戏分类
-        return new MovieList();
+        // 直播间搜索对匿名访客恒回「服务器繁忙」且搜索页列不出房间(pure_live #881),
+        // 主播搜索仍公开并自带开播标记;房间号即主播 id,详情走 /u/<id> 既有链路
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+        try {
+            String encoded = URLEncoder.encode(wd, StandardCharsets.UTF_8);
+            HttpHeaders headers = createHeaders();
+            headers.set("Referer", "https://live.kuaishou.com/search?keyword=" + encoded);
+            // 用 URI 直传绕开 RestTemplate 模板二次编码:模板模式会把已编码的 %E7.. 再编成 %25E7..,
+            // 快手收到字面百分号串匹配不到主播(curl 正常/Java 空 results 的根源)
+            ResponseEntity<String> response = restTemplate.exchange(
+                    java.net.URI.create(AUTHOR_SEARCH_API + "?keyword=" + encoded + "&page=1&lssid="),
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class
+            );
+            list.addAll(parseAuthorSearch(objectMapper.readTree(response.getBody())));
+        } catch (Exception e) {
+            log.error("快手主播搜索失败: {}", wd, e);
+        }
+        result.setList(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+        log.debug("快手search result: {}", result);
+        return result;
+    }
+
+    /** 主播搜索条目解析:counts.fan 为快手预格式化字符串(如 "1944.8w")原样展示不重排。 */
+    List<MovieDetail> parseAuthorSearch(JsonNode root) {
+        List<MovieDetail> list = new ArrayList<>();
+        for (JsonNode author : root.path("data").path("list")) {
+            String id = author.path("id").asText().trim();
+            if (id.isEmpty()) {
+                continue;
+            }
+            String name = author.path("name").asText();
+            MovieDetail detail = new MovieDetail();
+            detail.setVod_id(getType() + "$" + id);
+            detail.setVod_name(name);
+            detail.setVod_pic(author.path("avatar").asText());
+            detail.setVod_actor(name);
+            String fan = author.path("counts").path("fan").asText();
+            String status = author.path("bannedStatus").path("banned").asBoolean(false) ? "封禁"
+                    : author.path("living").asBoolean(false) ? "直播中" : "未开播";
+            detail.setVod_remarks(fan.isBlank() ? status : status + " · 粉丝 " + fan);
+            detail.setVod_content(author.path("description").asText(""));
+            list.add(detail);
+        }
+        return list;
     }
 
     @Override

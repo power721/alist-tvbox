@@ -35,9 +35,8 @@ public class AppProperties {
     // 直播平台首页热门展示方式:mix=热门直播间混排在分类文件夹前;folder=入口为"热门直播间"文件夹;none=仅分类文件夹
     private String liveHotMode = "folder";
     // 隐藏的直播平台 type 列表:不进平台分类/聚合搜索/关注筛选,detail 保留(已关注房间仍可直达播放)。
-    // 默认含花椒:其 web 匿名 feed 接口已被平台限流至 0-2 条/页(实测各参数组合全 0,纯凭 pure_live
-    // 同款匿名链路无解,App 接口需签名),入口空列表无意义;detail/取流仍可用,可在平台管理 tab 手动开启。
-    private List<String> liveHiddenPlatforms = List.of("huajiao");
+    // 花椒已随 pure_live 3.1.6 下线(公域 feed 实测 0 房间),服务整体移除,历史关注行仍可读(标「已下线」)。
+    private List<String> liveHiddenPlatforms = List.of();
     // 平台展示顺序(live_platform_order):配置的平台按序在前,未列入的新平台按注册序追加
     private List<String> livePlatformOrder = List.of();
     // 直播流代理模式:proxy=流地址全部经本服务代理中转(断流自动续租无感,消耗服务器带宽);

@@ -52,7 +52,8 @@ public class LivePlatformCookieService {
         return key == null ? null : settingRepository.findById(key).map(Setting::getValue).orElse("");
     }
 
-    /** 保存(空串等于清除);抖音同步失效内存态与风控冷却。 */
+    /** 保存(空串等于清除);抖音同步失效内存态与风控冷却;斗鱼记录保存时间戳(网页 Cookie 7 天时效起算点)
+     *  并做粘贴保护(passport 凭证串不带会话,只取走 LTP0/dy_did 合并进既有登录,防整串覆盖等于登出)。 */
     public void save(String platform, String cookie) {
         String key = COOKIE_KEYS.get(platform);
         if (key == null) {
@@ -61,7 +62,16 @@ public class LivePlatformCookieService {
         String value = cookie == null ? "" : cookie.trim();
         if (value.isEmpty()) {
             settingRepository.deleteById(key);
+            if ("douyu".equals(platform)) {
+                settingRepository.deleteById(DouyuService.COOKIE_SAVED_AT_SETTING);
+            }
         } else {
+            if ("douyu".equals(platform)) {
+                String existing = settingRepository.findById(key).map(Setting::getValue).orElse("");
+                value = DouyuService.normalizePastedCookie(existing, value);
+                settingRepository.save(new Setting(DouyuService.COOKIE_SAVED_AT_SETTING,
+                        String.valueOf(System.currentTimeMillis() / 1000)));
+            }
             settingRepository.save(new Setting(key, value));
         }
         if ("douyin".equals(platform)) {
@@ -85,8 +95,23 @@ public class LivePlatformCookieService {
         };
     }
 
-    /** 斗鱼无公开账号接口(pure_live 同口径不核验登录),带 cookie 请求 getEncryption 验证连通与描述符有效性。 */
+    /** 斗鱼无公开账号接口,登录态按 Cookie 内 token 判定(pure_live 3.1.6 同款):H5 的 acf_jwt_token/acf_auth
+     *  是 JWT 可读到期时间,网页版 dy_auth 是有效登录但读不到到期;getEncryption 仅验证连通与描述符。 */
     private String[] verifyDouyu(String cookie) {
+        String token = DouyuService.sessionToken(cookie);
+        String stateNote;
+        if (token == null) {
+            stateNote = "游客 Cookie(未含登录凭证)";
+        } else {
+            Long expiry = DouyuService.sessionExpirySeconds(cookie, null);
+            long now = System.currentTimeMillis() / 1000;
+            if (expiry != null && expiry <= now) {
+                boolean refreshable = DouyuService.cookieField(cookie, "LTP0") != null;
+                return new String[]{"false", "登录已过期" + (refreshable ? "(含 LTP0,播放时将自动续期)" : ",请重新粘贴 Cookie")};
+            }
+            stateNote = expiry != null ? "已登录,有效至 " + java.time.Instant.ofEpochSecond(expiry)
+                    : "已登录(网页版 Cookie,未提供到期时间)";
+        }
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.set(HttpHeaders.COOKIE, cookie);
@@ -96,7 +121,7 @@ public class LivePlatformCookieService {
                     "https://www.douyu.com/wgapi/livenc/liveweb/websec/getEncryption?did=10000000000000000000000000001501",
                     HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class).getBody();
             if (root.path("error").asInt(-1) == 0 && root.path("data").path("enc_data").isTextual()) {
-                return new String[]{"true", "请求连通正常(斗鱼无公开账号接口,仅验证连通)"};
+                return new String[]{"true", stateNote + ";请求连通正常"};
             }
             return new String[]{"false", "斗鱼返回结构异常: error=" + root.path("error").asInt(-1)};
         } catch (Exception e) {

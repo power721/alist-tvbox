@@ -36,27 +36,43 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class DouyuService implements LivePlatform {
     /** web 管理端配置的用户 cookie 存储键:登录态解锁原画等高画质,匿名流不仅限档还会 5-30 分钟中断。 */
     public static final String COOKIE_SETTING = "douyu_cookie";
+    /** Cookie 保存时间(秒)存储键:网页版 dy_auth 是不透明 token 读不到 exp,7 天时效从这里起算。 */
+    static final String COOKIE_SAVED_AT_SETTING = "douyu_cookie_saved_at";
     private static final String GET_ENCRYPTION_URL = "https://www.douyu.com/wgapi/livenc/liveweb/websec/getEncryption";
     private static final String PLAY_API = "https://www.douyu.com/lapi/live/getH5PlayV1/";
     private static final String LEGACY_SIGN_URL = "http://dy.har01d.cn/sign";
+    /** passport 端点:LTP0+dy_did 换新会话 Cookie(pure_live DouyuUtils.safeAuth 同款)。 */
+    private static final String PASSPORT_SAFE_AUTH_URL = "https://passport.douyu.com/lapi/passport/iframe/safeAuth";
     /** getEncryption 加密描述符缓存窗口(pure_live 同款 5 分钟),描述符与房间无关,全房间共享。 */
     private static final long ENC_KEY_CACHE_SECONDS = 5 * 60;
+    /** 网页版 dy_auth 的 7 天时效(pure_live webCookieLifetime),到期前 1 天进入续期窗口。 */
+    private static final long WEB_COOKIE_LIFETIME_SECONDS = 7L * 24 * 3600;
+    private static final long REFRESH_MARGIN_SECONDS = 24L * 3600;
+    /** Set-Cookie 属性名:不是 Cookie 字段,合并时不得写回请求头(pure_live _setCookieAttributes)。 */
+    private static final java.util.Set<String> SET_COOKIE_ATTRIBUTES =
+            java.util.Set.of("path", "domain", "expires", "max-age", "samesite", "secure", "httponly");
+    /** 合法 Cookie 字段名形态:拦住 "Path=/" 之类的属性碎片(pure_live cookieHeader 同款正则)。 */
+    private static final java.util.regex.Pattern COOKIE_NAME =
+            java.util.regex.Pattern.compile("[A-Za-z0-9_!#$%&'*+.^`|~-]+");
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final Map<String, String> categoryMap = new HashMap<>();
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final SettingRepository settingRepository;
-    /** 进程级设备 DID:签名表单与请求 Cookie 恒用同一值。用户粘贴的 Cookie 里 dy_did/acf_did 会被它取代,
-     *  防止表单 did 与请求头 Cookie 中的 did 冲突(pure_live issue #873 审计结论)。 */
+    /** 进程级设备 DID:无账号 Cookie dy_did 时的回退值。签名表单、请求 Cookie、getEncryption 三处恒用同一 DID。 */
     private final String deviceId = randomDeviceId();
     private volatile JsonNode encryptionKey;
     private volatile long encryptionKeyFetchedAt;
+    /** 缓存的加密描述符签发给哪个 DID:描述符发给某台设备并校验签名来自同一台,换账号(=换 dy_did)必须作废。 */
+    private volatile String encryptionKeyDeviceId;
 
     public DouyuService(RestTemplateBuilder builder, ObjectMapper objectMapper, SettingRepository settingRepository) {
         this.restTemplate = builder
@@ -258,6 +274,24 @@ public class DouyuService implements LivePlatform {
     }
 
     private void parseUrl(MovieDetail movieDetail, String id) throws IOException {
+        // 播放是需要登录的路径:粘贴的 Cookie 只值 7 天,先按窗口保鲜(过期边缘自动续)
+        ensureFreshSession(false);
+        try {
+            doParseUrl(movieDetail, id);
+        } catch (Exception e) {
+            // 第一次失败也是最便宜的凭证过期信号:有会话且有 LTP0 时强续一次再试,纯游客照旧上抛
+            String cookie = userCookie();
+            if (sessionToken(cookie) != null && cookieField(cookie, "LTP0") != null) {
+                log.warn("斗鱼播放请求失败,强制续期后重试: room={} {}", id, e.getMessage());
+                ensureFreshSession(true);
+                doParseUrl(movieDetail, id);
+            } else {
+                throw e;
+            }
+        }
+    }
+
+    private void doParseUrl(MovieDetail movieDetail, String id) throws IOException {
         PlayArgs args = getPlayArgs(id);
         if (args == null) {
             return;
@@ -278,7 +312,18 @@ public class DouyuService implements LivePlatform {
         List<String> playFrom = new ArrayList<>();
         List<String> playUrl = new ArrayList<>();
 
-        DouyuStreamResponse douyuStreamResponse = objectMapper.readValue(response.getBody(), DouyuStreamResponse.class);
+        // 目录请求(不定档)可能回错误 JSON(无 data,如匿名被限流/房间异常):模型没有 error 字段,
+        // 先读树判形再转换;转换用宽松 reader(Spring mapper 默认忽略未知字段,裸 mapper 会炸)
+        JsonNode catalogRoot = objectMapper.readTree(response.getBody());
+        if (!catalogRoot.path("data").isObject()) {
+            log.warn("斗鱼房间 {} 播放目录请求无数据: error={} msg={}", id,
+                    catalogRoot.path("error").asInt(-1), catalogRoot.path("msg").asText(""));
+            return;
+        }
+        DouyuStreamResponse douyuStreamResponse = objectMapper
+                .readerFor(DouyuStreamResponse.class)
+                .without(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .readValue(catalogRoot);
         var stream = douyuStreamResponse.getData();
         // 未开播/签名失败返回错误 JSON 无 data:无流即不出线路(此前 getCdnsWithName 直接 NPE,detail 500)
         if (stream == null || stream.getCdnsWithName() == null || stream.getCdnsWithName().isEmpty()) {
@@ -364,7 +409,7 @@ public class DouyuService implements LivePlatform {
         headers.set(HttpHeaders.REFERER, "https://www.douyu.com/" + id);
         headers.set(HttpHeaders.ORIGIN, "https://www.douyu.com");
         if (args.localDid()) {
-            headers.set(HttpHeaders.COOKIE, buildCookieHeader(deviceId, userCookie()));
+            headers.set(HttpHeaders.COOKIE, buildCookieHeader(effectiveDeviceId(), userCookie()));
         }
         return headers;
     }
@@ -374,7 +419,225 @@ public class DouyuService implements LivePlatform {
         return settingRepository.findById(COOKIE_SETTING).map(Setting::getValue).orElse("");
     }
 
-    /** 请求 Cookie:dy_did/acf_did 恒为签名 DID,用户粘贴值里的同名项剔除防冲突,其余登录字段(dy_auth 等)原样附加。 */
+    /** Cookie 保存时间(秒);未记录返回 null(网页版 dy_auth 的 7 天时效无从起算,不猜)。 */
+    private Long cookieSavedAt() {
+        return settingRepository.findById(COOKIE_SAVED_AT_SETTING)
+                .map(Setting::getValue)
+                .map(value -> {
+                    try {
+                        long parsed = Long.parseLong(value.trim());
+                        return parsed > 0 ? parsed : null;
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                })
+                .orElse(null);
+    }
+
+    // ---------------------------------------------------------------------------
+    // 会话判定与续期(pure_live 3.1.6 DouyuUtils 对应物)
+    // ---------------------------------------------------------------------------
+
+    /** Cookie 字段值(名字大小写不敏感),无该字段返回 null。 */
+    static String cookieField(String cookie, String name) {
+        if (cookie == null || cookie.isEmpty()) {
+            return null;
+        }
+        String wanted = name.toLowerCase();
+        for (String piece : cookie.split(";")) {
+            int sep = piece.indexOf('=');
+            if (sep <= 0) {
+                continue;
+            }
+            if (piece.substring(0, sep).trim().toLowerCase().equals(wanted)) {
+                return piece.substring(sep + 1).trim();
+            }
+        }
+        return null;
+    }
+
+    /** 登录态 token:H5/app 为 acf_jwt_token/acf_auth(JWT 可读 exp),网页版为 dy_auth(不透明 token)——
+     *  只认 H5 那套会把网页登录 Cookie 判成游客(pure_live 7d5187ca)。 */
+    static String sessionToken(String cookie) {
+        String token = cookieField(cookie, "acf_jwt_token");
+        if (token == null || token.isEmpty()) {
+            token = cookieField(cookie, "acf_auth");
+        }
+        if (token == null || token.isEmpty()) {
+            token = cookieField(cookie, "dy_auth");
+        }
+        return token == null || token.isEmpty() ? null : token;
+    }
+
+    /** JWT payload 的 exp(秒);非 JWT 或解析失败返回 null——手贴 Cookie 的畸形 token 不该炸请求链路。 */
+    static Long jwtExpirySeconds(String token) {
+        if (token == null) {
+            return null;
+        }
+        String[] parts = token.split("\\.");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            String payload = parts[1].replace('-', '+').replace('_', '/');
+            switch (payload.length() % 4) {
+                case 2 -> payload += "==";
+                case 3 -> payload += "=";
+            }
+            long exp = JSON.readTree(java.util.Base64.getDecoder().decode(payload)).path("exp").asLong(0);
+            return exp > 0 ? exp : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 会话到期(秒):优先 JWT exp;网页版不透明 token 按保存时间 + 7 天折算;皆无返回 null(未知不猜,
+     *  猜过期会否掉一个仍然可用的登录)。 */
+    static Long sessionExpirySeconds(String cookie, Long savedAtSeconds) {
+        String token = sessionToken(cookie);
+        if (token == null) {
+            return null;
+        }
+        Long exp = jwtExpirySeconds(token);
+        if (exp != null) {
+            return exp;
+        }
+        return savedAtSeconds == null ? null : savedAtSeconds + WEB_COOKIE_LIFETIME_SECONDS;
+    }
+
+    /** 是否应续期:无 token 恒应(仅含 LTP0/dy_did 的 passport 凭证串可借此续出完整会话);到期时间未知不续
+     *  (猜过期会否掉仍可用的登录,交给播放失败强续路径);到期前 1 天进入续期窗口。 */
+    static boolean shouldRefreshSession(String cookie, Long savedAtSeconds, long nowSeconds) {
+        if (sessionToken(cookie) == null) {
+            return true;
+        }
+        Long expiry = sessionExpirySeconds(cookie, savedAtSeconds);
+        if (expiry == null) {
+            return false;
+        }
+        return nowSeconds >= expiry - REFRESH_MARGIN_SECONDS;
+    }
+
+    /** 签名/加密/Cookie 共用 DID:账号 Cookie 自带 dy_did(登录所属设备)时以它为准,缺失才回退进程 DID。
+     *  用另一个 DID 签名正是有效登录被按游客作答、边缘 403 的常见原因(pure_live 2e2cb0d4/c29a3b85)。 */
+    static String effectiveDeviceId(String userCookie, String processDid) {
+        String did = cookieField(userCookie, "dy_did");
+        return did == null || did.isEmpty() ? processDid : did;
+    }
+
+    private String effectiveDeviceId() {
+        return effectiveDeviceId(userCookie(), deviceId);
+    }
+
+    /** Set-Cookie 行合并进 Cookie:响应未提及的字段保留(整串替换会丢 LTP0,下次续期就没凭据了),
+     *  属性名(Path/Expires 等)不是字段,空值=服务端清空该字段,须删除而非复活。 */
+    static String mergeSetCookieLines(String cookie, List<String> setCookieLines) {
+        Map<String, String> fields = new HashMap<>();
+        for (String piece : cookie.split(";")) {
+            int sep = piece.indexOf('=');
+            if (sep <= 0) {
+                continue;
+            }
+            fields.put(piece.substring(0, sep).trim(), piece.substring(sep + 1).trim());
+        }
+        for (String line : setCookieLines) {
+            String pair = line.split(";", 2)[0].trim();
+            int sep = pair.indexOf('=');
+            if (sep <= 0) {
+                continue;
+            }
+            String name = pair.substring(0, sep).trim();
+            if (name.isEmpty() || SET_COOKIE_ATTRIBUTES.contains(name.toLowerCase())) {
+                continue;
+            }
+            String value = pair.substring(sep + 1).trim();
+            if (value.isEmpty()) {
+                fields.remove(name);
+            } else {
+                fields.put(name, value);
+            }
+        }
+        return fields.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).collect(Collectors.joining("; "));
+    }
+
+    /** 粘贴保护:新串只含 passport 凭证(无会话 token)而旧 Cookie 仍是登录态时,只取走 LTP0/dy_did 合并进
+     *  旧值——passport 那串整串覆盖等于登出(pure_live c29a3b85 形态 2)。 */
+    static String normalizePastedCookie(String oldCookie, String paste) {
+        if (oldCookie == null || oldCookie.isBlank() || paste == null || paste.isBlank()) {
+            return paste;
+        }
+        if (sessionToken(oldCookie) == null || sessionToken(paste) != null) {
+            return paste;
+        }
+        List<String> carry = new ArrayList<>();
+        String ltp0 = cookieField(paste, "LTP0");
+        if (ltp0 != null && !ltp0.isEmpty()) {
+            carry.add("LTP0=" + ltp0);
+        }
+        String did = cookieField(paste, "dy_did");
+        if (did != null && !did.isEmpty()) {
+            carry.add("dy_did=" + did);
+        }
+        return carry.isEmpty() ? paste : mergeSetCookieLines(oldCookie, carry);
+    }
+
+    /** passport safeAuth 续期:LTP0+dy_did 换新会话 Cookie 并落库;无凭证/不到窗口/没续到一律返回 null 不动存量。 */
+    synchronized String refreshSession(boolean force) {
+        String stored = userCookie();
+        if (stored.isBlank()) {
+            return null;
+        }
+        String ltp0 = cookieField(stored, "LTP0");
+        String did = cookieField(stored, "dy_did");
+        // 续期必须用登录所属设备,编造 DID 只会被 passport 拒绝(pure_live 7b917467)
+        if (ltp0 == null || ltp0.isBlank() || did == null || did.isBlank()) {
+            return null;
+        }
+        if (!force && !shouldRefreshSession(stored, cookieSavedAt(), System.currentTimeMillis() / 1000)) {
+            return null;
+        }
+        try {
+            String ms = String.valueOf(System.currentTimeMillis());
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.USER_AGENT, Constants.USER_AGENT);
+            headers.set(HttpHeaders.REFERER, "https://www.douyu.com/");
+            headers.set(HttpHeaders.COOKIE, "dy_did=" + did + ";LTP0=" + ltp0);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    PASSPORT_SAFE_AUTH_URL + "?client_id=1&t=" + ms + "&_=" + ms + "&callback=axiosJsonpCallback",
+                    HttpMethod.GET, new HttpEntity<>(headers), String.class);
+            List<String> setCookies = response.getHeaders().get(HttpHeaders.SET_COOKIE);
+            // 没有任何 Set-Cookie = 没续到:不落库不推进时间戳,否则把将死的 Cookie 再装成 7 天新鲜
+            if (setCookies == null || setCookies.isEmpty()) {
+                log.info("斗鱼续期响应未带回 Set-Cookie,保留原 Cookie");
+                return null;
+            }
+            String renewed = mergeSetCookieLines(stored, setCookies);
+            // 续期结果丢了会话字段 = 降级为游客,宁可保留原 Cookie
+            if (renewed.isBlank() || sessionToken(renewed) == null) {
+                log.info("斗鱼续期结果缺少会话字段,保留原 Cookie");
+                return null;
+            }
+            settingRepository.save(new Setting(COOKIE_SETTING, renewed));
+            settingRepository.save(new Setting(COOKIE_SAVED_AT_SETTING, String.valueOf(System.currentTimeMillis() / 1000)));
+            log.info("斗鱼 Cookie 已自动续期");
+            return renewed;
+        } catch (Exception e) {
+            log.warn("斗鱼 Cookie 续期失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** 播放前会话保鲜,永不抛:续期失败按原身份继续,不拖垮播放。force=播放失败路径强续一次。 */
+    void ensureFreshSession(boolean force) {
+        try {
+            refreshSession(force);
+        } catch (Exception e) {
+            log.warn("斗鱼会话续期异常: {}", e.getMessage());
+        }
+    }
+
+    /** 请求 Cookie:dy_did/acf_did 恒为签名 DID;LTP0 是 passport 续期密钥不进播放请求头(发了会被边缘
+     *  风控 403,pure_live c29a3b85 形态 3);属性碎片与非字段名剔除。 */
     static String buildCookieHeader(String did, String userCookie) {
         StringBuilder sb = new StringBuilder("dy_did=").append(did).append("; acf_did=").append(did);
         String normalized = userCookie == null ? "" : userCookie.trim().replaceFirst("(?i)^Cookie:\\s*", "");
@@ -385,7 +648,11 @@ public class DouyuService implements LivePlatform {
             }
             String name = piece.substring(0, sep).trim();
             String lower = name.toLowerCase();
-            if (lower.equals("dy_did") || lower.equals("acf_did")) {
+            if (lower.equals("dy_did") || lower.equals("acf_did") || lower.equals("ltp0")) {
+                continue;
+            }
+            // 误贴 Set-Cookie 行时带进的属性名(Path=/ 等)不是字段,一并滤掉
+            if (SET_COOKIE_ATTRIBUTES.contains(lower) || !COOKIE_NAME.matcher(name).matches()) {
                 continue;
             }
             sb.append("; ").append(name).append("=").append(piece.substring(sep + 1).trim());
@@ -401,7 +668,7 @@ public class DouyuService implements LivePlatform {
     private PlayArgs getPlayArgs(String roomId) {
         try {
             JsonNode key = fetchEncryptionKey();
-            return new PlayArgs(buildSignedForm(roomId, key, deviceId, System.currentTimeMillis() / 1000),
+            return new PlayArgs(buildSignedForm(roomId, key, effectiveDeviceId(), System.currentTimeMillis() / 1000),
                     "&hevc=0&fa=0&ive=0&ver=Douyu_new&iar=0", true);
         } catch (Exception e) {
             log.warn("斗鱼本地签名失败,回退外部签名服务: {}", e.getMessage());
@@ -411,7 +678,10 @@ public class DouyuService implements LivePlatform {
 
     private synchronized JsonNode fetchEncryptionKey() throws IOException {
         long now = System.currentTimeMillis() / 1000;
-        if (encryptionKey != null && now - encryptionKeyFetchedAt < ENC_KEY_CACHE_SECONDS
+        // 描述符签发给某台设备并校验签名来自同一台:登录 dy_did 变化 = 换设备,旧描述符必须作废
+        String did = effectiveDeviceId();
+        if (encryptionKey != null && did.equals(encryptionKeyDeviceId)
+                && now - encryptionKeyFetchedAt < ENC_KEY_CACHE_SECONDS
                 && isEncryptionKeyUsable(encryptionKey, now)) {
             return encryptionKey;
         }
@@ -419,8 +689,8 @@ public class DouyuService implements LivePlatform {
         headers.set(HttpHeaders.USER_AGENT, Constants.USER_AGENT);
         headers.set(HttpHeaders.REFERER, "https://www.douyu.com/");
         headers.set(HttpHeaders.ORIGIN, "https://www.douyu.com");
-        headers.set(HttpHeaders.COOKIE, buildCookieHeader(deviceId, userCookie()));
-        String body = restTemplate.exchange(GET_ENCRYPTION_URL + "?did=" + deviceId, HttpMethod.GET,
+        headers.set(HttpHeaders.COOKIE, buildCookieHeader(did, userCookie()));
+        String body = restTemplate.exchange(GET_ENCRYPTION_URL + "?did=" + did, HttpMethod.GET,
                 new HttpEntity<>(headers), String.class).getBody();
         JsonNode data = objectMapper.readTree(body).path("data");
         if (!isEncryptionKeyUsable(data, now)) {
@@ -428,6 +698,7 @@ public class DouyuService implements LivePlatform {
         }
         encryptionKey = data;
         encryptionKeyFetchedAt = now;
+        encryptionKeyDeviceId = did;
         return encryptionKey;
     }
 

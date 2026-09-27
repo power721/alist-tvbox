@@ -40,7 +40,7 @@ public class LiveService {
     private final SubscriptionService subscriptionService;
     private final AppProperties appProperties;
 
-    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService, TwitchService twitchService, SoopService soopService, AcfunService acfunService, InkeService inkeService, HuajiaoService huajiaoService, SixRoomService sixRoomService, KugouLiveService kugouLiveService, LookLiveService lookLiveService, YyService yyService, LiveFollowService liveFollowService, SubscriptionService subscriptionService, AppProperties appProperties) {
+    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService, TwitchService twitchService, SoopService soopService, AcfunService acfunService, InkeService inkeService, SixRoomService sixRoomService, KugouLiveService kugouLiveService, LookLiveService lookLiveService, YyService yyService, LiveFollowService liveFollowService, SubscriptionService subscriptionService, AppProperties appProperties) {
         this.huyaService = huyaService;
         platforms.add(huyaService);
         platforms.add(douyuService);
@@ -56,7 +56,6 @@ public class LiveService {
         platforms.add(twitchService);
         platforms.add(soopService);
         platforms.add(lookLiveService);
-        platforms.add(huajiaoService);
         this.liveFollowService = liveFollowService;
         this.subscriptionService = subscriptionService;
         this.appProperties = appProperties;

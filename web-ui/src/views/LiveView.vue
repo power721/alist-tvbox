@@ -94,7 +94,7 @@ const platformNames: Record<string, string> = {
   twitch: "Twitch",
   acfun: "AcFun",
   inke: "映客",
-  huajiao: "花椒",
+  huajiao: "花椒(已下线)",
   sixroom: "六间房",
   kugoulive: "酷狗直播",
   look: "LOOK直播",

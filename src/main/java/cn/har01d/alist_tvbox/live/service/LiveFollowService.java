@@ -496,9 +496,15 @@ public class LiveFollowService {
         return info != null && StringUtils.isNotBlank(info.getVod_play_url());
     }
 
+    /** 已下线平台(服务已移除)的展示名:历史关注行仍可读,pure_live 3.1.6 同款「已下线」口径。 */
+    private static final Map<String, String> RETIRED_PLATFORMS = Map.of("huajiao", "花椒(已下线)");
+
     private String platformName(String type) {
         LivePlatform platform = findPlatform(type);
-        return platform == null ? type : platform.getName();
+        if (platform != null) {
+            return platform.getName();
+        }
+        return RETIRED_PLATFORMS.getOrDefault(type, type);
     }
 
     private LivePlatform findPlatform(String type) {
