@@ -21,10 +21,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,7 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 每日离线清理(docs/pan115-offline-auto-delete-design.md):删除 115 离线任务+文件,
+ * 定时离线清理(docs/pan115-offline-auto-delete-design.md):删除 115 离线任务+文件,
  * 面向离线配额大的重度用户(任务槽位被完成态任务占满、离线目录无限膨胀)。
  * <p>
  * 删除时机三分法(v2.2 定案):
@@ -50,9 +46,9 @@ import java.util.Objects;
  * 115 客户端自建的任务。本地行永不物理删(配额计数、urlHash 查重、FAILED 记忆都依赖行),
  * 清理完成只置 {@code cleanup_state=DONE} —— 提交短路随之放行同磁力重提(这正是删任务的目的)。
  * <p>
- * 调度:每小时 :10(2026-09-28 用户定规改每小时,原每日一次)+ 05:40 备用入口,自然小时
- * 闸门共用(同小时只跑一次)——TTL 到期 1 小时内即回收;电视盒子晚上用完关机是主力画像,
- * 错过整点下次在线自动补上;连续失败超限进入 7 天冷却,冷却期满重试一轮(cookie 换新后自愈),
+ * 调度:每小时 :10 cron 直跑(2026-09-28 用户定规,原每日一次;无代码内节流/闸门,
+ * 清理幂等无副作用)——TTL 到期 1 小时内即回收;电视盒子晚上用完关机是主力画像,错过整点
+ * 下次在线的 :10 自动补上;连续失败超限进入 7 天冷却,冷却期满重试一轮(cookie 换新后自愈),
  * 不永久放弃。
  * <p>
  * 多盘差异(按 {@link OfflineDownloadHandler#supportsTaskManagement()} 分叉):115/迅雷有任务
@@ -112,53 +108,16 @@ public class OfflineCleanupService {
     }
 
     /**
-     * 05:40 备用调度入口(每小时 :10 之外的一个整点,共用自然小时闸门;原「避开 6 点高峰」
-     * 定规随每小时清理演进而失效,保留入口不撤,行为与 :10 等价);autoDelete 与固化开关全关时零动作。
-     */
-    @Scheduled(cron = "0 40 5 * * *")
-    public void dailyCleanup() {
-        runIfDue();
-    }
-
-    /**
-     * 每小时 :10 清理(2026-09-28 用户定规改每小时,原每日一次):TTL 到期 1 小时内即回收,
-     * 电视盒子晚上用完关机错过的整点在下次在线后自动补上;与 05:40 入口共用自然小时闸门;
-     * 从未跑过(升级上来无 marker)立即执行。
+     * 每小时 :10 清理(2026-09-28 用户定规:cron 直跑,不做代码内节流/闸门——TTL 到期 1 小时内
+     * 即回收;清理幂等:行 DONE 不再进候选,重复触发最多多一次任务列表查询,无副作用)。
+     * 电视盒子晚上用完关机错过的整点在下次在线的 :10 自动补上;autoDelete 与固化开关全关时零动作。
      */
     @Scheduled(cron = "0 10 * * * *")
-    public void catchUpCleanup() {
-        runIfDue();
-    }
-
-    /**
-     * 自然小时闸门:两个调度入口共用,同本地自然小时内只跑一次(05:10/05:40 同小时只触发一次,
-     * 跨小时即执行)——比「距上次 ≥1h」稳:marker 写在清理完成时刻,执行耗时会把下个 :10
-     * 的间隔压成 59m59s 差几秒被节流,实际频率退化成每 2 小时(线上 20:10:00.002 触发、
-     * marker 19:10:01.2 即此形态)。跑完(含配置未启用的空跑)持久化执行时间,重启不重复。
-     */
-    private void runIfDue() {
-        Instant now = Instant.now();
-        Instant last = lastRunTime();
-        if (last != null
-                && LocalDateTime.ofInstant(last, ZoneId.systemDefault()).truncatedTo(ChronoUnit.HOURS)
-                        .equals(LocalDateTime.ofInstant(now, ZoneId.systemDefault()).truncatedTo(ChronoUnit.HOURS))) {
-            log.debug("offline cleanup ran {} ago, skip", Duration.between(last, now));
-            return;
-        }
+    public void hourlyCleanup() {
         try {
             doCleanup();
         } finally {
-            writeLastRun(Instant.now());
-        }
-    }
-
-    private Instant lastRunTime() {
-        try {
-            return settingRepository.findById(LAST_RUN_SETTING).map(Setting::getValue)
-                    .map(Instant::parse).orElse(null);
-        } catch (Exception e) {
-            log.debug("read offline cleanup last-run failed: {}", e.getMessage());
-            return null;
+            writeLastRun(Instant.now()); // 仅诊断展示用(DiagnosticsService「上次清理距今」),不参与调度判定
         }
     }
 
