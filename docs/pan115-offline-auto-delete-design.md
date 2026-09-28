@@ -1,7 +1,7 @@
 # 115 离线下载自动清理设计(TTL 删任务+文件 + 永久分享固化)
 
-状态:**已实现**(2026-09-15,v2.2 定案落地;v1 生命周期触发废弃,v2 纯 TTL 经两轮修正:起算点改完成时间、msub 行改**观看进度门禁**)。
-实现索引:迁移 V54 + `OfflineDownloadTask` 五列;`OfflineCleanupService`(每日 05:40,触发矩阵/活体检查/追平门禁/固化编排,四盘按 `supportsTaskManagement`/`deletesFilesWithTask` 分叉,123 离线 handler 含两步提交+重登自愈);`Pan115OfflineDownloadHandler.taskStatus/deleteTask`(task_del 契约)与 `ThunderOfflineDownloadHandler` 同款(phase 映射 + task_ids/delete_files);光鸭 AList 删文件路径;`MediaSubscriptionCheckService.selfifyOfflineProduct`(固化转换);`OfflineDownloadService`(短路放行/FAILED 即清/info_hash 落行/completed_time);web-ui DriverAccountView 离线 tab 三控件。
+状态:**已实现**(2026-09-15,v2.2 定案落地;v1 生命周期触发废弃,v2 纯 TTL 经两轮修正:起算点改完成时间、msub 行改**观看进度门禁**;2026-09-28 用户定规调度改每小时 :10,原每日一次)。
+实现索引:迁移 V54 + `OfflineDownloadTask` 五列;`OfflineCleanupService`(每小时 :10,触发矩阵/活体检查/追平门禁/固化编排,四盘按 `supportsTaskManagement`/`deletesFilesWithTask` 分叉,123 离线 handler 含两步提交+重登自愈);`Pan115OfflineDownloadHandler.taskStatus/deleteTask`(task_del 契约)与 `ThunderOfflineDownloadHandler` 同款(phase 映射 + task_ids/delete_files);光鸭 AList 删文件路径;`MediaSubscriptionCheckService.selfifyOfflineProduct`(固化转换);`OfflineDownloadService`(短路放行/FAILED 即清/info_hash 落行/completed_time);web-ui DriverAccountView 离线 tab 三控件。
 目标用户:离线配额大、重度使用磁力兜底/离线入口的用户。
 
 ## 0. 定规(用户拍板)
@@ -24,7 +24,7 @@
 
 均放现有 `offline_download_config`(StoredConfig JSON,加字段向后兼容):
 
-- **autoDelete**(bool,默认 false)+ **ttlHours**(int,默认 24):每日定时清理离线任务+文件——通用入口按 TTL(完成时间起算),msub 行按追平门禁或固化后即删(见 §5 触发矩阵)。
+- **autoDelete**(bool,默认 false)+ **ttlHours**(int,默认 24):定时清理离线任务+文件——通用入口按 TTL(完成时间起算),msub 行按追平门禁或固化后即删(见 §5 触发矩阵)。
 - **selfShare**(bool,默认 false,仅 cookie PAN115;OPEN115 无分享 API):删除前对仍被订阅引用的磁力产物**先固化永久分享**(建分享→存 URL→资源行切自有分享播放),再删任务+文件 → 清理对播放零影响,内容经由分享快照长期可达。
 
 开关组合语义:
@@ -66,13 +66,13 @@
 - 分享粒度=每产物一个分享(115 加文件必须新建分享,快照不可变,天然一产物一分享)。分享标题即 taskName(原始资源名),美观化留二期。长番按集磁力会产生较多小分享,量级无害;若要收敛为按剧合并,须先把产物 fs/move 进统一目录——**move 后严禁 task_del flag=1**(115 按 fid 删文件,fid 跨路径有效,会追杀已移走的文件),只能 flag=0,二期再议。
 - 分享创建只能用 cookie PAN115 账号;开放平台无分享 API。
 
-## 5. 清理执行(每日定时任务)
+## 5. 清理执行(定时任务,每小时)
 
-新建 `OfflineCleanupService`,自有 `@Scheduled` 每日一次(05:40——用户定规避开 6 点整段高峰:06:00 例行清理/06:05-06:11 签到族/06:30-06:50 全挤在该小时;固化+删除是网络密集型,批量限速防风控)。逐行判定:
+新建 `OfflineCleanupService`,自有 `@Scheduled` 每小时 :10(2026-09-28 用户定规;原每日 05:40 单时刻——错过即积压、TTL 到期任务最长压一天才回收;05:40 入口保留与 :10 共用 1h 节流)。逐行判定:
 
 | 行形态 | 条件 | 动作 |
 |---|---|---|
-| FAILED | 115 侧任务残留会挡重提(10008) | **即清,不等 TTL**:提交失败当场 task_del flag=1(提交路径钩子);每日任务兜底扫漏 |
+| FAILED | 115 侧任务残留会挡重提(10008) | **即清,不等 TTL**:提交失败当场 task_del flag=1(提交路径钩子);定时任务兜底扫漏 |
 | PENDING(未收割) | 滞留任务白占 115 槽位+app pending 闸门,但**不按 TTL 盲删**——先活体检查 `findTask`(匹配键见下):115 侧已完成且订阅仍在 → 跳过等收割(砍了白瞎整包进度);仍在下载 → 跳过,提交超 `offlinePendingStuckDays`(默认 7 天)才按滞留清;已失败/查无 → task_del flag=1,行置 FAILED 或 DONE |
 | COMPLETED,subscriptionId=null(通用 /parse、/offline_download 即看即走) | **完成时间**超 TTL | task_del flag=1 → DONE |
 | COMPLETED,msub 行,autoDelete ON + selfShare OFF | **追平门禁**:资源行覆盖集全部已看(取数与 🆕 追平角标同源聚合,只升不降、计数去重;保守回落=最大覆盖集号 ≤ caught_up_episode);或行已退役/订阅已删 | task_del flag=1 → DONE,行放行重提;未追平保留 |
@@ -82,7 +82,7 @@
 
 执行细节:
 - **放行重提(定规 2 的落点)**:`doSubmitMagnet` 短路处增加 `cleanup_state=DONE` 分支——COMPLETED/PENDING 行若已清理,视同无行,照常重新提交(行被 upsert 覆盖)。FAILED 记忆不因清理解除(坏磁力重复烧配额,语义不变,手动重试本就不受限)。
-- 幂等与重试:task_del 失败置 `cleanup_state=FAILED`,每日重试,连续 5 次 WARN 放弃;任务不存在视为成功。
+- 幂等与重试:task_del 失败置 `cleanup_state=FAILED`,下轮每小时重试,连续 5 次 WARN 放弃;任务不存在视为成功。
 - PENDING 活体检查的匹配键:`saveAttempt` 目前**不落 info_hash**(只存预测名),须补提——magnet 的 btih 提取逻辑在 handler 已有(`xt=urn:btih:`),抽公共方法在服务层落列;ed2k 无 btih,按预测名对 task_lists 匹配,匹配不上只按滞留天数兜底。
 - **只删本系统提交的任务**(表内有行、有 info_hash);严禁 `task_clear` 批量清空,会误删用户在 115 客户端自建的任务。
 - 删除后 msub 磁力行的退役:走既有收割扫描「产品消失→retireResource」(磁力行 shareId=null,退役只翻行态不删文件),零新路径;selfShare ON 下行已切分享挂载,不受离线目录扫描影响。

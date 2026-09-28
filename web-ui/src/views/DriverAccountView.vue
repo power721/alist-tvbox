@@ -420,7 +420,7 @@
             <el-form-item label="自动清理">
               <el-switch v-model="offlineDownloadConfig.autoDelete" inline-prompt active-text="开启" inactive-text="关闭"
                          :disabled="!offlineDownloadConfig.enabled"/>
-              <span class="hint">每日清理离线任务和文件,释放任务槽位与空间</span>
+              <span class="hint">每小时自动清理离线任务和文件,释放任务槽位与空间</span>
             </el-form-item>
             <el-form-item v-if="offlineDownloadConfig.autoDelete" label="通用入口保留时长">
               <el-input-number v-model="offlineDownloadConfig.ttlHours" :min="1" :disabled="!offlineDownloadConfig.enabled"/>
