@@ -22,6 +22,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,9 +50,10 @@ import java.util.Objects;
  * 115 客户端自建的任务。本地行永不物理删(配额计数、urlHash 查重、FAILED 记忆都依赖行),
  * 清理完成只置 {@code cleanup_state=DONE} —— 提交短路随之放行同磁力重提(这正是删任务的目的)。
  * <p>
- * 调度:每小时 :10(2026-09-28 用户定规改每小时,原每日一次)+ 05:40 备用入口,1h 节流
- * 共用闸门——TTL 到期 1 小时内即回收;电视盒子晚上用完关机是主力画像,错过整点下次在线
- * 自动补上;连续失败超限进入 7 天冷却,冷却期满重试一轮(cookie 换新后自愈),不永久放弃。
+ * 调度:每小时 :10(2026-09-28 用户定规改每小时,原每日一次)+ 05:40 备用入口,自然小时
+ * 闸门共用(同小时只跑一次)——TTL 到期 1 小时内即回收;电视盒子晚上用完关机是主力画像,
+ * 错过整点下次在线自动补上;连续失败超限进入 7 天冷却,冷却期满重试一轮(cookie 换新后自愈),
+ * 不永久放弃。
  * <p>
  * 多盘差异(按 {@link OfflineDownloadHandler#supportsTaskManagement()} 分叉):115/迅雷有任务
  * 删除契约,删任务+文件一体,固化分享仅 cookie 115;光鸭无契约(重复提交直接建新任务、无
@@ -64,8 +68,6 @@ public class OfflineCleanupService {
     private static final int MAX_CLEANUP_ATTEMPTS = 5;
     /** 连续失败超限后的冷却时长:冷却期满重置计数重试一轮(cookie 换新等环境修复后自愈)。 */
     private static final long RETRY_COOLDOWN_HOURS = 7 * 24L;
-    /** 清理最小间隔:每小时一次(2026-09-28 用户定规),节流防同小时内重复跑。 */
-    private static final Duration MIN_INTERVAL = Duration.ofHours(1);
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_FAILED = "FAILED";
@@ -110,8 +112,8 @@ public class OfflineCleanupService {
     }
 
     /**
-     * 05:40 备用调度入口(每小时 :10 之外的一个整点,共用 1h 节流;原「避开 6 点高峰」定规
-     * 随每小时清理演进而失效,保留入口不撤,行为与 :10 等价);autoDelete 与固化开关全关时零动作。
+     * 05:40 备用调度入口(每小时 :10 之外的一个整点,共用自然小时闸门;原「避开 6 点高峰」
+     * 定规随每小时清理演进而失效,保留入口不撤,行为与 :10 等价);autoDelete 与固化开关全关时零动作。
      */
     @Scheduled(cron = "0 40 5 * * *")
     public void dailyCleanup() {
@@ -120,7 +122,7 @@ public class OfflineCleanupService {
 
     /**
      * 每小时 :10 清理(2026-09-28 用户定规改每小时,原每日一次):TTL 到期 1 小时内即回收,
-     * 电视盒子晚上用完关机错过的整点在下次在线后自动补上;与 05:40 入口共用 1h 节流;
+     * 电视盒子晚上用完关机错过的整点在下次在线后自动补上;与 05:40 入口共用自然小时闸门;
      * 从未跑过(升级上来无 marker)立即执行。
      */
     @Scheduled(cron = "0 10 * * * *")
@@ -128,11 +130,19 @@ public class OfflineCleanupService {
         runIfDue();
     }
 
-    /** 23h 节流闸门:两个调度入口共用;跑完(含配置未启用的空跑)持久化执行时间,重启不重复。 */
+    /**
+     * 自然小时闸门:两个调度入口共用,同本地自然小时内只跑一次(05:10/05:40 同小时只触发一次,
+     * 跨小时即执行)——比「距上次 ≥1h」稳:marker 写在清理完成时刻,执行耗时会把下个 :10
+     * 的间隔压成 59m59s 差几秒被节流,实际频率退化成每 2 小时(线上 20:10:00.002 触发、
+     * marker 19:10:01.2 即此形态)。跑完(含配置未启用的空跑)持久化执行时间,重启不重复。
+     */
     private void runIfDue() {
+        Instant now = Instant.now();
         Instant last = lastRunTime();
-        if (last != null && last.plus(MIN_INTERVAL).isAfter(Instant.now())) {
-            log.debug("offline cleanup ran {} ago, skip", Duration.between(last, Instant.now()));
+        if (last != null
+                && LocalDateTime.ofInstant(last, ZoneId.systemDefault()).truncatedTo(ChronoUnit.HOURS)
+                        .equals(LocalDateTime.ofInstant(now, ZoneId.systemDefault()).truncatedTo(ChronoUnit.HOURS))) {
+            log.debug("offline cleanup ran {} ago, skip", Duration.between(last, now));
             return;
         }
         try {

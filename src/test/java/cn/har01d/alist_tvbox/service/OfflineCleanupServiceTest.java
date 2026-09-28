@@ -22,6 +22,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -668,5 +671,38 @@ class OfflineCleanupServiceTest {
         verify(handler).deleteTask(account, HASH, "旧账号产物", true);
         verify(handler123).deleteTask(pan123, HASH, "123产物", true);
         verify(aListService).remove(any(), eq("/123挂载/alist-tvbox-offline/123产物"));
+    }
+
+    // ---------- 自然小时闸门(每小时一次;marker 完成时刻偏移不吞下个整点) ----------
+
+    @Test
+    void cleanupSkipsWhenLastRunInSameWallClockHour() {
+        LocalDateTime hourStart = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS);
+        lenient().when(settingRepository.findById(OfflineCleanupService.LAST_RUN_SETTING))
+                .thenReturn(Optional.of(new Setting(OfflineCleanupService.LAST_RUN_SETTING,
+                        hourStart.plusMinutes(1).atZone(ZoneId.systemDefault()).toInstant().toString())));
+
+        service.dailyCleanup();
+
+        // 同自然小时(哪怕只隔几十秒)不重跑
+        verify(taskRepository, never()).findCleanupCandidates();
+    }
+
+    @Test
+    void cleanupRunsWhenLastRunInPreviousWallClockHour() {
+        // 线上形态:marker 写在清理完成时刻(如 19:10:01),下个整点触发(20:10:00)只隔
+        // 59m59s——「距上次 ≥1h」判定会把它节流掉、实际退化成每 2 小时;自然小时闸门跨小时即执行
+        LocalDateTime hourStart = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS);
+        lenient().when(settingRepository.findById(OfflineCleanupService.LAST_RUN_SETTING))
+                .thenReturn(Optional.of(new Setting(OfflineCleanupService.LAST_RUN_SETTING,
+                        hourStart.minusSeconds(1).atZone(ZoneId.systemDefault()).toInstant().toString())));
+        // 空候选即可:验证的是闸门放行(候选查询被调),账号循环不进入
+        when(offlineDownloadService.cleanupConfig())
+                .thenReturn(new OfflineDownloadService.CleanupConfig(12, "PAN115", true, 24, false));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of());
+
+        service.dailyCleanup();
+
+        verify(taskRepository).findCleanupCandidates();
     }
 }
