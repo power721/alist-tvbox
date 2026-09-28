@@ -134,7 +134,16 @@ public class OfflineDownloadService {
         String pathId = requireOfflineFolderId(config);
         log.info("submitting offline download: driverType={}, accountId={}, pathId={}, urlHash={}", config.driverType(), account.getId(), pathId, urlHash);
 
-        OfflineDownloadHandler.TaskResult result = handler.submitAndWait(account, request.url(), pathId);
+        OfflineDownloadHandler.TaskResult result;
+        try {
+            result = handler.submitAndWait(account, request.url(), pathId);
+        } catch (BadRequestException e) {
+            // 超时/失败同样落行(对齐磁力兜底三态):115 侧任务已创建,后台继续下载、产物照常落盘,
+            // 不落行则网盘有文件夹而本地无行——每日清理只遍历本地行,产物沦为永久盲区
+            // (线上:javbus 即看即走同批 5 部,4 部 10 秒内完成落行获清理,1 部超时无行残留目录)。
+            recordSubmitFailure(config, account, request.url(), urlHash, null, null, e);
+            throw e; // 播放语义不变:仍上抛;重试时 115 返回「任务已存在」,不会重复建任务
+        }
         String targetPath = buildTargetPath(account, result.taskName());
         saveTask(account.getId(), urlHash, result, targetPath, null, null);
         log.info("offline download task completed: driverType={}, accountId={}, urlHash={}, targetPath={}", config.driverType(), account.getId(), urlHash, targetPath);
@@ -259,17 +268,10 @@ public class OfflineDownloadService {
         try {
             result = handler.submitAndWait(account, url, pathId, waitSeconds);
         } catch (BadRequestException e) {
-            if (isTimeoutMessage(e.getMessage())) {
-                // 123 等盘超时时已拿到网盘侧任务 id,存 info_hash 供清理活体检查直按它对账
-                String pendingTaskId = e instanceof cn.har01d.alist_tvbox.service.offline.OfflineTaskPendingException pending
-                        && StringUtils.isNotBlank(pending.getTaskId()) ? pending.getTaskId() : null;
-                saveAttempt(account.getId(), urlHash, url, pendingTaskId, subscriptionId, episode,
-                        STATUS_PENDING, predictProductName(url), null, false);
-                return MagnetSubmitResult.submitted("已提交,等待网盘下载");
-            }
-            saveAttempt(account.getId(), urlHash, url, null, subscriptionId, episode, STATUS_FAILED, null, null, false);
-            deleteFailedTaskQuietly(config, account, url, urlHash);
-            return MagnetSubmitResult.failed(e.getMessage());
+            boolean timeout = isTimeoutMessage(e.getMessage());
+            recordSubmitFailure(config, account, url, urlHash, subscriptionId, episode, e);
+            return timeout ? MagnetSubmitResult.submitted("已提交,等待网盘下载")
+                    : MagnetSubmitResult.failed(e.getMessage());
         } catch (Exception e) {
             saveAttempt(account.getId(), urlHash, url, null, subscriptionId, episode, STATUS_FAILED, null, null, false);
             deleteFailedTaskQuietly(config, account, url, urlHash);
@@ -568,6 +570,26 @@ public class OfflineDownloadService {
         entity.setCleanupAttempts(0);
         entity.setUpdatedTime(now);
         offlineDownloadTaskRepository.save(entity);
+    }
+
+    /**
+     * 提交异常落行(超时→PENDING 交清理活体检查接管;失败→FAILED+当场即清残任务防挡重提):
+     * 通用入口({@link #downloadTarget})与磁力兜底({@link #doSubmitMagnet})共用。
+     * 超时形态网盘侧任务已建,后台继续下载、产物照常落盘——不落行则产物无本地行,
+     * 每日清理只遍历本地行,文件夹沦为永久盲区。
+     */
+    private void recordSubmitFailure(StoredConfig config, DriverAccount account, String url, String urlHash,
+                                     Integer subscriptionId, Integer episode, BadRequestException e) {
+        if (isTimeoutMessage(e.getMessage())) {
+            // 123 等盘超时时已拿到网盘侧任务 id,存 info_hash 供清理活体检查直按它对账
+            String pendingTaskId = e instanceof cn.har01d.alist_tvbox.service.offline.OfflineTaskPendingException pending
+                    && StringUtils.isNotBlank(pending.getTaskId()) ? pending.getTaskId() : null;
+            saveAttempt(account.getId(), urlHash, url, pendingTaskId, subscriptionId, episode,
+                    STATUS_PENDING, predictProductName(url), null, false);
+        } else {
+            saveAttempt(account.getId(), urlHash, url, null, subscriptionId, episode, STATUS_FAILED, null, null, false);
+            deleteFailedTaskQuietly(config, account, url, urlHash);
+        }
     }
 
     /**

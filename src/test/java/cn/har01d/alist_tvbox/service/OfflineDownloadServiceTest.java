@@ -238,6 +238,77 @@ class OfflineDownloadServiceTest {
         assertEquals("不支持的离线下载链接", exception.getMessage());
     }
 
+    // ---------- 通用入口超时/失败落行(防清理盲区) ----------
+
+    @Test
+    void downloadPathShouldRecordPendingTaskOnTimeout() {
+        DriverAccount account = account(12, DriverType.PAN115, "3142159731515950166");
+        enableConfig(account);
+        String magnet = "magnet:?xt=urn:btih:" + "a".repeat(40);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(pan115Handler.submitAndWait(any(), any(), any()))
+                .thenThrow(new BadRequestException("离线下载任务未在10秒内完成"));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () ->
+                service.downloadPath(new ParseRequest(magnet)));
+
+        assertEquals("离线下载任务未在10秒内完成", exception.getMessage());
+        // 超时必须落 PENDING 行:115 侧任务已建,产物会后台落盘;无本地行=每日清理的盲区,文件夹永不清理
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("PENDING", captor.getValue().getStatus());
+        assertEquals("a".repeat(40), captor.getValue().getInfoHash());
+    }
+
+    @Test
+    void downloadPathShouldRecordFailedTaskAndCleanResidue() {
+        DriverAccount account = account(12, DriverType.PAN115, "3142159731515950166");
+        when(settingRepository.findById("offline_download_config")).thenReturn(Optional.of(new Setting(
+                "offline_download_config",
+                "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"folder-1\",\"autoDelete\":true}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        String magnet = "magnet:?xt=urn:btih:" + "a".repeat(40);
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.empty());
+        when(pan115Handler.submitAndWait(any(), any(), any()))
+                .thenThrow(new BadRequestException("task failed: 链接违规"));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () ->
+                service.downloadPath(new ParseRequest(magnet)));
+
+        assertEquals("task failed: 链接违规", exception.getMessage());
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("FAILED", captor.getValue().getStatus());
+        // 残失败任务当场即清(防挡同磁力重提)
+        verify(pan115Handler).deleteTask(account, "a".repeat(40), null, true);
+    }
+
+    @Test
+    void downloadPathShouldSettlePendingRowOnRetrySuccess() {
+        DriverAccount account = account(12, DriverType.PAN115, "3142159731515950166");
+        enableConfig(account);
+        // 首次超时落的 PENDING 行,重试成功后须原地转 COMPLETED(同 urlHash 单行):PENDING/COMPLETED
+        // 并存时,清理活体检查会把 PENDING 行按 SUCCEEDED 删任务+文件,砍掉正在播放的正片
+        OfflineDownloadTask pending = new OfflineDownloadTask();
+        pending.setId(88);
+        pending.setAccountId(12);
+        pending.setStatus("PENDING");
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(pending));
+        when(pan115Handler.submitAndWait(any(), any(), any()))
+                .thenReturn(new OfflineDownloadHandler.TaskResult("重试产物", "hash", true));
+
+        String result = service.downloadPath(new ParseRequest("magnet:?xt=urn:btih:test"));
+
+        assertEquals("/115云盘/😲我的115云盘/alist-tvbox-offline/重试产物", result);
+        var captor = org.mockito.ArgumentCaptor.forClass(OfflineDownloadTask.class);
+        verify(offlineDownloadTaskRepository).save(captor.capture());
+        assertEquals("COMPLETED", captor.getValue().getStatus());
+        assertEquals(88, captor.getValue().getId());
+    }
+
     @Test
     void getQuotaShouldDelegateToHandler() {
         DriverAccount account = account(12, DriverType.PAN115, "3142159731515950166");
