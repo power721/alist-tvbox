@@ -221,6 +221,21 @@ class BiliBiliServiceTest {
                 service.getDetail("BV195KY6YEeY", "com.github.tvbox.osc").getList().get(0).getVod_director());
     }
 
+    @Test
+    void getDetailResolvesAidCidEntryIdsThroughBvConversion() throws Exception {
+        // 相关视频/合集线路条目 id 为 aid-cid(/play 同款格式)、稍后再看有纯 aid 回落:
+        // 详情必须折 BV 后照常返回(stub 只认折转后的 BV,拿到响应即证明走了转换),而非恒 404
+        BiliBiliInfoResponse response = new BiliBiliInfoResponse();
+        response.setData(videoInfo());
+        when(restTemplate.getForObject(startsWith("https://api.bilibili.com/x/web-interface/view?bvid=BV195KY6YEeY"), eq(BiliBiliInfoResponse.class)))
+                .thenReturn(response);
+
+        assertEquals("BV195KY6YEeY",
+                service.getDetail("116958703918865-40168587741", "gui").getList().get(0).getVod_id());
+        assertEquals("BV195KY6YEeY",
+                service.getDetail("116958703918865", "gui").getList().get(0).getVod_id());
+    }
+
 
     @Test
     void getUpMediaSendsCookieHeaderToSpaceArcSearch() throws Exception {

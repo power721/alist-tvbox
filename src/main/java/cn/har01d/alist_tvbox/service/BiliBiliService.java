@@ -1775,6 +1775,14 @@ public class BiliBiliService {
             return getSeriesPlaylist(bvid);
         }
 
+        // 相关视频/合集线路条目 id 为 aid-cid(或 aid-cid-epId,与 /play 同款格式),稍后再看等场景还有纯 aid 回落;
+        // view 接口只认 BV,统一折 BV 后走正常详情链路。否则这些条目"能播不能看详情":
+        // getPlayUrl 原生拆 aid-cid 照常出流,而详情恒 404,客户端播放列表树逐条切换时影片详情永远停在打开时的视频上。
+        if (bvid.matches("\\d+.*")) {
+            String aid = bvid.contains("-") ? bvid.substring(0, bvid.indexOf('-')) : bvid;
+            bvid = BiliBiliUtils.av2bv(Long.parseLong(aid));
+        }
+
         BiliBiliInfo info = cache.get(bvid);
         MovieDetail movieDetail = getMovieDetail(info, client, true);
 
