@@ -340,6 +340,16 @@ public class Pan115OfflineDownloadHandler implements OfflineDownloadHandler {
         return OfflineDownloadHandler.extractInfoHash(url);
     }
 
+    /** 删任务前解析产物名(超时 PENDING 行 taskName=null,兜底删文件需要路径)。 */
+    @Override
+    public String resolveTaskName(DriverAccount account, String infoHash, String taskName) {
+        ObjectNode task = findTaskByIdentity(account, infoHash, taskName, 2);
+        if (task == null) {
+            return taskName;
+        }
+        return StringUtils.firstNonBlank(task.path("name").asText(""), taskName);
+    }
+
     /** 离线清理对账:任务列表按 info_hash 优先/产物名兜底定位任务。 */
     private ObjectNode findTaskByIdentity(DriverAccount account, String infoHash, String taskName, int pages) {
         String cookie = requireCookie(account);

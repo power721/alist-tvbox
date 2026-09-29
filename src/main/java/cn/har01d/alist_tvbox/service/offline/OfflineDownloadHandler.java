@@ -50,11 +50,19 @@ public interface OfflineDownloadHandler {
 
     /**
      * deleteTask(deleteFiles=true) 是否连产物文件一并删(115 flag=1 / 迅雷 delete_files=true)。
-     * false(123 任务删除无文件参数 / 光鸭无任务删除)时,清理调度在删任务记录后经内嵌
-     * AList 删产物文件兜底回收空间。
+     * 注意:即便为 true,网盘侧文件删除也是尽力而为(2026-09-29 线上实测 115 task_del state=true
+     * 仍有产物残留),清理调度对所有盘统一在删任务后经内嵌 AList 兜底核删产物文件。
      */
     default boolean deletesFilesWithTask() {
         return false;
+    }
+
+    /**
+     * 按 info_hash(缺失按产物名)从网盘任务列表解析任务产物名(清理兜底删文件需要路径)。
+     * 超时落行的 PENDING 行 taskName=null,删任务前先解析回填;任务查无返回入参 taskName。
+     */
+    default String resolveTaskName(DriverAccount account, String infoHash, String taskName) {
+        return taskName;
     }
 
     record TaskResult(String taskName, String infoHash, boolean folder) {

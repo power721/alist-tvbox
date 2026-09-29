@@ -46,10 +46,10 @@ import java.util.Objects;
  * 115 客户端自建的任务。本地行永不物理删(配额计数、urlHash 查重、FAILED 记忆都依赖行),
  * 清理完成只置 {@code cleanup_state=DONE} —— 提交短路随之放行同磁力重提(这正是删任务的目的)。
  * <p>
- * 调度:每小时 :10 cron 直跑(2026-09-28 用户定规,原每日一次;无代码内节流/闸门,
- * 清理幂等无副作用)——TTL 到期 1 小时内即回收;电视盒子晚上用完关机是主力画像,错过整点
- * 下次在线的 :10 自动补上;连续失败超限进入 7 天冷却,冷却期满重试一轮(cookie 换新后自愈),
- * 不永久放弃。
+ * 调度:每小时 :10 cron 直跑(2026-09-28 用户定规,原每日一次;2026-09-29 曾试加密到
+ * 10 分钟,用户定规改回每小时——TTL 到期最长 1 小时内回收,关机错过的整点下次在线补上;
+ * 零候选时只花一次 DB 查询,幂等无副作用);连续失败超限进入 7 天冷却,冷却期满重试一轮
+ * (cookie 换新后自愈),不永久放弃。
  * <p>
  * 多盘差异(按 {@link OfflineDownloadHandler#supportsTaskManagement()} 分叉):115/迅雷有任务
  * 删除契约,删任务+文件一体,固化分享仅 cookie 115;光鸭无契约(重复提交直接建新任务、无
@@ -108,8 +108,8 @@ public class OfflineCleanupService {
     }
 
     /**
-     * 每小时 :10 清理(2026-09-28 用户定规:cron 直跑,不做代码内节流/闸门——TTL 到期 1 小时内
-     * 即回收;清理幂等:行 DONE 不再进候选,重复触发最多多一次任务列表查询,无副作用)。
+     * 每小时 :10 清理(用户定规:cron 直跑,不做代码内节流/闸门——TTL 到期最长 1 小时内回收;
+     * 清理幂等:行 DONE 不再进候选,重复触发最多多一次任务列表查询,无副作用)。
      * 电视盒子晚上用完关机错过的整点在下次在线的 :10 自动补上;autoDelete 与固化开关全关时零动作。
      */
     @Scheduled(cron = "0 10 * * * *")
@@ -269,7 +269,14 @@ public class OfflineCleanupService {
         switch (handler.taskStatus(account, task.getInfoHash(), task.getTaskName())) {
             case SUCCEEDED -> {
                 if (!subAlive) {
-                    return deleteRemote(task, account, handler, managed, true); // 订阅已删,无人收割:删
+                    // 通用入口超时行(subscriptionId=null)无 completedTime,按提交时间近似 TTL——
+                    // 与 COMPLETED 行同口径,防止刚提交不久就被下一轮清掉(用户还没来得及看);
+                    // msub 残行(订阅已删)无人收割,即清
+                    if (task.getSubscriptionId() == null
+                            && !olderThan(task.getCreatedTime(), config.ttlHours())) {
+                        return false;
+                    }
+                    return deleteRemote(task, account, handler, managed, true);
                 }
             }
             case RUNNING -> {
@@ -355,17 +362,36 @@ public class OfflineCleanupService {
     }
 
     /** 删网盘侧任务(+文件)并记账;handler 层保证任务不存在=幂等成功。
-     *  任务删除与文件删除解耦:115/迅雷 deleteTask 连文件一并删;123 任务删除无文件参数、
-     *  光鸭无任务删除契约(重复提交直接建新任务,任务记录留存无害)——这两类经内嵌 AList
-     *  删产物文件兜底回收空间。 */
+     *  任务删除与文件删除解耦:即便 115/迅雷 deleteTask 声明连文件删,网盘侧文件删除也是
+     *  尽力而为(2026-09-29 线上实测 115 task_del 17 个 state=true 仍残留 2 个产物),删任务后
+     *  统一经内嵌 AList 对产物路径兜底核删——路径已随任务删净时 AList 报 not found,属正常;
+     *  123 任务删除无文件参数、光鸭无任务删除契约,兜底核删即主删除通道。超时 PENDING 行
+     *  taskName=null(产物名未知),删任务前先按 info_hash 从任务列表解析回填。 */
     private boolean deleteRemote(OfflineDownloadTask task, DriverAccount account, OfflineDownloadHandler handler,
                                  boolean managed, boolean deleteFiles) {
         if (managed) {
+            if (StringUtils.isBlank(task.getTaskName())) {
+                String resolved = handler.resolveTaskName(account, task.getInfoHash(), task.getTaskName());
+                if (StringUtils.isNotBlank(resolved)) {
+                    task.setTaskName(resolved);
+                }
+            }
             handler.deleteTask(account, task.getInfoHash(), task.getTaskName(), deleteFiles);
         }
-        if (deleteFiles && !handler.deletesFilesWithTask() && StringUtils.isNotBlank(task.getTaskName())) {
-            aListService.remove(siteService.getById(1),
-                    offlineDownloadService.offlineRootPath(account) + "/" + task.getTaskName());
+        if (deleteFiles && StringUtils.isNotBlank(task.getTaskName())) {
+            String productPath = offlineDownloadService.offlineRootPath(account) + "/" + task.getTaskName();
+            try {
+                aListService.remove(siteService.getById(1), productPath);
+            } catch (Exception e) {
+                String message = StringUtils.defaultString(e.getMessage());
+                if (StringUtils.contains(message, "not found")) {
+                    // 路径已随任务删净(115 flag=1 生效的正常形态),幂等收尾
+                    log.debug("offline product {} already gone (deleted with task)", productPath);
+                } else {
+                    // 产物可能真残留(115 兜底通道/123 光鸭主通道):markFailed 下轮重试,deleteTask 幂等
+                    throw e;
+                }
+            }
         }
         task.setCleanupState(OfflineDownloadService.CLEANUP_DONE);
         task.setCleanupAttempts(0);

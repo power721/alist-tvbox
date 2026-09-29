@@ -40,7 +40,8 @@ import static org.mockito.Mockito.when;
 
 /**
  * 定时离线清理(每小时 cron)触发矩阵(docs/pan115-offline-auto-delete-design.md §5):
- * FAILED 即清 / PENDING 活体检查 / 通用入口 TTL / 固化先行 / 追平门禁 / 幂等与重试。
+ * FAILED 即清 / PENDING 活体检查 / 通用入口 TTL / 固化先行 / 追平门禁 / 幂等与重试 /
+ * 删任务后 AList 兜底核删产物(115 task_del state=true 仍残留,2026-09-29 线上实测)。
  */
 @ExtendWith(MockitoExtension.class)
 class OfflineCleanupServiceTest {
@@ -85,7 +86,6 @@ class OfflineCleanupServiceTest {
         account.setCookie("UID=1_A1_1; CID=c");
         lenient().when(offlineDownloadService.getHandler("PAN115")).thenReturn(handler);
         lenient().when(handler.supportsTaskManagement()).thenReturn(true); // 115/迅雷/123 形态;光鸭走 false 用例
-        lenient().when(handler.deletesFilesWithTask()).thenReturn(true); // 115/迅雷:任务+文件一体删
         lenient().when(taskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         // 调度节流 marker:默认无记录(=从未跑过/升级首跑),单测内 mock 不持久化
         lenient().when(settingRepository.findById(OfflineCleanupService.LAST_RUN_SETTING)).thenReturn(Optional.empty());
@@ -148,7 +148,6 @@ class OfflineCleanupServiceTest {
                 .thenReturn(new OfflineDownloadService.CleanupConfig(12, "GUANGYA", true, 24, false));
         when(offlineDownloadService.getHandler("GUANGYA")).thenReturn(handler);
         when(handler.supportsTaskManagement()).thenReturn(false);
-        when(handler.deletesFilesWithTask()).thenReturn(false);
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
         OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
         task.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
@@ -172,7 +171,6 @@ class OfflineCleanupServiceTest {
                 .thenReturn(new OfflineDownloadService.CleanupConfig(12, "GUANGYA", true, 24, false));
         when(offlineDownloadService.getHandler("GUANGYA")).thenReturn(handler);
         when(handler.supportsTaskManagement()).thenReturn(false);
-        when(handler.deletesFilesWithTask()).thenReturn(false);
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
         OfflineDownloadTask task = task("PENDING", 9, "产物");
         when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
@@ -197,7 +195,6 @@ class OfflineCleanupServiceTest {
                 .thenReturn(new OfflineDownloadService.CleanupConfig(12, "GUANGYA", true, 24, true));
         when(offlineDownloadService.getHandler("GUANGYA")).thenReturn(handler);
         when(handler.supportsTaskManagement()).thenReturn(false);
-        when(handler.deletesFilesWithTask()).thenReturn(false);
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
         OfflineDownloadTask task = task("COMPLETED", 9, "产物");
         when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
@@ -471,7 +468,6 @@ class OfflineCleanupServiceTest {
     void taskOnlyDriverDeletesRecordThenFilesViaAlist() {
         // 123 形态:任务删除无文件参数 —— 删任务记录之外,产物文件经内嵌 AList 兜底删
         enable(true, 24, false);
-        when(handler.deletesFilesWithTask()).thenReturn(false);
         OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
         task.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
         when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
@@ -630,7 +626,6 @@ class OfflineCleanupServiceTest {
         when(taskRepository.findCleanupCandidates()).thenReturn(List.of(old, other));
         when(offlineDownloadService.getHandler("PAN123")).thenReturn(handler123);
         when(handler123.supportsTaskManagement()).thenReturn(true);
-        when(handler123.deletesFilesWithTask()).thenReturn(false);
         when(driverAccountRepository.findById(30)).thenReturn(Optional.of(pan123));
         when(offlineDownloadService.offlineRootPath(pan123)).thenReturn("/123挂载/alist-tvbox-offline");
         when(siteService.getById(1)).thenReturn(new cn.har01d.alist_tvbox.entity.Site());
@@ -640,5 +635,93 @@ class OfflineCleanupServiceTest {
         verify(handler).deleteTask(account, HASH, "旧账号产物", true);
         verify(handler123).deleteTask(pan123, HASH, "123产物", true);
         verify(aListService).remove(any(), eq("/123挂载/alist-tvbox-offline/123产物"));
+    }
+
+    // ---------- 删任务后 AList 兜底核删产物 ----------
+
+    @Test
+    void managedTaskProductFilesAlsoRemovedViaAlistAfterTaskDelete() {
+        // 115 形态:task_del flag=1 声称连文件删,但网盘侧文件删除尽力而为——删任务后仍对产物路径兜底核删
+        enable(true, 24, false);
+        OfflineDownloadTask task = task("COMPLETED", null, "即看即走");
+        task.setCompletedTime(Instant.now().minusSeconds(30 * 3600));
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
+        cn.har01d.alist_tvbox.entity.Site site = new cn.har01d.alist_tvbox.entity.Site();
+        when(siteService.getById(1)).thenReturn(site);
+        when(offlineDownloadService.offlineRootPath(account)).thenReturn("/挂载/alist-tvbox-offline");
+
+        service.hourlyCleanup();
+
+        verify(handler).deleteTask(account, HASH, "即看即走", true);
+        verify(aListService).remove(site, "/挂载/alist-tvbox-offline/即看即走");
+    }
+
+    @Test
+    void pendingTimeoutRowResolvesProductNameBeforeDelete() {
+        // 超时 PENDING 行 taskName=null:删任务前按 info_hash 从任务列表解析产物名回填(兜底删文件要用)
+        enable(true, 24, false);
+        OfflineDownloadTask task = task("PENDING", null, null);
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
+        when(handler.taskStatus(account, HASH, null)).thenReturn(OfflineDownloadHandler.TaskStatus.SUCCEEDED);
+        when(handler.resolveTaskName(account, HASH, null)).thenReturn("解析产物");
+        when(siteService.getById(1)).thenReturn(new cn.har01d.alist_tvbox.entity.Site());
+        when(offlineDownloadService.offlineRootPath(account)).thenReturn("/挂载/alist-tvbox-offline");
+
+        service.hourlyCleanup();
+
+        verify(handler).deleteTask(account, HASH, "解析产物", true);
+        verify(aListService).remove(any(), eq("/挂载/alist-tvbox-offline/解析产物"));
+        assertEquals("解析产物", task.getTaskName()); // 回填持久化,重试轮不再依赖任务列表解析
+        assertEquals("DONE", task.getCleanupState());
+    }
+
+    @Test
+    void genericPendingSucceededHonorsTtlFromCreatedTime() {
+        // 通用入口超时行(无 completedTime):任务已完成也按提交时间 + TTL,防止提交后 10 分钟就被下一轮清掉
+        enable(true, 1, false);
+        OfflineDownloadTask task = task("PENDING", null, null);
+        task.setCreatedTime(Instant.now().minusSeconds(30 * 60)); // 提交 30 分钟 < TTL 1h
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
+        when(handler.taskStatus(account, HASH, null)).thenReturn(OfflineDownloadHandler.TaskStatus.SUCCEEDED);
+
+        service.hourlyCleanup();
+        verify(handler, never()).deleteTask(any(), any(), any(), anyBoolean());
+
+        task.setCreatedTime(Instant.now().minusSeconds(2 * 3600)); // 超 TTL:清
+        service.hourlyCleanup();
+        verify(handler).deleteTask(account, HASH, null, true);
+    }
+
+    @Test
+    void productAlreadyGoneAfterTaskDeleteIsIdempotentSuccess() {
+        // 兜底核删时路径不存在(已随任务删净):AList 报 not found 属正常,行照常 DONE
+        enable(true, 24, false);
+        OfflineDownloadTask task = task("FAILED", null, "失败产物");
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
+        when(siteService.getById(1)).thenReturn(new cn.har01d.alist_tvbox.entity.Site());
+        when(offlineDownloadService.offlineRootPath(account)).thenReturn("/挂载/alist-tvbox-offline");
+        org.mockito.Mockito.doThrow(new RuntimeException("object not found"))
+                .when(aListService).remove(any(), anyString());
+
+        service.hourlyCleanup();
+
+        assertEquals("DONE", task.getCleanupState());
+    }
+
+    @Test
+    void productFallbackRealFailureMarksRowForRetry() {
+        // 兜底核删真实失败(产物可能残留):markFailed 下轮重试,不吞成 DONE
+        enable(true, 24, false);
+        OfflineDownloadTask task = task("FAILED", null, "失败产物");
+        when(taskRepository.findCleanupCandidates()).thenReturn(List.of(task));
+        when(siteService.getById(1)).thenReturn(new cn.har01d.alist_tvbox.entity.Site());
+        when(offlineDownloadService.offlineRootPath(account)).thenReturn("/挂载/alist-tvbox-offline");
+        org.mockito.Mockito.doThrow(new RuntimeException("connection refused"))
+                .when(aListService).remove(any(), anyString());
+
+        service.hourlyCleanup();
+
+        assertEquals("FAILED", task.getCleanupState());
+        assertEquals(1, task.getCleanupAttempts());
     }
 }

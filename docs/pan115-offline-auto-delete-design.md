@@ -1,7 +1,7 @@
 # 115 离线下载自动清理设计(TTL 删任务+文件 + 永久分享固化)
 
-状态:**已实现**(2026-09-15,v2.2 定案落地;v1 生命周期触发废弃,v2 纯 TTL 经两轮修正:起算点改完成时间、msub 行改**观看进度门禁**;2026-09-28 用户定规调度改每小时 :10,原每日一次)。
-实现索引:迁移 V54 + `OfflineDownloadTask` 五列;`OfflineCleanupService`(每小时 :10,触发矩阵/活体检查/追平门禁/固化编排,四盘按 `supportsTaskManagement`/`deletesFilesWithTask` 分叉,123 离线 handler 含两步提交+重登自愈);`Pan115OfflineDownloadHandler.taskStatus/deleteTask`(task_del 契约)与 `ThunderOfflineDownloadHandler` 同款(phase 映射 + task_ids/delete_files);光鸭 AList 删文件路径;`MediaSubscriptionCheckService.selfifyOfflineProduct`(固化转换);`OfflineDownloadService`(短路放行/FAILED 即清/info_hash 落行/completed_time);web-ui DriverAccountView 离线 tab 三控件。
+状态:**已实现**(2026-09-15,v2.2 定案落地;v1 生命周期触发废弃,v2 纯 TTL 经两轮修正:起算点改完成时间、msub 行改**观看进度门禁**;2026-09-28 用户定规调度改每小时 :10,原每日一次;2026-09-29 补删任务后 AList 兜底核删产物——线上实测 task_del state=true 仍残留产物;同日曾试加密到 10 分钟,用户定规改回每小时)。
+实现索引:迁移 V54 + `OfflineDownloadTask` 五列;`OfflineCleanupService`(每小时 :10,触发矩阵/活体检查/追平门禁/固化编排 + 删任务后 AList 兜底核删产物,四盘按 `supportsTaskManagement` 分叉,123 离线 handler 含两步提交+重登自愈);`Pan115OfflineDownloadHandler.taskStatus/deleteTask`(task_del 契约)与 `ThunderOfflineDownloadHandler` 同款(phase 映射 + task_ids/delete_files);光鸭 AList 删文件路径;`MediaSubscriptionCheckService.selfifyOfflineProduct`(固化转换);`OfflineDownloadService`(短路放行/FAILED 即清/info_hash 落行/completed_time);web-ui DriverAccountView 离线 tab 三控件。
 目标用户:离线配额大、重度使用磁力兜底/离线入口的用户。
 
 ## 0. 定规(用户拍板)
@@ -68,12 +68,12 @@
 
 ## 5. 清理执行(定时任务,每小时)
 
-新建 `OfflineCleanupService`,自有 `@Scheduled` 每小时 :10 cron 直跑(2026-09-28 用户定规;原每日 05:40 单时刻——错过即积压、TTL 到期任务最长压一天才回收;无代码内节流/闸门,清理幂等无副作用,执行时间戳仅留诊断展示)。逐行判定:
+新建 `OfflineCleanupService`,自有 `@Scheduled` 每小时 :10 cron 直跑(2026-09-28 用户定规;原每日 05:40 单时刻——错过即积压、TTL 到期任务最长压一天才回收;无代码内节流/闸门,清理幂等无副作用,执行时间戳仅留诊断展示;2026-09-29 曾试加密到 10 分钟,用户定规改回每小时——完成时刻+TTL 与整点轮相位错开会多等最多 59 分钟,属预期)。逐行判定:
 
 | 行形态 | 条件 | 动作 |
 |---|---|---|
 | FAILED | 115 侧任务残留会挡重提(10008) | **即清,不等 TTL**:提交失败当场 task_del flag=1(提交路径钩子);定时任务兜底扫漏 |
-| PENDING(未收割) | 滞留任务白占 115 槽位+app pending 闸门,但**不按 TTL 盲删**——先活体检查 `findTask`(匹配键见下):115 侧已完成且订阅仍在 → 跳过等收割(砍了白瞎整包进度);仍在下载 → 跳过,提交超 `offlinePendingStuckDays`(默认 7 天)才按滞留清;已失败/查无 → task_del flag=1,行置 FAILED 或 DONE |
+| PENDING(未收割) | 滞留任务白占 115 槽位+app pending 闸门,但**不按 TTL 盲删**——先活体检查 `findTask`(匹配键见下):115 侧已完成且订阅仍在 → 跳过等收割(砍了白瞎整包进度);仍在下载 → 跳过,提交超 `offlinePendingStuckDays`(默认 7 天)才按滞留清;已失败/查无 → task_del flag=1,行置 FAILED 或 DONE;**通用入口超时行(subscriptionId=null)任务已完成的,按提交时间近似 TTL**——无 completedTime,与 COMPLETED 行同口径,防提交后 10 分钟就被下一轮清掉(用户还没来得及看) | task_del flag=1 → DONE |
 | COMPLETED,subscriptionId=null(通用 /parse、/offline_download 即看即走) | **完成时间**超 TTL | task_del flag=1 → DONE |
 | COMPLETED,msub 行,autoDelete ON + selfShare OFF | **追平门禁**:资源行覆盖集全部已看(取数与 🆕 追平角标同源聚合,只升不降、计数去重;保守回落=最大覆盖集号 ≤ caught_up_episode);或行已退役/订阅已删 | task_del flag=1 → DONE,行放行重提;未追平保留 |
 | COMPLETED,msub 行,autoDelete ON + selfShare ON | 无需等进度,收割入账后即可处理 | 先按 §4 固化(仍被引用且未固化者),固化成功或无需固化 → task_del flag=1 → DONE;固化失败跳过次日再试 |
@@ -82,7 +82,8 @@
 
 执行细节:
 - **放行重提(定规 2 的落点)**:`doSubmitMagnet` 短路处增加 `cleanup_state=DONE` 分支——COMPLETED/PENDING 行若已清理,视同无行,照常重新提交(行被 upsert 覆盖)。FAILED 记忆不因清理解除(坏磁力重复烧配额,语义不变,手动重试本就不受限)。
-- 幂等与重试:task_del 失败置 `cleanup_state=FAILED`,下轮每小时重试,连续 5 次 WARN 放弃;任务不存在视为成功。
+- 幂等与重试:task_del 失败置 `cleanup_state=FAILED`,下轮每小时重试,连续 5 次 WARN 放弃进 7 天冷却;任务不存在视为成功。
+- **删任务后 AList 兜底核删产物(2026-09-29)**:115 task_del flag=1 对文件删除是尽力而为——线上实测 17 个任务全部 state=true 仍残留 2 个产物在离线目录。删任务后统一经内嵌 AList 对 `{离线根}/{产物名}` 核删:路径已随任务删净时 AList 报 not found(幂等收尾);其它失败 markFailed 下轮重试。超时 PENDING 行 taskName=null,删任务前先按 info_hash 从任务列表解析产物名回填(`resolveTaskName`),重试轮不再依赖任务列表。
 - PENDING 活体检查的匹配键:`saveAttempt` 目前**不落 info_hash**(只存预测名),须补提——magnet 的 btih 提取逻辑在 handler 已有(`xt=urn:btih:`),抽公共方法在服务层落列;ed2k 无 btih,按预测名对 task_lists 匹配,匹配不上只按滞留天数兜底。
 - **只删本系统提交的任务**(表内有行、有 info_hash);严禁 `task_clear` 批量清空,会误删用户在 115 客户端自建的任务。
 - 删除后 msub 磁力行的退役:走既有收割扫描「产品消失→retireResource」(磁力行 shareId=null,退役只翻行态不删文件),零新路径;selfShare ON 下行已切分享挂载,不受离线目录扫描影响。
@@ -106,7 +107,7 @@
 - **123**(managed,`deletesFilesWithTask=false`):两步提交(resolve→submit,任务 id 为 int64 存行 info_hash 位);任务删除有 API(task/delete)但无「连文件删」参数——删任务记录之外,产物文件经内嵌 AList 兜底删;超时抛 `OfflineTaskPendingException` 携带任务 id 落 PENDING 行,活体检查按 id 直查零匹配成本;Bearer token 失效按 DriverAccountService 同款 passport/mail 重登自愈回写。
 - **光鸭**(false):无任务删除契约(PowerList 驱动侧也是空壳)——但重复提交直接建新任务、无「任务已存在」限制,任务记录留存无害;清理走内嵌 AList 删产物文件(`{离线根}/{taskName}`)回收空间;PENDING 只按滞留天数兜底(预测产物名对不上任务列表,防误判查无砍死在途任务)。
 
-固化分享仍仅 cookie PAN115(其它盘开着开关忽略,UI 也只在 115 显示);追平门禁/TTL/FAILED 即清全盘同权;`deletesFilesWithTask` 能力决定删任务后是否由清理调度经 AList 补删产物文件(123/光鸭)。
+固化分享仍仅 cookie PAN115(其它盘开着开关忽略,UI 也只在 115 显示);追平门禁/TTL/FAILED 即清全盘同权;2026-09-29 起删任务后**所有盘统一**经内嵌 AList 兜底核删产物文件(115 task_del flag=1 尽力而为,实测有残留),`deletesFilesWithTask` 退化为纯契约说明。
 
 ## 7. 配置与 UI
 
