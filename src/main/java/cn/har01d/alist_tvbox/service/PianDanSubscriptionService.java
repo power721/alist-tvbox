@@ -51,7 +51,11 @@ public class PianDanSubscriptionService {
         MediaSubscriptionRequest request = new MediaSubscriptionRequest();
         if (entry.vodId().startsWith("tmdb:")) {
             request.setMetaProvider("tmdb");
-            request.setMetaId(entry.vodId().split(":")[2]);
+            // 电影条目 metaId 带 movie: 前缀:TMDB tv/movie id 是两个独立命名空间,裸 id 会被
+            // provider 当剧集查 /3/tv/{id} 绑到无关条目
+            request.setMetaId(entry.vodId().startsWith("tmdb:movie:")
+                    ? cn.har01d.alist_tvbox.service.metadata.TmdbMetadataProvider.MOVIE_ID_PREFIX + entry.vodId().split(":")[2]
+                    : entry.vodId().split(":")[2]);
         } else {
             bindDoubanMeta(request, entry);
         }

@@ -1716,7 +1716,7 @@ public class MediaSubscriptionService {
         return String.join(",", parts);
     }
 
-    /** 粘贴链接解析:豆瓣 subject / TMDB tv(含 season) / Bangumi subject / 腾讯 cover /
+    /** 粘贴链接解析:豆瓣 subject / TMDB tv(含 season)/ TMDB movie / Bangumi subject / 腾讯 cover /
      *  B站番剧播放页(ss/ep)/ 优酷 / 爱奇艺剧集页 → 元数据绑定信息。 */
     public Map<String, Object> resolveMetaLink(String url) {
         Map<String, Object> result = new java.util.LinkedHashMap<>();
@@ -1729,7 +1729,11 @@ public class MediaSubscriptionService {
             result.put("provider", "douban");
             result.put("id", matcher.group(1));
             result.put("doubanId", Integer.parseInt(matcher.group(1)));
-        } else if ((matcher = java.util.regex.Pattern.compile("themoviedb\\.org/(?:tv|movie)/(\\d+)").matcher(link)).find()) {
+        } else if ((matcher = java.util.regex.Pattern.compile("themoviedb\\.org/movie/(\\d+)").matcher(link)).find()) {
+            // 电影链接:metaId 带 movie: 前缀(tv/movie 两个命名空间,provider 按前缀走 /3/movie)
+            result.put("provider", "tmdb");
+            result.put("id", cn.har01d.alist_tvbox.service.metadata.TmdbMetadataProvider.MOVIE_ID_PREFIX + matcher.group(1));
+        } else if ((matcher = java.util.regex.Pattern.compile("themoviedb\\.org/tv/(\\d+)").matcher(link)).find()) {
             result.put("provider", "tmdb");
             result.put("id", matcher.group(1));
             java.util.regex.Matcher season = java.util.regex.Pattern.compile("/season/(\\d+)").matcher(link);
@@ -3098,14 +3102,22 @@ public class MediaSubscriptionService {
         return name + " 第" + subscription.getSeason() + "季";
     }
 
-    /** 条目页外链:豆瓣 subject / TMDB tv / Bangumi subject / B站番剧播放页(bilibili id 为「ss123」形态)。 */
+    /** 条目页外链:豆瓣 subject / TMDB tv·movie / Bangumi subject / B站番剧播放页(bilibili id 为「ss123」形态)。 */
     private static void appendMetaLink(Map<String, Object> links, String provider, String id) {
         if (StringUtils.isBlank(provider) || StringUtils.isBlank(id)) {
             return;
         }
         switch (provider) {
             case "douban" -> links.putIfAbsent("豆瓣", "https://movie.douban.com/subject/" + id + "/");
-            case "tmdb" -> links.putIfAbsent("TMDB", "https://www.themoviedb.org/tv/" + id);
+            case "tmdb" -> {
+                // 电影订阅 metaId 为 movie:{id} 形态,外链须走 /movie/ 路径
+                if (id.startsWith(cn.har01d.alist_tvbox.service.metadata.TmdbMetadataProvider.MOVIE_ID_PREFIX)) {
+                    links.putIfAbsent("TMDB", "https://www.themoviedb.org/movie/"
+                            + id.substring(cn.har01d.alist_tvbox.service.metadata.TmdbMetadataProvider.MOVIE_ID_PREFIX.length()));
+                } else {
+                    links.putIfAbsent("TMDB", "https://www.themoviedb.org/tv/" + id);
+                }
+            }
             case "bangumi" -> links.putIfAbsent("Bangumi", "https://bgm.tv/subject/" + id);
             case "bilibili" -> links.putIfAbsent("B站", "https://www.bilibili.com/bangumi/play/" + id + "/");
             default -> {

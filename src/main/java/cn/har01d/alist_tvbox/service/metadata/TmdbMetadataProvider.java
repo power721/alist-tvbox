@@ -32,6 +32,9 @@ import java.util.List;
 @Component
 public class TmdbMetadataProvider implements MetadataProvider {
     public static final String NAME = "tmdb";
+    /** 电影条目 metaId 前缀:TMDB tv/movie id 是两个独立命名空间,订阅绑电影必须带前缀区分
+     *  (裸 id 会被当剧集查 /3/tv/{id} 绑到无关条目)。 */
+    public static final String MOVIE_ID_PREFIX = "movie:";
     private static final ZoneId ZONE = ZoneId.of(Constants.ZONE_ID);
 
     private final TmdbEndpoint tmdbEndpoint;
@@ -142,6 +145,9 @@ public class TmdbMetadataProvider implements MetadataProvider {
     }
 
     private MetadataDetails fetchDetails(String id, int season) {
+        if (id.startsWith(MOVIE_ID_PREFIX)) {
+            return fetchMovieDetails(id);
+        }
         MetadataDetails details = new MetadataDetails();
         details.setProvider(NAME);
         details.setId(id);
@@ -321,6 +327,142 @@ public class TmdbMetadataProvider implements MetadataProvider {
             health.record(NAME, false);
             log.warn("tmdb details {} failed: {}", id, e.getMessage());
             return StringUtils.isBlank(details.getName()) ? null : details; // 空壳不缓存(detailsCache 对 null 不落位)
+        }
+        return details;
+    }
+
+    /**
+     * TMDB 电影详情(metaId 形态 {@code movie:{id}}):电影按 1 个资源位建模 —— 总集数恒 1,
+     * 已映(Released)=已播 1,收齐 1 个文件即与剧集 endedByCollectedAll 同路完结;
+     * 未映=已播 0 且上映日进 nextAirTime/upcoming(待上映电影进播放时间轴)。
+     * 分集导向的桥接(Bangumi/B站/平台排播)不参与,评分桥接照常补豆瓣互补分。
+     */
+    private MetadataDetails fetchMovieDetails(String metaId) {
+        String id = metaId.substring(MOVIE_ID_PREFIX.length());
+        MetadataDetails details = new MetadataDetails();
+        details.setProvider(NAME);
+        details.setId(metaId);
+        try {
+            JsonNode movie = get(tmdbEndpoint.apiHost() + "/3/movie/" + id
+                    + "?language=zh-CN&append_to_response=images");
+            if (movie == null) {
+                return details;
+            }
+            details.setName(movie.path("title").asText());
+            details.setOriginalName(movie.path("original_title").asText());
+            String releaseDate = movie.path("release_date").asText("");
+            details.setYear(yearOf(releaseDate));
+            details.setFirstAirDate(releaseDate);
+            details.setRating(ratingOf(movie.path("vote_average").asDouble(0)));
+            if (details.getRating() != null) {
+                details.setRatings(new java.util.LinkedHashMap<>(java.util.Map.of("tmdb", details.getRating())));
+            }
+            details.setExternalIds(new java.util.LinkedHashMap<>(java.util.Map.of("tmdb", id)));
+            List<String> genres = new ArrayList<>();
+            for (JsonNode genre : movie.path("genres")) {
+                String name = genre.path("name").asText();
+                if (StringUtils.isNotBlank(name)) {
+                    genres.add(name);
+                }
+            }
+            details.setGenres(genres);
+            String language = movie.path("original_language").asText("");
+            if (StringUtils.isNotBlank(language)) {
+                details.setLanguages(List.of(language));
+            }
+            String backdrop = movie.path("backdrop_path").asText("");
+            if (StringUtils.isNotBlank(backdrop)) {
+                details.setBackdrop(BACKDROP_BASE + backdrop);
+            }
+            List<String> backdrops = bestBackdropUrls(movie);
+            if (!backdrops.isEmpty()) {
+                details.setBackdrops(backdrops);
+                if (StringUtils.isBlank(details.getBackdrop())) {
+                    details.setBackdrop(backdrops.get(0));
+                }
+            }
+            String poster = movie.path("poster_path").asText("");
+            if (StringUtils.isNotBlank(poster)) {
+                details.setCover("https://media.themoviedb.org/t/p/w300_and_h450_bestv2" + poster);
+            }
+            details.setOverview(movie.path("overview").asText(""));
+            int runtime = movie.path("runtime").asInt(0);
+            if (runtime > 0) {
+                details.setRuntimeMinutes(runtime);
+            }
+            boolean released = "Released".equals(movie.path("status").asText());
+            details.setStatus(released ? MetadataDetails.STATUS_ENDED : MetadataDetails.STATUS_UNKNOWN);
+            details.setTotalEpisodes(1);
+            details.setAiredEpisodes(released ? 1 : 0);
+            LocalDate airDate = localDate(releaseDate);
+            if (!released && airDate != null) {
+                long airMoment = airDate.atTime(20, 0).atZone(ZONE).toInstant().toEpochMilli();
+                details.setNextAirTime(airMoment);
+                details.setUpcoming(List.of(new cn.har01d.alist_tvbox.dto.EpisodeAirDate(1, airMoment)));
+            }
+            // 别名(标题归属匹配素材:海外电影分享常用英文原名/其他译名)
+            JsonNode alt = get(tmdbEndpoint.apiHost() + "/3/movie/" + id + "/alternative_titles");
+            List<String> aliases = new ArrayList<>();
+            if (alt != null && alt.has("results")) {
+                for (JsonNode item : alt.get("results")) {
+                    String title = item.path("title").asText();
+                    if (StringUtils.isNotBlank(title)) {
+                        aliases.add(title);
+                    }
+                }
+            }
+            details.setAliases(aliases);
+            // 演职人员:cast=主演,crew=导演/编剧
+            JsonNode credits = get(tmdbEndpoint.apiHost() + "/3/movie/" + id + "/credits"
+                    + "?language=zh-CN");
+            if (credits != null) {
+                List<cn.har01d.alist_tvbox.dto.CastMember> cast = new ArrayList<>();
+                if (credits.has("cast") && credits.get("cast").isArray()) {
+                    for (JsonNode person : credits.get("cast")) {
+                        if (cast.size() >= 15) {
+                            break;
+                        }
+                        String name = person.path("name").asText();
+                        if (StringUtils.isBlank(name)) {
+                            continue;
+                        }
+                        String profile = person.path("profile_path").asText("");
+                        cast.add(new cn.har01d.alist_tvbox.dto.CastMember(name,
+                                person.path("character").asText(""),
+                                StringUtils.isNotBlank(profile)
+                                        ? "https://media.themoviedb.org/t/p/w185" + profile : null));
+                    }
+                }
+                details.setCast(cast);
+                List<String> directors = new ArrayList<>();
+                List<String> writers = new ArrayList<>();
+                if (credits.has("crew") && credits.get("crew").isArray()) {
+                    for (JsonNode person : credits.get("crew")) {
+                        String name = person.path("name").asText();
+                        if (StringUtils.isBlank(name)) {
+                            continue;
+                        }
+                        String job = person.path("job").asText("");
+                        if ("Director".equals(job) && directors.size() < 5) {
+                            directors.add(name);
+                        } else if ("Writer".equals(job) && writers.size() < 8) {
+                            writers.add(name);
+                        }
+                    }
+                }
+                details.setDirectors(directors.isEmpty() ? null : directors);
+                if (!writers.isEmpty()) {
+                    details.setWriters(writers);
+                }
+            }
+            health.record(NAME, true);
+            if (ratingBridge != null) {
+                ratingBridge.enrich(details, 1); // 补豆瓣评分与外链,失败自静默(电影无季,季参不参与)
+            }
+        } catch (Exception e) {
+            health.record(NAME, false);
+            log.warn("tmdb movie details {} failed: {}", id, e.getMessage());
+            return StringUtils.isBlank(details.getName()) ? null : details;
         }
         return details;
     }

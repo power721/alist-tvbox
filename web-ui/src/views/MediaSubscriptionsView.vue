@@ -1941,11 +1941,12 @@ const navSubscribe = (item: any) => {
   const vodId = String(item.vod_id || '')
   if (vodId.startsWith('tmdb:')) {
     // tmdb:tv:{id} / tmdb:movie:{id}:绑定元数据,官方集数/播出日程驱动追更;
+    // 电影条目 metaId 带 movie: 前缀(tv/movie 两个命名空间,裸 id 会绑到无关剧集);
     // 缺标识时不绑定,用户在对话框按标题提交即纯标题订阅
     const metaId = vodId.split(':')[2]
     if (metaId) {
       form.value.metaProvider = 'tmdb'
-      form.value.metaId = metaId
+      form.value.metaId = vodId.startsWith('tmdb:movie:') ? 'movie:' + metaId : metaId
     }
     return
   }

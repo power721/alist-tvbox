@@ -2553,6 +2553,9 @@ public class MediaSubscriptionCheckService {
      * 官方总集数未知/无集号 → 放行。
      */
     public static boolean episodeNumbersForeign(MediaSubscription subscription, Collection<Integer> numbers) {
+        if (isMovieBinding(subscription)) {
+            return false; // 电影订阅无集号本体:文件名里的续集数字/伪集号(「沙丘2」解析为 2)不是异剧信号
+        }
         Integer total = subscription.getOfficialTotal();
         if (total == null || total <= 0 || numbers == null || numbers.isEmpty()) {
             return false;
@@ -2566,6 +2569,14 @@ public class MediaSubscriptionCheckService {
      * 小体量区间(真人版 37 vs 动画版 26)容差仍是 2,原判别力不变。 */
     static int registrationLagTolerance(int officialTotal) {
         return Math.max(2, officialTotal / 10);
+    }
+
+    /** TMDB 电影订阅(metaId 带 movie: 前缀):电影按 1 个资源位追更,文件名解析出的集号
+     *  是续集数字等噪声而非排播结构,集号类门禁整体豁免。 */
+    static boolean isMovieBinding(MediaSubscription subscription) {
+        return "tmdb".equalsIgnoreCase(subscription.getMetaProvider())
+                && subscription.getMetaId() != null
+                && subscription.getMetaId().startsWith(cn.har01d.alist_tvbox.service.metadata.TmdbMetadataProvider.MOVIE_ID_PREFIX);
     }
 
     /** 非剧本内容(综艺/纪录/新闻/脱口秀):元数据对这类内容的季总集数登记天然不可靠
@@ -3044,6 +3055,9 @@ public class MediaSubscriptionCheckService {
      * 探测层,由季目录重映射后的集号门禁分辨。
      */
     static boolean titleProgressForeign(MediaSubscription subscription, String title) {
+        if (isMovieBinding(subscription)) {
+            return false; // 电影订阅:片名/合集宣称里的数字是续集序号不是排播进度,非异剧信号
+        }
         Integer total = subscription.getOfficialTotal();
         if (total == null || total <= 0 || StringUtils.isBlank(title)) {
             return false;

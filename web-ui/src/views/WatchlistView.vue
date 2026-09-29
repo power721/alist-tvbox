@@ -223,7 +223,8 @@ function subscribe(row: any) {
     const parts = vodId.split(':')
     if (parts.length >= 3) {
       body.metaProvider = 'tmdb'
-      body.metaId = parts[2]
+      // 电影条目 metaId 带 movie: 前缀:TMDB tv/movie id 是两个独立命名空间,裸 id 会绑到无关剧集
+      body.metaId = parts[1] === 'movie' ? 'movie:' + parts[2] : parts[2]
     }
   } else if (vodId.startsWith('db:')) {
     body.doubanId = Number(vodId.substring(3))

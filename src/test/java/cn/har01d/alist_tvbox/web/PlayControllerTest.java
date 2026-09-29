@@ -203,6 +203,23 @@ class PlayControllerTest {
     }
 
     @Test
+    void playShouldSubscribePianDanTmdbMovieEntryWithNamespacedMetaId() throws Exception {
+        when(mediaSubscriptionService.resolveUid("test-token")).thenReturn(7);
+        when(mediaSubscriptionService.isSubscribedTitle(7, "测试电影")).thenReturn(true);
+
+        // 电影条目:metaId 带 movie: 前缀(tv/movie 两个命名空间,裸 id 会被当剧集绑到无关条目)
+        mockMvc.perform(get("/play/test-token").param("id", "msubadd-tmdb:movie:438631|测试电影"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("《测试电影》已在追剧中"));
+        org.mockito.Mockito.verify(mediaSubscriptionService)
+                .create(org.mockito.ArgumentMatchers.eq(7), org.mockito.ArgumentMatchers.argThat(request ->
+                        "测试电影".equals(request.getName()) && "tmdb".equals(request.getMetaProvider())
+                                && "movie:438631".equals(request.getMetaId())));
+        org.mockito.Mockito.verifyNoInteractions(checkService);
+        verifyNoInteractions(tvBoxService, biliBiliService, proxyService, pianDanService);
+    }
+
+    @Test
     void playShouldRejectUnknownPianDanEntry() throws Exception {
         when(mediaSubscriptionService.resolveUid("test-token")).thenReturn(7);
         mockMvc.perform(get("/play/test-token").param("id", "msubadd-xxx:1"))

@@ -140,7 +140,9 @@ public class PianDanService {
     }
 
     /** 片单追更分类:排除电影类目(追更只对剧集/综艺的集数有意义);lite 榜单、趋势、动漫筛选里的电影选项一并隐藏。
-     * 电视端 csp_PianDan 导航仍走 category() 全量,电影分类在电视浏览场景是正当用途。 */
+     * 电视端 csp_PianDan 导航仍走 category() 全量,电影分类在电视浏览场景是正当用途。
+     * (2026-09-29 曾开放后回退:电影文件名多无集号,集源行只收有集号的文件,订阅停在 0/1 不可播;
+     * 电影继续走「稍后再看」。搜索入口的电影订阅误绑修复不受影响,保留。) */
     public CategoryList subscriptionCategory() {
         CategoryList result = category();
         result.getCategories().removeIf(category -> movieCategoryId(category.getType_id()));

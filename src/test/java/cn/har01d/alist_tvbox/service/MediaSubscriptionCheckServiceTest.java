@@ -4751,6 +4751,34 @@ class MediaSubscriptionCheckServiceTest {
                 "有下集排播 = 未播完口径,容差内放行");
     }
 
+    // ---------- 电影订阅集号类门禁豁免(2026-09-29):电影按 1 个资源位追更,无集号本体 ----------
+    // 文件名/标题里的数字是续集序号(「沙丘2」解析为 2)而非排播结构,官方 total=1 下
+    // 集号溢出/宣称超界都不构成异剧信号,两门禁整体豁免。
+
+    @Test
+    void episodeGatesExemptTmdbMovieBinding() {
+        MediaSubscription subscription = new MediaSubscription();
+        subscription.setMetaProvider("tmdb");
+        subscription.setMetaId("movie:438631");
+        subscription.setOfficialTotal(1);
+        subscription.setOfficialEpisodes(1); // 已映:Released 视作播完
+        assertTrue(MediaSubscriptionCheckService.isMovieBinding(subscription));
+        assertFalse(MediaSubscriptionCheckService.episodeNumbersForeign(subscription, Set.of(2)),
+                "电影文件名续集数字解析出的伪集号:放行");
+        assertFalse(MediaSubscriptionCheckService.titleProgressForeign(subscription, "沙丘2 全2部合集"),
+                "标题宣称的续集/合集数字:放行");
+
+        // 非电影绑定不受影响:同形态剧集(裸 metaId)照常走门禁
+        MediaSubscription series = new MediaSubscription();
+        series.setMetaProvider("tmdb");
+        series.setMetaId("438631");
+        series.setOfficialTotal(1);
+        series.setOfficialEpisodes(1);
+        assertFalse(MediaSubscriptionCheckService.isMovieBinding(series));
+        assertTrue(MediaSubscriptionCheckService.episodeNumbersForeign(series, Set.of(2)),
+                "剧集已播完+集号溢出:仍判异剧");
+    }
+
     // ---------- 长寿剧登记滞后容差(2026-08-27):固定 +2 容差误杀千集动漫正确主源 ----------
     // 线上事故(名侦探柯南):TMDB 登记总 1212,网盘实际更至 1270(滞后 58 集),集号门禁按
     // "溢出 > 2 = 同名异剧" 把正确主源整体退役。登记滞后量级与体量相关:容差随总集数放大
