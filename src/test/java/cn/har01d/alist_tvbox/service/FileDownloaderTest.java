@@ -152,6 +152,32 @@ class FileDownloaderTest {
     }
 
     @Test
+    void getLocalVersion_returnsDefaultValueForZeroByteFile() throws Exception {
+        Path empty = Files.createTempFile("atv-version", ".txt");
+        assertThat(FileDownloader.getLocalVersion(empty, "0.0")).isEqualTo("0.0");
+    }
+
+    @Test
+    void getLocalVersion_returnsDefaultValueForBlankOnlyFile() throws Exception {
+        Path blank = Files.createTempFile("atv-version", ".txt");
+        Files.writeString(blank, "  \n\n");
+        assertThat(FileDownloader.getLocalVersion(blank, "0.0")).isEqualTo("0.0");
+    }
+
+    @Test
+    void getLocalVersion_trimsFirstLine() throws Exception {
+        Path file = Files.createTempFile("atv-version", ".txt");
+        Files.writeString(file, " 09.25 \n");
+        assertThat(FileDownloader.getLocalVersion(file, "0.0")).isEqualTo("09.25");
+    }
+
+    @Test
+    void getLocalVersion_returnsDefaultValueForMissingFile() throws Exception {
+        Path missing = Files.createTempDirectory("atv-version-dir").resolve("no-such.txt");
+        assertThat(FileDownloader.getLocalVersion(missing, "0.0")).isEqualTo("0.0");
+    }
+
+    @Test
     void findXsZipUrl_returnsNullForBlank() {
         assertThat(FileDownloader.findXsZipUrl(null)).isNull();
         assertThat(FileDownloader.findXsZipUrl("not json")).isNull();

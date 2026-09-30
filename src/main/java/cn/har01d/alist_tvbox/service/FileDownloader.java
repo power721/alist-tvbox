@@ -301,6 +301,12 @@ public class FileDownloader {
 
         log.info("local xs: {}, remote xs: {}", localVersion, remoteVersion);
 
+        if (remoteVersion.isEmpty()) {
+            // getXsVersion 拉取失败返回空串；空串与任何本地版本不等，若继续下载会把空版本落盘，
+            // 之后 getLocalVersion 读 0 字节文件越界，更新从此永久失败
+            throw new IOException("xs remote version is empty");
+        }
+
         if (!localVersion.equals(remoteVersion)) {
             String url = resolveXsSingleUrl();
             String content = decryptXsContent(getRemoteText(url, XS_USER_AGENT));
@@ -568,9 +574,13 @@ public class FileDownloader {
         taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
     }
 
-    private String getLocalVersion(Path path, String defaultValue) throws IOException {
+    static String getLocalVersion(Path path, String defaultValue) throws IOException {
         if (Files.exists(path)) {
-            return Files.readAllLines(path).get(0).trim();
+            var lines = Files.readAllLines(path);
+            // 版本文件可能被写成 0 字节（曾因空远程版本落盘），get(0) 越界会让下载任务永久卡死
+            if (!lines.isEmpty() && !lines.get(0).isBlank()) {
+                return lines.get(0).trim();
+            }
         }
         return defaultValue;
     }
