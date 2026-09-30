@@ -2255,10 +2255,14 @@ public class MediaSubscriptionCheckService {
             row.setFileSize(file.size());
             boolean failedLongAgo = row.getLastVerifiedTime() == null
                     || System.currentTimeMillis() - row.getLastVerifiedTime() > 7L * 24 * 3600_000;
+            // 路径资源以用户目录列举为事实源:文件还在即回 LISTED(重加目录/点「恢复」必须立即回血;
+            // 7 天翻案窗只适用于分享文件 —— 那里 FAILED 意味着文件级损坏/被禁,需要冷却防抖动)
+            boolean userOwnedDirectory = isPathResource(resource);
             if (MediaSubscriptionEpisodeSource.STATE_MISSING.equals(row.getState())
                     // FAILED 行的翻案路径:换了文件(路径不同)= 新事实;或判决已过 7 天(对齐旧损坏登记的过期重试)
+                    // 路径资源豁免 7 天窗(列得出文件就是可播事实,此前失败是取链/CDN 瞬态)
                     || (MediaSubscriptionEpisodeSource.STATE_FAILED.equals(row.getState())
-                    && (!relPath.equals(previousPath) || failedLongAgo))) {
+                    && (userOwnedDirectory || !relPath.equals(previousPath) || failedLongAgo))) {
                 row.setState(MediaSubscriptionEpisodeSource.STATE_LISTED);
             }
             episodeSourceRepository.save(row);
@@ -3286,12 +3290,25 @@ public class MediaSubscriptionCheckService {
                     log.warn("aux mount refresh skipped, quark share alive via guest probe: {}", resource.getMountPath());
                     continue;
                 }
+                if (isPathResource(resource) && classifyProbeFailure(e) != ProbeFailure.GONE) {
+                    // 路径资源直连用户网盘目录:非「确认不存在」类列举失败(网络抖动/驱动限流变体/
+                    // AList 重启窗口)不退役 —— 退役后无自动复活路径(无分享链接可重探),保挂载下轮
+                    // 重试;目录真被删除(object not found/不存在)仍正常退役
+                    log.warn("path resource refresh failed, keep mounted: {} {}", resource.getMountPath(), e.getMessage());
+                    continue;
+                }
                 log.info("aux mount refresh failed, retire: {} {}", resource.getMountPath(), e.getMessage());
                 retireResource(subscription, resource, e.getMessage(), false);
                 continue;
             }
             sanitizeEpisodeFiles(subscription, resource, files, resource.getTitle());
             if (files.isEmpty()) {
+                if (isPathResource(resource)) {
+                    // 列空 ≠ 目录死(用户清空/挪走文件是合法态):行降 MISSING 保挂载,
+                    // 文件回来下轮重列 syncInventory 自动回 LISTED;分享列空才是分享被清理,退役
+                    demotePathRowsToMissing(subscription, resource);
+                    continue;
+                }
                 retireResource(subscription, resource, "挂载目录已无任何剧集文件", false);
                 continue;
             }
@@ -3369,7 +3386,10 @@ public class MediaSubscriptionCheckService {
                 episodeSourceRepository.save(row);
             }
         }
-        markDeadLink(resource.getLink(), reason);
+        if (!isPathResource(resource)) {
+            // path: 合成链接不是分享地址,目录随时可被用户重建,进跨订阅黑名单只会误伤后续重新添加
+            markDeadLink(resource.getLink(), reason);
+        }
         if (!quiet) {
             addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
                     (primary ? "主源" : "补缺源") + "失效已退役:" + StringUtils.defaultIfBlank(resource.getTitle(), "候选源")
@@ -3583,6 +3603,13 @@ public class MediaSubscriptionCheckService {
         if (resource == null || !MediaSubscriptionResource.STATE_MOUNTED.equals(resource.getState())
                 || StringUtils.isBlank(resource.getMountPath())) {
             return false; // 已在前一步退役
+        }
+        if (isPathResource(resource)) {
+            // 路径资源不整源退役:无分享链接,退役即失去供流且候选探测永不救回(与 evictWeakestAuxMount
+            // 排除同理)。行级 FAILED 照记,下轮 refreshAuxMounts 重列用户目录即按事实翻案;目录真被删
+            // 由 refresh 的「确认不存在」类列举错误退役(线上反馈:自己网盘目录加了就播,某次播放失败
+            // 传染把整源判死,重加同目录 FAILED 行卡 7 天翻案窗不回血,只能重新分享建新资源才恢复)
+            return false;
         }
         List<MediaSubscriptionEpisodeSource> live = episodeSourceRepository.findByResourceId(resource.getId()).stream()
                 .filter(s -> LIVE_STATES.contains(s.getState()) && !s.getId().equals(failedRowId))
@@ -4440,6 +4467,21 @@ public class MediaSubscriptionCheckService {
         log.info("subscription {} registered path resource {} at {} ({} episodes)",
                 subscription.getId(), resource.getId(), path, covered.size());
         return covered;
+    }
+
+    /** 路径资源列举为空时的行降级:LIVE 行全部 MISSING、资源保 MOUNTED(目录还在,内容暂无) ——
+     *  分享列空=分享被清理要退役,用户目录列空只降级,文件回来下轮 syncInventory 自愈回 LISTED。 */
+    private void demotePathRowsToMissing(MediaSubscription subscription, MediaSubscriptionResource resource) {
+        for (MediaSubscriptionEpisodeSource row : episodeSourceRepository.findByResourceId(resource.getId())) {
+            if (LIVE_STATES.contains(row.getState())) {
+                row.setState(MediaSubscriptionEpisodeSource.STATE_MISSING);
+                episodeSourceRepository.save(row);
+            }
+        }
+        resource.setEpisodesFound(0);
+        resourceRepository.save(resource);
+        addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_SOURCE_INVALID,
+                "网盘目录已无可识别的剧集文件:" + StringUtils.defaultIfBlank(resource.getTitle(), resource.getMountPath()), false);
     }
 
     // ---------- 115 自有分享(快照式自有化:可看集转存自有 115 盘 → 建永久分享 → 删源释放空间) ----------

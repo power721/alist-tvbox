@@ -28,6 +28,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -224,6 +225,132 @@ class MediaSubscriptionPathResourceTest {
         service.refreshAuxMounts(subscription);
 
         verify(resourceRepository, never()).save(any(MediaSubscriptionResource.class));
+    }
+
+    @Test
+    void refreshAuxMountsKeepsPathResourceOnTransientListingError() {
+        // 网络抖动/驱动限流变体等未识别错误:目录是用户事实,退役后无分享链接可重探 = 永久失流,
+        // 必须保挂载下轮重试(线上反馈:自己网盘目录作源,一轮巡检后被判死,只能重新分享建新资源)
+        when(aListService.listFiles(any(), eq(DIR), anyInt(), anyInt(), anyBoolean()))
+                .thenThrow(new IllegalStateException("read timeout"));
+        MediaSubscriptionResource resource = pathResource(MediaSubscriptionResource.STATE_MOUNTED);
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(List.of(resource));
+
+        service.refreshAuxMounts(subscription());
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, resource.getState());
+        assertEquals(DIR, resource.getMountPath());
+        verify(resourceRepository, never()).save(any(MediaSubscriptionResource.class));
+        verify(deadLinkRepository, never()).save(any());
+    }
+
+    @Test
+    void refreshAuxMountsRetiresPathResourceWhenDirectoryGone() {
+        // 「确认不存在」类错误 = 目录真被删除:照常退役;path: 合成链接不进跨订阅黑名单
+        when(aListService.listFiles(any(), eq(DIR), anyInt(), anyInt(), anyBoolean()))
+                .thenThrow(new IllegalStateException("object not found"));
+        MediaSubscriptionResource resource = pathResource(MediaSubscriptionResource.STATE_MOUNTED);
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(List.of(resource));
+
+        service.refreshAuxMounts(subscription());
+
+        ArgumentCaptor<MediaSubscriptionResource> captor = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        verify(resourceRepository).save(captor.capture());
+        assertEquals(MediaSubscriptionResource.STATE_RETIRED, captor.getValue().getState());
+        assertNull(captor.getValue().getMountPath());
+        verify(deadLinkRepository, never()).save(any());
+    }
+
+    @Test
+    void refreshAuxMountsDemotesRowsToMissingWhenPathListingEmptied() {
+        // 列空(列举有文件但全部不可识别,如用户把剧集文件挪走只剩说明文件)≠ 目录死:
+        // 行降 MISSING 保挂载,内容回来下轮重列自愈;分享列空才是分享被清理,退役
+        stubEpisodes("说明.txt");
+        MediaSubscriptionResource resource = pathResource(MediaSubscriptionResource.STATE_MOUNTED);
+        when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(9)).thenReturn(List.of(resource));
+        when(episodeSourceRepository.findByResourceId(41)).thenReturn(List.of(
+                sourceRow(MediaSubscriptionEpisodeSource.STATE_LISTED),
+                sourceRow(MediaSubscriptionEpisodeSource.STATE_LISTED)));
+
+        service.refreshAuxMounts(subscription());
+
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, resource.getState());
+        assertEquals(DIR, resource.getMountPath());
+        ArgumentCaptor<MediaSubscriptionResource> resources = ArgumentCaptor.forClass(MediaSubscriptionResource.class);
+        verify(resourceRepository).save(resources.capture());
+        assertEquals(0, resources.getValue().getEpisodesFound());
+        ArgumentCaptor<MediaSubscriptionEpisodeSource> rows = ArgumentCaptor.forClass(MediaSubscriptionEpisodeSource.class);
+        verify(episodeSourceRepository, times(2)).save(rows.capture());
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_MISSING, rows.getAllValues().get(0).getState());
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_MISSING, rows.getAllValues().get(1).getState());
+    }
+
+    @Test
+    void contagionNeverRetiresPathResource() {
+        // 播放/采样取链双败的传染判定:分享整源退役合理,路径资源退役=失去供流且永不救回;
+        // 行级 FAILED 照留,下轮重列按用户目录事实翻案
+        MediaSubscriptionResource resource = pathResource(MediaSubscriptionResource.STATE_MOUNTED);
+        MediaSubscriptionEpisodeSource liveRow = sourceRow(MediaSubscriptionEpisodeSource.STATE_LISTED);
+        when(episodeSourceRepository.findByResourceId(41)).thenReturn(List.of(liveRow));
+        when(aListService.getFile(any(), anyString())).thenThrow(new IllegalStateException("object not found"));
+
+        boolean retired = service.contagion(subscription(), resource, 555);
+
+        assertFalse(retired);
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, resource.getState());
+        assertEquals(DIR, resource.getMountPath());
+        verify(resourceRepository, never()).save(any(MediaSubscriptionResource.class));
+    }
+
+    @Test
+    void contagionKeepsPathResourceWhenAllRowsFailed() {
+        // 单集目录(无其他集可二次探测):旧逻辑「全部集取链失败」直接整源退役,路径资源必须豁免
+        MediaSubscriptionResource resource = pathResource(MediaSubscriptionResource.STATE_MOUNTED);
+        when(episodeSourceRepository.findByResourceId(41)).thenReturn(List.of(
+                sourceRow(MediaSubscriptionEpisodeSource.STATE_FAILED)));
+
+        boolean retired = service.contagion(subscription(), resource, 555);
+
+        assertFalse(retired);
+        assertEquals(MediaSubscriptionResource.STATE_MOUNTED, resource.getState());
+        verify(resourceRepository, never()).save(any(MediaSubscriptionResource.class));
+    }
+
+    @Test
+    void reRegisterPathResourceHealsFreshFailedRowsImmediately() {
+        // 线上反馈的致死闭环:播放失败把行打成 FAILED(判决时间=now)→ 用户重加同目录 →
+        // 旧 7 天翻案窗拒绝回血(路径没变)→ 看似"路径不能作源只能重新分享"。路径资源以目录
+        // 列举为事实源:文件还在即回 LISTED,重加/恢复立即生效
+        stubEpisodes("第01集.mp4");
+        MediaSubscriptionEpisode episode = new MediaSubscriptionEpisode();
+        episode.setId(601);
+        episode.setSubscriptionId(9);
+        episode.setSeason(1);
+        episode.setNumber(1);
+        when(episodeRepository.findBySubscriptionIdOrderByNumber(9)).thenReturn(List.of(episode));
+        MediaSubscriptionEpisodeSource failed = sourceRow(MediaSubscriptionEpisodeSource.STATE_FAILED);
+        failed.setEpisodeId(601);
+        failed.setRelPath("第01集.mp4");
+        failed.setLastVerifiedTime(System.currentTimeMillis()); // 判决刚落:7 天窗内
+        when(episodeSourceRepository.findByResourceId(41)).thenReturn(List.of(failed));
+        MediaSubscriptionResource resource = pathResource(MediaSubscriptionResource.STATE_MOUNTED);
+
+        Set<Integer> covered = service.registerPathResource(subscription(), resource);
+
+        assertEquals(Set.of(1), covered);
+        ArgumentCaptor<MediaSubscriptionEpisodeSource> rows = ArgumentCaptor.forClass(MediaSubscriptionEpisodeSource.class);
+        verify(episodeSourceRepository).save(rows.capture());
+        assertEquals(MediaSubscriptionEpisodeSource.STATE_LISTED, rows.getValue().getState(),
+                "重列用户目录文件仍在,FAILED 行必须立即回 LISTED,不等 7 天翻案窗");
+    }
+
+    private MediaSubscriptionEpisodeSource sourceRow(String state) {
+        MediaSubscriptionEpisodeSource row = new MediaSubscriptionEpisodeSource();
+        row.setId(701);
+        row.setResourceId(41);
+        row.setRelPath("第01集.mp4");
+        row.setState(state);
+        return row;
     }
 
     // ---------- 换血/主源闸门 ----------
