@@ -777,7 +777,7 @@ class BiliBiliServiceTest {
         assertEquals(6, page2.getList().size()); // 合集 + 剩余 5 条
 
         MovieList page3 = withRequestContext(() -> service.getRegion("217", 3));
-        assertEquals(1, page3.getList().size()); // 越界仅剩合集占位行,客户端按 pagecount 停止翻页
+        assertEquals(0, page3.getList().size()); // 越界空页,客户端停止翻页
         verify(restTemplate, never()).exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class));
     }
 
@@ -794,7 +794,7 @@ class BiliBiliServiceTest {
         assertEquals(21, result.getList().size()); // 合集 + 20 条全命中
 
         MovieList page2 = withRequestContext(() -> service.getMovieList("217", filter, 2, ""));
-        assertEquals(1, page2.getList().size()); // 撤区「最新」无流,第 2 页起仅剩合集占位
+        assertEquals(0, page2.getList().size()); // 撤区「最新」无流,第 2 页起空页
         verify(restTemplate, never()).exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class));
     }
 
@@ -808,7 +808,7 @@ class BiliBiliServiceTest {
         assertTrue(service.getHotRank("all", 223, 1).isEmpty());
 
         MovieList result = withRequestContext(() -> service.getRegion("223", 1));
-        assertEquals(1, result.getList().size()); // 仅合集占位,不再 500
+        assertEquals(0, result.getList().size()); // 空页,不再 500
     }
 
     @Test
@@ -828,10 +828,10 @@ class BiliBiliServiceTest {
                 .thenThrow(new org.springframework.web.client.HttpClientErrorException(org.springframework.http.HttpStatus.PRECONDITION_FAILED));
 
         MovieList first = withRequestContext(() -> service.getRegion("11", 1));
-        assertEquals(1, first.getList().size()); // 412 HTML 挑战页降级为仅合集占位,不再 500
+        assertEquals(0, first.getList().size()); // 412 HTML 挑战页降级为空页,不再 500 也不出空合集
 
         MovieList second = withRequestContext(() -> service.getRegion("11", 2));
-        assertEquals(1, second.getList().size()); // 熔断冷却期内直接返空,不再撞接口
+        assertEquals(0, second.getList().size()); // 熔断冷却期内直接返空,不再撞接口
         verify(restTemplate, org.mockito.Mockito.times(1)).exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class));
     }
 

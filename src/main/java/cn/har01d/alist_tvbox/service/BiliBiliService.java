@@ -1616,6 +1616,15 @@ public class BiliBiliService {
             archives = getRegionArchives(tid, page);
             total = size * 100; // newlist 不返回总数(page.count 恒 0),给固定翻页深度(深翻页实测 200+ 页仍可用)
         }
+        if (archives.isEmpty()) {
+            // 412 风控降级/熔断冷却/翻页越界:返回空页而非「共0个视频」合集占位——客户端见空页即停止翻页,避免连环刷屏
+            result.setLimit(0);
+            result.setTotal(0);
+            result.setPagecount(1);
+            result.setPage(page);
+            log.debug("getRegion empty: {} {}", tid, result);
+            return result;
+        }
         List<MovieDetail> list = new ArrayList<>();
         for (BiliBiliInfo info : archives) {
             MovieDetail movieDetail = getMovieDetail(info);
@@ -2963,6 +2972,15 @@ public class BiliBiliService {
 
     private MovieList getMovieListByType(String tid, String type, int page) {
         List<BiliBiliInfo> videos = getSubRegionVideos(tid, type, page);
+        if (videos.isEmpty()) {
+            // 412 风控降级/无命中/翻页越界:空页,不出「共0个视频」合集占位,客户端停止翻页
+            MovieList empty = new MovieList();
+            empty.setLimit(0);
+            empty.setTotal(0);
+            empty.setPagecount(1);
+            empty.setPage(page);
+            return empty;
+        }
         List<MovieDetail> list = new ArrayList<>();
         for (BiliBiliInfo info : videos) {
             list.add(getMovieDetail(info));
