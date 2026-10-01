@@ -223,6 +223,41 @@ public final class Utils {
         return param.toString().replace("%2C", ",") + "&w_rid=" + wbiSign;
     }
 
+    /**
+     * WBI 签名(RFC3986 严格编码版):参数值按 encodeURIComponent 语义百分号编码(大写十六进制、空格 %20)。
+     * 官方规则(docs/misc/sign/wbi.md)即此行为;encryptWbi 的宽松编码只对非 ASCII 生效,
+     * 值含 JSON(如评论 pagination_str 的 {"offset":..})时签名串与官方不一致,上游回 -403 访问权限不足。
+     * 已验证可用的旧接口(dm_img_inter 等)不动,继续走 encryptWbi。
+     */
+    public static String encryptWbiRfc3986(Map<String, Object> params, String imgKey, String subKey) {
+        String mixinKey = getMixinKey(imgKey, subKey);
+        params.put("wts", System.currentTimeMillis() / 1000);
+        StringJoiner param = new StringJoiner("&");
+        params.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> param.add(entry.getKey() + "=" + rfc3986Encode(entry.getValue().toString())));
+        String s = param + mixinKey;
+        String wbiSign = md5(s);
+        return param + "&w_rid=" + wbiSign;
+    }
+
+    private static String rfc3986Encode(String value) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : value.getBytes(StandardCharsets.UTF_8)) {
+            int v = b & 0xFF;
+            char c = (char) v;
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                    || "-_.~!'()*".indexOf(c) >= 0) {
+                sb.append(c);
+            } else {
+                sb.append('%')
+                        .append(Character.toUpperCase(Character.forDigit(v >>> 4, 16)))
+                        .append(Character.toUpperCase(Character.forDigit(v & 0xF, 16)));
+            }
+        }
+        return sb.toString();
+    }
+
     public static String byte2size(long size) {
         if (size <= 0) {
             return "";

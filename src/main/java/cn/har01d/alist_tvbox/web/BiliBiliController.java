@@ -86,6 +86,19 @@ public class BiliBiliController {
         return biliBiliService.runAction(request.id(), request.action());
     }
 
+    /** atv-player 评论列表:root 空=主列表(mode 3=热门/2=最新,next=游标),root 非空=楼中楼(pn 翻页)。 */
+    @GetMapping("/bilibili/{token}/comments")
+    public Object comments(@PathVariable String token,
+                           String ids,
+                           @RequestParam(required = false, defaultValue = "3") Integer mode,
+                           String next,
+                           String root,
+                           @RequestParam(required = false, defaultValue = "1") Integer pn) {
+        subscriptionService.checkToken(token);
+        log.info("bilibili comments: {} mode: {} root: {} pn: {}", ids, mode, root, pn);
+        return biliBiliService.getComments(ids, mode, next, root, pn);
+    }
+
     @GetMapping("/api/bilibili/status")
     public Map<String, Object> getLoginStatus() {
         return biliBiliService.getLoginStatus();

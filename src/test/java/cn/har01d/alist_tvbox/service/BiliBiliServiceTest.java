@@ -993,4 +993,155 @@ class BiliBiliServiceTest {
 
         assertEquals("动画 / 短片", service.getDetail("BV195KY6YEeY", "").getList().get(0).getType_name());
     }
+
+    @Test
+    void getCommentsReturnsMainListWithTopMergeAndCursor() throws Exception {
+        String body = """
+                {"code":0,"data":{
+                  "cursor":{"all_count":962,"is_end":false,
+                    "pagination_reply":{"next_offset":"{\\"type\\":3,\\"direction\\":1,\\"Data\\":{\\"cursor\\":71859}}"}},
+                  "upper":{"mid":2},
+                  "top":{"upper":{
+                    "rpid_str":"1001","member":{"mid":"2","uname":"UP主","avatar":"https://i0.hdslb.com/face/up.jpg",
+                      "level_info":{"current_level":6}},
+                    "content":{"message":"置顶说明"},"like":99,"rcount":3,"ctime":1700000000,
+                    "reply_control":{"time_desc":"3天前发布","location":"IP属地：上海"},"replies":[]}},
+                  "replies":[{
+                    "rpid_str":"1002","member":{"mid":"42","uname":"小明","avatar":"https://i0.hdslb.com/face/a.jpg",
+                      "level_info":{"current_level":4}},
+                    "content":{"message":"这个视频太好了"},"like":12000,"rcount":2,"ctime":1700000100,
+                    "reply_control":{"time_desc":"2天前发布","location":"IP属地：河北"},
+                    "replies":[{
+                      "rpid_str":"1003","parent_str":"1002","member":{"mid":"43","uname":"小刚",
+                        "avatar":"https://i0.hdslb.com/face/b.jpg","level_info":{"current_level":3}},
+                      "content":{"message":"确实"},"like":5,"rcount":0,"ctime":1700000200,
+                      "reply_control":{"time_desc":"2天前发布"},"replies":[]},
+                      {"rpid_str":"1004","parent_str":"1003","member":{"mid":"2","uname":"UP主",
+                        "avatar":"https://i0.hdslb.com/face/up.jpg","level_info":{"current_level":6}},
+                      "content":{"message":"回复小刚"},"like":8,"rcount":0,"ctime":1700000300,
+                      "reply_control":{"time_desc":"1天前发布"},"replies":[]}]}]}}
+                """;
+        org.mockito.ArgumentCaptor<HttpEntity<Void>> captor = org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        when(restTemplate.exchange(any(java.net.URI.class), eq(HttpMethod.GET),
+                captor.capture(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree(body)));
+
+        Map<String, Object> result = service.getComments("BV195KY6YEeY", 3, "", "", 1);
+
+        assertEquals(962, result.get("count"));
+        assertEquals(false, result.get("is_end"));
+        assertEquals("{\"type\":3,\"direction\":1,\"Data\":{\"cursor\":71859}}", result.get("next_offset"));
+        List<Map<String, Object>> comments = (List<Map<String, Object>>) result.get("comments");
+        assertEquals(2, comments.size());
+        // 置顶合并到首位,top 标记;UP 主回复带 is_up
+        assertEquals("1001", comments.get(0).get("rpid"));
+        assertEquals(true, comments.get(0).get("top"));
+        assertEquals(true, comments.get(0).get("is_up"));
+        assertEquals(false, comments.get(1).get("is_up"));
+        // 子回复预览:直答不带 parent_uname,层内互答带;UP 主身份透传
+        List<Map<String, Object>> preview = (List<Map<String, Object>>) comments.get(1).get("preview");
+        assertEquals("", preview.get(0).get("parent_uname"));
+        assertEquals("小刚", preview.get(1).get("parent_uname"));
+        assertEquals(true, preview.get(1).get("is_up"));
+        // wbi 主列表必须带 cookie/UA 头
+        org.junit.jupiter.api.Assertions.assertNotNull(captor.getValue().getHeaders().getFirst("Cookie"));
+    }
+
+    @Test
+    void getCommentsMainListPassesCursorOffset() throws Exception {
+        String body = """
+                {"code":0,"data":{"cursor":{"all_count":10,"is_end":true,"pagination_reply":{"next_offset":""}},
+                  "upper":{"mid":2},"top":{"upper":null},"replies":[]}}
+                """;
+        when(restTemplate.exchange(any(java.net.URI.class), eq(HttpMethod.GET),
+                any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree(body)));
+
+        Map<String, Object> result = service.getComments("BV195KY6YEeY", 2,
+                "{\"type\":3,\"direction\":1,\"Data\":{\"cursor\":71859}}", "", 1);
+
+        assertEquals(10, result.get("count"));
+        assertEquals(true, result.get("is_end"));
+        assertTrue(((List<?>) result.get("comments")).isEmpty());
+    }
+
+    @Test
+    void getCommentsPaginationStrStaysCompactForWbiSignature() throws Exception {
+        // 根因回归:注入 ObjectMapper 开 INDENT_OUTPUT 时 pagination_str 会变成多行 JSON,
+        // 空格经 form 编码为 '+' 与官方验签(空格 %20)不一致 → 上游 -403;必须紧凑序列化
+        StringBuilder urlHolder = new StringBuilder();
+        when(restTemplate.exchange(any(java.net.URI.class), eq(HttpMethod.GET),
+                any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenAnswer(invocation -> {
+                    urlHolder.append(invocation.getArgument(0, java.net.URI.class).toString());
+                    return ResponseEntity.ok(new ObjectMapper().readTree(
+                            "{\"code\":0,\"data\":{\"cursor\":{\"all_count\":10,\"is_end\":true,"
+                                    + "\"pagination_reply\":{\"next_offset\":\"\"}},\"upper\":{\"mid\":2},"
+                                    + "\"top\":{\"upper\":null},\"replies\":[]}}"));
+                });
+
+        service.getComments("BV195KY6YEeY", 3, "CAEaCAoG4Yez4ZMJIgIIAg==", "", 1);
+
+        String url = urlHolder.toString();
+        assertTrue(url.contains("pagination_str="), url);
+        String encoded = url.substring(url.indexOf("pagination_str=") + "pagination_str=".length())
+                .split("&")[0];
+        assertFalse(encoded.contains("%0A"), "分页载荷不得含换行(美化输出): " + encoded);
+        assertFalse(encoded.contains("+"), "分页载荷不得含 form 编码空格 '+': " + encoded);
+        // 紧凑形态 {"offset":"..."}: %22offset%22%3A%22
+        assertTrue(encoded.contains("%22offset%22%3A%22"), encoded);
+    }
+
+    @Test
+    void getCommentsReturnsFloorRepliesWithParentNames() throws Exception {
+        String body = """
+                {"code":0,"data":{
+                  "page":{"count":32,"num":1,"size":20},
+                  "root":{"rpid_str":"1002"},
+                  "upper":{"mid":2},
+                  "replies":[{
+                    "rpid_str":"2001","parent_str":"1002","member":{"mid":"43","uname":"小刚",
+                      "avatar":"https://i0.hdslb.com/face/b.jpg","level_info":{"current_level":3}},
+                    "content":{"message":"直答根评论"},"like":5,"rcount":0,"ctime":1700000200,
+                    "reply_control":{"time_desc":"2天前发布"},"replies":[]},
+                    {"rpid_str":"2002","parent_str":"2001","member":{"mid":"44","uname":"小强",
+                      "avatar":"https://i0.hdslb.com/face/c.jpg","level_info":{"current_level":5}},
+                    "content":{"message":"层内互答"},"like":6,"rcount":0,"ctime":1700000250,
+                    "reply_control":{"time_desc":"2天前发布"},"replies":[]},
+                    {"rpid_str":"2003","parent_str":"2001","member":{"mid":"2","uname":"UP主",
+                      "avatar":"https://i0.hdslb.com/face/up.jpg","level_info":{"current_level":6}},
+                    "content":{"message":"作者回复"},"like":7,"rcount":0,"ctime":1700000300,
+                    "reply_control":{"time_desc":"1天前发布"},"replies":[]}],
+                  "config":{},"control":{},"show_bvid":false,"show_text":"","show_type":0}}
+                """;
+        when(restTemplate.exchange(org.mockito.ArgumentMatchers.argThat((java.net.URI u) ->
+                        u.toString().startsWith("https://api.bilibili.com/x/v2/reply/reply?type=1&oid=116958703918865&root=1002&pn=2")),
+                eq(HttpMethod.GET), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree(body)));
+
+        Map<String, Object> result = service.getComments("BV195KY6YEeY", 3, "", "1002", 2);
+
+        assertEquals(32, result.get("count"));
+        assertEquals(1, result.get("page"));
+        List<Map<String, Object>> replies = (List<Map<String, Object>>) result.get("replies");
+        assertEquals(3, replies.size());
+        assertEquals("", replies.get(0).get("parent_uname"));
+        assertEquals("小刚", replies.get(1).get("parent_uname"));
+        assertEquals(true, replies.get(2).get("is_up"));
+        // 主列表字段在楼中楼同结构透出
+        assertEquals("作者回复", replies.get(2).get("message"));
+    }
+
+    @Test
+    void getCommentsSurfacesUpstreamClosedError() throws Exception {
+        when(restTemplate.exchange(any(java.net.URI.class), eq(HttpMethod.GET),
+                any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree(
+                        "{\"code\":12002,\"message\":\"评论区已关闭\"}")));
+
+        cn.har01d.alist_tvbox.exception.BadRequestException ex =
+                org.junit.jupiter.api.Assertions.assertThrows(cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                        () -> service.getComments("BV195KY6YEeY", 3, "", "", 1));
+        assertTrue(ex.getMessage().contains("评论区已关闭"));
+    }
 }

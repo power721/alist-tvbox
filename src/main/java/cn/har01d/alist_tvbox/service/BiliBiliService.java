@@ -76,6 +76,7 @@ import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -104,6 +105,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
+import java.net.URI;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -111,6 +113,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -185,6 +188,8 @@ public class BiliBiliService {
     public static final String SEASON_ARCHIVES_DETAIL_API = "https://api.bilibili.com/x/polymer/web-space/seasons_archives_list";
     public static final String SERIES_ARCHIVES_API = "https://api.bilibili.com/x/series/archives";
     public static final String SERIES_META_API = "https://api.bilibili.com/x/series/series";
+    public static final String REPLY_MAIN_API = "https://api.bilibili.com/x/v2/reply/wbi/main";
+    public static final String REPLY_REPLY_API = "https://api.bilibili.com/x/v2/reply/reply";
 
     private final List<FilterValue> filters1 = Arrays.asList(
             new FilterValue("综合排序", ""),
@@ -320,6 +325,8 @@ public class BiliBiliService {
     private final RestTemplate restTemplate;
     private final RestTemplate restTemplate1;
     private final ObjectMapper objectMapper;
+    /** 无美化输出 mapper:WBI 签名载荷(pagination_str 等)必须是紧凑 JSON,见 getComments 注释。 */
+    private static final ObjectMapper COMPACT_JSON = new ObjectMapper();
     private final OkHttpClient client = new OkHttpClient();
     private final LoadingCache<String, BiliBiliInfo> cache = Caffeine.newBuilder()
             .maximumSize(10)
@@ -2450,6 +2457,134 @@ public class BiliBiliService {
         return "点赞: " + (state.liked ? "已点赞" : "未点赞")
                 + "  投币: " + (state.coins > 0 ? "已投 " + state.coins + "/2 枚" : "未投币")
                 + "  收藏: " + (state.favoured ? "已收藏" : "未收藏");
+    }
+
+    /**
+     * atv-player 评论列表:root 空=主列表(x/v2/reply/wbi/main,mode 3=热门/2=最新,cursor 游标翻页,
+     * 每条自带前几条子回复预览),root 非空=楼中楼(x/v2/reply/reply,pn/ps 翻页,免 WBI)。
+     * 上游响应精简为扁平 Map 透出,不透传 member/vip 等大对象;12002 等错误码转异常文案。
+     */
+    public Map<String, Object> getComments(String vodId, int mode, String next, String root, int pn) {
+        String aid = resolveAid(vodId);
+        if (StringUtils.isNotBlank(root)) {
+            if (!StringUtils.isNumeric(root.trim())) {
+                throw new BadRequestException("无效的评论 ID: " + root);
+            }
+            // aid/root/pn 均为纯数字,无需编码;该接口不校验 WBI
+            String url = String.format("%s?type=1&oid=%s&root=%s&pn=%d&ps=20",
+                    REPLY_REPLY_API, aid, root.trim(), Math.max(1, pn));
+            JsonNode body = fetchReplyJson(url, "楼中楼");
+            JsonNode data = body.path("data");
+            long upperMid = data.path("upper").path("mid").asLong(0);
+            String rootRpid = data.path("root").path("rpid_str").asText(data.path("root").path("rpid").asText(""));
+            List<Map<String, Object>> replies = new ArrayList<>();
+            Map<String, String> names = new HashMap<>();
+            for (JsonNode reply : data.path("replies")) {
+                names.put(reply.path("rpid_str").asText(""), reply.path("member").path("uname").asText(""));
+            }
+            for (JsonNode reply : data.path("replies")) {
+                Map<String, Object> map = buildComment(reply, upperMid, false);
+                // 楼中楼直答(root)不带前缀,层内互答显示「回复 @xxx」;父条不在本页则留空
+                String parent = reply.path("parent_str").asText("");
+                map.put("parent_uname", !parent.isEmpty() && !parent.equals(rootRpid) ? names.getOrDefault(parent, "") : "");
+                replies.add(map);
+            }
+            Map<String, Object> result = new HashMap<>();
+            result.put("count", data.path("page").path("count").asInt(0));
+            result.put("page", data.path("page").path("num").asInt(Math.max(1, pn)));
+            result.put("replies", replies);
+            return result;
+        }
+
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        getKeys(entity);
+        Map<String, Object> params = new HashMap<>();
+        params.put("type", 1);
+        params.put("oid", aid);
+        params.put("mode", mode == 2 ? 2 : 3);
+        if (StringUtils.isNotBlank(next)) {
+            // next_offset 是「套着字符串皮的游标」,须作为紧凑 JSON 字符串值嵌进 pagination_str;
+            // Spring 注入的 objectMapper 开了 INDENT_OUTPUT(多行+空格),空格经 URLEncoder 变 '+'
+            // 与官方验签重编码(%20)不一致 → -403 访问权限不足,必须用无美化 mapper
+            try {
+                params.put("pagination_str", COMPACT_JSON.writeValueAsString(Map.of("offset", next.trim())));
+            } catch (JsonProcessingException e) {
+                throw new BadRequestException("无效的评论分页参数");
+            }
+        }
+        String url = REPLY_MAIN_API + "?" + Utils.encryptWbiRfc3986(params, imgKey, subKey);
+        JsonNode body = fetchReplyJson(url, "评论");
+        JsonNode data = body.path("data");
+        JsonNode cursor = data.path("cursor");
+        long upperMid = data.path("upper").path("mid").asLong(0);
+        List<Map<String, Object>> comments = new ArrayList<>();
+        // UP 置顶评论置首(top.upper),后台置顶(top.admin)不并:与 B站 web 展示一致
+        JsonNode top = data.path("top").path("upper");
+        if (top.isObject() && !top.isNull()) {
+            comments.add(buildComment(top, upperMid, true));
+        }
+        for (JsonNode reply : data.path("replies")) {
+            comments.add(buildComment(reply, upperMid, false));
+        }
+        Map<String, Object> result = new HashMap<>();
+        result.put("count", cursor.path("all_count").asInt(0));
+        result.put("is_end", cursor.path("is_end").asBoolean(false));
+        result.put("next_offset", cursor.path("pagination_reply").path("next_offset").asText(""));
+        result.put("comments", comments);
+        return result;
+    }
+
+    private JsonNode fetchReplyJson(String url, String source) {
+        HttpEntity<Void> entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
+        JsonNode body;
+        try {
+            // 必须传 URI 重载:exchange(String,...) 的模板处理器会把已编码 %XX 二次编码(%7B→%257B),
+            // 上游解码后 pagination_str 不再是合法 JSON,验签失败回 -403 访问权限不足
+            body = restTemplate.exchange(URI.create(url), HttpMethod.GET, entity, JsonNode.class).getBody();
+        } catch (Exception e) {
+            log.warn("bilibili comments failed: {} {}", url, e.getMessage());
+            throw new BadRequestException("B站" + source + "获取失败,请稍后重试");
+        }
+        int code = body == null ? -1 : body.path("code").asInt(-1);
+        if (code != 0) {
+            String message = body == null ? "空响应" : body.path("message").asText("");
+            log.warn("bilibili comments error: {} {} url: {}", code, message, url);
+            throw new BadRequestException("B站" + source + "获取失败: " + message);
+        }
+        return body;
+    }
+
+    private Map<String, Object> buildComment(JsonNode reply, long upperMid, boolean top) {
+        JsonNode member = reply.path("member");
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("rpid", reply.path("rpid_str").asText(reply.path("rpid").asText("0")));
+        map.put("uname", member.path("uname").asText(""));
+        map.put("avatar", member.path("avatar").asText(""));
+        map.put("level", member.path("level_info").path("current_level").asInt(0));
+        map.put("message", reply.path("content").path("message").asText(""));
+        map.put("like", reply.path("like").asInt(0));
+        map.put("rcount", reply.path("rcount").asInt(0));
+        map.put("ctime", reply.path("ctime").asLong(0));
+        // 上游已给相对时间文案与 IP 属地,直接透传免本地化
+        map.put("time_desc", reply.path("reply_control").path("time_desc").asText(""));
+        map.put("location", reply.path("reply_control").path("location").asText(""));
+        map.put("top", top);
+        long mid = member.path("mid").asLong(0);
+        map.put("is_up", upperMid > 0 && mid == upperMid);
+        List<Map<String, Object>> preview = new ArrayList<>();
+        Map<String, String> names = new HashMap<>();
+        for (JsonNode child : reply.path("replies")) {
+            names.put(child.path("rpid_str").asText(""), child.path("member").path("uname").asText(""));
+        }
+        String rootRpid = reply.path("rpid_str").asText(reply.path("rpid").asText(""));
+        for (JsonNode child : reply.path("replies")) {
+            Map<String, Object> childMap = buildComment(child, upperMid, false);
+            String parent = child.path("parent_str").asText("");
+            childMap.put("parent_uname", !parent.isEmpty() && !parent.equals(rootRpid) ? names.getOrDefault(parent, "") : "");
+            preview.add(childMap);
+        }
+        map.put("preview", preview);
+        return map;
     }
 
     /** 播放条目 id(aid-cid[-epId] / BVxxx / aid)→ 纯数字 aid。 */
