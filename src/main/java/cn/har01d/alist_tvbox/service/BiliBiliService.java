@@ -190,6 +190,7 @@ public class BiliBiliService {
     public static final String SERIES_META_API = "https://api.bilibili.com/x/series/series";
     public static final String REPLY_MAIN_API = "https://api.bilibili.com/x/v2/reply/wbi/main";
     public static final String REPLY_REPLY_API = "https://api.bilibili.com/x/v2/reply/reply";
+    public static final String REPLY_ACTION_API = "https://api.bilibili.com/x/v2/reply/action";
 
     private final List<FilterValue> filters1 = Arrays.asList(
             new FilterValue("综合排序", ""),
@@ -2534,6 +2535,34 @@ public class BiliBiliService {
         return result;
     }
 
+    /**
+     * atv-player 评论点赞(x/v2/reply/action,action 1=赞/0=取消,点赞同时消点踩)。
+     * 返回动作后状态;未登录(无 csrf)与上游错误码转文案抛出。
+     */
+    public Map<String, Object> runCommentAction(String vodId, String rpid, int action) {
+        String aid = resolveAid(vodId);
+        String normalizedRpid = StringUtils.defaultString(rpid).trim();
+        if (!StringUtils.isNumeric(normalizedRpid)) {
+            throw new BadRequestException("无效的评论 ID: " + rpid);
+        }
+        String cookie = resolveCookie();
+        String csrf = BiliCookieRefreshUtils.getCookieValue(cookie, "bili_jct");
+        if (StringUtils.isBlank(csrf)) {
+            throw new BadRequestException("未登录 B站,请先在设置中配置 Cookie");
+        }
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("type", "1");
+        form.add("oid", aid);
+        form.add("rpid", normalizedRpid);
+        form.add("action", action == 1 ? "1" : "0");
+        form.add("csrf", csrf);
+        // 12011 不合法的赞或踩:重复请求同方向时上游偶发,幂等视作成功
+        postForm(REPLY_ACTION_API, form, "https://www.bilibili.com/", 12011);
+        Map<String, Object> result = new HashMap<>();
+        result.put("liked", action == 1);
+        return result;
+    }
+
     private JsonNode fetchReplyJson(String url, String source) {
         HttpEntity<Void> entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
         JsonNode body;
@@ -2571,6 +2600,8 @@ public class BiliBiliService {
         map.put("top", top);
         long mid = member.path("mid").asLong(0);
         map.put("is_up", upperMid > 0 && mid == upperMid);
+        // 登录时上游 action=1 表示当前用户已赞,驱动客户端点赞按钮初始态
+        map.put("liked", reply.path("action").asInt(0) == 1);
         List<Map<String, Object>> preview = new ArrayList<>();
         Map<String, String> names = new HashMap<>();
         for (JsonNode child : reply.path("replies")) {

@@ -1004,7 +1004,7 @@ class BiliBiliServiceTest {
                   "top":{"upper":{
                     "rpid_str":"1001","member":{"mid":"2","uname":"UP主","avatar":"https://i0.hdslb.com/face/up.jpg",
                       "level_info":{"current_level":6}},
-                    "content":{"message":"置顶说明"},"like":99,"rcount":3,"ctime":1700000000,
+                    "content":{"message":"置顶说明"},"like":99,"rcount":3,"ctime":1700000000,"action":1,
                     "reply_control":{"time_desc":"3天前发布","location":"IP属地：上海"},"replies":[]}},
                   "replies":[{
                     "rpid_str":"1002","member":{"mid":"42","uname":"小明","avatar":"https://i0.hdslb.com/face/a.jpg",
@@ -1037,6 +1037,8 @@ class BiliBiliServiceTest {
         assertEquals("1001", comments.get(0).get("rpid"));
         assertEquals(true, comments.get(0).get("top"));
         assertEquals(true, comments.get(0).get("is_up"));
+        assertEquals(true, comments.get(0).get("liked"));
+        assertEquals(false, comments.get(1).get("liked"));
         assertEquals(false, comments.get(1).get("is_up"));
         // 子回复预览:直答不带 parent_uname,层内互答带;UP 主身份透传
         List<Map<String, Object>> preview = (List<Map<String, Object>>) comments.get(1).get("preview");
@@ -1144,4 +1146,31 @@ class BiliBiliServiceTest {
                         () -> service.getComments("BV195KY6YEeY", 3, "", "", 1));
         assertTrue(ex.getMessage().contains("评论区已关闭"));
     }
+    @Test
+    void runCommentActionPostsReplyActionFormWithCsrf() throws Exception {
+        org.mockito.ArgumentCaptor<HttpEntity<org.springframework.util.MultiValueMap<String, String>>> captor =
+                org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/v2/reply/action"), eq(HttpMethod.POST),
+                captor.capture(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+
+        Map<String, Object> result = service.runCommentAction("BV195KY6YEeY", "314458109537", 1);
+
+        assertEquals(true, result.get("liked"));
+        org.springframework.util.MultiValueMap<String, String> form = captor.getValue().getBody();
+        assertEquals("1", form.getFirst("type"));
+        assertEquals("116958703918865", form.getFirst("oid"));
+        assertEquals("314458109537", form.getFirst("rpid"));
+        assertEquals("1", form.getFirst("action"));
+        org.junit.jupiter.api.Assertions.assertNotNull(captor.getValue().getHeaders().getFirst("Cookie"));
+    }
+
+    @Test
+    void runCommentActionRejectsInvalidRpid() {
+        cn.har01d.alist_tvbox.exception.BadRequestException ex =
+                org.junit.jupiter.api.Assertions.assertThrows(cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                        () -> service.runCommentAction("BV195KY6YEeY", "abc", 1));
+        assertTrue(ex.getMessage().contains("无效的评论 ID"));
+    }
+
 }
