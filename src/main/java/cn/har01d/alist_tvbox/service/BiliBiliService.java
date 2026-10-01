@@ -109,6 +109,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -172,7 +173,6 @@ public class BiliBiliService {
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/newlist?ps=%d&rid=%s&pn=%d&type=0";
     // B 站 2026 分区改版撤销的主分区(动物圈/运动/汽车,均 2022 年从生活拆出):newlist 无流,分区内热榜 ranking/v2 仍在
     private static final Set<Integer> RANK_ONLY_REGION_RIDS = Set.of(217, 234, 223);
-    private static final int SUB_REGION_SCAN_PAGES = 10;
     public static final String CHANNEL_API = "https://api.bilibili.com/x/web-interface/web/channel/multiple/list?channel_id=%s&sort_type=%s&offset=%s&page_size=30";
     public static final String FAV_API = "https://api.bilibili.com/x/v3/fav/resource/list?media_id=%s&keyword=&order=%s&type=0&tid=0&platform=web&pn=%d&ps=20";
     public static final String FOLLOW_API = "https://api.bilibili.com/x/relation/followings";
@@ -333,6 +333,11 @@ public class BiliBiliService {
     private final Cache<String, List<BiliBiliInfo>> regionPageCache = Caffeine.newBuilder()
             .expireAfterWrite(2, java.util.concurrent.TimeUnit.MINUTES)
             .maximumSize(200)
+            .build();
+    /** 分区热榜短缓存:子分区列表/撤区兜底/主分区热门全走此榜,2 分钟免重复请求。 */
+    private final Cache<String, List<BiliBiliInfo>> regionRankCache = Caffeine.newBuilder()
+            .expireAfterWrite(2, java.util.concurrent.TimeUnit.MINUTES)
+            .maximumSize(50)
             .build();
     /** newlist 412 风控熔断到期时间戳(毫秒):触发后冷却期内直接返空,避免连环撞加重拦截。 */
     private volatile long newlistBlockedUntil;
@@ -1551,6 +1556,11 @@ public class BiliBiliService {
         if (page > 1) {
             return new ArrayList<>();
         }
+        String cacheKey = type + ":" + rid;
+        List<BiliBiliInfo> cached = regionRankCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
         // ranking/v2 分区改版后要求浏览器头+buvid3:裸 getForObject 恒 -352(data=null)
         String url = String.format(HOT_API, type, rid);
         HttpEntity<Void> entity = buildHttpEntity(null);
@@ -1560,7 +1570,9 @@ public class BiliBiliService {
             log.warn("getHotRank empty response: {}", url);
             return new ArrayList<>();
         }
-        return body.getData().getList();
+        List<BiliBiliInfo> list = body.getData().getList();
+        regionRankCache.put(cacheKey, list);
+        return list;
     }
 
     public MovieList getSeasonResult(String type, FilterDto filter, int page) {
@@ -2909,35 +2921,27 @@ public class BiliBiliService {
         return node;
     }
 
-    /** B 站分区改版下线 dynamic/region(-404)与 newlist_rank(-400):子分区列表改走父分区数据 + 本地 tid 过滤 */
+    /** B 站分区改版下线子分区全部列表接口(dynamic/region -404 / newlist_rank -400),且 newlist 是 IP 频率风控重灾区:
+     *  子分区统一改走父分区热榜 + 本地 tid 过滤,单请求无扇出;「热门」按榜位序,「最新」按发布时间倒序,仅第 1 页。 */
     private List<BiliBiliInfo> getSubRegionVideos(String tid, String type, int page) {
-        int subTid = Integer.parseInt(tid);
         List<BiliBiliInfo> result = new ArrayList<>();
+        if (page > 1) {
+            return result;
+        }
+        int subTid = Integer.parseInt(tid);
         String parentTid = navigationService.getParentValue(tid);
         if (parentTid == null) {
             log.warn("no parent category for tid {}", tid);
             return result;
         }
-        if ("hot".equals(type) || isRankOnlyRegion(parentTid)) {
-            // 热门走父分区热榜过滤;已撤分区(动物圈/运动/汽车)的「最新」无流,同样以热榜兜底,仅第 1 页
-            List<BiliBiliInfo> rank = getHotRank("all", Integer.parseInt(parentTid), 1);
-            for (BiliBiliInfo info : rank) {
-                if (info.getTid() == subTid) {
-                    result.add(info);
-                }
+        List<BiliBiliInfo> rank = getHotRank("all", Integer.parseInt(parentTid), 1);
+        for (BiliBiliInfo info : rank) {
+            if (info.getTid() == subTid) {
+                result.add(info);
             }
-            if (page > 1) {
-                result.clear();
-            }
-        } else {
-            // 子分区无公开列表接口:按父分区页扫描过滤,单页扫 10 页,小众子分区可能不足 30 条
-            for (int pn = (page - 1) * SUB_REGION_SCAN_PAGES + 1; pn <= page * SUB_REGION_SCAN_PAGES; pn++) {
-                for (BiliBiliInfo info : getRegionArchives(parentTid, pn)) {
-                    if (info.getTid() == subTid) {
-                        result.add(info);
-                    }
-                }
-            }
+        }
+        if (!"hot".equals(type)) {
+            result.sort(Comparator.comparing(BiliBiliInfo::getPubdate, Comparator.reverseOrder()));
         }
         return result;
     }
@@ -3002,10 +3006,10 @@ public class BiliBiliService {
 
         result.getList().addAll(list);
 
-        boolean hot = "hot".equals(type);
-        result.setTotal(hot ? list.size() : 30 * 50);
+        // 子分区以父分区热榜过滤兜底,仅第 1 页
+        result.setTotal(list.size());
         result.setPage(page);
-        result.setPagecount(hot ? 1 : 50);
+        result.setPagecount(1);
         result.setLimit(result.getList().size());
         return result;
     }

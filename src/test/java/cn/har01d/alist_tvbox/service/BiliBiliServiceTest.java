@@ -782,7 +782,7 @@ class BiliBiliServiceTest {
     }
 
     @Test
-    void subRegionLatestFallsBackToParentRankingForRemovedRegions() throws Exception {
+    void subRegionOfRemovedRegionAlsoUsesParentRanking() throws Exception {
         when(navigationService.getParentValue("218")).thenReturn("217"); // 喵星人 → 动物圈(已撤)
         when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/web-interface/ranking/v2"), eq(HttpMethod.GET), any(), eq(BiliBiliHotResponse.class)))
                 .thenReturn(ResponseEntity.ok(rankResponse(20, 218)));
@@ -794,7 +794,7 @@ class BiliBiliServiceTest {
         assertEquals(21, result.getList().size()); // 合集 + 20 条全命中
 
         MovieList page2 = withRequestContext(() -> service.getMovieList("217", filter, 2, ""));
-        assertEquals(0, page2.getList().size()); // 撤区「最新」无流,第 2 页起空页
+        assertEquals(0, page2.getList().size()); // 子分区仅第 1 页,第 2 页起空页
         verify(restTemplate, never()).exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class));
     }
 
@@ -850,22 +850,33 @@ class BiliBiliServiceTest {
     }
 
     @Test
-    void getMovieListFiltersSubRegionFromParentFeed() throws Exception {
+    void subRegionLatestUsesParentRankingFilteredAndSortedByPubdate() throws Exception {
         when(navigationService.getParentValue("130")).thenReturn("3");
-        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class)))
-                .thenReturn(ResponseEntity.ok(newlistResponse(
-                        archive(130, "BV1match1"), archive(28, "BV1other1"), archive(130, "BV1match2"))));
+        BiliBiliInfo older = archive(130, "BV1older"); // 榜位靠前但发布早
+        older.setPubdate(100);
+        BiliBiliInfo newer = archive(130, "BV1newer"); // 榜位靠后但发布晚
+        newer.setPubdate(200);
+        BiliBiliHotResponse hotResponse = new BiliBiliHotResponse();
+        BiliBiliHot hot = new BiliBiliHot();
+        hot.setList(new ArrayList<>(List.of(older, archive(28, "BV1other1"), newer)));
+        hotResponse.setData(hot);
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/web-interface/ranking/v2"), eq(HttpMethod.GET), any(), eq(BiliBiliHotResponse.class)))
+                .thenReturn(ResponseEntity.ok(hotResponse));
 
         FilterDto filter = new FilterDto();
-        filter.setCategory("130"); // 子分区:音乐综合
+        filter.setCategory("130"); // 子分区:音乐综合,「最新」档
 
         MovieList result = withRequestContext(() -> service.getMovieList("3", filter, 1, ""));
 
-        // 父分区每页 3 条命中 2 条;第 1 页扫父分区 10 页 → 2×10 条
-        assertEquals(21, result.getList().size());
+        assertEquals(3, result.getList().size()); // 合集 + 2 条命中(非 130 被滤掉)
         assertEquals("type$130$$1", result.getList().get(0).getVod_id());
-        assertEquals(50, result.getPagecount());
-        assertTrue(result.getList().stream().skip(1).allMatch(e -> e.getVod_name().startsWith("视频BV1match")));
+        assertEquals("视频BV1newer", result.getList().get(1).getVod_name()); // 「最新」按发布时间倒序
+        assertEquals("视频BV1older", result.getList().get(2).getVod_name());
+        assertEquals(1, result.getPagecount());
+
+        MovieList page2 = withRequestContext(() -> service.getMovieList("3", filter, 2, ""));
+        assertEquals(0, page2.getList().size()); // 单请求无扇出,仅第 1 页
+        verify(restTemplate, never()).exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class));
     }
 
     @Test
