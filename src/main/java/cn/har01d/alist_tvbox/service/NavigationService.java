@@ -32,12 +32,42 @@ public class NavigationService {
             loadBiliBiliCategory();
         } else {
             List<Navigation> list = navigationRepository.findAll();
+            renameRenamedCategories(list);
             addRecommend(list);
             addIndex(list);
             addUps(list);
             addFollow(list);
             addWatchlater(list);
             addTypes(list);
+        }
+    }
+
+    /** B 站 2026 分区改版重命名的子分区(value=tid, 旧名, 新名):仅当现存名称仍为旧名时更新,不覆盖用户自定义名 */
+    private static final List<String[]> RENAMED_SUB_CATEGORIES = List.of(
+            new String[]{"47", "短片·手书·配音", "同人·手书"},
+            new String[]{"122", "野生技术协会", "野生技能协会"},
+            new String[]{"147", "华语电影", "国产电影"},
+            new String[]{"168", "国产原创", "国产原创相关"},
+            new String[]{"200", "中国舞", "国风舞蹈"},
+            new String[]{"210", "手办·模玩", "模玩·周边"},
+            new String[]{"220", "大熊猫", "动物二创"},
+            new String[]{"222", "爬宠", "小宠异宠"},
+            new String[]{"242", "粉丝创作", "娱乐粉丝创作"});
+
+    void renameRenamedCategories(List<Navigation> all) {
+        Map<String, Navigation> map = new HashMap<>();
+        for (Navigation item : all) {
+            if (item.getType() == 2) {
+                map.putIfAbsent(item.getValue(), item);
+            }
+        }
+        for (String[] rename : RENAMED_SUB_CATEGORIES) {
+            Navigation item = map.get(rename[0]);
+            if (item != null && rename[1].equals(item.getName())) {
+                log.info("rename navigation {} [{}] -> [{}]", rename[0], rename[1], rename[2]);
+                item.setName(rename[2]);
+                navigationRepository.save(item);
+            }
         }
     }
 
@@ -95,7 +125,7 @@ public class NavigationService {
         }
         NavigationDto parent = map.get("36");
         if (all.stream().noneMatch(e -> e.getType() == 2 && e.getValue().equals("122"))) {
-            navigationRepository.save(new Navigation("野生技术协会", "122", 2, true, true, parent.getChildren().size() + 1, parent.getId()));
+            navigationRepository.save(new Navigation("野生技能协会", "122", 2, true, true, parent.getChildren().size() + 1, parent.getId()));
         }
         parent = map.get("1");
         if (all.stream().noneMatch(e -> e.getType() == 2 && e.getValue().equals("257"))) {
@@ -151,6 +181,14 @@ public class NavigationService {
         if (all.stream().noneMatch(e -> e.getType() == 2 && e.getValue().equals("255"))) {
             navigationRepository.save(new Navigation("颜值·网红舞", "255", 2, true, true, parent.getChildren().size() + 1, parent.getId()));
         }
+        parent = map.get("188");
+        if (parent != null && all.stream().noneMatch(e -> e.getType() == 2 && e.getValue().equals("232"))) {
+            navigationRepository.save(new Navigation("科工机械", "232", 2, true, true, parent.getChildren().size() + 1, parent.getId()));
+        }
+        parent = map.get("160");
+        if (parent != null && all.stream().noneMatch(e -> e.getType() == 2 && e.getValue().equals("254"))) {
+            navigationRepository.save(new Navigation("亲子", "254", 2, true, true, parent.getChildren().size() + 1, parent.getId()));
+        }
     }
 
     @Transactional
@@ -200,7 +238,7 @@ public class NavigationService {
         int parent = 15; // 国创
         order = 1;
         list.add(new Navigation("国产动画", "153", 2, true, true, order++, parent));
-        list.add(new Navigation("国产原创", "168", 2, true, true, order++, parent));
+        list.add(new Navigation("国产原创相关", "168", 2, true, true, order++, parent));
         list.add(new Navigation("布袋戏", "169", 2, true, true, order++, parent));
         list.add(new Navigation("资讯", "170", 2, true, true, order++, parent));
         list.add(new Navigation("动态漫·广播剧 ", "195", 2, true, true, order++, parent));
@@ -214,7 +252,7 @@ public class NavigationService {
 
         parent++; // 电影
         order = 1;
-        list.add(new Navigation("华语电影", "147", 2, true, true, order++, parent));
+        list.add(new Navigation("国产电影", "147", 2, true, true, order++, parent));
         list.add(new Navigation("欧美电影", "145", 2, true, true, order++, parent));
         list.add(new Navigation("日本电影", "146", 2, true, true, order++, parent));
         list.add(new Navigation("其他国家", "83", 2, true, true, order++, parent));
@@ -230,6 +268,7 @@ public class NavigationService {
         list.add(new Navigation("软件应用", "230", 2, true, true, order++, parent));
         list.add(new Navigation("计算机技术", "231", 2, true, true, order++, parent));
         list.add(new Navigation("极客DIY", "233", 2, true, true, order++, parent));
+        list.add(new Navigation("科工机械", "232", 2, true, true, order++, parent));
 
         parent++; // 知识
         order = 1;
@@ -240,14 +279,14 @@ public class NavigationService {
         list.add(new Navigation("校园学习", "208", 2, true, true, order++, parent));
         list.add(new Navigation("职业职场", "209", 2, true, true, order++, parent));
         list.add(new Navigation("设计·创意", "229", 2, true, true, order++, parent));
-        list.add(new Navigation("野生技术协会", "122", 2, true, true, order++, parent));
+        list.add(new Navigation("野生技能协会", "122", 2, true, true, order++, parent));
 
         parent++; // 动画
         order = 1;
         list.add(new Navigation("MAD·AMV", "24", 2, true, true, order++, parent));
         list.add(new Navigation("MMD·3D", "25", 2, true, true, order++, parent));
-        list.add(new Navigation("短片·手书·配音", "47", 2, true, true, order++, parent));
-        list.add(new Navigation("手办·模玩", "210", 2, true, true, order++, parent));
+        list.add(new Navigation("同人·手书", "47", 2, true, true, order++, parent));
+        list.add(new Navigation("模玩·周边", "210", 2, true, true, order++, parent));
         list.add(new Navigation("特摄", "86", 2, true, true, order++, parent));
         list.add(new Navigation("动漫杂谈", "253", 2, true, true, order++, parent));
         list.add(new Navigation("综合", "27", 2, true, true, order++, parent));
@@ -286,7 +325,7 @@ public class NavigationService {
         order = 1;
         list.add(new Navigation("综艺", "71", 2, true, true, order++, parent));
         list.add(new Navigation("娱乐杂谈", "241", 2, true, true, order++, parent));
-        list.add(new Navigation("粉丝创作", "242", 2, true, true, order++, parent));
+        list.add(new Navigation("娱乐粉丝创作", "242", 2, true, true, order++, parent));
         list.add(new Navigation("明星综合", "137", 2, true, true, order++, parent));
 
         parent++; // 影视
@@ -303,7 +342,7 @@ public class NavigationService {
         list.add(new Navigation("舞蹈教程", "156", 2, true, true, order++, parent));
         list.add(new Navigation("街舞", "198", 2, true, true, order++, parent));
         list.add(new Navigation("明星舞蹈", "199", 2, true, true, order++, parent));
-        list.add(new Navigation("中国舞", "200", 2, true, true, order++, parent));
+        list.add(new Navigation("国风舞蹈", "200", 2, true, true, order++, parent));
 
         parent++; // 运动
         order = 1;
@@ -333,6 +372,7 @@ public class NavigationService {
         list.add(new Navigation("手工 ", "161", 2, true, true, order++, parent));
         list.add(new Navigation("绘画", "162", 2, true, true, order++, parent));
         list.add(new Navigation("日常", "21", 2, true, true, order++, parent));
+        list.add(new Navigation("亲子", "254", 2, true, true, order++, parent));
 
         parent++; // 美食
         order = 1;
@@ -346,9 +386,9 @@ public class NavigationService {
         order = 1;
         list.add(new Navigation("喵星人", "218", 2, true, true, order++, parent));
         list.add(new Navigation("汪星人", "219", 2, true, true, order++, parent));
-        list.add(new Navigation("大熊猫", "220", 2, true, true, order++, parent));
+        list.add(new Navigation("动物二创", "220", 2, true, true, order++, parent));
         list.add(new Navigation("野生动物", "221", 2, true, true, order++, parent));
-        list.add(new Navigation("爬宠 ", "222", 2, true, true, order++, parent));
+        list.add(new Navigation("小宠异宠", "222", 2, true, true, order++, parent));
         list.add(new Navigation("动物综合 ", "75", 2, true, true, order++, parent));
 
         parent++; // 时尚
@@ -368,6 +408,19 @@ public class NavigationService {
 
         navigationRepository.saveAll(list);
         log.info("load BiliBili category");
+    }
+
+    /** view 接口的 tname 已被 B 站清空(分区改版):按分区 tid 反查本地分类名 */
+    public String getNameByValue(String value) {
+        return navigationRepository.findFirstByValue(value).map(Navigation::getName).orElse(null);
+    }
+
+    /** B 站下线子分区列表接口后,子分区浏览改走父分区数据 + 本地 tid 过滤:返回子分区所属主分区 value */
+    public String getParentValue(String value) {
+        return navigationRepository.findFirstByValueAndType(value, 2)
+                .flatMap(child -> navigationRepository.findById(child.getParentId()))
+                .map(Navigation::getValue)
+                .orElse(null);
     }
 
     public List<NavigationDto> list() {
