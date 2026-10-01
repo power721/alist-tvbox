@@ -626,9 +626,10 @@ class BiliBiliServiceTest {
 
     @Test
     void viewApiUgcSeasonDeserializes() throws Exception {
-        // 实测 episode 无顶层 duration,时长在 arc.duration(秒)
+        // 实测 episode 无顶层 duration,时长在 arc.duration(秒);多P成员的分P全集在 pages[](各P独立 cid)
         String json = "{\"aid\":1,\"bvid\":\"BV1\",\"title\":\"t\",\"ugc_season\":{\"id\":748,\"title\":\"合集名\",\"mid\":9,"
-                + "\"sections\":[{\"id\":1,\"title\":\"正片\",\"episodes\":[{\"aid\":10,\"bvid\":\"BV10\",\"cid\":100,\"title\":\"第一集\",\"arc\":{\"duration\":61}}]},"
+                + "\"sections\":[{\"id\":1,\"title\":\"正片\",\"episodes\":[{\"aid\":10,\"bvid\":\"BV10\",\"cid\":100,\"title\":\"第一集\","
+                + "\"arc\":{\"duration\":346},\"pages\":[{\"page\":1,\"part\":\"上\",\"cid\":100,\"duration\":45},{\"page\":2,\"part\":\"下\",\"cid\":101,\"duration\":301}]}]},"
                 + "{\"id\":2,\"title\":\"花絮\",\"episodes\":[]}]}}";
         BiliBiliInfo info = new ObjectMapper().readValue(json, BiliBiliInfo.class);
 
@@ -638,7 +639,10 @@ class BiliBiliServiceTest {
         assertEquals("第一集", episode.getTitle());
         assertEquals(100L, episode.getCid());
         assertEquals(10L, episode.getAid());
-        assertEquals(61L, episode.getDuration());
+        assertEquals(346L, episode.getDuration());
+        assertEquals(2, episode.getPages().size());
+        assertEquals(101L, episode.getPages().get(1).getCid());
+        assertEquals("下", episode.getPages().get(1).getPart());
     }
 
     private BiliBiliInfo.UgcSeason.Arc arcOf(long seconds) {
@@ -708,6 +712,61 @@ class BiliBiliServiceTest {
         String guiPlayUrl = service.getDetail("BV195KY6YEeY", "gui").getList().get(0).getVod_play_url();
         assertTrue(guiPlayUrl.contains("【正片】1 初入宗门(10:31)$1130000001-1500000001"));
         assertTrue(guiPlayUrl.contains("▶ 【正片】2 突破金丹 特辑(01:15:31)$116958703918865-40168587741"));
+    }
+
+    private BiliBiliInfo.PageInfo pageOf(int page, String part, long cid, long duration) {
+        BiliBiliInfo.PageInfo pageInfo = new BiliBiliInfo.PageInfo();
+        pageInfo.setPage(page);
+        pageInfo.setPart(part);
+        pageInfo.setCid(cid);
+        pageInfo.setDuration(duration);
+        return pageInfo;
+    }
+
+    @Test
+    void getDetailExpandsMultiPageSeasonEpisodes() throws Exception {
+        // 实测形态(创造101 BV1ES7D6XEZy):合集成员自身带分P,episode.cid 只锚 P1,
+        // 不展开则合集线连播只播每成员首个分P(该视频 P1 恰为 45 秒短片即跳下一成员)
+        BiliBiliInfo info = videoInfo();
+        BiliBiliInfo.UgcSeason season = new BiliBiliInfo.UgcSeason();
+        season.setId(8319251L);
+        season.setTitle("创造101");
+        BiliBiliInfo.UgcSeason.Section main = new BiliBiliInfo.UgcSeason.Section();
+        main.setId(1L);
+        main.setTitle("正片");
+        BiliBiliInfo.UgcSeason.Episode multi = new BiliBiliInfo.UgcSeason.Episode();
+        multi.setAid(116702348056416L);
+        multi.setBvid("BV195KY6YEeY"); // 当前视频=多P成员
+        multi.setCid(38905774565L);
+        multi.setTitle("EP1上");
+        multi.setArc(arcOf(5305L));
+        multi.setPages(List.of(
+                pageOf(1, "xbb", 38905774565L, 45),
+                pageOf(2, "真1", 38906171035L, 301)));
+        BiliBiliInfo.UgcSeason.Episode single = new BiliBiliInfo.UgcSeason.Episode();
+        single.setAid(116736204478395L);
+        single.setBvid("BV1BDE166Esn");
+        single.setCid(39363544915L);
+        single.setTitle("EP1下");
+        single.setArc(arcOf(301L));
+        main.setEpisodes(List.of(multi, single));
+        season.setSections(List.of(main));
+        info.setUgcSeason(season);
+        stubInfoApi(info);
+
+        cn.har01d.alist_tvbox.tvbox.MovieDetail movie = service.getDetail("BV195KY6YEeY", "com.github.tvbox.osc").getList().get(0);
+
+        String playUrl = movie.getVod_play_url();
+        // 多P成员按分P展开、载荷 aid-各P cid;▶ 只标当前视频首个分P
+        assertTrue(playUrl.contains("▶ EP1上 P1 xbb$116702348056416-38905774565"));
+        assertTrue(playUrl.contains("EP1上 P2 真1$116702348056416-38906171035"));
+        // 单P成员不展开、条目无 P 标(与既有形态一致)
+        assertTrue(playUrl.contains("EP1下$116736204478395-39363544915"));
+
+        // gui 时长后缀=各分P自身时长(P1=45 秒非整视频 01:28:25)
+        String guiPlayUrl = service.getDetail("BV195KY6YEeY", "gui").getList().get(0).getVod_play_url();
+        assertTrue(guiPlayUrl.contains("▶ EP1上 P1 xbb(0:45)$116702348056416-38905774565"));
+        assertTrue(guiPlayUrl.contains("EP1上 P2 真1(05:01)$116702348056416-38906171035"));
     }
 
     // ==== B 站分区改版(2026-10):dynamic/region 与 newlist_rank 下线、view 接口 tname 清空 的替代链路 ====

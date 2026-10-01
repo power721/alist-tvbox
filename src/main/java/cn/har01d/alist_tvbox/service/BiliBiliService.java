@@ -1907,7 +1907,9 @@ public class BiliBiliService {
     }
 
     /** 详情页「合集」线路条目:aid-cid 载荷与相关视频线路同款;当前视频 ▶ 前缀定位;
-     * 多 section(正片/花絮)时条目名带【分区名】;无合集返回 null 不出线路。 */
+     * 多 section(正片/花絮)时条目名带【分区名】;无合集返回 null 不出线路。
+     * 多P成员按分P展开成多条(B 站原生连播顺序:先走完该视频全部分P再到下一成员),
+     * ▶ 只标当前视频首个分P;pages 缺失的老载荷回落单条(P1=episode.cid)。 */
     private String buildUgcSeasonPlayUrl(BiliBiliInfo info, String client) {
         BiliBiliInfo.UgcSeason season = info.getUgcSeason();
         if (season == null || season.getSections() == null || season.getSections().isEmpty()) {
@@ -1921,23 +1923,59 @@ public class BiliBiliService {
                 continue;
             }
             for (BiliBiliInfo.UgcSeason.Episode episode : section.getEpisodes()) {
-                if (!playUrl.isEmpty()) {
-                    playUrl.append('#');
+                List<BiliBiliInfo.PageInfo> pages = playablePages(episode);
+                if (pages.isEmpty()) {
+                    continue;
                 }
-                String title = fixTitle(episode.getTitle());
-                if (multipleSections) {
-                    title = "【" + fixTitle(section.getTitle()) + "】" + title;
+                boolean isCurrent = episode.getBvid() != null && episode.getBvid().equals(current);
+                for (int i = 0; i < pages.size(); i++) {
+                    BiliBiliInfo.PageInfo page = pages.get(i);
+                    String title = fixTitle(episode.getTitle());
+                    if (pages.size() > 1) {
+                        String part = StringUtils.trimToNull(page.getPart());
+                        int no = page.getPage() > 0 ? page.getPage() : i + 1;
+                        title += " P" + no + (part == null ? "" : " " + fixTitle(part));
+                    }
+                    appendSeasonEntry(playUrl, title, section, multipleSections,
+                            isCurrent && i == 0, episode.getAid(), page.getCid(),
+                            pages.size() > 1 ? page.getDuration() : episode.getDuration(), client);
                 }
-                if ("gui".equals(client)) {
-                    title += "(" + seconds2String(episode.getDuration()) + ")";
-                }
-                if (episode.getBvid() != null && episode.getBvid().equals(current)) {
-                    title = "▶ " + title;
-                }
-                playUrl.append(title).append('$').append(episode.getAid()).append('-').append(episode.getCid());
             }
         }
         return playUrl.isEmpty() ? null : playUrl.toString();
+    }
+
+    /** 成员视频的可播分P集合:优先 ugc_season 载荷自带的 pages[](各P独立 cid);
+     * 缺失或全无 cid 时回落单条(P1=episode.cid 本身)。 */
+    private List<BiliBiliInfo.PageInfo> playablePages(BiliBiliInfo.UgcSeason.Episode episode) {
+        if (episode.getPages() != null) {
+            List<BiliBiliInfo.PageInfo> pages = episode.getPages().stream()
+                    .filter(e -> e != null && e.getCid() > 0).toList();
+            if (!pages.isEmpty()) {
+                return pages;
+            }
+        }
+        BiliBiliInfo.PageInfo first = new BiliBiliInfo.PageInfo();
+        first.setPage(1);
+        first.setCid(episode.getCid());
+        return first.getCid() > 0 ? List.of(first) : List.of();
+    }
+
+    private void appendSeasonEntry(StringBuilder playUrl, String title, BiliBiliInfo.UgcSeason.Section section,
+            boolean multipleSections, boolean current, long aid, long cid, long duration, String client) {
+        if (!playUrl.isEmpty()) {
+            playUrl.append('#');
+        }
+        if (multipleSections) {
+            title = "【" + fixTitle(section.getTitle()) + "】" + title;
+        }
+        if ("gui".equals(client)) {
+            title += "(" + seconds2String(duration) + ")";
+        }
+        if (current) {
+            title = "▶ " + title;
+        }
+        playUrl.append(title).append('$').append(aid).append('-').append(cid);
     }
 
     private List<BiliBiliInfo> fetchRelatedList(String bvid) {

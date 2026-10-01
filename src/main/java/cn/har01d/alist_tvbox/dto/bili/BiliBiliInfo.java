@@ -80,6 +80,8 @@ public class BiliBiliInfo {
             private long cid;
             private String title;
             private Arc arc;
+            /** 成员视频的分P全集(各P独立 cid):ugc_season 载荷自带,合集线多P展开零额外请求 */
+            private List<PageInfo> pages = new ArrayList<>();
 
             /** 条目时长(秒):实测响应无顶层 duration 字段,取 arc.duration(与视频条目 duration 同口径) */
             public long getDuration() {
