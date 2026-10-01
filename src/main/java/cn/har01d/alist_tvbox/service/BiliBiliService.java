@@ -99,6 +99,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -328,6 +329,13 @@ public class BiliBiliService {
             .expireAfterWrite(5, java.util.concurrent.TimeUnit.MINUTES)
             .maximumSize(500)
             .build();
+    /** newlist 分区页短缓存:子分区扫描单请求连打 10 页、翻页跨请求重叠,同页 2 分钟内免重复请求(412 是 IP 频率风控)。 */
+    private final Cache<String, List<BiliBiliInfo>> regionPageCache = Caffeine.newBuilder()
+            .expireAfterWrite(2, java.util.concurrent.TimeUnit.MINUTES)
+            .maximumSize(200)
+            .build();
+    /** newlist 412 风控熔断到期时间戳(毫秒):触发后冷却期内直接返空,避免连环撞加重拦截。 */
+    private volatile long newlistBlockedUntil;
     /** 单设备翻页会话:游标/搜索词/收藏夹选择原先存单例字段,共享 token 部署(亲友同链)多设备并发互串页 ——
      *  按客户端标识(配置下发时烤进 BILIBILI_URL 的 ?client=,一次性随机)分桶隔离,30 分钟无访问过期回收。 */
     static final class BiliSession {
@@ -2926,14 +2934,31 @@ public class BiliBiliService {
     }
 
     private List<BiliBiliInfo> getRegionArchives(String tid, int page) {
-        String url = String.format(REGION_API, 30, tid, page);
-        HttpEntity<Void> entity = buildHttpEntity(null);
-        ResponseEntity<BiliBiliListResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliListResponse.class);
-        BiliBiliListResponse body = response.getBody();
-        if (body == null || body.getData() == null) {
+        if (System.currentTimeMillis() < newlistBlockedUntil) {
             return new ArrayList<>();
         }
-        return body.getData().getArchives();
+        String cacheKey = tid + ":" + page;
+        List<BiliBiliInfo> cached = regionPageCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        String url = String.format(REGION_API, 30, tid, page);
+        HttpEntity<Void> entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com/"));
+        try {
+            ResponseEntity<BiliBiliListResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliListResponse.class);
+            BiliBiliListResponse body = response.getBody();
+            if (body == null || body.getData() == null || body.getData().getArchives() == null) {
+                return new ArrayList<>();
+            }
+            List<BiliBiliInfo> archives = body.getData().getArchives();
+            regionPageCache.put(cacheKey, archives);
+            return archives;
+        } catch (HttpClientErrorException e) {
+            // newlist 为 IP 频率风控(412 回 HTML 挑战页):熔断 5 分钟并降级空列表,客户端仅见合集占位
+            log.warn("newlist rejected {} , cooling down 5 minutes: {}", e.getStatusCode(), url);
+            newlistBlockedUntil = System.currentTimeMillis() + 300_000;
+            return new ArrayList<>();
+        }
     }
 
     private MovieList getMovieListByType(String tid, String type, int page) {

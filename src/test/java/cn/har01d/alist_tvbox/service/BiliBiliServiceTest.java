@@ -823,6 +823,33 @@ class BiliBiliServiceTest {
     }
 
     @Test
+    void newlistRiskControlReturnsEmptyAndTripsCircuitBreaker() throws Exception {
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class)))
+                .thenThrow(new org.springframework.web.client.HttpClientErrorException(org.springframework.http.HttpStatus.PRECONDITION_FAILED));
+
+        MovieList first = withRequestContext(() -> service.getRegion("11", 1));
+        assertEquals(1, first.getList().size()); // 412 HTML 挑战页降级为仅合集占位,不再 500
+
+        MovieList second = withRequestContext(() -> service.getRegion("11", 2));
+        assertEquals(1, second.getList().size()); // 熔断冷却期内直接返空,不再撞接口
+        verify(restTemplate, org.mockito.Mockito.times(1)).exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class));
+    }
+
+    @Test
+    void newlistPagesAreCachedToReduceRequestFanout() throws Exception {
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class)))
+                .thenReturn(ResponseEntity.ok(newlistResponse(archive(130, "BV1cached"))));
+
+        MovieList first = withRequestContext(() -> service.getRegion("3", 1));
+        MovieList again = withRequestContext(() -> service.getRegion("3", 1));
+
+        assertEquals(2, first.getList().size());
+        assertEquals(first.getList().size(), again.getList().size());
+        // 同 (rid,page) 短缓存命中,只发一次请求
+        verify(restTemplate, org.mockito.Mockito.times(1)).exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class));
+    }
+
+    @Test
     void getMovieListFiltersSubRegionFromParentFeed() throws Exception {
         when(navigationService.getParentValue("130")).thenReturn("3");
         when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/web-interface/newlist"), eq(HttpMethod.GET), any(), eq(BiliBiliListResponse.class)))
