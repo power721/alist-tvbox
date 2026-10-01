@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -33,12 +35,36 @@ class DashUtilsTest {
 
     @Test
     void dataUriMpdEmbedsSwappedUrl() {
-        Map<String, Object> map = DashUtils.convert(resp(MCDN, List.of(MIRROR), MCDN, List.of(MIRROR)), List.of(), "com.fongmi.android.tv");
+        Map<String, Object> map = DashUtils.convert(resp(MCDN, List.of(MIRROR), MCDN, List.of(MIRROR)), List.of(), "com.github.tvbox.osc.tk");
         String url = (String) map.get("url");
         assertTrue(url.startsWith("data:application/dash+xml;base64,"));
-        String mpd = new String(Base64.getMimeDecoder().decode(url.substring("data:application/dash+xml;base64,".length())));
+        String mpd = decodeDataUri(url);
         assertFalse(mpd.contains("mcdn"));
         assertTrue(mpd.contains("upos-sz-mirrorcos"));
+    }
+
+    @Test
+    void fongmiMultiBaseUrlOrdered() {
+        Map<String, Object> map = DashUtils.convert(resp(MCDN, List.of(MIRROR, MIRROR_B), MIRROR, List.of(MIRROR_B)), List.of(), "com.fongmi.android.tv");
+        List<String> bases = baseUrls(decodeDataUri((String) map.get("url")));
+        // video 表示:首条择优 MIRROR,其余按原始顺序 MCDN、MIRROR_B;audio 表示:MIRROR 后跟 MIRROR_B
+        assertEquals(List.of(MIRROR, MCDN, MIRROR_B, MIRROR, MIRROR_B), bases);
+    }
+
+    @Test
+    void guiMultiBaseUrlOrdered() {
+        Map<String, Object> map = DashUtils.convert(resp(MCDN, List.of(MIRROR, MIRROR_B), MIRROR, List.of(MIRROR_B)), List.of(), "gui");
+        List<String> bases = baseUrls(decodeDataUri((String) map.get("url")));
+        assertEquals(List.of(MIRROR, MCDN, MIRROR_B, MIRROR, MIRROR_B), bases);
+    }
+
+    @Test
+    void legacyShellsKeepSingleBaseUrl() {
+        Map<String, Object> open = DashUtils.convert(resp(MCDN, List.of(MIRROR, MIRROR_B), MCDN, List.of(MIRROR)), List.of(), "open");
+        assertEquals(List.of(MIRROR, MIRROR), baseUrls((String) open.get("mpd")));
+
+        Map<String, Object> tk = DashUtils.convert(resp(MCDN, List.of(MIRROR, MIRROR_B), MCDN, List.of(MIRROR)), List.of(), "com.github.tvbox.osc.tk");
+        assertEquals(List.of(MIRROR, MIRROR), baseUrls(decodeDataUri((String) tk.get("url"))));
     }
 
     @Test
@@ -78,6 +104,20 @@ class DashUtilsTest {
         assertFalse(DashUtils.isPcdn(MIRROR));
         assertFalse(DashUtils.isPcdn("https://cn-jsnt-ct-01-06.bilivideo.com/upos/a.m4s"));
         assertFalse(DashUtils.isPcdn("not-a-url"));
+    }
+
+    private static String decodeDataUri(String url) {
+        assertTrue(url.startsWith("data:application/dash+xml;base64,"));
+        return new String(Base64.getMimeDecoder().decode(url.substring("data:application/dash+xml;base64,".length())));
+    }
+
+    private static List<String> baseUrls(String mpd) {
+        List<String> list = new ArrayList<>();
+        Matcher matcher = Pattern.compile("<BaseURL>(.*?)</BaseURL>", Pattern.DOTALL).matcher(mpd);
+        while (matcher.find()) {
+            list.add(matcher.group(1).trim().replace("&amp;", "&"));
+        }
+        return list;
     }
 
     private static Resp resp(String videoUrl, List<String> videoBackup, String audioUrl, List<String> audioBackup) {

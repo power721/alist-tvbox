@@ -83,9 +83,10 @@ public final class DashUtils {
             quality.put(String.valueOf(data.getAcceptQuality().get(i)), data.getAcceptDescription().get(i));
         }
 
+        boolean multiBase = supportsMultiBaseUrl(client);
         for (Media video : dash.getVideo()) {
             if (!hasAny || qns.contains(video.getId())) {
-                videoList.append(getMedia(video));
+                videoList.append(getMedia(video, multiBase));
                 urls.add(quality.get(video.getId()) + " " + getCodec(video.getCodecid()));
                 urls.add(resolveUrl(video));
             }
@@ -93,7 +94,7 @@ public final class DashUtils {
 
         StringBuilder audioList = new StringBuilder();
         for (Media audio : dash.getAudio()) {
-            audioList.append(getMedia(audio));
+            audioList.append(getMedia(audio, multiBase));
             if (audioIds.containsKey(audio.getId())) {
                 CatAudio catAudio = new CatAudio();
                 catAudio.setBit(audioIds.get(audio.getId()));
@@ -135,24 +136,59 @@ public final class DashUtils {
     }
 
     // B 站调度会把 baseUrl 分到 PCDN/P2P 节点(mcdn*.bilivideo.cn、*.szbdyd.com),
-    // 直连时长视频大偏移 Range(续播 seek)易挂起且限速;MPD 每个 Representation 只嵌一个
+    // 直连时长视频大偏移 Range(续播 seek)易挂起且限速;MPD 每个 Representation 仅嵌一个
     // BaseURL 无备线可换,命中 PCDN 即改用 backupUrl 里的常规 CDN(路径与参数跨节点通用)。
     static String resolveUrl(Media media) {
+        return resolveUrls(media).get(0);
+    }
+
+    // 多线路 MPD 仅对已验证支持多条 <BaseURL> 故障转移的消费方开放:gui=桌面端(对每条
+    // BaseURL 各建资产),com.fongmi.android.tv=内嵌 media3(逐条收集为 failover 候选)。
+    // 老壳子(tk/影视仓/OKJOY/webhtv)引擎年龄未知,老 exo2 对多条 BaseURL 是后条覆盖前条,
+    // 多线路会退化成永远用最后一条,维持单线路。爬虫端代理会把每条 BaseURL 各改写为一个
+    // 分片代理地址,exo 在其间失败转移即等于换 CDN 线路。
+    private static boolean supportsMultiBaseUrl(String client) {
+        return "gui".equals(client) || "com.fongmi.android.tv".equals(client);
+    }
+
+    // 线路全集,首条为择优结果(非 PCDN 优先,主线路干净则保主线路),其余按 B 站原始顺序跟随。
+    // 同表示线路字节相同,客户端中途换线安全;ISO DASH 同层级多条 BaseURL 即标准故障转移形态。
+    static List<String> resolveUrls(Media media) {
+        List<String> all = new ArrayList<>();
         String primary = media.getBaseUrl();
+        if (primary != null && !primary.isEmpty()) {
+            all.add(primary);
+        }
         List<String> backups = media.getBackupUrl();
-        if (primary == null || primary.isEmpty()) {
-            return backups == null || backups.isEmpty() ? "" : backups.get(0);
-        }
-        if (!isPcdn(primary) || backups == null) {
-            return primary;
-        }
-        for (String backup : backups) {
-            if (backup != null && !backup.isEmpty() && !isPcdn(backup)) {
-                log.debug("swap PCDN host: {} -> {}", primary, backup);
-                return backup;
+        if (backups != null) {
+            for (String backup : backups) {
+                if (backup != null && !backup.isEmpty() && !all.contains(backup)) {
+                    all.add(backup);
+                }
             }
         }
-        return primary;
+        if (all.isEmpty()) {
+            all.add("");
+            return all;
+        }
+        String first = all.get(0);
+        if (isPcdn(first)) {
+            for (String candidate : all) {
+                if (!isPcdn(candidate)) {
+                    first = candidate;
+                    log.debug("swap PCDN host: {} -> {}", all.get(0), candidate);
+                    break;
+                }
+            }
+        }
+        List<String> ordered = new ArrayList<>();
+        ordered.add(first);
+        for (String url : all) {
+            if (!url.equals(first)) {
+                ordered.add(url);
+            }
+        }
+        return ordered;
     }
 
     static boolean isPcdn(String url) {
@@ -183,25 +219,30 @@ public final class DashUtils {
         return (audioIds.get(id) / 1024) + "Kbps";
     }
 
-    private static String getMedia(Media media) {
+    private static String getMedia(Media media, boolean multiBase) {
         if (media.getMimeType().startsWith("video")) {
-            return getAdaptationSet(media, String.format(Locale.getDefault(), "height='%s' width='%s' frameRate='%s' sar='%s'", media.getHeight(), media.getWidth(), media.getFrameRate(), media.getSar()));
+            return getAdaptationSet(media, String.format(Locale.getDefault(), "height='%s' width='%s' frameRate='%s' sar='%s'", media.getHeight(), media.getWidth(), media.getFrameRate(), media.getSar()), multiBase);
         } else if (media.getMimeType().startsWith("audio")) {
-            return getAdaptationSet(media, String.format("numChannels='2' sampleRate='%s'", audioIds.get(media.getId())));
+            return getAdaptationSet(media, String.format("numChannels='2' sampleRate='%s'", audioIds.get(media.getId())), multiBase);
         } else {
             return "";
         }
     }
 
-    private static String getAdaptationSet(Media media, String params) {
+    private static String getAdaptationSet(Media media, String params, boolean multiBase) {
         String id = media.getId() + "_" + media.getCodecid();
         String type = media.getMimeType().split("/")[0];
-        String baseUrl = resolveUrl(media).replace("&", "&amp;");
+        StringBuilder baseUrls = new StringBuilder();
+        List<String> urls = resolveUrls(media);
+        int count = multiBase ? urls.size() : 1;
+        for (int i = 0; i < count; i++) {
+            baseUrls.append("<BaseURL>").append(urls.get(i).replace("&", "&amp;")).append("</BaseURL>\n");
+        }
         return String.format(Locale.getDefault(),
                 "<AdaptationSet>\n" +
                         "<ContentComponent contentType=\"%s\"/>\n" +
                         "<Representation id=\"%s\" bandwidth=\"%s\" codecs=\"%s\" mimeType=\"%s\" %s startWithSAP=\"%s\">\n" +
-                        "<BaseURL>%s</BaseURL>\n" +
+                        "%s" +
                         "<SegmentBase indexRange=\"%s\">\n" +
                         "<Initialization range=\"%s\"/>\n" +
                         "</SegmentBase>\n" +
@@ -209,7 +250,7 @@ public final class DashUtils {
                         "</AdaptationSet>\n",
                 type,
                 id, media.getBandwidth(), media.getCodecs(), media.getMimeType(), params, media.getStartWithSap(),
-                baseUrl,
+                baseUrls,
                 media.getSegmentBase().getIndexRange(),
                 media.getSegmentBase().getInitialization());
     }
