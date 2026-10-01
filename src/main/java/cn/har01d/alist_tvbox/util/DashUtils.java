@@ -87,7 +87,7 @@ public final class DashUtils {
             if (!hasAny || qns.contains(video.getId())) {
                 videoList.append(getMedia(video));
                 urls.add(quality.get(video.getId()) + " " + getCodec(video.getCodecid()));
-                urls.add(video.getBaseUrl());
+                urls.add(resolveUrl(video));
             }
         }
 
@@ -98,7 +98,7 @@ public final class DashUtils {
                 CatAudio catAudio = new CatAudio();
                 catAudio.setBit(audioIds.get(audio.getId()));
                 catAudio.setTitle(getAudioTitle(audio.getId()));
-                catAudio.setUrl(audio.getBaseUrl());
+                catAudio.setUrl(resolveUrl(audio));
                 audios.add(catAudio);
             }
         }
@@ -134,6 +134,45 @@ public final class DashUtils {
         return "AV1";
     }
 
+    // B 站调度会把 baseUrl 分到 PCDN/P2P 节点(mcdn*.bilivideo.cn、*.szbdyd.com),
+    // 直连时长视频大偏移 Range(续播 seek)易挂起且限速;MPD 每个 Representation 只嵌一个
+    // BaseURL 无备线可换,命中 PCDN 即改用 backupUrl 里的常规 CDN(路径与参数跨节点通用)。
+    static String resolveUrl(Media media) {
+        String primary = media.getBaseUrl();
+        List<String> backups = media.getBackupUrl();
+        if (primary == null || primary.isEmpty()) {
+            return backups == null || backups.isEmpty() ? "" : backups.get(0);
+        }
+        if (!isPcdn(primary) || backups == null) {
+            return primary;
+        }
+        for (String backup : backups) {
+            if (backup != null && !backup.isEmpty() && !isPcdn(backup)) {
+                log.debug("swap PCDN host: {} -> {}", primary, backup);
+                return backup;
+            }
+        }
+        return primary;
+    }
+
+    static boolean isPcdn(String url) {
+        int scheme = url.indexOf("://");
+        if (scheme < 0) {
+            return false;
+        }
+        String host = url.substring(scheme + 3);
+        int end = host.indexOf('/');
+        if (end >= 0) {
+            host = host.substring(0, end);
+        }
+        int port = host.indexOf(':');
+        if (port >= 0) {
+            host = host.substring(0, port);
+        }
+        host = host.toLowerCase(Locale.ROOT);
+        return host.contains("mcdn") || host.endsWith(".szbdyd.com") || host.contains("p2p");
+    }
+
     private static String getAudioTitle(String id) {
         if (id.equals("30250")) {
             return "杜比全景声";
@@ -157,7 +196,7 @@ public final class DashUtils {
     private static String getAdaptationSet(Media media, String params) {
         String id = media.getId() + "_" + media.getCodecid();
         String type = media.getMimeType().split("/")[0];
-        String baseUrl = media.getBaseUrl().replace("&", "&amp;");
+        String baseUrl = resolveUrl(media).replace("&", "&amp;");
         return String.format(Locale.getDefault(),
                 "<AdaptationSet>\n" +
                         "<ContentComponent contentType=\"%s\"/>\n" +
