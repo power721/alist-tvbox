@@ -57,6 +57,11 @@ import java.util.stream.Collectors;
  * 二小随新入口 2xiaopan.one 复活回归(蜡笔/至臻实测仍死未接);表哥在该配置中又名「龙龙/longlong」。
  * <p>2026-09-27 蜡笔随 py 蜡笔.py 复活回归:tvpanpan.site 实测存活,xiaocgege.shop 双域名 CF 409
  * 降为恢复候选(feimo.fun 域名过期剔除);标准搜索卡片/详情形状,站内搜索已改默认 path-info 路由。
+ * <p>2026-10-01 玩偶配置 v3 同步(7 站主入口对齐,旧入口降为备用垫底):蜡笔换域名 tvpanpan.site
+ * 已死、新入口 www.mmpanpan.site 实测存活;快映与虎斑同款裸 IP 轮换形态(38.76.197.172:12521
+ * 302 到 43.248.128.118:12512),补直连终点入池首位;木偶 666.666291.xyz 提首位(服务存活,
+ * 部分网络环境 444 拒连,探测兜底),停放页 muou.site 降后;闪电 shandian.blog、多多 tv.214521.xyz
+ * 实测存活提首位;欧哥/虎斑入口未变。
  *
  * <p>站点域名池 = 静态种子 ∪ 监控服务(pan-site-monitor)下发的候选(含其标记失败的域名,
  * 可能复活);本服务定时主动探测各域名可达性与延迟(判定参考自建 domain-monitor:200 且
@@ -126,23 +131,27 @@ public class WanouSearchService {
     }
 
     private static final List<Site> SITES = List.of(
+            // 木偶:2026-10-01 主入口 666.666291.xyz(服务存活,部分网络环境 nginx 444 拒连,探测自动判定);
+            // muou.site 实测 DNSPod 停放页降后
             new Site("muou", "木偶", "木偶",
-                    List.of("https://www.muou.site", "https://www.muou.asia", "https://666.666291.xyz",
+                    List.of("https://666.666291.xyz", "https://www.muou.site", "https://www.muou.asia",
                             "https://123.666291.xyz", "https://www.muoua.top", "https://333.333291.xyz"),
                     null, 10, null, null),
             new Site("duoduo", "多多", "多多",
-                    List.of("https://yydsys.de5.net", "https://tv.214521.xyz", "https://tv.yydsys.cc",
+                    List.of("https://tv.214521.xyz", "https://yydsys.de5.net", "https://tv.yydsys.cc",
                             "https://tv.yydsys.top", "https://pan.yydsys.de"),
                     null, 10, null, null),
             new Site("wanou", "玩偶", "玩偶",
                     List.of("https://woggpan.xxooo.cf", "https://wogg.xxooo.cf", "https://woggpan.888484.xyz",
                             "https://www.wogg.net", "https://www.wogg.live"),
                     "/vodsearch/-------------.html?wd={keyword}&page={page}", 10, null, null),
+            // 快映:与虎斑同款裸 IP 轮换(38.76.197.172:12521 实测 302 到 43.248.128.118:12512),直连终点居首省一跳
             new Site("kuaiying", "快映", null,
-                    List.of("http://xsayang.fun:12512", "http://38.76.197.172:12521", "http://103.45.162.207:12512"),
+                    List.of("http://43.248.128.118:12512", "http://38.76.197.172:12521",
+                            "http://xsayang.fun:12512", "http://103.45.162.207:12512"),
                     null, 10, null, null),
             new Site("shandian", "闪电", "闪电",
-                    List.of("http://sd.sduc.site", "http://shandian.blog", "http://sduc.cloud"),
+                    List.of("http://shandian.blog", "http://sd.sduc.site", "http://sduc.cloud"),
                     null, 10, null, null),
             new Site("biaoge", "表哥", null,
                     List.of("http://xn--4yqy17f.xn--yi7aa.vip:3155"),
@@ -164,10 +173,11 @@ public class WanouSearchService {
             new Site("erxiao", "二小", "二小",
                     List.of("https://www.2xiaopan.one", "https://www.2xiaopan.top", "https://www.wexwp.cc"),
                     null, 10, null, null),
-            // 蜡笔:2026-09-27 随 py 蜡笔.py 复活回归(标准卡片/详情形状与默认搜索路由)——tvpanpan.site 实测存活,
-            // xiaocgege.shop 双域名 CF 409 降为恢复候选,feimo.fun 域名过期剔除
+            // 蜡笔:2026-10-01 换域名——tvpanpan.site 实测已死、新入口 www.mmpanpan.site 存活居首;
+            // 旧主入口与 xiaocgege.shop(CF 409)降为恢复候选,探测复活自动顶回
             new Site("labi", "蜡笔", "蜡笔",
-                    List.of("http://tvpanpan.site", "http://www.xiaocgege.shop", "http://xiaocgege.shop"),
+                    List.of("https://www.mmpanpan.site", "http://tvpanpan.site",
+                            "http://www.xiaocgege.shop", "http://xiaocgege.shop"),
                     null, 10, null, null));
 
     private static final class DomainState {

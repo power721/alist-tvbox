@@ -172,9 +172,10 @@ class WanouSearchServiceTest {
         };
         WanouSearchService.Site muou = WanouSearchService.siteById("muou");
         assertEquals("<html>ok</html>", service.requestWithFailover(muou, "/index.php/vod/search/page/1/wd/x.html"));
-        // 首选域名失败后落到第二域名
-        assertTrue(calls.get(0).startsWith("https://www.muou.site/"));
-        assertTrue(calls.get(1).startsWith("https://www.muou.asia/"));
+        // 首选域名失败后依次落到后续域名(种子序:666.666291.xyz → muou.site → muou.asia)
+        assertTrue(calls.get(0).startsWith("https://666.666291.xyz/"));
+        assertTrue(calls.get(1).startsWith("https://www.muou.site/"));
+        assertTrue(calls.get(2).startsWith("https://www.muou.asia/"));
         // 成功域名粘滞:下一次直接从 muou.asia 起步
         calls.clear();
         service.requestWithFailover(muou, "/index.php/vod/search/page/1/wd/x.html");
@@ -353,11 +354,11 @@ class WanouSearchServiceTest {
         assertTrue(muouDto.bestUrl().endsWith("muou.asia"));
         assertEquals(6, muouDto.domains().size());
         assertTrue(muouDto.domains().get(3).latencyMs() >= 0);
-        // 全域名失败站点:bestUrl=null、ok=false,但域名池保持完整(快映现 3 种子)
+        // 全域名失败站点:bestUrl=null、ok=false,但域名池保持完整(快映现 4 种子)
         var kuaiying = dtos.stream().filter(d -> d.siteId().equals("kuaiying")).findFirst().orElseThrow();
         assertFalse(kuaiying.ok());
         assertNull(kuaiying.bestUrl());
-        assertEquals(3, kuaiying.domains().size());
+        assertEquals(4, kuaiying.domains().size());
         // 探测重排后搜索第一发即最优域名(自动采用,零 failover 撞墙)
         assertEquals("<html>ok</html>",
                 service.requestWithFailover(WanouSearchService.siteById("muou"),
