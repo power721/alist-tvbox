@@ -2565,9 +2565,10 @@ public class BiliBiliService {
     }
 
     /**
-     * atv-player 回复评论(x/v2/reply/add):回复一级评论 root=parent=该评论 rpid,
-     * 楼中楼内互答 root=根 rpid/parent=被回复行。返回上游 data.reply 精简后的新评论对象
-     * (含 rpid/member/content 等),客户端据此本地插入免整页刷新;敏感词/频率等错误码转文案抛出。
+     * atv-player 发评论(x/v2/reply/add):root/parent 空=视频顶层评论(form 不带两者),
+     * 回复一级评论 root=parent=该评论 rpid,楼中楼内互答 root=根 rpid/parent=被回复行。
+     * 返回上游 data.reply 精简后的新评论对象(含 rpid/member/content 等),
+     * 客户端据此本地插入免整页刷新;敏感词/频率等错误码转文案抛出。
      */
     public Map<String, Object> runCommentReply(String vodId, String root, String parent, String message) {
         String aid = resolveAid(vodId);
@@ -2576,12 +2577,16 @@ public class BiliBiliService {
         if (StringUtils.isBlank(normalizedParent)) {
             normalizedParent = normalizedRoot;
         }
+        if (StringUtils.isBlank(normalizedRoot)) {
+            // 顶层评论不带 root/parent,孤传 parent 不成形,一并忽略
+            normalizedParent = "";
+        }
         String normalizedMessage = StringUtils.defaultString(message).trim();
-        if (!StringUtils.isNumeric(normalizedRoot) || !StringUtils.isNumeric(normalizedParent)) {
+        if (StringUtils.isNotBlank(normalizedRoot) && !StringUtils.isNumeric(normalizedRoot + normalizedParent)) {
             throw new BadRequestException("无效的评论 ID");
         }
         if (normalizedMessage.isEmpty() || normalizedMessage.length() > 1000) {
-            throw new BadRequestException("回复内容须为 1-1000 字");
+            throw new BadRequestException("评论内容须为 1-1000 字");
         }
         String cookie = resolveCookie();
         String csrf = BiliCookieRefreshUtils.getCookieValue(cookie, "bili_jct");
@@ -2591,8 +2596,10 @@ public class BiliBiliService {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("type", "1");
         form.add("oid", aid);
-        form.add("root", normalizedRoot);
-        form.add("parent", normalizedParent);
+        if (StringUtils.isNotBlank(normalizedRoot)) {
+            form.add("root", normalizedRoot);
+            form.add("parent", normalizedParent);
+        }
         form.add("message", normalizedMessage);
         form.add("plat", "1");
         form.add("csrf", csrf);
