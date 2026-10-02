@@ -2484,8 +2484,9 @@ public class BiliBiliService {
             for (JsonNode reply : data.path("replies")) {
                 names.put(reply.path("rpid_str").asText(""), reply.path("member").path("uname").asText(""));
             }
+            long selfMid = currentSelfMid();
             for (JsonNode reply : data.path("replies")) {
-                Map<String, Object> map = buildComment(reply, upperMid, false);
+                Map<String, Object> map = buildComment(reply, upperMid, false, selfMid);
                 // 楼中楼直答(root)不带前缀,层内互答显示「回复 @xxx」;父条不在本页则留空
                 String parent = reply.path("parent_str").asText("");
                 map.put("parent_uname", !parent.isEmpty() && !parent.equals(rootRpid) ? names.getOrDefault(parent, "") : "");
@@ -2521,12 +2522,13 @@ public class BiliBiliService {
         long upperMid = data.path("upper").path("mid").asLong(0);
         List<Map<String, Object>> comments = new ArrayList<>();
         // UP 置顶评论置首(top.upper),后台置顶(top.admin)不并:与 B站 web 展示一致
+        long selfMid = currentSelfMid();
         JsonNode top = data.path("top").path("upper");
         if (top.isObject() && !top.isNull()) {
-            comments.add(buildComment(top, upperMid, true));
+            comments.add(buildComment(top, upperMid, true, selfMid));
         }
         for (JsonNode reply : data.path("replies")) {
-            comments.add(buildComment(reply, upperMid, false));
+            comments.add(buildComment(reply, upperMid, false, selfMid));
         }
         Map<String, Object> result = new HashMap<>();
         result.put("count", cursor.path("all_count").asInt(0));
@@ -2604,14 +2606,10 @@ public class BiliBiliService {
         form.add("plat", "1");
         form.add("csrf", csrf);
         JsonNode body = postForm(REPLY_ADD_API, form, "https://www.bilibili.com/");
-        long selfMid;
-        try {
-            selfMid = Long.parseLong(BiliCookieRefreshUtils.getCookieValue(cookie, "DedeUserID"));
-        } catch (NumberFormatException e) {
-            selfMid = 0;
-        }
+        // 「作者」标签=视频 UP 主(曾误传登录 mid 致自己的回复全被标作者);「我」标签=当前账号
+        long upMid = ownerMidOf(vodId);
         Map<String, Object> result = new HashMap<>();
-        result.put("comment", buildComment(body.path("data").path("reply"), selfMid, false));
+        result.put("comment", buildComment(body.path("data").path("reply"), upMid, false, currentSelfMid()));
         return result;
     }
 
@@ -2646,6 +2644,26 @@ public class BiliBiliService {
         map.put("pictures", pictures);
     }
 
+    /** 当前登录账号 mid(cookie DedeUserID),用于评论 is_self 标识;未登录/缺失为 0。 */
+    private long currentSelfMid() {
+        try {
+            return Long.parseLong(BiliCookieRefreshUtils.getCookieValue(resolveCookie(), "DedeUserID"));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** 视频条目 id→UP 主 mid(view 缓存),未命中为 0(新评论回传时判 is_up 用)。 */
+    private long ownerMidOf(String vodId) {
+        try {
+            String aid = resolveAid(vodId);
+            BiliBiliInfo info = cache.getIfPresent(BiliBiliUtils.av2bv(Long.parseLong(aid)));
+            return info == null || info.getOwner() == null ? 0 : info.getOwner().getMid();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     private JsonNode fetchReplyJson(String url, String source) {
         HttpEntity<Void> entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
         JsonNode body;
@@ -2667,6 +2685,10 @@ public class BiliBiliService {
     }
 
     private Map<String, Object> buildComment(JsonNode reply, long upperMid, boolean top) {
+        return buildComment(reply, upperMid, top, 0);
+    }
+
+    private Map<String, Object> buildComment(JsonNode reply, long upperMid, boolean top, long selfMid) {
         JsonNode member = reply.path("member");
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("rpid", reply.path("rpid_str").asText(reply.path("rpid").asText("0")));
@@ -2682,7 +2704,9 @@ public class BiliBiliService {
         map.put("location", reply.path("reply_control").path("location").asText(""));
         map.put("top", top);
         long mid = member.path("mid").asLong(0);
+        // is_up=视频 UP 主(评论区「作者」标签);is_self=当前登录账号自己发的(客户端标「我」),二者独立
         map.put("is_up", upperMid > 0 && mid == upperMid);
+        map.put("is_self", selfMid > 0 && mid == selfMid);
         // 登录时上游 action=1 表示当前用户已赞,驱动客户端点赞按钮初始态
         map.put("liked", reply.path("action").asInt(0) == 1);
         appendCommentImages(reply.path("content"), map);
@@ -2693,7 +2717,7 @@ public class BiliBiliService {
         }
         String rootRpid = reply.path("rpid_str").asText(reply.path("rpid").asText(""));
         for (JsonNode child : reply.path("replies")) {
-            Map<String, Object> childMap = buildComment(child, upperMid, false);
+            Map<String, Object> childMap = buildComment(child, upperMid, false, selfMid);
             String parent = child.path("parent_str").asText("");
             childMap.put("parent_uname", !parent.isEmpty() && !parent.equals(rootRpid) ? names.getOrDefault(parent, "") : "");
             preview.add(childMap);

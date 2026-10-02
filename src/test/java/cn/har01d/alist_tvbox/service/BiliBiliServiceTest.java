@@ -1189,13 +1189,14 @@ class BiliBiliServiceTest {
 
     @Test
     void runCommentReplyPostsAddFormAndReturnsNewComment() throws Exception {
+        String selfMid = cn.har01d.alist_tvbox.util.BiliCookieRefreshUtils.getCookieValue(BiliBiliUtils.getCookie(), "DedeUserID");
         String body = """
                 {"code":0,"data":{"reply":{
-                  "rpid_str":"9999","member":{"mid":"2340134","uname":"我","avatar":"https://i0.hdslb.com/face/me.jpg",
+                  "rpid_str":"9999","member":{"mid":"%s","uname":"我","avatar":"https://i0.hdslb.com/face/me.jpg",
                     "level_info":{"current_level":6}},
                   "content":{"message":"回复内容"},"like":0,"rcount":0,"ctime":1790837000,"action":0,
                   "reply_control":{"time_desc":"刚刚"},"replies":[]}}}
-                """;
+                """.formatted(selfMid);
         org.mockito.ArgumentCaptor<HttpEntity<org.springframework.util.MultiValueMap<String, String>>> captor =
                 org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
         when(restTemplate.exchange(eq("https://api.bilibili.com/x/v2/reply/add"), eq(HttpMethod.POST),
@@ -1214,6 +1215,9 @@ class BiliBiliServiceTest {
         Map<String, Object> comment = (Map<String, Object>) result.get("comment");
         assertEquals("9999", comment.get("rpid"));
         assertEquals("回复内容", comment.get("message"));
+        // 自己发的回复:标「我」(is_self)而非「作者」(is_up)
+        assertEquals(true, comment.get("is_self"));
+        assertEquals(false, comment.get("is_up"));
     }
 
     @Test
