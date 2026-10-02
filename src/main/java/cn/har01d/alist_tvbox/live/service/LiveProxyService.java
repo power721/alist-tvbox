@@ -159,18 +159,20 @@ public class LiveProxyService {
         }
         if (isYyStream(target) && request.getParameter("yy") != null) {
             // YY 流地址签名 t 租约仅约 10 分钟(detail 15 分钟缓存内必然过期):
-            // 每次连接先重取当前地址,断流再续租;HLS 清单每次重取,分片独立签名即刻有效,
-            // 分片经 rewrite 生成的代理地址不带 yy 参数,落到下方通用转发
+            // 每次连接先重取房间当前地址(HLS 天然续租);分片经 rewrite 生成的代理地址不带
+            // yy 参数,落到下方通用转发,不产生多余重签。
+            // 子频道房 yys 带子频道号(流接口要 cid=频道/sid=子频道双 id),缺省=房间号
             String roomId = request.getParameter("yy");
+            String subSid = yySubChannelId(request, roomId);
             if (target.contains(".m3u8")) {
                 String rate = request.getParameter("yyr");
-                String fresh = rate == null ? null : yyService.getObject().renewHlsUrl(roomId, rate);
+                String fresh = rate == null ? null : yyService.getObject().renewHlsUrl(roomId, subSid, rate);
                 proxyManifest(fresh == null ? target : fresh, response, "https://wap.yy.com/");
             } else {
                 String gear = request.getParameter("yyq");
-                String fresh = yyService.getObject().renewStreamUrl(roomId, gear);
+                String fresh = yyService.getObject().renewStreamUrl(roomId, subSid, gear);
                 proxyWithRenew(fresh == null ? target : fresh, response, "https://www.yy.com/",
-                        () -> yyService.getObject().renewStreamUrl(roomId, gear));
+                        () -> yyService.getObject().renewStreamUrl(roomId, subSid, gear));
             }
             return;
         }
@@ -264,6 +266,12 @@ public class LiveProxyService {
 
     static boolean isYyStream(String target) {
         return hostMatches(target, YY_MEDIA_HOST);
+    }
+
+    /** YY 子频道号(续租双 id 用):yys 参数纯数字即用,缺省回落房间号(单频道房/存量条目)。 */
+    static String yySubChannelId(HttpServletRequest request, String roomId) {
+        String subSid = request.getParameter("yys");
+        return subSid != null && subSid.matches("[1-9][0-9]{0,17}") ? subSid : roomId;
     }
 
     private static boolean hostMatches(String target, String suffix) {

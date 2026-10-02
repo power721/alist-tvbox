@@ -47,6 +47,8 @@ public class YyService implements LivePlatform {
     private static final String STREAM_SDK_VERSION = "5.23.0-beta.2";
     /** 房间号:1-18 位纯数字(pure_live sid 同形态)。 */
     private static final Pattern ROOM_ID = Pattern.compile("^[1-9][0-9]{1,17}$");
+    /** 子频道号:ssid 字段形态较宽(可为单位数),纯数字即认。 */
+    private static final Pattern SUB_CHANNEL_ID = Pattern.compile("^[1-9][0-9]{0,17}$");
     /** 子分区页 pageInfo(pure_live 同款):块内再取 pageBar 的 moduleId/biz/subBiz。 */
     private static final Pattern PAGE_INFO = Pattern.compile("pageInfo\\s*=\\s*(\\{[\\s\\S]*?\\})\\s*;", Pattern.MULTILINE);
     private static final Pattern MODULE_ID = Pattern.compile("moduleId\\s*:\\s*['\"]?(-?\\d+)");
@@ -82,24 +84,24 @@ public class YyService implements LivePlatform {
      * 供直播代理续租:重调 stream-manager 拿当前签名 FLV 地址(t 租约仅约 10 分钟,
      * 断流/detail 缓存过期地址都会失效)。gear 非法回落流畅档 1;下播/异常返回 null。
      */
-    public String renewStreamUrl(String roomId, String gear) {
+    public String renewStreamUrl(String roomId, String subSid, String gear) {
         try {
-            JsonNode payload = channelStreams(roomId, normalizeGear(gear));
+            JsonNode payload = channelStreams(roomId, subSid, normalizeGear(gear));
             String url = firstStreamLine(payload);
             return url;
         } catch (Exception e) {
-            log.warn("YY流地址续租失败: {} gear={}", roomId, gear, e);
+            log.warn("YY流地址续租失败: {} sub={} gear={}", roomId, subSid, gear, e);
             return null;
         }
     }
 
     /** 供直播代理续租:重取匿名 HLS 清单地址;下播/异常返回 null。 */
-    public String renewHlsUrl(String roomId, String rate) {
+    public String renewHlsUrl(String roomId, String subSid, String rate) {
         try {
-            JsonNode payload = mobileHls(roomId, rate);
+            JsonNode payload = mobileHls(roomId, subSid, rate);
             return payload == null ? null : payload.path("hls").asText("").trim();
         } catch (Exception e) {
-            log.warn("YY HLS续租失败: {} rate={}", roomId, rate, e);
+            log.warn("YY HLS续租失败: {} sub={} rate={}", roomId, subSid, rate, e);
             return null;
         }
     }
@@ -274,6 +276,10 @@ public class YyService implements LivePlatform {
             detail.setVod_remarks("未开播");
             return detail;
         }
+        // 取流双 id:cid=频道号(sid 字段=roomId)、sid=子频道号(ssid 字段,缺失回落 roomId)。
+        // 子频道房两者不同,流接口 cid/sid 双填 roomId 会取错流(pure_live _channelIds 契约,
+        // 上游 49f71fa9 改 cid==sid 被 fork 明确拒绝:「子频道房间会取错」)
+        String subSid = subChannelId(roomId, item);
         String nick = text(item.path("name").asText());
         detail.setVod_name(firstText(item.path("desc").asText(), nick));
         detail.setVod_pic(picture(item.path("thumb2").asText("")));
@@ -285,20 +291,20 @@ public class YyService implements LivePlatform {
         List<String> proxyEntries = new ArrayList<>();
         try {
             // gear=1 一次响应带全档列表(channel_stream_info.streams[].json.gear_info),再逐档取线路地址
-            JsonNode first = channelStreams(roomId, "1");
+            JsonNode first = channelStreams(roomId, subSid, "1");
             List<String[]> gears = parseGears(first);
             for (String[] gear : gears) {
-                JsonNode payload = "1".equals(gear[0]) ? first : channelStreams(roomId, gear[0]);
-                addEntries(directEntries, proxyEntries, gear[1], firstStreamLine(payload), "&yyq=" + gear[0], roomId);
+                JsonNode payload = "1".equals(gear[0]) ? first : channelStreams(roomId, subSid, gear[0]);
+                addEntries(directEntries, proxyEntries, gear[1], firstStreamLine(payload), "&yyq=" + gear[0], roomId, subSid);
             }
         } catch (Exception e) {
             log.warn("YY stream-manager 失败: {}", roomId, e);
         }
         for (String rate : HLS_RATES) {
-            JsonNode payload = mobileHls(roomId, rate);
+            JsonNode payload = mobileHls(roomId, subSid, rate);
             if (payload != null) {
                 addEntries(directEntries, proxyEntries, rate.equals(HLS_RATES[0]) ? "HLS高清" : "HLS流畅",
-                        payload.path("hls").asText("").trim(), "&yyr=" + rate, roomId);
+                        payload.path("hls").asText("").trim(), "&yyr=" + rate, roomId, subSid);
             }
         }
         detail.setVod_remarks(directEntries.isEmpty() ? "未开播" : "直播中 " + playCount(intValue(item.path("users").asText())));
@@ -330,15 +336,16 @@ public class YyService implements LivePlatform {
                 .toList();
     }
 
-    /** stream-manager 请求(pure_live 同款 text/plain JSON 体);流线取首条 cdn_info.url。 */
-    private JsonNode channelStreams(String roomId, String gear) throws IOException {
+    /** stream-manager 请求(pure_live 同款 text/plain JSON 体);流线取首条 cdn_info.url。
+     *  cid=频道号(roomId)、sid=子频道号(subSid),单频道房两者相同。 */
+    private JsonNode channelStreams(String roomId, String subSid, String gear) throws IOException {
         long sequence = System.currentTimeMillis();
         Map<String, Object> head = new LinkedHashMap<>();
         head.put("seq", sequence);
         head.put("appidstr", "0");
         head.put("bidstr", "121");
         head.put("cidstr", roomId);
-        head.put("sidstr", roomId);
+        head.put("sidstr", subSid);
         head.put("uid64", 0);
         head.put("client_type", 108);
         head.put("client_ver", STREAM_SDK_VERSION);
@@ -381,9 +388,9 @@ public class YyService implements LivePlatform {
         HttpHeaders headers = browserHeaders();
         // YY web SDK 以 text/plain 发这团 JSON,部分频道拒收 application/json(pure_live 同注)
         headers.setContentType(MediaType.TEXT_PLAIN);
-        headers.set(HttpHeaders.REFERER, WEB_ORIGIN + "/" + roomId + "/" + roomId);
+        headers.set(HttpHeaders.REFERER, WEB_ORIGIN + "/" + roomId + "/" + subSid);
         String url = "https://stream-manager.yy.com/v3/channel/streams?uid=0&cid=" + roomId
-                + "&sid=" + roomId + "&appid=0&sequence=" + sequence + "&encode=json";
+                + "&sid=" + subSid + "&appid=0&sequence=" + sequence + "&encode=json";
         // 响应 Content-Type 为非法的 "json; charset=utf-8",走转换器会炸 mime 解析,手动读写 body
         String json = objectMapper.writeValueAsString(body);
         String response = restTemplate.execute(url, HttpMethod.POST, request -> {
@@ -394,12 +401,12 @@ public class YyService implements LivePlatform {
     }
 
     /** 匿名手机端 HLS(pure_live 同款兜底链路,部分官方频道拒 stream-manager 时仍可用);失败返回 null。 */
-    private JsonNode mobileHls(String roomId, String rate) {
+    private JsonNode mobileHls(String roomId, String subSid, String rate) {
         try {
             HttpHeaders headers = browserHeaders();
             headers.set(HttpHeaders.USER_AGENT, MOBILE_UA);
-            headers.set(HttpHeaders.REFERER, "https://wap.yy.com/mobileweb/" + roomId + "/" + roomId);
-            String body = restTemplate.exchange("https://interface.yy.com/hls/new/get/" + roomId + "/" + roomId
+            headers.set(HttpHeaders.REFERER, "https://wap.yy.com/mobileweb/" + roomId + "/" + subSid);
+            String body = restTemplate.exchange("https://interface.yy.com/hls/new/get/" + roomId + "/" + subSid
                             + "/" + rate + "?source=wapyy&callback=", HttpMethod.GET, new HttpEntity<>(headers), String.class)
                     .getBody();
             if (body == null) {
@@ -443,10 +450,11 @@ public class YyService implements LivePlatform {
 
     /**
      * 播放条目双收集:直连条目=原始地址;代理条目=包代理+yy 续租参数(签名租约仅约 10 分钟,
-     * 代理端每次连接重取当前地址)。buildProxyUrl 降级(无请求上下文)或探针无代理实例时不产代理条目。
+     * 代理端每次连接重取当前地址)。子频道房追加 yys 参数供续租还原双 id;buildProxyUrl 降级
+     * (无请求上下文)或探针无代理实例时不产代理条目。
      */
     private void addEntries(List<String> directEntries, List<String> proxyEntries,
-                            String label, String raw, String extra, String roomId) {
+                            String label, String raw, String extra, String roomId, String subSid) {
         if (raw == null || raw.isEmpty()) {
             return;
         }
@@ -456,8 +464,18 @@ public class YyService implements LivePlatform {
         }
         String proxyUrl = proxyService.buildProxyUrl(raw);
         if (!proxyUrl.equals(raw)) {
-            proxyEntries.add(label + "$" + proxyUrl + "&yy=" + roomId + extra);
+            String renewParams = "&yy=" + roomId + extra;
+            if (!subSid.equals(roomId)) {
+                renewParams += "&yys=" + subSid;
+            }
+            proxyEntries.add(label + "$" + proxyUrl + renewParams);
         }
+    }
+
+    /** 子频道号:ssid 字段合法(纯数字)即用,缺失/非法回落 roomId(pure_live subSid = ssid ?? topSid 同款)。 */
+    static String subChannelId(String roomId, JsonNode item) {
+        String ssid = item.path("ssid").asText("").trim();
+        return SUB_CHANNEL_ID.matcher(ssid).matches() ? ssid : roomId;
     }
 
     /** 分类房间:page.action 带 pageInfo 参数;page 由调用方传入。 */
