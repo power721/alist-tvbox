@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.dto.FilterDto;
 import cn.har01d.alist_tvbox.dto.bili.BiliActionRequest;
 import cn.har01d.alist_tvbox.dto.bili.BiliCommentActionRequest;
 import cn.har01d.alist_tvbox.dto.bili.BiliCommentReplyRequest;
+import cn.har01d.alist_tvbox.dto.bili.BiliDanmakuPostRequest;
 import cn.har01d.alist_tvbox.dto.bili.CookieData;
 import cn.har01d.alist_tvbox.dto.bili.QrCode;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
@@ -117,6 +118,16 @@ public class BiliBiliController {
         subscriptionService.checkToken(token);
         log.info("bilibili comment reply: {} root: {} parent: {}", request.id(), request.root(), request.parent());
         return biliBiliService.runCommentReply(request.id(), request.root(), request.parent(), request.message());
+    }
+
+    /** atv-player 发送弹幕(x/v2/dm/post,WBI 签名+csrf):返回 dmid。 */
+    @PostMapping("/bilibili/{token}/danmaku-post")
+    public Object danmakuPost(@PathVariable String token,
+                              @RequestBody BiliDanmakuPostRequest request) {
+        subscriptionService.checkToken(token);
+        log.info("bilibili danmaku post: {} mode: {} progress: {}", request.id(), request.mode(), request.progress());
+        return biliBiliService.postDanmaku(request.id(), request.message(), request.progress(),
+                request.mode(), request.color(), request.fontsize());
     }
 
     @GetMapping("/api/bilibili/status")

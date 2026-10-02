@@ -192,6 +192,7 @@ public class BiliBiliService {
     public static final String REPLY_REPLY_API = "https://api.bilibili.com/x/v2/reply/reply";
     public static final String REPLY_ACTION_API = "https://api.bilibili.com/x/v2/reply/action";
     public static final String REPLY_ADD_API = "https://api.bilibili.com/x/v2/reply/add";
+    public static final String DM_POST_API = "https://api.bilibili.com/x/v2/dm/post";
 
     private final List<FilterValue> filters1 = Arrays.asList(
             new FilterValue("综合排序", ""),
@@ -2613,6 +2614,52 @@ public class BiliBiliService {
         return result;
     }
 
+    /**
+     * atv-player 发送弹幕(x/v2/dm/post,query 带 WBI 签名,form 带内容):
+     * oid=cid(条目 id 无 cid 段时回落视频首个分P),rnd=微秒时间戳(免 90s 冷却降到 5s)。
+     * 模式仅开放 1=滚动/4=底部/5=顶部;36701 敏感词、36703 频率等上游错误码转文案抛出。
+     * 签名后的 query 均为字母数字安全字符,postForm 的 String url 模板展开无二次编码风险。
+     */
+    public Map<String, Object> postDanmaku(String vodId, String message, Long progress, Integer mode, Integer color, Integer fontsize) {
+        String aid = resolveAid(vodId);
+        String cid = resolveCid(vodId);
+        String normalizedMessage = StringUtils.defaultString(message).trim();
+        if (normalizedMessage.isEmpty() || normalizedMessage.length() > 100) {
+            throw new BadRequestException("弹幕内容须为 1-100 字");
+        }
+        int normalizedMode = mode != null && (mode == 1 || mode == 4 || mode == 5) ? mode : 1;
+        int normalizedColor = color != null && color > 0 ? color : 0xFFFFFF;
+        int normalizedFontsize = fontsize != null && fontsize >= 12 && fontsize <= 64 ? fontsize : 25;
+        long normalizedProgress = progress != null ? Math.max(0, progress) : 0;
+        String cookie = resolveCookie();
+        String csrf = BiliCookieRefreshUtils.getCookieValue(cookie, "bili_jct");
+        if (StringUtils.isBlank(csrf)) {
+            throw new BadRequestException("未登录 B站,请先在设置中配置 Cookie");
+        }
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        getKeys(entity);
+        Map<String, Object> query = new HashMap<>();
+        query.put("web_location", 1315873);
+        String url = DM_POST_API + "?" + Utils.encryptWbiRfc3986(query, imgKey, subKey);
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("type", "1");
+        form.add("oid", cid);
+        form.add("msg", normalizedMessage);
+        form.add("aid", aid);
+        form.add("progress", String.valueOf(normalizedProgress));
+        form.add("color", String.valueOf(normalizedColor));
+        form.add("fontsize", String.valueOf(normalizedFontsize));
+        form.add("pool", "0");
+        form.add("mode", String.valueOf(normalizedMode));
+        form.add("rnd", String.valueOf(System.currentTimeMillis() * 1000));
+        form.add("csrf", csrf);
+        JsonNode body = postForm(url, form, videoReferer(aid));
+        Map<String, Object> result = new HashMap<>();
+        JsonNode data = body.path("data");
+        result.put("dmid", data.path("dmid_str").asText(data.path("dmid").asText("")));
+        return result;
+    }
+
     /** 评论正文内嵌表情(content.emote,key=[xxx])与图片评论(content.pictures)透传,供客户端渲染图片。 */
     private void appendCommentImages(JsonNode content, Map<String, Object> map) {
         List<Map<String, Object>> emotes = new ArrayList<>();
@@ -2740,6 +2787,30 @@ public class BiliBiliService {
             throw new BadRequestException("无法识别的视频 ID: " + vodId);
         }
         return aid;
+    }
+
+    /** 播放条目 id(aid-cid[-epId] / BVxxx / aid)→ cid;无 cid 段时取视频首个分P(view 缓存,未命中走 view API)。 */
+    private String resolveCid(String vodId) {
+        String id = StringUtils.defaultString(vodId).trim();
+        int dash = id.indexOf('-');
+        if (dash > 0) {
+            String rest = id.substring(dash + 1);
+            int next = rest.indexOf('-');
+            String cid = (next >= 0 ? rest.substring(0, next) : rest).trim();
+            if (StringUtils.isNumeric(cid)) {
+                return cid;
+            }
+        }
+        String aid = resolveAid(id);
+        try {
+            BiliBiliInfo info = cache.get(BiliBiliUtils.av2bv(Long.parseLong(aid)));
+            if (info != null && info.getCid() != 0) {
+                return String.valueOf(info.getCid());
+            }
+        } catch (Exception e) {
+            log.warn("resolve bilibili cid failed: {} {}", vodId, e.getMessage());
+        }
+        throw new BadRequestException("无法解析视频 cid: " + vodId);
     }
 
     private String resolveCookie() {

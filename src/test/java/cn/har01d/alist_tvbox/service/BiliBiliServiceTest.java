@@ -1082,6 +1082,74 @@ class BiliBiliServiceTest {
     }
 
     @Test
+    void postDanmakuSignsQueryAndPostsForm() throws Exception {
+        when(settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE))
+                .thenReturn(Optional.of(new Setting(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE,
+                        "SESSDATA=test; bili_jct=jct-token; DedeUserID=42; buvid3=buv")));
+        String body = "{\"code\":0,\"data\":{\"dmid\":32161968826613767,\"dmid_str\":\"32161968826613767\"}}";
+        org.mockito.ArgumentCaptor<String> urlCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<HttpEntity<org.springframework.util.MultiValueMap<String, String>>> formCaptor =
+                org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        when(restTemplate.exchange(urlCaptor.capture(), eq(HttpMethod.POST), formCaptor.capture(),
+                eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree(body)));
+
+        Map<String, Object> result = service.postDanmaku("170001-62131", "前来考古", 5000L, 1, null, null);
+
+        assertEquals("32161968826613767", result.get("dmid"));
+        // query 带 WBI 签名(web_location+wts+w_rid,值为安全字符)
+        String url = urlCaptor.getValue();
+        assertTrue(url.startsWith("https://api.bilibili.com/x/v2/dm/post?"));
+        assertTrue(url.contains("web_location=1315873"));
+        assertTrue(url.contains("wts="));
+        assertTrue(url.contains("w_rid="));
+        org.springframework.util.MultiValueMap<String, String> form = formCaptor.getValue().getBody();
+        assertEquals("1", form.getFirst("type"));
+        assertEquals("62131", form.getFirst("oid"));
+        assertEquals("170001", form.getFirst("aid"));
+        assertEquals("前来考古", form.getFirst("msg"));
+        assertEquals("5000", form.getFirst("progress"));
+        assertEquals("1", form.getFirst("mode"));
+        assertEquals("0", form.getFirst("pool"));
+        // color/fontsize 缺省回落白字 25 号;rnd 必带(不带则上游冷却 90s)
+        assertEquals("16777215", form.getFirst("color"));
+        assertEquals("25", form.getFirst("fontsize"));
+        org.junit.jupiter.api.Assertions.assertNotNull(form.getFirst("rnd"));
+        assertEquals("jct-token", form.getFirst("csrf"));
+    }
+
+    @Test
+    void postDanmakuSurfacesUpstreamError() throws Exception {
+        when(settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE))
+                .thenReturn(Optional.of(new Setting(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE,
+                        "SESSDATA=test; bili_jct=jct-token; DedeUserID=42; buvid3=buv")));
+        String body = "{\"code\":36703,\"message\":\"弹幕发送频率过快\"}";
+        when(restTemplate.exchange(org.mockito.ArgumentMatchers.anyString(), eq(HttpMethod.POST),
+                any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree(body)));
+
+        cn.har01d.alist_tvbox.exception.BadRequestException ex =
+                org.junit.jupiter.api.Assertions.assertThrows(
+                        cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                        () -> service.postDanmaku("170001-62131", "太快", 0L, 1, null, null));
+        assertTrue(ex.getMessage().contains("36703"));
+        assertTrue(ex.getMessage().contains("频率过快"));
+    }
+
+    @Test
+    void postDanmakuRejectsBlankOrOverlongMessage() {
+        when(settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE))
+                .thenReturn(Optional.of(new Setting(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE,
+                        "SESSDATA=test; bili_jct=jct-token; DedeUserID=42; buvid3=buv")));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                () -> service.postDanmaku("170001-62131", "  ", 0L, 1, null, null));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                () -> service.postDanmaku("170001-62131", "字".repeat(101), 0L, 1, null, null));
+    }
+
+    @Test
     void getCommentsPaginationStrStaysCompactForWbiSignature() throws Exception {
         // 根因回归:注入 ObjectMapper 开 INDENT_OUTPUT 时 pagination_str 会变成多行 JSON,
         // 空格经 form 编码为 '+' 与官方验签(空格 %20)不一致 → 上游 -403;必须紧凑序列化
