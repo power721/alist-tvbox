@@ -2615,6 +2615,37 @@ public class BiliBiliService {
         return result;
     }
 
+    /** 评论正文内嵌表情(content.emote,key=[xxx])与图片评论(content.pictures)透传,供客户端渲染图片。 */
+    private void appendCommentImages(JsonNode content, Map<String, Object> map) {
+        List<Map<String, Object>> emotes = new ArrayList<>();
+        JsonNode emoteNode = content.path("emote");
+        if (emoteNode.isObject()) {
+            emoteNode.fields().forEachRemaining(entry -> {
+                String url = entry.getValue().path("url").asText("");
+                if (!url.isEmpty()) {
+                    Map<String, Object> emote = new HashMap<>();
+                    emote.put("text", entry.getKey());
+                    emote.put("url", url);
+                    emote.put("size", entry.getValue().path("meta").path("size").asInt(1));
+                    emotes.add(emote);
+                }
+            });
+        }
+        map.put("emotes", emotes);
+        List<Map<String, Object>> pictures = new ArrayList<>();
+        for (JsonNode picture : content.path("pictures")) {
+            String url = picture.path("img_src").asText("");
+            if (!url.isEmpty()) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("url", url);
+                item.put("width", picture.path("img_width").asInt(0));
+                item.put("height", picture.path("img_height").asInt(0));
+                pictures.add(item);
+            }
+        }
+        map.put("pictures", pictures);
+    }
+
     private JsonNode fetchReplyJson(String url, String source) {
         HttpEntity<Void> entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
         JsonNode body;
@@ -2654,6 +2685,7 @@ public class BiliBiliService {
         map.put("is_up", upperMid > 0 && mid == upperMid);
         // 登录时上游 action=1 表示当前用户已赞,驱动客户端点赞按钮初始态
         map.put("liked", reply.path("action").asInt(0) == 1);
+        appendCommentImages(reply.path("content"), map);
         List<Map<String, Object>> preview = new ArrayList<>();
         Map<String, String> names = new HashMap<>();
         for (JsonNode child : reply.path("replies")) {

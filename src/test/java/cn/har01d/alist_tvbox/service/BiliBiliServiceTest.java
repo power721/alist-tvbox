@@ -1010,7 +1010,10 @@ class BiliBiliServiceTest {
                   "replies":[{
                     "rpid_str":"1002","member":{"mid":"42","uname":"小明","avatar":"https://i0.hdslb.com/face/a.jpg",
                       "level_info":{"current_level":4}},
-                    "content":{"message":"这个视频太好了"},"like":12000,"rcount":2,"ctime":1700000100,
+                    "content":{"message":"这个视频太好了[doge]","emote":{"[doge]":{
+                        "url":"https://i0.hdslb.com/bfs/emote/3087d273.png","meta":{"size":1}}},
+                      "pictures":[{"img_src":"https://i0.hdslb.com/bfs/new_dyn/1.jpg","img_width":800,"img_height":600}]},
+                    "like":12000,"rcount":2,"ctime":1700000100,
                     "reply_control":{"time_desc":"2天前发布","location":"IP属地：河北"},
                     "replies":[{
                       "rpid_str":"1003","parent_str":"1002","member":{"mid":"43","uname":"小刚",
@@ -1041,6 +1044,16 @@ class BiliBiliServiceTest {
         assertEquals(true, comments.get(0).get("liked"));
         assertEquals(false, comments.get(1).get("liked"));
         assertEquals(false, comments.get(1).get("is_up"));
+        // 表情与图片评论透传
+        List<Map<String, Object>> emotes = (List<Map<String, Object>>) comments.get(1).get("emotes");
+        assertEquals(1, emotes.size());
+        assertEquals("[doge]", emotes.get(0).get("text"));
+        assertEquals("https://i0.hdslb.com/bfs/emote/3087d273.png", emotes.get(0).get("url"));
+        assertEquals(1, emotes.get(0).get("size"));
+        List<Map<String, Object>> pictures = (List<Map<String, Object>>) comments.get(1).get("pictures");
+        assertEquals(1, pictures.size());
+        assertEquals("https://i0.hdslb.com/bfs/new_dyn/1.jpg", pictures.get(0).get("url"));
+        assertEquals(800, pictures.get(0).get("width"));
         // 子回复预览:直答不带 parent_uname,层内互答带;UP 主身份透传
         List<Map<String, Object>> preview = (List<Map<String, Object>>) comments.get(1).get("preview");
         assertEquals("", preview.get(0).get("parent_uname"));
