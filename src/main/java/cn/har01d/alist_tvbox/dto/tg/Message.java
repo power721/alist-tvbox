@@ -40,7 +40,7 @@ public class Message {
     private Map<String, Object> media;
     private String validityState;
     private String validitySummary;
-    /** 来源类别:站点源(wanou/panlian/guanying/woniu)标出自身,TG 三路留空。站点源标题结构化程度更高,打分加权。 */
+    /** 来源类别:站点源(wanou/panlian/guanying/woniu/jying 等)标出自身,TG 三路留空。站点源标题结构化程度更高,打分加权。 */
     private String sourceKind;
 
     public Message() {

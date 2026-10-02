@@ -23,6 +23,7 @@ import cn.har01d.alist_tvbox.service.sitesearch.Pan123CommunitySearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WoniuSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.ZhenCangSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.JyingSearchService;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import org.apache.commons.lang3.StringUtils;
@@ -56,6 +57,7 @@ public class MediaSubscriptionController {
     private final ZhenCangSearchService zhenCangSearchService;
     private final Pan123CommunitySearchService pan123CommunitySearchService;
     private final KuafuSearchService kuafuSearchService;
+    private final JyingSearchService jyingSearchService;
     private final WanouSearchService wanouSearchService;
 
     public MediaSubscriptionController(MediaSubscriptionService subscriptionService,
@@ -68,6 +70,7 @@ public class MediaSubscriptionController {
                                        ZhenCangSearchService zhenCangSearchService,
                                        Pan123CommunitySearchService pan123CommunitySearchService,
                                        KuafuSearchService kuafuSearchService,
+                                       JyingSearchService jyingSearchService,
                                        WanouSearchService wanouSearchService) {
         this.subscriptionService = subscriptionService;
         this.checkService = checkService;
@@ -79,6 +82,7 @@ public class MediaSubscriptionController {
         this.zhenCangSearchService = zhenCangSearchService;
         this.pan123CommunitySearchService = pan123CommunitySearchService;
         this.kuafuSearchService = kuafuSearchService;
+        this.jyingSearchService = jyingSearchService;
         this.wanouSearchService = wanouSearchService;
     }
 
@@ -124,6 +128,7 @@ public class MediaSubscriptionController {
             case "zencang" -> zhenCangSearchService.checkCredential(request);
             case "pan123community" -> pan123CommunitySearchService.checkCredential(request);
             case "kuafu" -> kuafuSearchService.checkCredential(request);
+            case "jying" -> jyingSearchService.checkCredential(request);
             default -> throw new BadRequestException("未知站点:" + site);
         };
     }

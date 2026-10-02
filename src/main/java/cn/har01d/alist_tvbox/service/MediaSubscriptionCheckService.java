@@ -49,6 +49,7 @@ import cn.har01d.alist_tvbox.service.sitesearch.Xb6vSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.KuafuSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.Pan123CommunitySearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.ZhenCangSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.JyingSearchService;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -364,6 +365,7 @@ public class MediaSubscriptionCheckService {
     private final ZhenCangSearchService zhenCangSearchService;
     private final Pan123CommunitySearchService pan123CommunitySearchService;
     private final KuafuSearchService kuafuSearchService;
+    private final JyingSearchService jyingSearchService;
     private final MetadataService metadataService;
     private final AutoUpdateExecutor autoUpdateExecutor;
     /** 观看进度只读来源:追更系统不自行存储进度,多端合并由播放记录同步负责 */
@@ -497,6 +499,7 @@ public class MediaSubscriptionCheckService {
                                          ZhenCangSearchService zhenCangSearchService,
                                          Pan123CommunitySearchService pan123CommunitySearchService,
                                          KuafuSearchService kuafuSearchService,
+                                         JyingSearchService jyingSearchService,
                                          MetadataService metadataService,
                                          AutoUpdateExecutor autoUpdateExecutor,
                                          HistoryRepository historyRepository,
@@ -535,6 +538,7 @@ public class MediaSubscriptionCheckService {
         this.zhenCangSearchService = zhenCangSearchService;
         this.pan123CommunitySearchService = pan123CommunitySearchService;
         this.kuafuSearchService = kuafuSearchService;
+        this.jyingSearchService = jyingSearchService;
         this.metadataService = metadataService;
         this.autoUpdateExecutor = autoUpdateExecutor;
         this.historyRepository = historyRepository;
@@ -580,7 +584,7 @@ public class MediaSubscriptionCheckService {
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
-                guanYingSearchService, woniuSearchService, panjuSearchService, null, null, null, null, metadataService, autoUpdateExecutor,
+                guanYingSearchService, woniuSearchService, panjuSearchService, null, null, null, null, null, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper,
                 fixedProvider(transferService), notificationService, null, null, null);
     }
@@ -628,7 +632,7 @@ public class MediaSubscriptionCheckService {
                 episodeSourceRepository, deadLinkRepository, shareRepository, siteRepository,
                 driverAccountRepository, indexTemplateRepository, settingRepository, shareService,
                 aListService, telegramService, wanouSearchService, panLianSearchService,
-                guanYingSearchService, woniuSearchService, panjuSearchService, null, null, null, null, metadataService, autoUpdateExecutor,
+                guanYingSearchService, woniuSearchService, panjuSearchService, null, null, null, null, null, metadataService, autoUpdateExecutor,
                 historyRepository, appProperties, objectMapper, fixedProvider(null),
                 notificationService, null, null, null);
     }
@@ -7169,13 +7173,17 @@ public class MediaSubscriptionCheckService {
                 && appProperties.getSubscription().isKuafuEnabled()
                 && targets != null && targets.drives().contains(KuafuSearchService.DRIVE_KEY)
                 ? searchAsync("kuafu", keyword, () -> kuafuSearchService.search(keyword), respectBackoff) : null;
+        // 聚影是多盘混合聚合站(需登录解锁,凭证即开关):磁力/ed2k 资源仅磁力兜底生效时才解锁产出
+        CompletableFuture<List<Message>> jying = jyingSearchService != null
+                ? searchAsync("jying", keyword, () -> jyingSearchService.search(keyword,
+                        targets != null && targets.offlineIncluded()), respectBackoff) : null;
 
         List<Message> messages = new ArrayList<>(joinSearch("telegram", telegram));
         Set<String> links = new java.util.HashSet<>();
         for (Message message : messages) {
             links.add(message.getLink());
         }
-        // 站点源(玩偶/盘链/观影/蜗牛/盘聚/6V/123臻藏/123社区/夸父)是聚合站抓取,链接新鲜度未知 —— 统一过盘检再入列
+        // 站点源(玩偶/盘链/观影/蜗牛/盘聚/6V/123臻藏/123社区/夸父/聚影)是聚合站抓取,链接新鲜度未知 —— 统一过盘检再入列
         // (telegram 聚合在其内部已过检,不重复送检):合并去重后送检一次,好链接盖 validityState
         // 供入池准入/审计消费,bad/uncertain 在此剔除;盘检未配置时原样返回。
         List<Message> siteMessages = new ArrayList<>();
@@ -7207,6 +7215,9 @@ public class MediaSubscriptionCheckService {
         }
         if (kuafu != null) {
             mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("kuafu", kuafu), targets), "kuafu", keyword);
+        }
+        if (jying != null) {
+            mergeSource(siteMessages, siteLinks, retainTargetTypes(joinSearch("jying", jying), targets), "jying", keyword);
         }
         if (!siteMessages.isEmpty() && panLinkCheckService != null) {
             siteMessages = new ArrayList<>(panLinkCheckService.filterInvalidPanSouLinks(siteMessages));
@@ -7739,6 +7750,7 @@ public class MediaSubscriptionCheckService {
             Map.entry("source.zencang", 12),   // 123臻藏(123 主题站,仅订阅定向 123 时搜索)
             Map.entry("source.pan123community", 12), // 123社区(纯 123 产出,仅订阅定向 123 时搜索)
             Map.entry("source.kuafu", 12),      // 夸父(夸克主题社,仅订阅定向夸克时搜索)
+            Map.entry("source.jying", 12),      // 聚影(多盘混合聚合,需登录解锁)
             Map.entry("drive.main", 15),       // 主网盘候选
             Map.entry("baidu.free", 17),       // 百度分享免会员 15 + 夸克易和谐耐删加成 2(线上「重器」:夸克滚动窗分享说删就删)
             Map.entry("pan115", -10),          // 115 分享追更弱

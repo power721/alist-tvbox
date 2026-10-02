@@ -4693,7 +4693,7 @@ class MediaSubscriptionCheckServiceTest {
                 null, resourceRepository, eventRepository, episodeRepository, episodeSourceRepository, null, null, null,
                 null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null,
-                null, null, appProperties, new ObjectMapper(), null, null, null, null,
+                null, null, null, appProperties, new ObjectMapper(), null, null, null, null,
                 fallbackRepository
                 );
         MediaSubscription subscription = new MediaSubscription();

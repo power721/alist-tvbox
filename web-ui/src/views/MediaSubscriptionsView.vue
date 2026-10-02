@@ -817,7 +817,7 @@
               </el-select>
               <span class="sub-text">对应网盘的候选资源打分 +15(已配置账号本身 +8),如夸克 SVIP/百度 SVIP/115 会员</span>
             </el-form-item>
-            <span v-if="store.admin" class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关;域名状态入口在主页「域名状态」按钮,每小时自动探测并采用延迟最低的可达域名);盘聚是项目内命名,实际站点为 SeedHub 系聚合站,免登录无需配置;盘链/观影/蜗牛在各自标签页配置,无凭证的源自动关闭</span>
+            <span v-if="store.admin" class="sub-text">玩偶聚合搜索源默认开启无需配置(wanou-enabled 可关;域名状态入口在主页「域名状态」按钮,每小时自动探测并采用延迟最低的可达域名);盘聚是项目内命名,实际站点为 SeedHub 系聚合站,免登录无需配置;盘链/观影/蜗牛/聚影在各自标签页配置,无凭证的源自动关闭</span>
           </el-tab-pane>
           <el-tab-pane label="资源筛选" name="poolFilter">
             <el-form-item label="清晰度门槛">
@@ -1052,6 +1052,32 @@
               </div>
             </el-form-item>
             <span class="sub-text">夸父资源社(夸克为主混多盘);仅订阅的候选盘(主网盘/扩展网盘)包含夸克网盘时才参与搜索</span>
+          </el-tab-pane>
+          <el-tab-pane v-if="store.admin" label="聚影" name="jying">
+            <el-form-item label="站点">
+              <el-input v-model="notifyForm.jyingHost" placeholder="留空用内置地址 https://www.jying.top;自定义镜像站填 https://..."/>
+            </el-form-item>
+            <el-form-item label="账号">
+              <el-input v-model="notifyForm.jyingUsername" placeholder="推荐账号密码(Token 过期自动续期);站内可注册"/>
+            </el-form-item>
+            <el-form-item label="密码">
+              <el-input v-model="notifyForm.jyingPassword" type="password" show-password placeholder="与账号配套"/>
+            </el-form-item>
+            <el-form-item label="Token">
+              <el-input v-model="notifyForm.jyingToken" type="textarea" :rows="2"
+                        placeholder="可选;浏览器登录聚影后复制请求头 x-app-user-token(约 7 天,过期需手动更新);无凭证时网盘链接隐藏,该搜索源自动关闭"/>
+            </el-form-item>
+            <el-form-item label="有效性">
+              <div style="width:100%">
+                <el-button size="small" :loading="siteCheckLoading.jying" :disabled="!notifyLoaded"
+                           @click="checkSiteCookie('jying')">检查登录态</el-button>
+                <el-tag v-if="siteCheckResult.jying"
+                        :type="siteCheckResult.jying!.valid ? 'success' : 'danger'"
+                        style="margin-left:8px">{{ siteCheckResult.jying!.message }}</el-tag>
+                <span class="sub-text">Token 只读探测登录态;Token 未填时用账号密码实测登录,成功自动保存会话</span>
+              </div>
+            </el-form-item>
+            <span class="sub-text">聚影(jying.top)多盘资源聚合站(夸克/UC/阿里/115/百度/迅雷/光鸭/天翼/移动/123 + 磁力);资源解锁需登录</span>
           </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="TG-Search" name="tgsearch">
             <el-form-item label="TG-Search地址">
@@ -1741,6 +1767,7 @@ const siteFormFields: Record<string, { cookie: string, host: string, username?: 
   zencang: {cookie: 'zencangCookie', host: 'zencangHost'},
   pan123community: {cookie: 'pan123communityCookie', host: 'pan123communityHost'},
   kuafu: {cookie: 'kuafuCookie', host: 'kuafuHost'},
+  jying: {cookie: 'jyingToken', host: 'jyingHost', username: 'jyingUsername', password: 'jyingPassword'},
 }
 const siteCheckLoading = ref<Record<string, boolean>>({})
 const siteCheckResult = ref<Record<string, { valid: boolean, message: string } | undefined>>({})
@@ -1754,7 +1781,7 @@ const checkSiteCookie = (site: string) => {
   const username = fields.username ? String(form[fields.username] ?? '').trim() : ''
   const password = fields.password ? String(form[fields.password] ?? '') : ''
   if (!cookie && !(username && password)) {
-    ElMessage.warning(fields.username ? '未填写 Cookie 或账号密码' : '未填写 Cookie')
+    ElMessage.warning(fields.username ? '未填写 Token/Cookie 或账号密码' : '未填写 Cookie')
     return
   }
   siteCheckLoading.value[site] = true
@@ -1857,6 +1884,10 @@ const notifyForm = ref({
   pan123communityCookie: '',
   kuafuHost: '',
   kuafuCookie: '',
+  jyingHost: '',
+  jyingUsername: '',
+  jyingPassword: '',
+  jyingToken: '',
   panSouUrl: '',
   panSouUsername: '',
   panSouPassword: '',
@@ -2857,6 +2888,10 @@ const openNotify = () => {
     notifyForm.value.pan123communityCookie = settings['pan123community_cookie'] || ''
     notifyForm.value.kuafuHost = settings['kuafu_host'] || ''
     notifyForm.value.kuafuCookie = settings['kuafu_cookie'] || ''
+    notifyForm.value.jyingHost = settings['jying_host'] || ''
+    notifyForm.value.jyingUsername = settings['jying_username'] || ''
+    notifyForm.value.jyingPassword = settings['jying_password'] || ''
+    notifyForm.value.jyingToken = settings['jying_token'] || ''
     notifyForm.value.panSouUrl = settings['pan_sou_url'] || ''
     notifyForm.value.panSouUsername = settings['pan_sou_username'] || ''
     notifyForm.value.panSouPassword = settings['pan_sou_password'] || ''
@@ -2945,6 +2980,10 @@ const saveNotify = () => {
     axios.post('/api/settings', {name: 'pan123community_cookie', value: notifyForm.value.pan123communityCookie.trim()}),
     axios.post('/api/settings', {name: 'kuafu_host', value: notifyForm.value.kuafuHost.trim()}),
     axios.post('/api/settings', {name: 'kuafu_cookie', value: notifyForm.value.kuafuCookie.trim()}),
+    axios.post('/api/settings', {name: 'jying_host', value: notifyForm.value.jyingHost.trim()}),
+    axios.post('/api/settings', {name: 'jying_username', value: notifyForm.value.jyingUsername.trim()}),
+    axios.post('/api/settings', {name: 'jying_password', value: notifyForm.value.jyingPassword}),
+    axios.post('/api/settings', {name: 'jying_token', value: notifyForm.value.jyingToken.trim()}),
     axios.post('/api/settings', {name: 'pan_sou_url', value: notifyForm.value.panSouUrl.trim()}),
     axios.post('/api/settings', {name: 'pan_sou_username', value: notifyForm.value.panSouUsername.trim()}),
     axios.post('/api/settings', {name: 'pan_sou_password', value: notifyForm.value.panSouPassword}),
@@ -3056,6 +3095,7 @@ const weightDefs: { key: string; label: string; value: number }[] = [
   { key: 'source.zencang', label: '123臻藏源', value: 12 },
   { key: 'source.pan123community', label: '123社区源', value: 12 },
   { key: 'source.kuafu', label: '夸父源', value: 12 },
+  { key: 'source.jying', label: '聚影源', value: 12 },
   { key: 'baidu.free', label: '百度免会员', value: 17 },
   { key: 'pan115', label: '115追更弱', value: -10 },
   { key: 'pack.complete', label: '完结包', value: -6 },

@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.service.MediaSubscriptionTransferService;
 import cn.har01d.alist_tvbox.service.PianDanService;
 import cn.har01d.alist_tvbox.service.sitesearch.GuanYingSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.KuafuSearchService;
+import cn.har01d.alist_tvbox.service.sitesearch.JyingSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.Pan123CommunitySearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.PanLianSearchService;
 import cn.har01d.alist_tvbox.service.sitesearch.WanouSearchService;
@@ -73,6 +74,8 @@ class MediaSubscriptionControllerTest {
     @Mock
     private KuafuSearchService kuafuSearchService;
     @Mock
+    private JyingSearchService jyingSearchService;
+    @Mock
     private WanouSearchService wanouSearchService;
 
     private MockMvc mockMvc;
@@ -82,7 +85,8 @@ class MediaSubscriptionControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new MediaSubscriptionController(subscriptionService, checkService, transferService, pianDanService,
                                 panLianSearchService, woniuSearchService, guanYingSearchService, zhenCangSearchService,
-                                pan123CommunitySearchService, kuafuSearchService, wanouSearchService))
+                                pan123CommunitySearchService, kuafuSearchService, jyingSearchService,
+                                wanouSearchService))
                 .setControllerAdvice(new RestErrorHandler())
                 .build();
     }
