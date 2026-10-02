@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.FilterDto;
 import cn.har01d.alist_tvbox.dto.bili.BiliActionRequest;
 import cn.har01d.alist_tvbox.dto.bili.BiliCommentActionRequest;
+import cn.har01d.alist_tvbox.dto.bili.BiliCommentReplyRequest;
 import cn.har01d.alist_tvbox.dto.bili.CookieData;
 import cn.har01d.alist_tvbox.dto.bili.QrCode;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
@@ -107,6 +108,15 @@ public class BiliBiliController {
         subscriptionService.checkToken(token);
         log.info("bilibili comment action: {} {} {}", request.id(), request.rpid(), request.action());
         return biliBiliService.runCommentAction(request.id(), request.rpid(), request.action());
+    }
+
+    /** atv-player 回复评论:返回上游新评论对象供客户端本地插入。 */
+    @PostMapping("/bilibili/{token}/comment-reply")
+    public Object commentReply(@PathVariable String token,
+                               @RequestBody BiliCommentReplyRequest request) {
+        subscriptionService.checkToken(token);
+        log.info("bilibili comment reply: {} root: {} parent: {}", request.id(), request.root(), request.parent());
+        return biliBiliService.runCommentReply(request.id(), request.root(), request.parent(), request.message());
     }
 
     @GetMapping("/api/bilibili/status")

@@ -1173,4 +1173,45 @@ class BiliBiliServiceTest {
         assertTrue(ex.getMessage().contains("无效的评论 ID"));
     }
 
+    @Test
+    void runCommentReplyPostsAddFormAndReturnsNewComment() throws Exception {
+        String body = """
+                {"code":0,"data":{"reply":{
+                  "rpid_str":"9999","member":{"mid":"2340134","uname":"我","avatar":"https://i0.hdslb.com/face/me.jpg",
+                    "level_info":{"current_level":6}},
+                  "content":{"message":"回复内容"},"like":0,"rcount":0,"ctime":1790837000,"action":0,
+                  "reply_control":{"time_desc":"刚刚"},"replies":[]}}}
+                """;
+        org.mockito.ArgumentCaptor<HttpEntity<org.springframework.util.MultiValueMap<String, String>>> captor =
+                org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/v2/reply/add"), eq(HttpMethod.POST),
+                captor.capture(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree(body)));
+
+        Map<String, Object> result = service.runCommentReply("BV195KY6YEeY", "1002", "1003", "  回复内容  ");
+
+        org.springframework.util.MultiValueMap<String, String> form = captor.getValue().getBody();
+        assertEquals("1", form.getFirst("type"));
+        assertEquals("116958703918865", form.getFirst("oid"));
+        assertEquals("1002", form.getFirst("root"));
+        assertEquals("1003", form.getFirst("parent"));
+        assertEquals("回复内容", form.getFirst("message"));
+        assertEquals("1", form.getFirst("plat"));
+        Map<String, Object> comment = (Map<String, Object>) result.get("comment");
+        assertEquals("9999", comment.get("rpid"));
+        assertEquals("回复内容", comment.get("message"));
+    }
+
+    @Test
+    void runCommentReplyValidatesRootAndMessage() {
+        cn.har01d.alist_tvbox.exception.BadRequestException badRoot =
+                org.junit.jupiter.api.Assertions.assertThrows(cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                        () -> service.runCommentReply("BV195KY6YEeY", "abc", "abc", "hi"));
+        assertTrue(badRoot.getMessage().contains("无效的评论 ID"));
+        cn.har01d.alist_tvbox.exception.BadRequestException emptyMessage =
+                org.junit.jupiter.api.Assertions.assertThrows(cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                        () -> service.runCommentReply("BV195KY6YEeY", "1002", "1002", "   "));
+        assertTrue(emptyMessage.getMessage().contains("1-1000 字"));
+    }
+
 }

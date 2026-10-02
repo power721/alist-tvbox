@@ -191,6 +191,7 @@ public class BiliBiliService {
     public static final String REPLY_MAIN_API = "https://api.bilibili.com/x/v2/reply/wbi/main";
     public static final String REPLY_REPLY_API = "https://api.bilibili.com/x/v2/reply/reply";
     public static final String REPLY_ACTION_API = "https://api.bilibili.com/x/v2/reply/action";
+    public static final String REPLY_ADD_API = "https://api.bilibili.com/x/v2/reply/add";
 
     private final List<FilterValue> filters1 = Arrays.asList(
             new FilterValue("综合排序", ""),
@@ -2560,6 +2561,50 @@ public class BiliBiliService {
         postForm(REPLY_ACTION_API, form, "https://www.bilibili.com/", 12011);
         Map<String, Object> result = new HashMap<>();
         result.put("liked", action == 1);
+        return result;
+    }
+
+    /**
+     * atv-player 回复评论(x/v2/reply/add):回复一级评论 root=parent=该评论 rpid,
+     * 楼中楼内互答 root=根 rpid/parent=被回复行。返回上游 data.reply 精简后的新评论对象
+     * (含 rpid/member/content 等),客户端据此本地插入免整页刷新;敏感词/频率等错误码转文案抛出。
+     */
+    public Map<String, Object> runCommentReply(String vodId, String root, String parent, String message) {
+        String aid = resolveAid(vodId);
+        String normalizedRoot = StringUtils.defaultString(root).trim();
+        String normalizedParent = StringUtils.defaultString(parent).trim();
+        if (StringUtils.isBlank(normalizedParent)) {
+            normalizedParent = normalizedRoot;
+        }
+        String normalizedMessage = StringUtils.defaultString(message).trim();
+        if (!StringUtils.isNumeric(normalizedRoot) || !StringUtils.isNumeric(normalizedParent)) {
+            throw new BadRequestException("无效的评论 ID");
+        }
+        if (normalizedMessage.isEmpty() || normalizedMessage.length() > 1000) {
+            throw new BadRequestException("回复内容须为 1-1000 字");
+        }
+        String cookie = resolveCookie();
+        String csrf = BiliCookieRefreshUtils.getCookieValue(cookie, "bili_jct");
+        if (StringUtils.isBlank(csrf)) {
+            throw new BadRequestException("未登录 B站,请先在设置中配置 Cookie");
+        }
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("type", "1");
+        form.add("oid", aid);
+        form.add("root", normalizedRoot);
+        form.add("parent", normalizedParent);
+        form.add("message", normalizedMessage);
+        form.add("plat", "1");
+        form.add("csrf", csrf);
+        JsonNode body = postForm(REPLY_ADD_API, form, "https://www.bilibili.com/");
+        long selfMid;
+        try {
+            selfMid = Long.parseLong(BiliCookieRefreshUtils.getCookieValue(cookie, "DedeUserID"));
+        } catch (NumberFormatException e) {
+            selfMid = 0;
+        }
+        Map<String, Object> result = new HashMap<>();
+        result.put("comment", buildComment(body.path("data").path("reply"), selfMid, false));
         return result;
     }
 
