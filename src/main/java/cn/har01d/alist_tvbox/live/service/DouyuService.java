@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.live.model.DouyuCategoryResponse;
 import cn.har01d.alist_tvbox.live.model.DouyuRoomResponse;
 import cn.har01d.alist_tvbox.live.model.DouyuRoomsResponse;
 import cn.har01d.alist_tvbox.live.model.DouyuStreamResponse;
+import cn.har01d.alist_tvbox.live.util.FlvSpliceSession;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -18,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.text.StringEscapeUtils;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -67,6 +69,8 @@ public class DouyuService implements LivePlatform {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final SettingRepository settingRepository;
+    /** 与 LiveProxyService 互为依赖,以 ObjectProvider 延迟化解(native 下 @Lazy CGLIB 不可用)。 */
+    private final ObjectProvider<LiveProxyService> liveProxyService;
     /** 进程级设备 DID:无账号 Cookie dy_did 时的回退值。签名表单、请求 Cookie、getEncryption 三处恒用同一 DID。 */
     private final String deviceId = randomDeviceId();
     private volatile JsonNode encryptionKey;
@@ -74,12 +78,14 @@ public class DouyuService implements LivePlatform {
     /** 缓存的加密描述符签发给哪个 DID:描述符发给某台设备并校验签名来自同一台,换账号(=换 dy_did)必须作废。 */
     private volatile String encryptionKeyDeviceId;
 
-    public DouyuService(RestTemplateBuilder builder, ObjectMapper objectMapper, SettingRepository settingRepository) {
+    public DouyuService(RestTemplateBuilder builder, ObjectMapper objectMapper, SettingRepository settingRepository,
+                        ObjectProvider<LiveProxyService> liveProxyService) {
         this.restTemplate = builder
                 .defaultHeader("User-Agent", Constants.MOBILE_USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
         this.settingRepository = settingRepository;
+        this.liveProxyService = liveProxyService;
     }
 
     @Override
@@ -354,7 +360,7 @@ public class DouyuService implements LivePlatform {
                     log.debug("douyu room {} rate {} fell back to {}", id, bitRate.getRate(), result.ackRate());
                     continue;
                 }
-                urls.add(bitRate.getName() + "$" + result.url());
+                urls.add(bitRate.getName() + "$" + relayUrlIfLeased(result.url(), id, bitRate.getRate(), cdn.getCdn()));
             }
             if (!urls.isEmpty()) {
                 playFrom.add(cdn.getName());
@@ -368,6 +374,36 @@ public class DouyuService implements LivePlatform {
 
     /** 播放条目与其服务端确认档位(getH5PlayV1 响应 data.rate):确认档≠请求档即发生了回落。 */
     record PlayResult(String url, int ackRate) {
+    }
+
+    /** 带 expire 租约的 FLV 地址(匿名原画 expire=300,CDN 到点断流且客户端无从重签)改发服务端
+     *  拼接中继地址,换链在关键帧上无缝接续(pure_live 3.2.11 #35);无租约/无请求上下文回退直连。 */
+    private String relayUrlIfLeased(String url, String roomId, int rate, String cdn) {
+        if (!FlvSpliceSession.appliesTo(url)) {
+            return url;
+        }
+        try {
+            return liveProxyService.getObject().buildDouyuProxyUrl(roomId, rate, cdn, url);
+        } catch (Exception e) {
+            log.debug("douyu relay url build failed, fallback direct: {}", url, e);
+            return url;
+        }
+    }
+
+    /** 中继续租:同房同线同档重签取流地址(含会话保鲜);空串=无流(下播/签名失败),调用方据此终止或换源。 */
+    String getPlayUrlForRelay(String roomId, int rate, String cdn) {
+        try {
+            ensureFreshSession(false);
+            PlayArgs args = getPlayArgs(roomId);
+            if (args == null) {
+                return "";
+            }
+            String url = getPlayUrl(roomId, args, rate, cdn).url();
+            return url == null ? "" : url;
+        } catch (Exception e) {
+            log.warn("斗鱼中继重签失败: room={} rate={} cdn={} {}", roomId, rate, cdn, e.getMessage());
+            return "";
+        }
     }
 
     private PlayResult getPlayUrl(String id, PlayArgs args, int rate, String cdn) {

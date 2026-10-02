@@ -41,7 +41,8 @@ class NewLivePlatformProbeTest {
                 case "douyu" -> new DouyuService(
                         builder.messageConverters(new org.springframework.http.converter.json.MappingJackson2HttpMessageConverter(objectMapper)),
                         objectMapper,
-                        org.mockito.Mockito.mock(cn.har01d.alist_tvbox.entity.SettingRepository.class));
+                        org.mockito.Mockito.mock(cn.har01d.alist_tvbox.entity.SettingRepository.class),
+                        null);
                 default -> throw new IllegalArgumentException("unknown platform: " + platform);
             };
             probePlatform(service);
@@ -94,5 +95,87 @@ class NewLivePlatformProbeTest {
             return "";
         }
         return value.length() <= max ? value : value.substring(0, max) + "...";
+    }
+
+    /**
+     * 斗鱼租约拼接中继真网探针:真实签名取流 → 强制 60 秒后换链(真实 300s 租约探针等不起),
+     * 断言完成至少一次关键帧换链且有持续数据。本机出口被斗鱼边缘拒(机房 IP 形态,取流空)时跳过。
+     * <pre> mvn test -Dtest=NewLivePlatformProbeTest#douyuRelaySplicesAcrossLeaseBoundary -Dlive.probe=1 </pre>
+     */
+    @Test
+    void douyuRelaySplicesAcrossLeaseBoundary() throws Exception {
+        DouyuService service = newService();
+        String roomId = System.getProperty("live.probe.douyu.room", "9999");
+        String url = "";
+        String cdn = "";
+        for (String candidate : new String[]{"hw-h5", "hs-h5", "tct-h5"}) {
+            url = service.getPlayUrlForRelay(roomId, 0, candidate);
+            if (!url.isBlank()) {
+                cdn = candidate;
+                break;
+            }
+        }
+        System.out.printf("[douyu-relay] room=%s cdn=%s url=%s%n", roomId, cdn, abbreviate(url, 140));
+        org.junit.jupiter.api.Assumptions.assumeTrue(!url.isBlank(), "本机出口取流被拒(机房 IP 形态),跳过中继探针");
+
+        okhttp3.OkHttpClient client = new okhttp3.OkHttpClient.Builder()
+                .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+        java.util.Map<String, String> headers = java.util.Map.of(
+                "User-Agent", cn.har01d.alist_tvbox.util.Constants.USER_AGENT,
+                "Referer", "https://www.douyu.com/" + roomId,
+                "Origin", "https://www.douyu.com");
+        String finalCdn = cdn;
+        cn.har01d.alist_tvbox.live.util.FlvSpliceSession session = new cn.har01d.alist_tvbox.live.util.FlvSpliceSession(
+                new cn.har01d.alist_tvbox.live.util.FlvSpliceSession.Lease(url, System.currentTimeMillis() + 60_000),
+                next -> new cn.har01d.alist_tvbox.live.util.HttpFlvTagReader(client, next, headers),
+                current -> {
+                    String renewed = service.getPlayUrlForRelay(roomId, 0, finalCdn);
+                    if (renewed.isBlank()) {
+                        throw new IllegalStateException("relign failed");
+                    }
+                    return new cn.har01d.alist_tvbox.live.util.FlvSpliceSession.Lease(renewed,
+                            cn.har01d.alist_tvbox.live.util.FlvSpliceSession.refreshAtEpochMs(renewed, System.currentTimeMillis()));
+                },
+                System::currentTimeMillis);
+        java.util.concurrent.atomic.AtomicLong bytes = new java.util.concurrent.atomic.AtomicLong();
+        java.io.OutputStream sink = new java.io.OutputStream() {
+            @Override
+            public void write(int b) {
+                bytes.incrementAndGet();
+            }
+
+            @Override
+            public void write(byte[] b, int off, int len) {
+                bytes.addAndGet(len);
+            }
+        };
+        Thread runner = new Thread(() -> {
+            try {
+                session.run(sink);
+            } catch (Exception ignored) {
+                // 探针线程:失败形态由断言呈现
+            }
+        }, "douyu-relay-probe");
+        runner.setDaemon(true);
+        runner.start();
+        long deadline = System.currentTimeMillis() + 180_000;
+        while (System.currentTimeMillis() < deadline && session.getSwitches() < 1) {
+            Thread.sleep(1_000);
+        }
+        session.cancel();
+        runner.join(5_000);
+        System.out.printf("[douyu-relay] switches=%d bytes=%d%n", session.getSwitches(), bytes.get());
+        org.junit.jupiter.api.Assertions.assertTrue(bytes.get() > 100_000, "应有持续流数据: " + bytes.get());
+        org.junit.jupiter.api.Assertions.assertTrue(session.getSwitches() >= 1, "应至少完成一次关键帧换链");
+    }
+
+    private DouyuService newService() {
+        return new DouyuService(
+                builder.messageConverters(new org.springframework.http.converter.json.MappingJackson2HttpMessageConverter(objectMapper)),
+                objectMapper,
+                org.mockito.Mockito.mock(cn.har01d.alist_tvbox.entity.SettingRepository.class),
+                null);
     }
 }

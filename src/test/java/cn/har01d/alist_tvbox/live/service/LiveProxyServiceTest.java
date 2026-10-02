@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -50,7 +51,7 @@ class LiveProxyServiceTest {
     void dualProxyModeFollowsConfiguredSetting() {
         cn.har01d.alist_tvbox.config.AppProperties properties = new cn.har01d.alist_tvbox.config.AppProperties();
         cn.har01d.alist_tvbox.service.SubscriptionService subscriptionService = org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.SubscriptionService.class);
-        LiveProxyService proxy = new LiveProxyService(subscriptionService, properties, null, null, null, null);
+        LiveProxyService proxy = new LiveProxyService(subscriptionService, properties, null, null, null, null, null);
         assertTrue(proxy.isDualProxyMode(), "默认应为直连优先模式(dual)");
         properties.setLiveProxyMode("proxy");
         assertFalse(proxy.isDualProxyMode(), "显式全代理配置应生效");
@@ -120,6 +121,69 @@ class LiveProxyServiceTest {
         assertTrue(fallback[1].startsWith("蓝光$https://cdn.example"), "应回落直连条目");
     }
 
+    @Test
+    void buildDouyuRelayUrlCarriesRoomRateAndCdn() {
+        cn.har01d.alist_tvbox.service.SubscriptionService subscriptionService =
+                org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.SubscriptionService.class);
+        org.mockito.Mockito.when(subscriptionService.getCurrentToken()).thenReturn("tok");
+        LiveProxyService proxy = new LiveProxyService(subscriptionService,
+                new cn.har01d.alist_tvbox.config.AppProperties(), null, null, null, null, null);
+        org.springframework.mock.web.MockHttpServletRequest request =
+                new org.springframework.mock.web.MockHttpServletRequest("GET", "/live");
+        request.setServerName("192.168.1.2");
+        request.setServerPort(8080);
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(request));
+        try {
+            String url = proxy.buildDouyuProxyUrl("9999", 0, "hw-h5", "https://direct/1.flv?expire=300");
+            assertEquals("http://192.168.1.2:8080/live-proxy/tok?dy=9999&dyr=0&dyc=hw-h5", url);
+        } finally {
+            org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+        }
+        // 无请求上下文(关注状态后台刷新等)回退直连地址,不炸链路
+        assertEquals("https://direct/1.flv?expire=300",
+                proxy.buildDouyuProxyUrl("9999", 0, "hw-h5", "https://direct/1.flv?expire=300"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void douyuRelayWithoutUpstreamAnswers502() throws Exception {
+        cn.har01d.alist_tvbox.service.SubscriptionService subscriptionService =
+                org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.SubscriptionService.class);
+        org.springframework.beans.factory.ObjectProvider<DouyuService> provider =
+                org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        DouyuService douyu = org.mockito.Mockito.mock(DouyuService.class);
+        org.mockito.Mockito.when(provider.getObject()).thenReturn(douyu);
+        org.mockito.Mockito.when(douyu.getPlayUrlForRelay("9999", 0, "hw-h5")).thenReturn("");
+        LiveProxyService proxy = new LiveProxyService(subscriptionService,
+                new cn.har01d.alist_tvbox.config.AppProperties(), null, null, null, null, provider);
+        org.springframework.mock.web.MockHttpServletRequest request =
+                new org.springframework.mock.web.MockHttpServletRequest("GET", "/live-proxy/tok");
+        request.setParameter("dy", "9999");
+        request.setParameter("dyr", "0");
+        request.setParameter("dyc", "hw-h5");
+        org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
+        proxy.proxy(null, request, response);
+        assertEquals(502, response.getStatus(), "取流失败应回 502 而非空 200");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void douyuRelayRejectsMissingParams() {
+        cn.har01d.alist_tvbox.service.SubscriptionService subscriptionService =
+                org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.SubscriptionService.class);
+        org.springframework.beans.factory.ObjectProvider<DouyuService> provider =
+                org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        LiveProxyService proxy = new LiveProxyService(subscriptionService,
+                new cn.har01d.alist_tvbox.config.AppProperties(), null, null, null, null, provider);
+        org.springframework.mock.web.MockHttpServletRequest request =
+                new org.springframework.mock.web.MockHttpServletRequest("GET", "/live-proxy/tok");
+        request.setParameter("dy", "9999");
+        org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
+        assertThrows(cn.har01d.alist_tvbox.exception.BadRequestException.class,
+                () -> proxy.proxy(null, request, response));
+    }
+
     /**
      * 复现线上形态:CDN 对单连接寿命截断可以是优雅关闭(FIN)——transferTo 正常返回不抛异常,
      * 旧版把 EOF 当"直播结束"直接终止(实测 23 分钟停止且无任何 warn)。断言:上游两段流各自
@@ -148,7 +212,7 @@ class LiveProxyServiceTest {
             cn.har01d.alist_tvbox.service.SubscriptionService subscriptionService =
                     org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.SubscriptionService.class);
             LiveProxyService proxy = new LiveProxyService(subscriptionService,
-                    new cn.har01d.alist_tvbox.config.AppProperties(), null, null, null, null);
+                    new cn.har01d.alist_tvbox.config.AppProperties(), null, null, null, null, null);
             org.springframework.mock.web.MockHttpServletResponse response = new org.springframework.mock.web.MockHttpServletResponse();
             java.util.List<String> renewed = java.util.List.of(base + "/b.flv");
 

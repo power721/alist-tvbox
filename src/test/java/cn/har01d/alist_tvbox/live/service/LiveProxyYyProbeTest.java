@@ -53,7 +53,7 @@ class LiveProxyYyProbeTest {
         SubscriptionService subscriptionService = mock(SubscriptionService.class);
         when(subscriptionService.getCurrentToken()).thenReturn("probe-token");
         LiveProxyService proxyService = new LiveProxyService(subscriptionService, new AppProperties(),
-                null, null, null, fixedProvider(yyService));
+                null, null, null, fixedProvider(yyService), null);
 
         // 模拟代理请求:清单目标地址 + yy/yyr 续租参数(条目生成端同款拼法)
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/live-proxy/probe-token");
@@ -104,7 +104,7 @@ class LiveProxyYyProbeTest {
         when(subscriptionService.getCurrentToken()).thenReturn("probe-token");
         AppProperties properties = new AppProperties();
         properties.setLiveProxyMode("dual");
-        LiveProxyService proxyService = new LiveProxyService(subscriptionService, properties, null, null, null, null);
+        LiveProxyService proxyService = new LiveProxyService(subscriptionService, properties, null, null, null, null, null);
         assertTrue(proxyService.isDualProxyMode(), "dual 模式未生效");
         YyService yyService = new YyService(builder, objectMapper, proxyService);
 
