@@ -23,7 +23,7 @@ public class TmdbDto {
     @JsonProperty("vote_average")
     private String score;
     @JsonProperty("release_date")
-    private LocalDate date;
+    private LocalDate releaseDate;
     @JsonProperty("first_air_date")
     private LocalDate firstDate;
 }
