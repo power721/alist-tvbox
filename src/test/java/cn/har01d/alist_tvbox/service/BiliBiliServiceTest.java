@@ -8,13 +8,17 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfo;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliList;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliListResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliRelatedResponse;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2InfoResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliWatchLaterResponse;
+import cn.har01d.alist_tvbox.dto.bili.Dash;
 import cn.har01d.alist_tvbox.dto.bili.Data;
+import cn.har01d.alist_tvbox.dto.bili.Media;
 import cn.har01d.alist_tvbox.dto.bili.Resp;
+import cn.har01d.alist_tvbox.dto.bili.Segment;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
@@ -1326,6 +1330,95 @@ class BiliBiliServiceTest {
         assertNull(form.getFirst("parent"));
         Map<String, Object> comment = (Map<String, Object>) result.get("comment");
         assertEquals("7777", comment.get("rpid"));
+    }
+
+    @Test
+    void parsePlayIdReadsEpisodeSegment() {
+        BiliBiliService.PlayId auto = BiliBiliService.parsePlayId("116958703918865-40168587741");
+        assertEquals("116958703918865", auto.aid());
+        assertEquals("40168587741", auto.cid());
+        assertNull(auto.epId());
+
+        // 番剧条目第三段是 epId:getPlayUrl 据此路由 pgc 端点
+        BiliBiliService.PlayId pgc = BiliBiliService.parsePlayId("478818261-1022370693-733316");
+        assertEquals("733316", pgc.epId());
+    }
+
+    @Test
+    void getPlayUrlUsesPgcEndpointForEpisodeIds() throws Exception {
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/pgc/player/web/playurl"), eq(HttpMethod.GET), any(), eq(Resp.class)))
+                .thenReturn(ResponseEntity.ok(dashResp()));
+
+        Map<String, Object> result = service.getPlayUrl("478818261-1022370693-733316", true, "com.github.tvbox.osc.tk");
+
+        org.mockito.ArgumentCaptor<String> urlCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(restTemplate, Mockito.times(1)).exchange(urlCaptor.capture(), eq(HttpMethod.GET), any(), eq(Resp.class));
+        assertTrue(urlCaptor.getValue().contains("ep_id=733316"));
+        assertTrue(urlCaptor.getValue().contains("qn=127"));
+        // pgc 端点放行 4K/HDR:MPD 含全部轨(125/120/80),播放器 ABR 自选
+        String mpd = decodeDataUri((String) result.get("url"));
+        assertTrue(mpd.contains("id=\"125_"));
+        assertTrue(mpd.contains("id=\"120_"));
+        assertTrue(mpd.contains("id=\"80_"));
+    }
+
+    @Test
+    void getPlayUrlReturnsFirstDurlForNonDashEpisodes() throws Exception {
+        // dash=false 时 pgc 请求 fnval=0,响应只有 durl(实测无 dash 字段):
+        // DashUtils.convert 的 dash==null 分支回落首段 durl,与改前非 DASH 流程同款,老壳子照常可播
+        Resp resp = new Resp();
+        resp.setCode(0);
+        Data data = new Data();
+        BiliBiliPlay.DUrl durl = new BiliBiliPlay.DUrl();
+        durl.setUrl("https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/x.mp4");
+        data.setDurl(new ArrayList<>(List.of(durl)));
+        resp.setResult(data);
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/pgc/player/web/playurl"), eq(HttpMethod.GET), any(), eq(Resp.class)))
+                .thenReturn(ResponseEntity.ok(resp));
+
+        Map<String, Object> result = service.getPlayUrl("478818261-1022370693-733316", false, "com.github.tvbox.osc");
+
+        org.mockito.ArgumentCaptor<String> urlCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(restTemplate, Mockito.times(1)).exchange(urlCaptor.capture(), eq(HttpMethod.GET), any(), eq(Resp.class));
+        assertTrue(urlCaptor.getValue().contains("fnval=0"));
+        assertEquals("https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/x.mp4", result.get("url"));
+    }
+
+    /** pgc/UGC playurl 通用 dash 样本:125/120/80 三档 + 单音频轨 */
+    private Resp dashResp() {
+        Data data = new Data();
+        Dash dash = new Dash();
+        dash.setDuration("600");
+        dash.setMinBufferTime("1.5");
+        dash.setVideo(List.of(
+                media("125", "https://upos/125.m4s", "video/mp4", "hvc1.2.4.L153.90"),
+                media("120", "https://upos/120.m4s", "video/mp4", "avc1.640033"),
+                media("80", "https://upos/80.m4s", "video/mp4", "avc1.640032")));
+        dash.setAudio(List.of(media("30280", "https://upos/a.m4s", "audio/mp4", "mp4a.40.2")));
+        data.setDash(dash);
+        data.setAcceptQuality(new ArrayList<>(List.of(125, 120, 80)));
+        data.setAcceptDescription(new ArrayList<>(List.of("真彩 HDR", "超清 4K", "高清 1080P")));
+        Resp resp = new Resp();
+        resp.setCode(0);
+        resp.setResult(data);
+        return resp;
+    }
+
+    private Media media(String id, String baseUrl, String mimeType, String codecs) {
+        Media media = new Media();
+        media.setId(id);
+        media.setBaseUrl(baseUrl);
+        media.setMimeType(mimeType);
+        media.setCodecs(codecs);
+        media.setBandwidth("2000000");
+        media.setCodecid("7");
+        media.setSegmentBase(new Segment());
+        return media;
+    }
+
+    private String decodeDataUri(String url) {
+        assertTrue(url.startsWith("data:application/dash+xml;base64,"));
+        return new String(java.util.Base64.getMimeDecoder().decode(url.substring("data:application/dash+xml;base64,".length())));
     }
 
 }

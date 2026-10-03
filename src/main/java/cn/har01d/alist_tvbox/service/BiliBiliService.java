@@ -2195,58 +2195,90 @@ public class BiliBiliService {
         return response.getBody().getData().getToken();
     }
 
-    public Map<String, Object> getPlayUrl(String bvid, boolean dash, String client) throws IOException {
-        String aid;
-        String cid;
+    /** 播放 id 解析:aid-cid(UGC)/ aid-cid-epId(番剧);第三段为番剧 epId */
+    record PlayId(String aid, String cid, String epId) {
+    }
+
+    static PlayId parsePlayId(String bvid) {
         String[] parts = bvid.split("-");
+        if (parts.length < 2) {
+            return new PlayId(bvid, null, null);
+        }
+        return new PlayId(parts[0], parts[1], parts.length >= 3 ? parts[2] : null);
+    }
+
+    public Map<String, Object> getPlayUrl(String bvid, boolean dash, String client) throws IOException {
         Map<String, Object> result = new HashMap<>();
         List<String> qns = appProperties.getQns();
         dash = dash || appProperties.isSupportDash() || DashUtils.isClientSupport(client);
-        if (parts.length >= 2) {
-            aid = parts[0];
-            cid = parts[1];
+        String aid;
+        String cid;
+        String epId = null;
+        PlayId playId = bvid.contains("-") ? parsePlayId(bvid) : null;
+        if (playId != null && playId.cid() != null) {
+            aid = playId.aid();
+            cid = playId.cid();
+            epId = playId.epId();
         } else {
             BiliBiliInfo info = cache.get(bvid);
             aid = String.valueOf(info.getAid());
             cid = String.valueOf(info.getCid());
         }
+        HttpEntity<Void> entity;
 
-        Map<String, Object> map = new HashMap<>();
-        map.put("avid", aid);
-        map.put("cid", cid);
-        map.put("qn", 127);
-        map.put("fourk", 1);
-        map.put("fnval", dash ? FN_VAL : 0);
-
-        HttpEntity<Void> entity = buildHttpEntity(null);
-        getKeys(entity);
-        String url = PLAY_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
-
-        log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
-
-        if (dash) {
+        if (epId != null) {
+            // 番剧/影视必须走 pgc 端点并带 ep_id(无需 WBI):UGC 端点对 pgc 内容会把 dash 钉在 1080P,
+            // accept 里列着 4K/HDR 也不发轨;pgc 端点按 ep 权限放行,非大会员实测可得 125/120
+            String url = String.format(PLAY_API1, aid, cid, epId, dash ? FN_VAL : 0);
+            entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
+            log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
             ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
             log.debug("url: {}  response: {}", url, response.getBody());
             if (response.getBody().getCode() != 0) {
                 log.warn("获取失败: {} {}", response.getBody().getCode(), response.getBody().getMessage());
-
-                entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
                 url = String.format(PLAY_API2, aid, cid);
                 response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
                 log.debug("url: {}  response: {}", url, response.getBody());
             }
-
             result = DashUtils.convert(response.getBody(), qns, client);
         } else {
-            ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
-            BiliBiliPlayResponse res = response.getBody();
-            log.debug("getPlayUrl url: {}  response: {}", url, res);
-            if (res.getCode() != 0) {
-                log.warn("获取失败: {} {}", res.getCode(), res.getMessage());
-            }
+            Map<String, Object> map = new HashMap<>();
+            map.put("avid", aid);
+            map.put("cid", cid);
+            map.put("qn", 127);
+            map.put("fourk", 1);
+            map.put("fnval", dash ? FN_VAL : 0);
 
-            BiliBiliPlay data = res.getData() == null ? res.getResult() : res.getData();
-            result.put("url", data.getDurl().get(0).getUrl());
+            entity = buildHttpEntity(null);
+            getKeys(entity);
+            String url = PLAY_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
+
+            log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
+
+            if (dash) {
+                ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
+                log.debug("url: {}  response: {}", url, response.getBody());
+                if (response.getBody().getCode() != 0) {
+                    log.warn("获取失败: {} {}", response.getBody().getCode(), response.getBody().getMessage());
+
+                    entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
+                    url = String.format(PLAY_API2, aid, cid);
+                    response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
+                    log.debug("url: {}  response: {}", url, response.getBody());
+                }
+
+                result = DashUtils.convert(response.getBody(), qns, client);
+            } else {
+                ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
+                BiliBiliPlayResponse res = response.getBody();
+                log.debug("getPlayUrl url: {}  response: {}", url, res);
+                if (res.getCode() != 0) {
+                    log.warn("获取失败: {} {}", res.getCode(), res.getMessage());
+                }
+
+                BiliBiliPlay data = res.getData() == null ? res.getResult() : res.getData();
+                result.put("url", data.getDurl().get(0).getUrl());
+            }
         }
         String cookie = entity.getHeaders().getFirst("Cookie");
         Map<String, String> headers = new HashMap<>();
@@ -2272,7 +2304,7 @@ public class BiliBiliService {
             heartbeat(aid, cid);
         }
 
-        log.debug("getPlayUrl: {} {}", url, result);
+        log.debug("getPlayUrl: {} {}", bvid, result);
         return result;
     }
 
