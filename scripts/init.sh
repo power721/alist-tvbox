@@ -47,6 +47,7 @@ init() {
       proxy_count=$((proxy_count + 1))
       [ "$proxy_count" -gt 5 ] && break
       if [ -n "$proxy" ]; then
+        case "$proxy" in */) ;; *) proxy="${proxy}/" ;; esac
         candidate="${proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip"
         echo "尝试使用代理: $proxy"
       else

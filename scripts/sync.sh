@@ -11,6 +11,7 @@ download_with_proxy() {
       proxy_count=$((proxy_count + 1))
       [ "$proxy_count" -gt 5 ] && break
       if [ -n "$proxy" ]; then
+        case "$proxy" in */) ;; *) proxy="${proxy}/" ;; esac
         candidate="${proxy}${url}"
       else
         candidate="${url}"

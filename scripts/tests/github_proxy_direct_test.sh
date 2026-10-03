@@ -22,12 +22,22 @@ assert_not_contains() {
   fi
 }
 
+assert_contains() {
+  local file="$1"
+  local pattern="$2"
+  if ! grep -Fq "$pattern" "$file"; then
+    printf 'ASSERT FAIL: %s should contain [%s]\n' "$file" "$pattern" >&2
+    exit 1
+  fi
+}
+
 extract_download_function() {
   local script="$1"
   local proxy_file="$2"
   awk '/^download_with_proxy\(\) \{/,/^}/' "$script" | sed "s#/data/github_proxy.txt#$proxy_file#g"
 }
 
+# mock wget 记录实际收到的 URL;仅当 URL 等于 $WGET_SUCCESS_URL(缺省=直连地址)时返回成功
 install_mock_wget() {
   local dir="$1"
   cat >"$dir/wget" <<'MOCK'
@@ -49,7 +59,8 @@ done
 
 printf '%s\n' "$url" >>"$WGET_LOG"
 
-if [[ "$url" == "https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt" ]]; then
+success_url="${WGET_SUCCESS_URL:-https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt}"
+if [[ "$url" == "$success_url" ]]; then
   printf 'ok\n' >"$output"
   exit 0
 fi
@@ -59,16 +70,17 @@ MOCK
   chmod +x "$dir/wget"
 }
 
-test_download_function_preserves_direct_entry_order() {
+run_download_function() {
   local script="$1"
-  local tmp proxy_file mockbin lib output first_url
+  local proxy_content="$2"
+  local tmp proxy_file mockbin lib output
   tmp="$(mktemp -d)"
   proxy_file="$tmp/github_proxy.txt"
   mockbin="$tmp/bin"
   lib="$tmp/download.sh"
   output="$tmp/version.txt"
   mkdir -p "$mockbin"
-  printf '\nhttps://gh.llkk.cc/\n' >"$proxy_file"
+  printf '%s' "$proxy_content" >"$proxy_file"
   extract_download_function "$script" "$proxy_file" >"$lib"
   install_mock_wget "$mockbin"
 
@@ -77,25 +89,61 @@ test_download_function_preserves_direct_entry_order() {
     export WGET_LOG="$tmp/wget.log"
     # shellcheck source=/dev/null
     source "$lib"
+    # docker/scripts/lib/download.sh 依赖 lib/common.sh 的日志函数,沙箱里置空
+    log_info() { :; }
+    log_warn() { :; }
+    log_error() { :; }
     download_with_proxy "https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt" "$output"
   )
 
-  first_url="$(head -n 1 "$tmp/wget.log")"
+  head -n 1 "$tmp/wget.log"
+}
+
+test_download_function_preserves_direct_entry_order() {
+  local first_url
+  first_url="$(run_download_function "$1" '
+https://gh.llkk.cc/
+')"
   assert_eq \
     "https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt" \
     "$first_url" \
-    "$script should preserve an empty first proxy entry as direct download"
+    "$1 should preserve an empty first proxy entry as direct download"
+}
+
+# github_proxy.txt 里的代理行常不带尾斜杠,裸拼接会产出 https://gh.llkk.https://... 这类坏 URL
+# (wget 报 bad port),必须归一化补上斜杠
+test_download_function_appends_missing_trailing_slash() {
+  local first_url
+  first_url="$(WGET_SUCCESS_URL="https://gh.llkk.cc/https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt" \
+    run_download_function "$1" 'https://gh.llkk.cc
+')"
+  assert_eq \
+    "https://gh.llkk.cc/https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt" \
+    "$first_url" \
+    "$1 should append a trailing slash to proxy entries without one"
 }
 
 test_no_script_drops_blank_proxy_entries() {
-  assert_not_contains "$ROOT_DIR/init.sh" "grep -v '^$'"
+  assert_not_contains "$ROOT_DIR/docker/scripts/lib/download.sh" "grep -v '^$'"
   assert_not_contains "$ROOT_DIR/scripts/sync.sh" "grep -v '^$'"
   assert_not_contains "$ROOT_DIR/scripts/index.sh" "grep -v '^$'"
   assert_not_contains "$ROOT_DIR/scripts/init.sh" "grep -v '^$'"
 }
 
-test_download_function_preserves_direct_entry_order "$ROOT_DIR/init.sh"
-test_download_function_preserves_direct_entry_order "$ROOT_DIR/scripts/sync.sh"
+# 所有代理消费方必须归一化尾斜杠:index.sh/init.sh 是内联循环,不会被上面的函数级用例覆盖
+test_all_proxy_consumers_normalize_trailing_slash() {
+  local normalize='case "$proxy" in */) ;; *) proxy="${proxy}/" ;; esac'
+  assert_contains "$ROOT_DIR/docker/scripts/lib/download.sh" "$normalize"
+  assert_contains "$ROOT_DIR/scripts/sync.sh" "$normalize"
+  assert_contains "$ROOT_DIR/scripts/index.sh" "$normalize"
+  assert_contains "$ROOT_DIR/scripts/init.sh" "$normalize"
+}
+
+for script in "$ROOT_DIR/docker/scripts/lib/download.sh" "$ROOT_DIR/scripts/sync.sh"; do
+  test_download_function_preserves_direct_entry_order "$script"
+  test_download_function_appends_missing_trailing_slash "$script"
+done
 test_no_script_drops_blank_proxy_entries
+test_all_proxy_consumers_normalize_trailing_slash
 
 printf 'github proxy direct tests: PASS\n'
