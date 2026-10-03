@@ -106,6 +106,15 @@ class DashUtilsTest {
         assertFalse(DashUtils.isPcdn("not-a-url"));
     }
 
+    @Test
+    void isPcdnDetectsThirdPartyMcdnEdges() {
+        // B 站 PCDN 的第三方边缘域:host 无 mcdn 字样,特征是 4483 端口 + os=mcdn 调度参数
+        assertTrue(DashUtils.isPcdn("https://b-baaa1jd6155d3c4bi3ygwqsbok4b.edge.mountaintoys.cn:4483/upgcxcode/x.m4s?e=exp&os=mcdn"));
+        assertTrue(DashUtils.isPcdn("https://some-unknown-edge.example.net/upos/a.m4s?e=exp&os=mcdn&platform=pc"));
+        assertFalse(DashUtils.isPcdn("https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/x.m4s?e=exp&os=cosbv"));
+        assertFalse(DashUtils.isPcdn("https://upos-sz-mirror08c.bilivideo.com/upos/a.m4s"));
+    }
+
     private static String decodeDataUri(String url) {
         assertTrue(url.startsWith("data:application/dash+xml;base64,"));
         return new String(Base64.getMimeDecoder().decode(url.substring("data:application/dash+xml;base64,".length())));

@@ -203,10 +203,16 @@ public final class DashUtils {
         }
         int port = host.indexOf(':');
         if (port >= 0) {
+            // mcdn PCDN 家族恒走 4483 端口:除 mcdn.bilivideo.cn 外还有第三方边缘域
+            // (如 edge.mountaintoys.cn,host 无任何 mcdn 字样),常规 upos CDN 恒 443
+            if (host.substring(port + 1).equals("4483")) {
+                return true;
+            }
             host = host.substring(0, port);
         }
         host = host.toLowerCase(Locale.ROOT);
-        return host.contains("mcdn") || host.endsWith(".szbdyd.com") || host.contains("p2p");
+        // os=mcdn 是 B 站调度参数里的节点类型标记,兜住非 4483 端口的三方 PCDN 域
+        return host.contains("mcdn") || host.endsWith(".szbdyd.com") || host.contains("p2p") || url.contains("os=mcdn");
     }
 
     private static String getAudioTitle(String id) {
