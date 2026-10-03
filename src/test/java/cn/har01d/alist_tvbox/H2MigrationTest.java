@@ -73,6 +73,101 @@ class H2MigrationTest {
     }
 
     /**
+     * #1076:SQL 备份恢复路径(FlywayRepairConfig)把库 baseline 到最高版本,历史表只有
+     * 一条 baseline 行——没有 V6 行,V6 永远不会执行,但 validate 因 baseline 覆盖而通过。
+     * 回调绝不能把真列挪走等 V6 重建:那会删列后无人恢复,validate 报 missing column
+     * [login_ip] 进入崩溃循环。
+     */
+    @Test
+    void callbackKeepsColumnsWhenSchemaAlreadyPassedV6() throws Exception {
+        String url = "jdbc:h2:mem:v6-schema-past-6;DB_CLOSE_DELAY=-1";
+        try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
+            createSessionTableWithLoginColumns(connection);
+            baselineAtCurrentVersion(url);
+
+            Flyway flyway = callbackEnabledFlyway(url);
+
+            assertThatCode(flyway::migrate).doesNotThrowAnyException();
+            assertThat(queryString(connection, "SELECT login_ip FROM session WHERE token = 'token-1'"))
+                    .isEqualTo("127.0.0.1");
+            assertThat(queryString(connection, "SELECT user_agent FROM session WHERE token = 'token-1'"))
+                    .isEqualTo("Mozilla/5.0");
+            // 不得留下挪列痕迹
+            assertThatThrownBy(() -> execute(connection, "SELECT login_ip_v6_existing FROM session"))
+                    .hasMessageContaining("not found");
+        }
+    }
+
+    /**
+     * #1076 崩溃循环库的自愈:旧版回调已在无 V6 历史行的库上把真列改名成 *_v6_existing,
+     * 修复后的回调要把临时列原名改回,数据无损恢复,而不是要求临时列与真列同时存在才动作。
+     */
+    @Test
+    void callbackRenamesAsideColumnsBackWhenV6WillNeverRun() throws Exception {
+        String url = "jdbc:h2:mem:v6-rename-aside-back;DB_CLOSE_DELAY=-1";
+        try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
+            createSessionTableWithLoginColumns(connection);
+            baselineAtCurrentVersion(url);
+            // 复现 1.108.0 损坏形态:真列已被挪成临时列
+            execute(connection, "ALTER TABLE session RENAME COLUMN login_ip TO login_ip_v6_existing");
+            execute(connection, "ALTER TABLE session RENAME COLUMN user_agent TO user_agent_v6_existing");
+
+            Flyway flyway = callbackEnabledFlyway(url);
+
+            assertThatCode(flyway::migrate).doesNotThrowAnyException();
+            assertThat(queryString(connection, "SELECT login_ip FROM session WHERE token = 'token-1'"))
+                    .isEqualTo("127.0.0.1");
+            assertThat(queryString(connection, "SELECT user_agent FROM session WHERE token = 'token-1'"))
+                    .isEqualTo("Mozilla/5.0");
+            assertThatThrownBy(() -> execute(connection, "SELECT login_ip_v6_existing FROM session"))
+                    .hasMessageContaining("not found");
+        }
+    }
+
+    /**
+     * #1076 极端形态:列被彻底删掉(手工清理或异常路径),既无真列也无临时列。
+     * V6 无法重跑时回调须直接补列,让 Hibernate validate 通过。
+     */
+    @Test
+    void callbackRecreatesMissingColumnsWhenV6WillNeverRun() throws Exception {
+        String url = "jdbc:h2:mem:v6-recreate-missing;DB_CLOSE_DELAY=-1";
+        try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
+            createSessionTableWithLoginColumns(connection);
+            baselineAtCurrentVersion(url);
+            execute(connection, "ALTER TABLE session DROP COLUMN login_ip");
+            execute(connection, "ALTER TABLE session DROP COLUMN user_agent");
+
+            Flyway flyway = callbackEnabledFlyway(url);
+
+            assertThatCode(flyway::migrate).doesNotThrowAnyException();
+            assertThatCode(() -> execute(connection, "UPDATE session SET login_ip = '127.0.0.1',"
+                    + " user_agent = 'Mozilla/5.0' WHERE token = 'token-1'")).doesNotThrowAnyException();
+        }
+    }
+
+    /** 复现 FlywayRepairConfig 的 SQL 恢复形态:业务表齐全、无历史表,baseline 到最高版本。 */
+    private void baselineAtCurrentVersion(String url) {
+        Flyway.configure()
+                .dataSource(url, "sa", "")
+                .locations("classpath:db/migration/h2", "classpath:db/migration/common",
+                        "classpath:db/migration/current")
+                .baselineVersion("56")
+                .baselineDescription("SQL backup restore: schema present, history table missing")
+                .load()
+                .baseline();
+    }
+
+    private Flyway callbackEnabledFlyway(String url) {
+        return Flyway.configure()
+                .dataSource(url, "sa", "")
+                .locations("classpath:db/migration/h2", "classpath:db/migration/common",
+                        "classpath:db/migration/current")
+                .callbacks(new SessionLoginInfoMigrationCallback())
+                .baselineOnMigrate(true)
+                .load();
+    }
+
+    /**
      * V10 在 H2 上必须能跑完:CREATE TABLE 未加引号,H2 把列存为大写,
      * 若后续 DDL 直接引用小写 "token"/"source_kind",迁移会以 Column not found 中断,应用起不来。
      * 断言用裸标识符访问(与 Hibernate、ddl-auto=validate 一致)。
