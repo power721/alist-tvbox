@@ -53,6 +53,7 @@ import cn.har01d.alist_tvbox.dto.bili.ChannelArchive;
 import cn.har01d.alist_tvbox.dto.bili.ChannelArchives;
 import cn.har01d.alist_tvbox.dto.bili.ChannelList;
 import cn.har01d.alist_tvbox.dto.bili.CookieData;
+import cn.har01d.alist_tvbox.dto.bili.Data;
 import cn.har01d.alist_tvbox.dto.bili.FavItem;
 import cn.har01d.alist_tvbox.dto.bili.FavItems;
 import cn.har01d.alist_tvbox.dto.bili.QrCode;
@@ -2207,6 +2208,30 @@ public class BiliBiliService {
         return new PlayId(parts[0], parts[1], parts.length >= 3 ? parts[2] : null);
     }
 
+    /** playurl 响应无可播内容:错误码/data 缺失,或 B站风控软拦截——命中时 code=0 但 data 只含
+     *  v_voucher 无 durl/dash(不发错误码),缺失 Referer 的请求高概率命中(#1075)。 */
+    static boolean isPlayUrlEmpty(Resp body) {
+        if (body == null || body.getCode() != 0) {
+            return true;
+        }
+        Data data = body.getData() == null ? body.getResult() : body.getData();
+        if (data == null) {
+            return true;
+        }
+        return data.getDash() == null && data.getVideoInfo() == null
+                && (data.getDurl() == null || data.getDurl().isEmpty())
+                && (data.getDurls() == null || data.getDurls().isEmpty());
+    }
+
+    /** 非 dash 消费方只读 durl,空判定按 durl 口径。 */
+    static boolean isPlayUrlEmpty(BiliBiliPlayResponse body) {
+        if (body == null || body.getCode() != 0) {
+            return true;
+        }
+        BiliBiliPlay data = body.getData() == null ? body.getResult() : body.getData();
+        return data == null || data.getDurl() == null || data.getDurl().isEmpty();
+    }
+
     public Map<String, Object> getPlayUrl(String bvid, boolean dash, String client) throws IOException {
         Map<String, Object> result = new HashMap<>();
         List<String> qns = appProperties.getQns();
@@ -2233,14 +2258,19 @@ public class BiliBiliService {
             entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
             log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
             ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
-            log.debug("url: {}  response: {}", url, response.getBody());
-            if (response.getBody().getCode() != 0) {
-                log.warn("获取失败: {} {}", response.getBody().getCode(), response.getBody().getMessage());
+            Resp body = response.getBody();
+            log.debug("url: {}  response: {}", url, body);
+            if (isPlayUrlEmpty(body)) {
+                log.warn("获取失败或风控软拦截: {} {}", body == null ? -1 : body.getCode(), body == null ? "" : body.getMessage());
                 url = String.format(PLAY_API2, aid, cid);
                 response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
-                log.debug("url: {}  response: {}", url, response.getBody());
+                body = response.getBody();
+                log.debug("url: {}  response: {}", url, body);
+                if (isPlayUrlEmpty(body)) {
+                    throw new IOException("B站返回播放信息为空(疑似风控软拦截 v_voucher),请稍后重试: " + bvid);
+                }
             }
-            result = DashUtils.convert(response.getBody(), qns, client);
+            result = DashUtils.convert(body, qns, client);
         } else {
             Map<String, Object> map = new HashMap<>();
             map.put("avid", aid);
@@ -2249,7 +2279,9 @@ public class BiliBiliService {
             map.put("fourk", 1);
             map.put("fnval", dash ? FN_VAL : 0);
 
-            entity = buildHttpEntity(null);
+            // playurl 风控校验要求 Referer:缺失时 B站高概率软拦截,code=0 但 data 只含 v_voucher
+            // 无 durl/dash(不发错误码)——dash 分支 200+空 url、非 dash 分支 durl 越界 500(#1075)
+            entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
             getKeys(entity);
             String url = PLAY_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
 
@@ -2257,23 +2289,36 @@ public class BiliBiliService {
 
             if (dash) {
                 ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
-                log.debug("url: {}  response: {}", url, response.getBody());
-                if (response.getBody().getCode() != 0) {
-                    log.warn("获取失败: {} {}", response.getBody().getCode(), response.getBody().getMessage());
+                Resp body = response.getBody();
+                log.debug("url: {}  response: {}", url, body);
+                if (isPlayUrlEmpty(body)) {
+                    log.warn("获取失败或风控软拦截: {} {}", body == null ? -1 : body.getCode(), body == null ? "" : body.getMessage());
 
                     entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
                     url = String.format(PLAY_API2, aid, cid);
                     response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
-                    log.debug("url: {}  response: {}", url, response.getBody());
+                    body = response.getBody();
+                    log.debug("url: {}  response: {}", url, body);
+                    if (isPlayUrlEmpty(body)) {
+                        throw new IOException("B站返回播放信息为空(疑似风控软拦截 v_voucher),请稍后重试: " + bvid);
+                    }
                 }
 
-                result = DashUtils.convert(response.getBody(), qns, client);
+                result = DashUtils.convert(body, qns, client);
             } else {
                 ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
                 BiliBiliPlayResponse res = response.getBody();
                 log.debug("getPlayUrl url: {}  response: {}", url, res);
-                if (res.getCode() != 0) {
-                    log.warn("获取失败: {} {}", res.getCode(), res.getMessage());
+                if (isPlayUrlEmpty(res)) {
+                    log.warn("获取失败或风控软拦截: {} {}", res == null ? -1 : res.getCode(), res == null ? "" : res.getMessage());
+                    // pgc 端点对 UGC 恒 -404,非 dash 重试仍打 wbi 端点(换新 entity)
+                    entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
+                    response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
+                    res = response.getBody();
+                    log.debug("getPlayUrl url: {}  response: {}", url, res);
+                    if (isPlayUrlEmpty(res)) {
+                        throw new IOException("B站返回播放信息为空(疑似风控软拦截 v_voucher),请稍后重试: " + bvid);
+                    }
                 }
 
                 BiliBiliPlay data = res.getData() == null ? res.getResult() : res.getData();

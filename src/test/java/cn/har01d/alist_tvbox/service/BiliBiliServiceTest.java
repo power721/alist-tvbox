@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliList;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliListResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlayResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliRelatedResponse;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
@@ -45,6 +46,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -55,6 +57,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -114,11 +117,8 @@ class BiliBiliServiceTest {
     }
 
     private void stubPlayUrl() {
-        Resp resp = new Resp();
-        resp.setCode(0);
-        resp.setData(new Data());
         when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(Resp.class)))
-                .thenReturn(ResponseEntity.ok(resp));
+                .thenReturn(ResponseEntity.ok(dashResp()));
     }
 
     @Test
@@ -149,6 +149,103 @@ class BiliBiliServiceTest {
 
         assertEquals(List.of(), result.get("chapters"));
         assertEquals(List.of(), result.get("subs"));
+    }
+
+    @Test
+    void getPlayUrlSendsRefererOnUgcPlayUrlRequest() throws Exception {
+        // #1075 回归:主请求缺 Referer 时 B站高概率回 code=0+data 只含 v_voucher 的软拦截
+        stubPlayUrl();
+
+        service.getPlayUrl("116958703918865-40168587741", true, "com.github.tvbox.osc");
+
+        org.mockito.ArgumentCaptor<HttpEntity> captor = org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), captor.capture(), eq(Resp.class));
+        assertEquals("https://www.bilibili.com", captor.getValue().getHeaders().getFirst("Referer"));
+    }
+
+    @Test
+    void getPlayUrlRetriesVoucherSoftBlockViaPgcFallback() throws Exception {
+        // 风控软拦截:code=0 但 data 只含 v_voucher(无 durl/dash),与错误码同走 fallback 重试
+        Resp voucher = new Resp();
+        voucher.setCode(0);
+        voucher.setData(new Data());
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(Resp.class)))
+                .thenReturn(ResponseEntity.ok(voucher));
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/pgc/player/web/v2/playurl"), eq(HttpMethod.GET), any(), eq(Resp.class)))
+                .thenReturn(ResponseEntity.ok(dashResp()));
+
+        Map<String, Object> result = service.getPlayUrl("116958703918865-40168587741", true, "com.github.tvbox.osc");
+
+        assertTrue(StringUtils.isNotBlank((String) result.get("url")));
+        verify(restTemplate).exchange(startsWith("https://api.bilibili.com/pgc/player/web/v2/playurl"), eq(HttpMethod.GET), any(), eq(Resp.class));
+    }
+
+    @Test
+    void getPlayUrlThrowsClearErrorWhenSoftBlocked() throws Exception {
+        Resp voucher = new Resp();
+        voucher.setCode(0);
+        voucher.setData(new Data());
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(Resp.class)))
+                .thenReturn(ResponseEntity.ok(voucher));
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/pgc/player/web/v2/playurl"), eq(HttpMethod.GET), any(), eq(Resp.class)))
+                .thenReturn(ResponseEntity.ok(voucher));
+
+        IOException ex = assertThrows(IOException.class,
+                () -> service.getPlayUrl("116958703918865-40168587741", true, "com.github.tvbox.osc"));
+        assertTrue(ex.getMessage().contains("v_voucher"));
+    }
+
+    @Test
+    void getPlayUrlNonDashThrowsInsteadOfCrashingOnEmptyDurl() throws Exception {
+        // 原实现空 durl 直接 get(0) 抛 IndexOutOfBoundsException(#1075 dash=false 形态)
+        BiliBiliPlayResponse empty = new BiliBiliPlayResponse();
+        empty.setCode(0);
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(BiliBiliPlayResponse.class)))
+                .thenReturn(ResponseEntity.ok(empty));
+
+        IOException ex = assertThrows(IOException.class,
+                () -> service.getPlayUrl("116958703918865-40168587741", false, "com.github.tvbox.osc"));
+        assertTrue(ex.getMessage().contains("v_voucher"));
+        verify(restTemplate, Mockito.times(2)).exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(BiliBiliPlayResponse.class));
+    }
+
+    @Test
+    void isPlayUrlEmptyDetectsVoucherSoftBlock() {
+        Resp voucher = new Resp();
+        voucher.setCode(0);
+        voucher.setData(new Data());
+        assertTrue(BiliBiliService.isPlayUrlEmpty(voucher));
+        assertTrue(BiliBiliService.isPlayUrlEmpty((Resp) null));
+        assertTrue(BiliBiliService.isPlayUrlEmpty((BiliBiliPlayResponse) null));
+        Resp err = new Resp();
+        err.setCode(-404);
+        assertTrue(BiliBiliService.isPlayUrlEmpty(err));
+
+        Resp durl = new Resp();
+        durl.setCode(0);
+        Data data = new Data();
+        data.setDurl(new ArrayList<>(List.of(new BiliBiliPlay.DUrl())));
+        durl.setData(data);
+        assertFalse(BiliBiliService.isPlayUrlEmpty(durl));
+
+        Resp dash = new Resp();
+        dash.setCode(0);
+        Data dashData = new Data();
+        dashData.setDash(new Dash());
+        dash.setResult(dashData);
+        assertFalse(BiliBiliService.isPlayUrlEmpty(dash));
+
+        BiliBiliPlayResponse emptyPlay = new BiliBiliPlayResponse();
+        emptyPlay.setCode(0);
+        assertTrue(BiliBiliService.isPlayUrlEmpty(emptyPlay));
+        BiliBiliPlayResponse durlPlay = new BiliBiliPlayResponse();
+        durlPlay.setCode(0);
+        BiliBiliPlay playData = new BiliBiliPlay();
+        BiliBiliPlay.DUrl d = new BiliBiliPlay.DUrl();
+        d.setUrl("https://upos/x.mp4");
+        playData.setDurl(new ArrayList<>(List.of(d)));
+        durlPlay.setData(playData);
+        assertFalse(BiliBiliService.isPlayUrlEmpty(durlPlay));
     }
 
     @Test
