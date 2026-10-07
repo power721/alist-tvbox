@@ -116,18 +116,35 @@ public class PanSouClient {
         return panSouToken;
     }
 
-    /** 认证 POST:启用了认证且拿到 token 时带 Bearer,否则裸 POST —— PanSou 搜索/盘检共用同一形态。 */
+    /** 认证 POST:启用了认证且拿到 token 时带 Bearer,否则裸 POST —— PanSou 搜索/盘检共用同一形态。token 过期(401)自动重登一次。 */
     <T> T post(String url, Object request, Class<T> responseType) {
         if (!shouldUseAuth()) {
             return restTemplate.postForObject(url, request, responseType);
         }
         String token = token();
+        try {
+            return postWithToken(url, request, responseType, token);
+        } catch (HttpClientErrorException.Unauthorized e) {
+            log.warn("PanSou token rejected (401), re-login once and retry: {}", url);
+            return postWithToken(url, request, responseType, refreshToken(token));
+        }
+    }
+
+    private <T> T postWithToken(String url, Object request, Class<T> responseType, String token) {
         if (StringUtils.isBlank(token)) {
             return restTemplate.postForObject(url, request, responseType);
         }
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
         return restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), responseType).getBody();
+    }
+
+    /** 401 后重登:synchronized 收敛并发重登(PanSou 登录轮换 token,双登录互踢);token 已被并发线程换新则直接复用。 */
+    private synchronized String refreshToken(String staleToken) {
+        if (StringUtils.equals(panSouToken, staleToken)) {
+            panSouToken = null;
+        }
+        return token();
     }
 
     /**

@@ -6,14 +6,17 @@ import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /**
@@ -85,6 +88,62 @@ class PanSouClientTest {
 
         assertThat(response).isEqualTo("plain");
         assertThat(appProperties.getPanSouAuthEnabled()).isFalse();
+        server.verify();
+    }
+
+    @Test
+    void postReLogsInAndRetriesOnceOn401() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setPanSouUsername("u");
+        appProperties.setPanSouPassword("p");
+        appProperties.setPanSouAuthEnabled(true);
+        PanSouClient client = new PanSouClient(appProperties, builder(restTemplate));
+
+        server.expect(once(), requestTo("http://pansou.example/api/auth/login"))
+                .andRespond(withSuccess("{\"token\":\"t1\"}", MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("http://pansou.example/api/x"))
+                .andExpect(header("Authorization", "Bearer t1"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED)); // token 过期(如 24h TTL 到期)
+        server.expect(once(), requestTo("http://pansou.example/api/auth/login"))
+                .andRespond(withSuccess("{\"token\":\"t2\"}", MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("http://pansou.example/api/x"))
+                .andExpect(header("Authorization", "Bearer t2"))
+                .andRespond(withSuccess("ok", MediaType.TEXT_PLAIN));
+
+        String response = client.post("http://pansou.example/api/x", Map.of("k", "v"), String.class);
+
+        assertThat(response).isEqualTo("ok");
+        assertThat(client.token()).isEqualTo("t2"); // 新 token 已缓存,后续请求不再触发重登
+        server.verify();
+    }
+
+    @Test
+    void postGivesUpAfterOne401Retry() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setPanSouUsername("u");
+        appProperties.setPanSouPassword("p");
+        appProperties.setPanSouAuthEnabled(true);
+        PanSouClient client = new PanSouClient(appProperties, builder(restTemplate));
+
+        server.expect(once(), requestTo("http://pansou.example/api/auth/login"))
+                .andRespond(withSuccess("{\"token\":\"t1\"}", MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("http://pansou.example/api/x"))
+                .andExpect(header("Authorization", "Bearer t1"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+        server.expect(once(), requestTo("http://pansou.example/api/auth/login"))
+                .andRespond(withSuccess("{\"token\":\"t2\"}", MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("http://pansou.example/api/x"))
+                .andExpect(header("Authorization", "Bearer t2"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+        assertThatThrownBy(() -> client.post("http://pansou.example/api/x", Map.of(), String.class))
+                .isInstanceOf(HttpClientErrorException.Unauthorized.class); // 只重试一次,不无限重登
         server.verify();
     }
 
