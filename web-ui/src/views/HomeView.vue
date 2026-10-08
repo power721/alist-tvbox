@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import {onMounted, ref} from "vue";
+import {onMounted, onUnmounted, ref} from "vue";
 import axios from "axios";
 import {store} from "@/services/store";
 
 const url = ref(window.location.protocol + '//' + window.location.hostname + ':' + (store.hostmode ? 5678 : 5344))
+const iframeActive = ref(true)
 const height = ref(window.innerHeight - 220) // 调整高度以适应新的页面结构
 const installMode = ref('')
 
@@ -43,8 +44,25 @@ const loadBaseUrl = () => {
   })
 }
 
+// 页面不可见(最小化/后台标签)时立即卸载内嵌 AList 的 iframe。
+// iframe 里的 AList(含魔改版)自带轮询、标题刷新等持续脚本，顶层页面埋点不到也管不到；
+// 挂在后台时这些脚本会阻止 Windows 上浏览器窗口保持最小化(#1078)，且弹回会让页面
+// 重新可见、重置任何延迟卸载的计时，故必须立即卸载。回到页面时重新加载 iframe。
+const onVisibilityChange = () => {
+  if (document.hidden) {
+    iframeActive.value = false
+  } else {
+    iframeActive.value = true
+  }
+}
+
 onMounted(() => {
   loadBaseUrl()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 
@@ -71,7 +89,7 @@ onMounted(() => {
         <a :href="url" class="hint" target="_blank">{{ url }}</a>
       </div>
 
-      <iframe v-if="store.aListStatus" :src="url" :height="height" style="width: 100%; border: none; border-radius: 4px;">
+      <iframe v-if="store.aListStatus && iframeActive" :src="url" :height="height" style="width: 100%; border: none; border-radius: 4px;">
       </iframe>
     </div>
   </div>
