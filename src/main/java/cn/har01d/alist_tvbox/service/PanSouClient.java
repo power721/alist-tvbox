@@ -91,7 +91,8 @@ public class PanSouClient {
         return hasCredentials() && Boolean.TRUE.equals(appProperties.getPanSouAuthEnabled());
     }
 
-    String token() {
+    /** 登录换 token:synchronized 与 refreshToken 同锁,并发首登/重登收敛为一次(PanSou 登录轮换 token,双登录互踢)。 */
+    synchronized String token() {
         if (StringUtils.isNotBlank(panSouToken)) {
             return panSouToken;
         }
