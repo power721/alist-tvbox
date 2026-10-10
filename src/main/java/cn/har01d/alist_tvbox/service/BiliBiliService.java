@@ -72,6 +72,7 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.BiliCookieRefreshUtils;
+import cn.har01d.alist_tvbox.util.BiliGaiaFingerprintUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
@@ -167,6 +168,8 @@ public class BiliBiliService {
     private static final String COINS_API = "https://api.bilibili.com/x/web-interface/archive/coins?aid=%s";
     private static final String FAVOURED_API = "https://api.bilibili.com/x/v2/fav/video/favoured?aid=%s";
     private static final String FAV_FOLDER_API = "https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=%s&type=2&rid=%s";
+    private static final String FINGER_SPI_API = "https://api.bilibili.com/x/frontend/finger/spi";
+    private static final String GAIA_REPORT_API = "https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi";
     /** TVBox 详情点赞/投币/收藏条目 id 前缀(载荷 aid,条目并入首线路),与追剧 msubstat-/msubcheck- 家族同款形态 */
     public static final String BILI_STAT_PLAY_PREFIX = "bilistat-";
     public static final String BILI_LIKE_PLAY_PREFIX = "bililike-";
@@ -398,6 +401,12 @@ public class BiliBiliService {
     private volatile String subKey;
     private volatile LocalDate keyTime;
     private volatile String cachedBuvid3;
+    /** 指纹建档失败后的重试门限(epoch 毫秒):建档挂在请求热路径上,失败退避防每个请求都重试上游 */
+    private volatile long gaiaEnrollRetryAfter;
+    /** bili_ticket 获取失败后的重试门限(epoch 毫秒) */
+    private volatile long biliTicketRetryAfter;
+    /** 当前扫码登录使用的匿名设备指纹(generate/poll 共享同一设备上下文;登录成功后合并落库) */
+    private volatile String pendingDeviceCookie;
 
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
@@ -487,7 +496,11 @@ public class BiliBiliService {
     }
 
     public QrCode scanLogin() throws IOException {
-        QrCode qrCode = restTemplate.getForObject("https://passport.bilibili.com/x/passport-login/web/qrcode/generate", BiliBiliQrCodeResponse.class).getData();
+        // 生成二维码须带设备指纹上下文:裸请求签发的会话会被风控标记为「无设备上下文」,
+        // 登录后点赞/投币等写操作稳定 -403 账号异常(2026-10 变体矩阵实验实证,cookie 字段事后补救无效)
+        HttpHeaders headers = loginDeviceHeaders();
+        QrCode qrCode = restTemplate.exchange("https://passport.bilibili.com/x/passport-login/web/qrcode/generate",
+                HttpMethod.GET, new HttpEntity<>(null, headers), BiliBiliQrCodeResponse.class).getBody().getData();
         qrCode.setImage(Utils.getQrCode(qrCode.getUrl()));
         log.debug("{}", qrCode);
         return qrCode;
@@ -496,7 +509,8 @@ public class BiliBiliService {
     public int checkLogin(String key) {
         String url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + key;
         log.debug("{}", url);
-        ResponseEntity<BiliBiliLoginResponse> response = restTemplate.getForEntity(url, BiliBiliLoginResponse.class);
+        ResponseEntity<BiliBiliLoginResponse> response = restTemplate.exchange(url, HttpMethod.GET,
+                new HttpEntity<>(null, loginDeviceHeaders()), BiliBiliLoginResponse.class);
         if (response.getBody() != null && response.getBody().getData() != null) {
             QrCodeResult result = response.getBody().getData();
             log.debug("checkLogin: {}", result);
@@ -505,17 +519,40 @@ public class BiliBiliService {
                 if (StringUtils.isNotBlank(result.getRefresh_token())) {
                     log.info("扫码登录成功");
                     String cookie = response.getHeaders().get("set-cookie").stream().map(e -> e.split(";")[0]).collect(Collectors.joining(";"));
-                    cookie = BiliCookieRefreshUtils.ensureBuvid3(cookie);
+                    // 会话 cookie 与登录时的设备上下文合并(poll 裸请求签发的会话无设备绑定,写操作会被风控拒)
+                    String deviceContext = loginDeviceHeaders().getFirst(HttpHeaders.COOKIE);
+                    if (StringUtils.isNotBlank(deviceContext)) {
+                        List<String> deviceEntries = new ArrayList<>();
+                        for (String entry : deviceContext.split(";")) {
+                            String name = entry.trim().split("=", 2)[0].trim();
+                            if (name.equals("SESSDATA") || name.equals("bili_jct") || name.equals("DedeUserID")
+                                    || name.equals("DedeUserID__ckMd5") || name.equals("sid")) {
+                                continue;
+                            }
+                            deviceEntries.add(entry.trim());
+                        }
+                        cookie = BiliCookieRefreshUtils.mergeCookieHeader(cookie, deviceEntries);
+                    }
+                    // 浏览器扫码流程 poll 成功后会请求 crossDomain URL 完成跨域收尾(落地 www 域补充 cookie 如 bp_t_offset)
+                    if (StringUtils.isNotBlank(result.getUrl())) {
+                        try {
+                            HttpHeaders cdHeaders = new HttpHeaders();
+                            cdHeaders.set(HttpHeaders.USER_AGENT, BiliGaiaFingerprintUtils.USER_AGENT);
+                            cdHeaders.set(HttpHeaders.COOKIE, cookie);
+                            ResponseEntity<Void> crossDomain = restTemplate.exchange(result.getUrl(), HttpMethod.GET, new HttpEntity<>(null, cdHeaders), Void.class);
+                            List<String> setCookies = crossDomain.getHeaders().get(HttpHeaders.SET_COOKIE);
+                            if (setCookies != null && !setCookies.isEmpty()) {
+                                cookie = BiliCookieRefreshUtils.mergeCookieHeader(cookie, setCookies);
+                            }
+                        } catch (Exception e) {
+                            log.warn("B站 crossDomain 收尾失败: {}", e.getMessage());
+                        }
+                    }
+                    // 设备上下文已并入,这里兜底建档查漏 + 换 bili_ticket(写操作风控因子)
+                    cookie = ensureDeviceProfile(cookie, true);
+                    pendingDeviceCookie = null;
                     settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
                     settingRepository.save(new Setting(BILIBILI_TOKEN, result.getRefresh_token()));
-//                    try {
-//                        HttpEntity<Void> entity = buildHttpEntity(null);
-//                        var body = restTemplate.exchange("https://api.bilibili.com/x/frontend/finger/spi", HttpMethod.GET, entity, JsonNode.class).getBody();
-//                        cookie += ";buvid3=" + body.get("data").get("b_3").asText() + ";buvid4=" + body.get("data").get("b_4").asText();
-//                        settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
-//                    } catch (Exception e) {
-//                        log.warn("get buvid3 failed", e);
-//                    }
                     return code;
                 }
             } else if (code == 86038) {
@@ -2147,14 +2184,15 @@ public class BiliBiliService {
             headers.set(entry.getKey(), entry.getValue());
         }
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
-        if (StringUtils.isBlank(cookie) || BILIBILI_CODE.equals(cookie)) {
-            cookie = getCookie(cookie);
-        } else {
+        boolean own = StringUtils.isNotBlank(cookie) && !BILIBILI_CODE.equals(cookie);
+        if (own) {
             String refreshed = biliCookieRefreshService.refreshIfNeeded(cookie);
             cookie = refreshed == null ? cookie : refreshed;
+        } else {
+            cookie = getCookie(cookie);
         }
-        // 点赞/投币/收藏等风控校验要求真实 buvid3,缺失时统一在此补齐(进程内缓存)
-        headers.set(HttpHeaders.COOKIE, ensureBuvid3(cookie.trim()));
+        // 点赞/投币/收藏等风控校验要求设备指纹已在服务端建档(未建档=buvid3 裸值被拒 -403),缺失时统一在此建档
+        headers.set(HttpHeaders.COOKIE, ensureDeviceProfile(cookie.trim(), own));
         return new HttpEntity<>(data, headers);
     }
 
@@ -2893,12 +2931,10 @@ public class BiliBiliService {
     private String resolveCookie() {
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(cookie) || BILIBILI_CODE.equals(cookie)) {
-            cookie = getCookie(cookie);
-        } else {
-            String refreshed = biliCookieRefreshService.refreshIfNeeded(cookie);
-            cookie = refreshed == null ? cookie : refreshed;
+            return ensureDeviceProfile(getCookie(cookie).trim(), false);
         }
-        return ensureBuvid3(cookie.trim());
+        String refreshed = biliCookieRefreshService.refreshIfNeeded(cookie);
+        return ensureDeviceProfile((refreshed == null ? cookie : refreshed).trim(), true);
     }
 
     /** 点赞/投币/收藏的风控校验要求 Cookie 携带真实 buvid3:缺失时经 getbuvid 取真值(进程内缓存),失败退随机值。 */
@@ -2920,6 +2956,161 @@ public class BiliBiliService {
             return cookie + "; buvid3=" + cachedBuvid3;
         }
         return BiliCookieRefreshUtils.ensureBuvid3(cookie);
+    }
+
+    /**
+     * 扫码登录链路(generate/poll)的设备上下文头:已配置 Cookie 时沿用其设备字段(老设备信任更高),
+     * 未配置时匿名建档一套纯设备指纹("buvid3=" 哨兵触发 spi+建档,persist=false 不落库,暂存内存供 poll 复用)。
+     */
+    private HttpHeaders loginDeviceHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.USER_AGENT, BiliGaiaFingerprintUtils.USER_AGENT);
+        headers.set(HttpHeaders.REFERER, "https://www.bilibili.com/");
+        headers.set("Origin", "https://www.bilibili.com");
+        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(cookie) && !BILIBILI_CODE.equals(cookie)) {
+            cookie = ensureDeviceProfile(cookie.trim(), false);
+        } else {
+            if (StringUtils.isBlank(pendingDeviceCookie)) {
+                pendingDeviceCookie = ensureDeviceProfile("buvid3=", false);
+            }
+            cookie = pendingDeviceCookie;
+        }
+        if (StringUtils.isNotBlank(cookie)) {
+            headers.set(HttpHeaders.COOKIE, cookie);
+        }
+        return headers;
+    }
+
+    /**
+     * 确保写操作(点赞/投币/收藏/分享)的风控因子齐备:①设备指纹在 B站服务端建档(ExClimbWuzhi);
+     * ②bili_ticket(Web 端票据,浏览器 Cookie 常态字段,缺失显著提高 -403 概率,2026-10 起 4567 实测必需)。
+     *
+     * @param persist true=用户自有 Cookie(结果写回设置);false=内置共享 Cookie(只随本次请求,不落库)
+     */
+    private synchronized String ensureDeviceProfile(String cookie, boolean persist) {
+        return ensureBiliTicket(ensureGaiaProfile(cookie, persist), persist);
+    }
+
+    private String ensureGaiaProfile(String cookie, boolean persist) {
+        if (StringUtils.isBlank(cookie)) {
+            return cookie;
+        }
+        String buvid3 = BiliCookieRefreshUtils.getCookieValue(cookie, "buvid3");
+        String buvid4 = BiliCookieRefreshUtils.getCookieValue(cookie, "buvid4");
+        String bNut = BiliCookieRefreshUtils.getCookieValue(cookie, "b_nut");
+        String uuid = BiliCookieRefreshUtils.getCookieValue(cookie, "_uuid");
+        String buvidFp = BiliCookieRefreshUtils.getCookieValue(cookie, "buvid_fp");
+        String bLsid = BiliCookieRefreshUtils.getCookieValue(cookie, "b_lsid");
+        if (StringUtils.isNotBlank(buvid3) && StringUtils.isNotBlank(uuid) && StringUtils.isNotBlank(buvidFp)) {
+            return cookie;
+        }
+        if (System.currentTimeMillis() < gaiaEnrollRetryAfter) {
+            return ensureBuvid3(cookie);
+        }
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.USER_AGENT, BiliGaiaFingerprintUtils.USER_AGENT);
+            headers.set(HttpHeaders.REFERER, "https://www.bilibili.com/");
+            headers.set("Origin", "https://www.bilibili.com");
+            if (StringUtils.isBlank(buvid3)) {
+                JsonNode spi = restTemplate.exchange(FINGER_SPI_API, HttpMethod.GET, new HttpEntity<>(null, headers), JsonNode.class).getBody();
+                buvid3 = spi.path("data").path("b_3").asText("");
+                buvid4 = spi.path("data").path("b_4").asText("");
+            }
+            if (StringUtils.isBlank(buvid3)) {
+                throw new IllegalStateException("finger/spi 未返回 buvid3");
+            }
+            String deviceUuid = StringUtils.isNotBlank(uuid) ? uuid : BiliGaiaFingerprintUtils.generateDeviceUuid();
+            List<String> deviceCookies = new ArrayList<>();
+            deviceCookies.add("buvid3=" + buvid3);
+            if (StringUtils.isNotBlank(buvid4)) {
+                deviceCookies.add("buvid4=" + buvid4);
+            }
+            deviceCookies.add("b_nut=" + (StringUtils.isNotBlank(bNut) ? bNut : System.currentTimeMillis() / 1000));
+            deviceCookies.add("_uuid=" + deviceUuid);
+            if (StringUtils.isBlank(buvidFp)) {
+                deviceCookies.add("buvid_fp=" + BiliGaiaFingerprintUtils.computeBuvidFp(buvid3));
+            }
+            if (StringUtils.isBlank(bLsid)) {
+                deviceCookies.add("b_lsid=" + BiliGaiaFingerprintUtils.generateBLsid());
+            }
+            deviceCookies.addAll(BiliGaiaFingerprintUtils.pageBehaviorCookies().stream()
+                    .filter(entry -> StringUtils.isBlank(BiliCookieRefreshUtils.getCookieValue(cookie, entry.split("=", 2)[0])))
+                    .toList());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set(HttpHeaders.COOKIE, String.join("; ", deviceCookies));
+            JsonNode response = restTemplate.exchange(GAIA_REPORT_API, HttpMethod.POST,
+                    new HttpEntity<>(BiliGaiaFingerprintUtils.buildPayload(deviceUuid), headers), JsonNode.class).getBody();
+            if (response == null || response.path("code").asInt(-1) != 0) {
+                log.warn("B站设备指纹建档失败: {}", response == null ? "空响应" : response.path("code") + " " + response.path("message"));
+                gaiaEnrollRetryAfter = System.currentTimeMillis() + Duration.ofMinutes(10).toMillis();
+                return ensureBuvid3(cookie);
+            }
+            String merged = BiliCookieRefreshUtils.mergeCookieHeader(cookie, deviceCookies);
+            if (persist) {
+                settingRepository.save(new Setting(BILIBILI_COOKIE, merged));
+            }
+            log.info("B站设备指纹建档成功(buvid3/buvid4/_uuid/buvid_fp/b_lsid 齐全),写操作风控 -403 应已解除");
+            return merged;
+        } catch (Exception e) {
+            log.warn("B站设备指纹建档异常: {}", e.getMessage());
+            gaiaEnrollRetryAfter = System.currentTimeMillis() + Duration.ofMinutes(10).toMillis();
+            return ensureBuvid3(cookie);
+        }
+    }
+
+    /**
+     * 补齐 bili_ticket(Web 端票据):缺指纹建档靠 ensureGaiaProfile,但能点赞的浏览器 Cookie 还常态携带
+     * bili_ticket/bili_ticket_expires(用户 4567 两份 Cookie 对比实证,2026-10)。经 GenWebTicket 换取并入 Cookie,
+     * 过期前 5 分钟外不再重复获取;失败静默退避(票据非读操作必需)。
+     */
+    private String ensureBiliTicket(String cookie, boolean persist) {
+        if (StringUtils.isBlank(cookie)) {
+            return cookie;
+        }
+        String ticket = BiliCookieRefreshUtils.getCookieValue(cookie, "bili_ticket");
+        long now = System.currentTimeMillis() / 1000;
+        if (StringUtils.isNotBlank(ticket)) {
+            String expires = BiliCookieRefreshUtils.getCookieValue(cookie, "bili_ticket_expires");
+            try {
+                if (StringUtils.isNotBlank(expires) && Long.parseLong(expires) - now > 300) {
+                    return cookie;
+                }
+            } catch (NumberFormatException ignored) {
+                // 过期值损坏按缺失处理
+            }
+        }
+        if (System.currentTimeMillis() < biliTicketRetryAfter) {
+            return cookie;
+        }
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.USER_AGENT, BiliGaiaFingerprintUtils.USER_AGENT);
+            headers.set(HttpHeaders.REFERER, "https://www.bilibili.com/");
+            headers.set(HttpHeaders.COOKIE, cookie);
+            String url = BiliGaiaFingerprintUtils.buildGenWebTicketUrl(
+                    BiliCookieRefreshUtils.getCookieValue(cookie, "bili_jct"), now);
+            JsonNode response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(null, headers), JsonNode.class).getBody();
+            String newTicket = response == null ? "" : response.path("data").path("ticket").asText("");
+            if (StringUtils.isNotBlank(newTicket)) {
+                long expires = response.path("data").path("created_at").asLong(now)
+                        + response.path("data").path("ttl").asLong(259200);
+                String merged = BiliCookieRefreshUtils.mergeCookieHeader(cookie,
+                        List.of("bili_ticket=" + newTicket, "bili_ticket_expires=" + expires));
+                if (persist) {
+                    settingRepository.save(new Setting(BILIBILI_COOKIE, merged));
+                }
+                log.info("B站 bili_ticket 已获取并入 Cookie(写操作风控因子)");
+                return merged;
+            }
+            log.warn("B站 bili_ticket 获取失败: {}", response == null ? "空响应" : response.path("code") + " " + response.path("message"));
+            biliTicketRetryAfter = System.currentTimeMillis() + Duration.ofMinutes(10).toMillis();
+        } catch (Exception e) {
+            log.warn("B站 bili_ticket 获取异常: {}", e.getMessage());
+            biliTicketRetryAfter = System.currentTimeMillis() + Duration.ofMinutes(10).toMillis();
+        }
+        return cookie;
     }
 
     /** @return 动作成功后的新点赞状态(由方向推导,不回查延迟接口) */
@@ -2989,11 +3180,13 @@ public class BiliBiliService {
         }
     }
 
-    /** 表单 POST 到 B站(自动携带 Cookie + urlencoded + 视频页 Referer/Origin,贴近浏览器以过风控),toleratedCodes 之外的错误抛 BadRequestException 携带上游 message。 */
+    /** 表单 POST 到 B站(自动携带 Cookie + urlencoded + 视频页 Referer/Origin,贴近浏览器以过风控),toleratedCodes 之外的错误抛 BadRequestException 携带上游 message。
+     *  UA 钉死建档模板 UA:写操作的设备档案(ExClimbWuzhi payload b8ce)与请求 UA 必须一致,随机池 UA 波动是新档案被拒 -403 的因子。 */
     private JsonNode postForm(String url, MultiValueMap<String, String> form, String referer, int... toleratedCodes) {
         HttpEntity<MultiValueMap<String, String>> entity = buildHttpEntity(form, true, new HashMap<>(Map.of(
                 HttpHeaders.REFERER, referer,
-                "Origin", "https://www.bilibili.com")));
+                "Origin", "https://www.bilibili.com",
+                HttpHeaders.USER_AGENT, BiliGaiaFingerprintUtils.USER_AGENT)));
         ResponseEntity<JsonNode> response = restTemplate.exchange(url, HttpMethod.POST, entity, JsonNode.class);
         JsonNode body = response.getBody();
         int code = body == null ? -1 : body.path("code").asInt(-1);

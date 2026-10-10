@@ -564,11 +564,12 @@ class BiliBiliServiceTest {
     }
 
     @Test
-    void runActionFetchesRealBuvid3WhenCookieLacksIt() throws Exception {
-        // 风控要点:点赞/投币/收藏的 Cookie 必须带真实 buvid3,否则上游可能静默丢弃(返回成功但官网无效果)
+    void runActionFallsBackToGetbuvidWhenGaiaEnrollFails() throws Exception {
+        // 建档失败(spi 未返回 buvid3)须退 ensureBuvid3 语义:Cookie 仍并入 getbuvid 真值,读操作与降级路径不受影响
         when(settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE))
                 .thenReturn(java.util.Optional.of(new cn.har01d.alist_tvbox.entity.Setting(
                         cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE, "SESSDATA=abc; bili_jct=xyz")));
+        stubGetJson("https://api.bilibili.com/x/frontend/finger/spi", "{\"code\":0,\"data\":{}}");
         when(restTemplate.getForObject(eq("https://api.bilibili.com/x/web-frontend/getbuvid"), eq(com.fasterxml.jackson.databind.JsonNode.class)))
                 .thenReturn(new ObjectMapper().readTree("{\"code\":0,\"data\":{\"buvid\":\"REAL-BUVID-123infoc\"}}"));
         stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":0}");
@@ -584,6 +585,128 @@ class BiliBiliServiceTest {
         assertTrue(cookieHeader != null && cookieHeader.contains("buvid3=REAL-BUVID-123infoc"), "Cookie 应并入 getbuvid 真值: " + cookieHeader);
         assertTrue(String.valueOf(captor.getValue().getHeaders().getFirst("Referer")).startsWith("https://www.bilibili.com/video/BV"));
         assertEquals("https://www.bilibili.com", captor.getValue().getHeaders().getFirst("Origin"));
+    }
+
+    @Test
+    void runActionEnrollsDeviceProfileWhenCookieLacksBuvid3() throws Exception {
+        // 扫码登录的 Cookie 只有会话字段:裸 buvid3 无服务端设备档案会被风控拒 -403 账号异常,
+        // 须 finger/spi 取指纹对并向 ExClimbWuzhi 上报建档,设备字段并入 Cookie 持久化
+        when(settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE))
+                .thenReturn(java.util.Optional.of(new cn.har01d.alist_tvbox.entity.Setting(
+                        cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE, "SESSDATA=abc; bili_jct=xyz")));
+        stubGetJson("https://api.bilibili.com/x/frontend/finger/spi", "{\"code\":0,\"data\":{\"b_3\":\"SPI-B3-infoc\",\"b_4\":\"SPI-B4-infoc\"}}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0,\"data\":{\"ticket\":\"TICKET-JWT\",\"created_at\":1791640000,\"ttl\":259200}}")));
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":0}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/web-interface/archive/like"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+
+        service.runAction("116958703918865-40168587741", "like");
+
+        // 建档请求:UA 与指纹模板一致,Cookie 携带全套指纹字段(buvid3/buvid4/b_nut/_uuid/buvid_fp/b_lsid)与页面行为痕迹
+        @SuppressWarnings("rawtypes")
+        org.mockito.ArgumentCaptor<HttpEntity> gaiaCaptor = org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate, org.mockito.Mockito.atLeastOnce()).exchange(eq("https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi"), eq(HttpMethod.POST), gaiaCaptor.capture(), eq(com.fasterxml.jackson.databind.JsonNode.class));
+        assertEquals(cn.har01d.alist_tvbox.util.BiliGaiaFingerprintUtils.USER_AGENT, gaiaCaptor.getValue().getHeaders().getFirst("User-Agent"));
+        String gaiaCookie = String.valueOf(gaiaCaptor.getValue().getHeaders().getFirst("Cookie"));
+        assertTrue(gaiaCookie.contains("buvid3=SPI-B3-infoc") && gaiaCookie.contains("buvid4=SPI-B4-infoc"), gaiaCookie);
+        assertTrue(gaiaCookie.contains("b_nut=") && gaiaCookie.contains("_uuid="), gaiaCookie);
+        assertTrue(gaiaCookie.matches(".*buvid_fp=[0-9a-f]{32}.*"), "buvid_fp 应为 32 位 hex: " + gaiaCookie);
+        assertTrue(gaiaCookie.contains("b_lsid=") && gaiaCookie.contains("innersign=0") && gaiaCookie.contains("browser_resolution="), gaiaCookie);
+        String payload = String.valueOf(gaiaCaptor.getValue().getBody());
+        int uuidStart = gaiaCookie.indexOf("_uuid=") + 6;
+        String uuidValue = gaiaCookie.substring(uuidStart, gaiaCookie.indexOf(';', uuidStart));
+        assertTrue(payload.contains(uuidValue), "payload 的 df35 应与 Cookie 中 _uuid 一致: " + payload);
+
+        // 点赞出站 Cookie 并入建档设备字段,建档结果写回设置(_uuid 为已建档标记)
+        @SuppressWarnings("rawtypes")
+        org.mockito.ArgumentCaptor<HttpEntity> captor = org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate, org.mockito.Mockito.atLeastOnce()).exchange(eq("https://api.bilibili.com/x/web-interface/archive/like"), eq(HttpMethod.POST), captor.capture(), eq(com.fasterxml.jackson.databind.JsonNode.class));
+        String cookieHeader = captor.getValue().getHeaders().getFirst("Cookie");
+        assertTrue(cookieHeader != null && cookieHeader.contains("buvid3=SPI-B3-infoc") && cookieHeader.contains("_uuid="), "Cookie 应并入建档指纹: " + cookieHeader);
+        assertTrue(cookieHeader.matches(".*buvid_fp=[0-9a-f]{32}.*") && cookieHeader.contains("b_lsid="), "Cookie 应并入 buvid_fp/b_lsid: " + cookieHeader);
+        assertTrue(cookieHeader.contains("bili_ticket=TICKET-JWT") && cookieHeader.contains("bili_ticket_expires=1791899200"), "Cookie 应并入 bili_ticket: " + cookieHeader);
+        // 写操作 UA 须与建档设备档案(payload b8ce)一致,随机池 UA 波动是新档案 -403 的因子
+        assertEquals(cn.har01d.alist_tvbox.util.BiliGaiaFingerprintUtils.USER_AGENT, captor.getValue().getHeaders().getFirst("User-Agent"));
+        verify(settingRepository, org.mockito.Mockito.atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(setting ->
+                setting != null && cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE.equals(setting.getName())
+                        && setting.getValue().contains("buvid3=SPI-B3-infoc") && setting.getValue().contains("_uuid=")));
+    }
+
+    @Test
+    void runActionSkipsGaiaEnrollWhenCookieAlreadyEnrolled() throws Exception {
+        // buvid3/_uuid/buvid_fp/bili_ticket 齐全且未过期(浏览器粘贴/已完整建档)= 快路径,不再访问 spi/上报/换票
+        when(settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE))
+                .thenReturn(java.util.Optional.of(new cn.har01d.alist_tvbox.entity.Setting(
+                        cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE,
+                        "SESSDATA=abc; bili_jct=xyz; buvid3=ENROLLED-infoc; buvid4=B4-infoc; _uuid=UUID-infoc; buvid_fp=0123456789abcdef0123456789abcdef; b_lsid=ABC_DEF; bili_ticket=STILL-VALID; bili_ticket_expires=4102444800")));
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":0}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/web-interface/archive/like"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+
+        service.runAction("116958703918865-40168587741", "like");
+
+        verify(restTemplate, never()).exchange(startsWith("https://api.bilibili.com/x/frontend/finger/spi"), eq(HttpMethod.GET), any(), eq(com.fasterxml.jackson.databind.JsonNode.class));
+        verify(settingRepository, never()).save(any(cn.har01d.alist_tvbox.entity.Setting.class));
+    }
+
+    @Test
+    void scanLoginBindsDeviceContextToSession() throws Exception {
+        // 扫码登录链路必须带设备指纹上下文:裸 poll 签发的会话被风控标记,登录后写操作稳定 -403(变体矩阵实验实证)
+        when(settingRepository.findById(cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE))
+                .thenReturn(java.util.Optional.empty());
+        stubGetJson("https://api.bilibili.com/x/frontend/finger/spi", "{\"code\":0,\"data\":{\"b_3\":\"LOGIN-B3-infoc\",\"b_4\":\"LOGIN-B4-infoc\"}}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0,\"data\":{\"ticket\":\"LOGIN-TICKET\",\"created_at\":1791640000,\"ttl\":259200}}")));
+
+        cn.har01d.alist_tvbox.dto.bili.QrCode qrData = new cn.har01d.alist_tvbox.dto.bili.QrCode();
+        qrData.setUrl("https://passport.bilibili.com/h5-app/passportLogin/scan?qrcode_key=KEY");
+        qrData.setQrcodeKey("KEY");
+        cn.har01d.alist_tvbox.dto.bili.BiliBiliQrCodeResponse qrResp = new cn.har01d.alist_tvbox.dto.bili.BiliBiliQrCodeResponse();
+        qrResp.setData(qrData);
+        when(restTemplate.exchange(eq("https://passport.bilibili.com/x/passport-login/web/qrcode/generate"), eq(HttpMethod.GET), any(), eq(cn.har01d.alist_tvbox.dto.bili.BiliBiliQrCodeResponse.class)))
+                .thenReturn(ResponseEntity.ok(qrResp));
+
+        service.scanLogin();
+
+        // generate 携带匿名建档的设备上下文(与建档模板一致的 UA)
+        @SuppressWarnings("rawtypes")
+        org.mockito.ArgumentCaptor<HttpEntity> genCaptor = org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).exchange(eq("https://passport.bilibili.com/x/passport-login/web/qrcode/generate"), eq(HttpMethod.GET), genCaptor.capture(), eq(cn.har01d.alist_tvbox.dto.bili.BiliBiliQrCodeResponse.class));
+        String genCookie = String.valueOf(genCaptor.getValue().getHeaders().getFirst("Cookie"));
+        assertTrue(genCookie.contains("buvid3=LOGIN-B3-infoc"), "generate 应带设备上下文: " + genCookie);
+        assertEquals(cn.har01d.alist_tvbox.util.BiliGaiaFingerprintUtils.USER_AGENT, genCaptor.getValue().getHeaders().getFirst("User-Agent"));
+
+        // poll 成功:同一设备上下文随 poll 发出,新会话与设备字段合并落库(含 bili_ticket)
+        cn.har01d.alist_tvbox.dto.bili.QrCodeResult result = new cn.har01d.alist_tvbox.dto.bili.QrCodeResult();
+        result.setCode(0);
+        result.setRefresh_token("LOGIN-RT");
+        cn.har01d.alist_tvbox.dto.bili.BiliBiliLoginResponse loginResp = new cn.har01d.alist_tvbox.dto.bili.BiliBiliLoginResponse();
+        loginResp.setCode(0);
+        loginResp.setData(result);
+        when(restTemplate.exchange(startsWith("https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=KEY"), eq(HttpMethod.GET), any(), eq(cn.har01d.alist_tvbox.dto.bili.BiliBiliLoginResponse.class)))
+                .thenReturn(ResponseEntity.ok().header("Set-Cookie",
+                        "SESSDATA=NEW-SESS; Path=/; Domain=.bilibili.com",
+                        "bili_jct=NEW-JCT; Path=/; Domain=.bilibili.com",
+                        "DedeUserID=2340134; Path=/",
+                        "sid=NEW-SID; Path=/").body(loginResp));
+
+        assertEquals(0, service.checkLogin("KEY"));
+
+        @SuppressWarnings("rawtypes")
+        org.mockito.ArgumentCaptor<HttpEntity> pollCaptor = org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate, org.mockito.Mockito.atLeastOnce()).exchange(startsWith("https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=KEY"), eq(HttpMethod.GET), pollCaptor.capture(), eq(cn.har01d.alist_tvbox.dto.bili.BiliBiliLoginResponse.class));
+        String pollCookie = String.valueOf(pollCaptor.getValue().getHeaders().getFirst("Cookie"));
+        assertTrue(pollCookie.contains("buvid3=LOGIN-B3-infoc"), "poll 应带设备上下文: " + pollCookie);
+
+        verify(settingRepository, org.mockito.Mockito.atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(setting ->
+                setting != null && cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE.equals(setting.getName())
+                        && setting.getValue().contains("SESSDATA=NEW-SESS") && setting.getValue().contains("buvid3=LOGIN-B3-infoc")
+                        && setting.getValue().contains("_uuid=") && setting.getValue().contains("bili_ticket=LOGIN-TICKET")));
     }
 
     @Test
