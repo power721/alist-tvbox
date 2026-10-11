@@ -301,6 +301,28 @@ class PlayControllerTest {
     }
 
     @Test
+    void playShouldRunBilibiliWatchLaterAction() throws Exception {
+        when(biliBiliService.runActionText("116958703918865", "watchlater")).thenReturn("已加入稍后再看");
+
+        mockMvc.perform(get("/play/test-token").param("id", "biliwatch-116958703918865"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("已加入稍后再看"));
+        verifyNoInteractions(tvBoxService, proxyService, mediaSubscriptionService);
+    }
+
+    @Test
+    void playShouldRouteBilibiliActionIdArrivingAsBvid() throws Exception {
+        // 版本错位兜底(2026-10-11 实战):旧 spider jar 未拦截 biliwatch-,点击走默认播放路径把动作条目 id
+        // 当 bvid 发上来;须归位到 id 分发执行动作,而非拆出 avid=biliwatch 撞 -400 风控文案
+        when(biliBiliService.runActionText("117360333757002", "watchlater")).thenReturn("已加入稍后再看");
+
+        mockMvc.perform(get("/play/test-token").param("bvid", "biliwatch-117360333757002").param("from", "jar"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.msg").value("已加入稍后再看"));
+        verifyNoInteractions(tvBoxService, proxyService, mediaSubscriptionService);
+    }
+
+    @Test
     void playShouldReportBilibiliActionFailureAsMsg() throws Exception {
         // 未登录/投满/上游错误走 msg 通道回执(TVBox 端 Toast),不炸 400
         when(biliBiliService.runActionText("116958703918865", "coin"))

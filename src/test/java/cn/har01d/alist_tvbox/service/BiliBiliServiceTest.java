@@ -398,15 +398,17 @@ class BiliBiliServiceTest {
         stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":1}");
         stubGetJson("https://api.bilibili.com/x/web-interface/archive/coins", "{\"code\":0,\"data\":{\"multiply\":2}}");
         stubGetJson("https://api.bilibili.com/x/v2/fav/video/favoured", "{\"code\":0,\"data\":{\"favoured\":true}}");
+        stubGetJson("https://api.bilibili.com/x/v2/history/toview/web", "{\"code\":0,\"data\":{\"count\":1,\"list\":[{\"aid\":116958703918865}]}}");
 
         Map<String, Object> result = service.getPlayUrl("116958703918865-40168587741", true, "gui");
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> actions = (List<Map<String, Object>>) result.get("actions");
-        assertEquals(3, actions.size());
+        assertEquals(4, actions.size());
         assertEquals(Map.of("id", "like", "icon", "like", "label", "已点赞", "active", true, "enabled", true, "tooltip", "已点赞,点击取消"), actions.get(0));
         assertEquals(Map.of("id", "coin", "icon", "coin", "label", "已投币×2", "active", true, "enabled", false, "tooltip", "已投 2/2 枚"), actions.get(1));
         assertEquals(Map.of("id", "favorite", "icon", "favorite", "label", "已收藏", "active", true, "enabled", true, "tooltip", "已收藏(默认收藏夹),点击取消"), actions.get(2));
+        assertEquals(Map.of("id", "watchlater", "icon", "watchlater", "label", "稍后再看", "active", true, "enabled", true, "tooltip", "已加入稍后再看,点击移出"), actions.get(3));
     }
 
     @Test
@@ -429,7 +431,7 @@ class BiliBiliServiceTest {
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> actions = (List<Map<String, Object>>) result.get("actions");
-        assertEquals(3, actions.size());
+        assertEquals(4, actions.size());
         for (Map<String, Object> actionMap : actions) {
             assertEquals(false, actionMap.get("enabled"));
             assertEquals("未登录 B站,请先在设置中配置 Cookie", actionMap.get("tooltip"));
@@ -445,7 +447,7 @@ class BiliBiliServiceTest {
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> actions = (List<Map<String, Object>>) result.get("actions");
-        assertEquals(3, actions.size());
+        assertEquals(4, actions.size());
         for (Map<String, Object> actionMap : actions) {
             assertEquals(false, actionMap.get("enabled"));
             assertEquals("B站账号未登录或已过期,请更新 Cookie", actionMap.get("tooltip"));
@@ -510,6 +512,61 @@ class BiliBiliServiceTest {
         assertEquals("116958703918865", form.getFirst("rid")); // BV → aid
         assertEquals("2", form.getFirst("type"));
         assertEquals("44233921", form.getFirst("add_media_ids")); // 默认收藏夹,未收藏 → add
+    }
+
+    @Test
+    void runActionWatchLaterAddsWhenNotInList() throws Exception {
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":0}");
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/coins", "{\"code\":0,\"data\":{\"multiply\":0}}");
+        stubGetJson("https://api.bilibili.com/x/v2/fav/video/favoured", "{\"code\":0,\"data\":{\"favoured\":false}}");
+        stubGetJson("https://api.bilibili.com/x/v2/history/toview/web", "{\"code\":0,\"data\":{\"count\":0,\"list\":[]}}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/v2/history/toview/add"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+
+        Map<String, Object> result = service.runAction("116958703918865-40168587741", "watchlater");
+
+        @SuppressWarnings("rawtypes")
+        org.mockito.ArgumentCaptor<HttpEntity> captor = org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).exchange(eq("https://api.bilibili.com/x/v2/history/toview/add"), eq(HttpMethod.POST), captor.capture(), eq(com.fasterxml.jackson.databind.JsonNode.class));
+        @SuppressWarnings("unchecked")
+        org.springframework.util.MultiValueMap<String, String> form = (org.springframework.util.MultiValueMap<String, String>) captor.getValue().getBody();
+        assertEquals("116958703918865", form.getFirst("aid"));
+        assertTrue(form.getFirst("csrf") != null && !form.getFirst("csrf").isBlank());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> refreshed = (List<Map<String, Object>>) result.get("actions");
+        assertEquals(true, refreshed.get(3).get("active"));
+        assertEquals("稍后再看", refreshed.get(3).get("label"));
+    }
+
+    @Test
+    void runActionWatchLaterRemovesWhenInList() throws Exception {
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":0}");
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/coins", "{\"code\":0,\"data\":{\"multiply\":0}}");
+        stubGetJson("https://api.bilibili.com/x/v2/fav/video/favoured", "{\"code\":0,\"data\":{\"favoured\":false}}");
+        // 列表已含该稿(快照=已加入)→ 点击移出走 del 端点
+        stubGetJson("https://api.bilibili.com/x/v2/history/toview/web", "{\"code\":0,\"data\":{\"count\":1,\"list\":[{\"aid\":116958703918865,\"bvid\":\"BV195KY6YEeY\"}]}}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/v2/history/toview/del"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+
+        Map<String, Object> result = service.runAction("116958703918865-40168587741", "watchlater");
+
+        verify(restTemplate).exchange(eq("https://api.bilibili.com/x/v2/history/toview/del"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> refreshed = (List<Map<String, Object>>) result.get("actions");
+        assertEquals(false, refreshed.get(3).get("active"));
+        assertEquals("稍后再看", refreshed.get(3).get("label")); // 标签恒定,active 表状态
+    }
+
+    @Test
+    void runActionTextWatchLaterReportsToggle() throws Exception {
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":0}");
+        stubGetJson("https://api.bilibili.com/x/web-interface/archive/coins", "{\"code\":0,\"data\":{\"multiply\":0}}");
+        stubGetJson("https://api.bilibili.com/x/v2/fav/video/favoured", "{\"code\":0,\"data\":{\"favoured\":false}}");
+        stubGetJson("https://api.bilibili.com/x/v2/history/toview/web", "{\"code\":0,\"data\":{\"count\":0,\"list\":[]}}");
+        when(restTemplate.exchange(eq("https://api.bilibili.com/x/v2/history/toview/add"), eq(HttpMethod.POST), any(), eq(com.fasterxml.jackson.databind.JsonNode.class)))
+                .thenReturn(ResponseEntity.ok(new ObjectMapper().readTree("{\"code\":0}")));
+
+        assertEquals("已加入稍后再看", service.runActionText("116958703918865", "watchlater"));
     }
 
     @Test
@@ -720,7 +777,7 @@ class BiliBiliServiceTest {
         assertFalse(movieDetail.getVod_play_from().contains("操作"), movieDetail.getVod_play_from());
         String firstLine = movieDetail.getVod_play_url().split("\\$\\$\\$", -1)[0];
         assertTrue(firstLine.startsWith("视频$"), firstLine);
-        assertTrue(firstLine.endsWith("互动状态$bilistat-116958703918865#点赞$bililike-116958703918865#投币$bilicoin-116958703918865#收藏$bilifav-116958703918865"), firstLine);
+        assertTrue(firstLine.endsWith("互动状态$bilistat-116958703918865#点赞$bililike-116958703918865#投币$bilicoin-116958703918865#收藏$bilifav-116958703918865#稍后再看$biliwatch-116958703918865"), firstLine);
     }
 
     @Test
@@ -748,7 +805,7 @@ class BiliBiliServiceTest {
         String[] lines = movieDetail.getVod_play_url().split("\\$\\$\\$", -1);
         assertTrue(lines[0].startsWith("视频$"), lines[0]);
         assertFalse(lines[0].contains("bililike-"), lines[0]);
-        assertEquals("互动状态$bilistat-116958703918865#点赞$bililike-116958703918865#投币$bilicoin-116958703918865#收藏$bilifav-116958703918865",
+        assertEquals("互动状态$bilistat-116958703918865#点赞$bililike-116958703918865#投币$bilicoin-116958703918865#收藏$bilifav-116958703918865#稍后再看$biliwatch-116958703918865",
                 lines[lines.length - 1]);
     }
 
@@ -757,8 +814,9 @@ class BiliBiliServiceTest {
         stubGetJson("https://api.bilibili.com/x/web-interface/archive/has/like", "{\"code\":0,\"data\":1}");
         stubGetJson("https://api.bilibili.com/x/web-interface/archive/coins", "{\"code\":0,\"data\":{\"multiply\":1}}");
         stubGetJson("https://api.bilibili.com/x/v2/fav/video/favoured", "{\"code\":0,\"data\":{\"favoured\":true}}");
+        stubGetJson("https://api.bilibili.com/x/v2/history/toview/web", "{\"code\":0,\"data\":{\"count\":0,\"list\":[]}}");
 
-        assertEquals("点赞: 已点赞  投币: 已投 1/2 枚  收藏: 已收藏", service.getActionStatusText("116958703918865"));
+        assertEquals("点赞: 已点赞  投币: 已投 1/2 枚  收藏: 已收藏  稍后再看: 未加入", service.getActionStatusText("116958703918865"));
     }
 
     @Test

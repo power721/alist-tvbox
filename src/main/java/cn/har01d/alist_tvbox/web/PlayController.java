@@ -96,6 +96,13 @@ public class PlayController {
         // com.qingsong.yingmi      影迷
         log.debug("get play url - site: {}  path: {}  id: {}  bvid: {}  type: {}  client: {}", site, path, id, bvid, type, client);
 
+        // 版本错位兜底:旧 spider jar 不含新动作前缀的拦截,点击动作条目会走默认播放路径把条目 id 当 bvid
+        // 发上来(误入 getPlayUrl 拆出 avid=biliwatch,上游 -400 风控文案误导排障);识别动作前缀归位到 id 分发
+        if (StringUtils.isBlank(id) && BiliBiliService.isActionPlayId(bvid)) {
+            id = bvid;
+            bvid = null;
+        }
+
         if (StringUtils.isNotBlank(bvid)) {
             return biliBiliService.getPlayUrl(bvid, dash, client);
         }
@@ -116,6 +123,10 @@ public class PlayController {
 
         if (StringUtils.isNotBlank(id) && id.startsWith(BiliBiliService.BILI_FAV_PLAY_PREFIX)) {
             return biliActionMsg(id, BiliBiliService.BILI_FAV_PLAY_PREFIX, "favorite");
+        }
+
+        if (StringUtils.isNotBlank(id) && id.startsWith(BiliBiliService.BILI_WATCH_PLAY_PREFIX)) {
+            return biliActionMsg(id, BiliBiliService.BILI_WATCH_PLAY_PREFIX, "watchlater");
         }
 
         if (StringUtils.isNotBlank(id) && id.startsWith("msubadd-")) {

@@ -147,6 +147,8 @@ public class BiliBiliService {
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/index/result?st=1&style_id=%s&season_version=-1&spoken_language_type=-1&area=-1&is_finish=%s&copyright=-1&season_status=-1&season_month=-1&year=%s&order=0&sort=0&page=%d&season_type=%s&pagesize=30&type=1";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s&view_at=%s";
     private static final String WATCHLATER_API = "https://api.bilibili.com/x/v2/history/toview/web";
+    private static final String WATCHLATER_ADD_API = "https://api.bilibili.com/x/v2/history/toview/add";
+    private static final String WATCHLATER_DEL_API = "https://api.bilibili.com/x/v2/history/toview/del";
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
     private static final String PLAY_API = "https://api.bilibili.com/x/player/wbi/playurl";
     private static final String PLAY_API_NOT_DASH = "https://api.bilibili.com/x/player/wbi/playurl";
@@ -170,11 +172,22 @@ public class BiliBiliService {
     private static final String FAV_FOLDER_API = "https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=%s&type=2&rid=%s";
     private static final String FINGER_SPI_API = "https://api.bilibili.com/x/frontend/finger/spi";
     private static final String GAIA_REPORT_API = "https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi";
-    /** TVBox 详情点赞/投币/收藏条目 id 前缀(载荷 aid,条目并入首线路),与追剧 msubstat-/msubcheck- 家族同款形态 */
+    /** TVBox 详情点赞/投币/收藏/稍后再看条目 id 前缀(载荷 aid,条目并入首线路),与追剧 msubstat-/msubcheck- 家族同款形态 */
     public static final String BILI_STAT_PLAY_PREFIX = "bilistat-";
     public static final String BILI_LIKE_PLAY_PREFIX = "bililike-";
     public static final String BILI_COIN_PLAY_PREFIX = "bilicoin-";
     public static final String BILI_FAV_PLAY_PREFIX = "bilifav-";
+    public static final String BILI_WATCH_PLAY_PREFIX = "biliwatch-";
+
+    /** @return 播放参数是否为 B站详情动作条目 id(任一动作前缀);新增动作前缀须同步收录。 */
+    public static boolean isActionPlayId(String value) {
+        if (StringUtils.isBlank(value)) {
+            return false;
+        }
+        return value.startsWith(BILI_STAT_PLAY_PREFIX) || value.startsWith(BILI_LIKE_PLAY_PREFIX)
+                || value.startsWith(BILI_COIN_PLAY_PREFIX) || value.startsWith(BILI_FAV_PLAY_PREFIX)
+                || value.startsWith(BILI_WATCH_PLAY_PREFIX);
+    }
     public static final String RELATED_API = "https://api.bilibili.com/x/web-interface/archive/related?bvid=%s";
     // dynamic/region 已被 B 站下线(-404),改走 newlist:结构同为 data.archives,仅认主分区 rid,且 page.count 恒 0
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/newlist?ps=%d&rid=%s&pn=%d&type=0";
@@ -368,17 +381,19 @@ public class BiliBiliService {
         List<String> channelOffsets = new ArrayList<>();
     }
 
-    /** 详情动作(点赞/投币/收藏)状态:has/like 等接口有近期窗口与同步延迟,点击瞬间的重查可能和
+    /** 详情动作(点赞/投币/收藏/稍后再看)状态:has/like 等接口有近期窗口与同步延迟,点击瞬间的重查可能和
      *  加载时(客户端按钮所见)不一致,导致首次点击方向反了、要点两次 —— 翻转方向一律取加载时快照。 */
     static final class ActionState {
         final boolean liked;
         final int coins;
         final boolean favoured;
+        final boolean watchLater;
 
-        ActionState(boolean liked, int coins, boolean favoured) {
+        ActionState(boolean liked, int coins, boolean favoured, boolean watchLater) {
             this.liked = liked;
             this.coins = coins;
             this.favoured = favoured;
+            this.watchLater = watchLater;
         }
     }
 
@@ -1885,7 +1900,7 @@ public class BiliBiliService {
         BiliBiliInfo info = cache.get(bvid);
         MovieDetail movieDetail = getMovieDetail(info, client, true);
 
-        // 点赞/投币/收藏条目(「互动状态」零副作用占位守在动作之前,防自动下一集/误按直接撞上有副作用的动作;
+        // 点赞/投币/收藏/稍后再看条目(「互动状态」零副作用占位守在动作之前,防自动下一集/误按直接撞上有副作用的动作;
         // gui/atv-player 不下发,动作按钮由 getPlayUrl 的 actions 键下发)。默认并入第一条 BiliBili 线路
         // (视频条目之后 # 追加,选集网格直接可见,OK影视等内核自动下一集不跨线路、不会越界打断相关视频连播);
         // 开关 bilibili_action_separate_line=true 时单独「操作」线路,置于线路末位(相关视频/UP主视频之后)
@@ -1896,7 +1911,8 @@ public class BiliBiliService {
             biliActions = "互动状态$" + BILI_STAT_PLAY_PREFIX + actionAid
                     + "#点赞$" + BILI_LIKE_PLAY_PREFIX + actionAid
                     + "#投币$" + BILI_COIN_PLAY_PREFIX + actionAid
-                    + "#收藏$" + BILI_FAV_PLAY_PREFIX + actionAid;
+                    + "#收藏$" + BILI_FAV_PLAY_PREFIX + actionAid
+                    + "#稍后再看$" + BILI_WATCH_PLAY_PREFIX + actionAid;
             if (!separateActionLine) {
                 movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "#" + biliActions);
             }
@@ -2377,7 +2393,7 @@ public class BiliBiliService {
         result.put("danmaku", "https://comment.bilibili.com/" + cid + ".xml");
 
         if ("gui".equals(client)) {
-            // atv-player 详情动作(点赞/投币/收藏):三个状态查询并发,失败兜底默认态不影响播放
+            // atv-player 详情动作(点赞/投币/收藏/稍后再看):状态查询并发,失败兜底默认态不影响播放
             java.util.concurrent.CompletableFuture<List<Map<String, Object>>> actionsFuture =
                     java.util.concurrent.CompletableFuture.supplyAsync(() -> getActions(aid));
             result.put("actions", actionsFuture.join());
@@ -2466,7 +2482,7 @@ public class BiliBiliService {
         return list;
     }
 
-    /** 详情动作(点赞/投币/收藏)按钮清单:未登录(无 csrf)禁用并提示;状态查询失败兜底默认态。 */
+    /** 详情动作(点赞/投币/收藏/稍后再看)按钮清单:未登录(无 csrf)禁用并提示;状态查询失败兜底默认态。 */
     List<Map<String, Object>> getActions(String aid) {
         List<Map<String, Object>> actions = new ArrayList<>();
         String cookie = resolveCookie();
@@ -2475,6 +2491,7 @@ public class BiliBiliService {
             actions.add(action("like", "like", "点赞", false, false, "未登录 B站,请先在设置中配置 Cookie"));
             actions.add(action("coin", "coin", "投币", false, false, "未登录 B站,请先在设置中配置 Cookie"));
             actions.add(action("favorite", "favorite", "收藏", false, false, "未登录 B站,请先在设置中配置 Cookie"));
+            actions.add(action("watchlater", "watchlater", "稍后再看", false, false, "未登录 B站,请先在设置中配置 Cookie"));
             return actions;
         }
         // 探针:SESSDATA 失效(如内置共享 cookie 过期)上游回 -101,按钮禁用提示更新而非可点必败
@@ -2483,26 +2500,32 @@ public class BiliBiliService {
             actions.add(action("like", "like", "点赞", false, false, "B站账号未登录或已过期,请更新 Cookie"));
             actions.add(action("coin", "coin", "投币", false, false, "B站账号未登录或已过期,请更新 Cookie"));
             actions.add(action("favorite", "favorite", "收藏", false, false, "B站账号未登录或已过期,请更新 Cookie"));
+            actions.add(action("watchlater", "watchlater", "稍后再看", false, false, "B站账号未登录或已过期,请更新 Cookie"));
             return actions;
         }
         var coinFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> coinCount(aid));
         var favFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> isFavoured(aid));
+        var watchLaterFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> isInWatchLater(aid));
         boolean liked = likeNode != null && likeNode.path("data").asInt(0) == 1;
         int coins = coinFuture.join();
         boolean favoured = favFuture.join();
+        boolean watchLater = watchLaterFuture.join();
 
-        actionStates.put(aid, new ActionState(liked, coins, favoured));
+        actionStates.put(aid, new ActionState(liked, coins, favoured, watchLater));
         // 状态入文案 + icon 字段(客户端按 active 切换 filled/outline 图标),点击后即时可见
-        return buildActions(liked, coins, favoured);
+        return buildActions(liked, coins, favoured, watchLater);
     }
 
-    private List<Map<String, Object>> buildActions(boolean liked, int coins, boolean favoured) {
+    private List<Map<String, Object>> buildActions(boolean liked, int coins, boolean favoured, boolean watchLater) {
         List<Map<String, Object>> actions = new ArrayList<>();
         actions.add(action("like", "like", liked ? "已点赞" : "点赞", liked, true, liked ? "已点赞,点击取消" : "点赞"));
         actions.add(action("coin", "coin", coins > 0 ? "已投币×" + coins : "投币", coins > 0, coins < 2,
                 coins <= 0 ? "投 1 枚硬币" : "已投 " + coins + "/2 枚" + (coins < 2 ? ",点击再投 1 枚" : "")));
         actions.add(action("favorite", "favorite", favoured ? "已收藏" : "收藏", favoured, true,
                 favoured ? "已收藏(默认收藏夹),点击取消" : "收藏到默认收藏夹"));
+        // 「稍后再看」是列表名非动词,active 态沿用原标签(B站 web 同款),选中色/填充图标表达状态
+        actions.add(action("watchlater", "watchlater", "稍后再看", watchLater, true,
+                watchLater ? "已加入稍后再看,点击移出" : "加入稍后再看列表(上限 100 个)"));
         return actions;
     }
 
@@ -2519,7 +2542,7 @@ public class BiliBiliService {
         return map;
     }
 
-    /** atv-player 详情动作入口:点赞(toggle)/投币(+1,上限 2)/收藏(toggle 默认收藏夹);返回刷新后的完整按钮清单。 */
+    /** atv-player 详情动作入口:点赞(toggle)/投币(+1,上限 2)/收藏(toggle 默认收藏夹)/稍后再看(toggle);返回刷新后的完整按钮清单。 */
     public Map<String, Object> runAction(String vodId, String action) {
         String aid = resolveAid(vodId);
         String cookie = resolveCookie();
@@ -2529,23 +2552,25 @@ public class BiliBiliService {
         }
         // 翻转方向取加载时快照(客户端按钮所见):点击瞬间重查状态接口可能抖动出相反值,
         // 方向反了就表现为"要点两次";动作成功后的状态由动作本身推导并回写快照
-        ActionState state = actionStates.get(aid, k -> new ActionState(hasLiked(aid), coinCount(aid), isFavoured(aid)));
+        ActionState state = actionStates.get(aid, k -> new ActionState(hasLiked(aid), coinCount(aid), isFavoured(aid), isInWatchLater(aid)));
         boolean liked = state.liked;
         int coins = state.coins;
         boolean favoured = state.favoured;
+        boolean watchLater = state.watchLater;
         switch (StringUtils.defaultString(action)) {
             case "like" -> liked = like(aid, csrf, liked);
             case "coin" -> coins = coin(aid, csrf, coins);
             case "favorite" -> favoured = favorite(aid, cookie, csrf, favoured);
+            case "watchlater" -> watchLater = toggleWatchLater(aid, csrf, watchLater);
             default -> throw new BadRequestException("未知详情动作: " + action);
         }
-        actionStates.put(aid, new ActionState(liked, coins, favoured));
+        actionStates.put(aid, new ActionState(liked, coins, favoured, watchLater));
         Map<String, Object> result = new HashMap<>();
-        result.put("actions", buildActions(liked, coins, favoured));
+        result.put("actions", buildActions(liked, coins, favoured, watchLater));
         return result;
     }
 
-    /** TVBox「操作」线路「点赞/投币/收藏」的 msg 回执文案:新状态由动作结果推导(runAction 成功必回写快照),不回查有延迟的状态接口。 */
+    /** TVBox「操作」线路「点赞/投币/收藏/稍后再看」的 msg 回执文案:新状态由动作结果推导(runAction 成功必回写快照),不回查有延迟的状态接口。 */
     public String runActionText(String vodId, String action) {
         runAction(vodId, action);
         ActionState state = actionStates.getIfPresent(resolveAid(vodId));
@@ -2556,15 +2581,16 @@ public class BiliBiliService {
             case "like" -> state.liked ? "点赞成功" : "已取消点赞";
             case "coin" -> "投币成功: 已投 " + state.coins + "/2 枚";
             case "favorite" -> state.favoured ? "收藏成功(默认收藏夹)" : "已取消收藏";
+            case "watchlater" -> state.watchLater ? "已加入稍后再看" : "已移出稍后再看";
             default -> "操作已执行";
         };
     }
 
-    /** TVBox「操作」线路首条「互动状态」:零副作用,msg 回显点赞/投币/收藏当前状态;未登录/过期回显原因。 */
+    /** TVBox「操作」线路首条「互动状态」:零副作用,msg 回显点赞/投币/收藏/稍后再看当前状态;未登录/过期回显原因。 */
     public String getActionStatusText(String vodId) {
         String aid = resolveAid(vodId);
         List<Map<String, Object>> actions = getActions(aid);
-        // 未登录/过期分支:三钮禁用且 tooltip 即原因(不落快照,不能读旧快照冒充当前状态)
+        // 未登录/过期分支:按钮禁用且 tooltip 即原因(不落快照,不能读旧快照冒充当前状态)
         if (!Boolean.TRUE.equals(actions.get(0).get("enabled"))) {
             return String.valueOf(actions.get(0).getOrDefault("tooltip", "当前状态不可用"));
         }
@@ -2574,7 +2600,8 @@ public class BiliBiliService {
         }
         return "点赞: " + (state.liked ? "已点赞" : "未点赞")
                 + "  投币: " + (state.coins > 0 ? "已投 " + state.coins + "/2 枚" : "未投币")
-                + "  收藏: " + (state.favoured ? "已收藏" : "未收藏");
+                + "  收藏: " + (state.favoured ? "已收藏" : "未收藏")
+                + "  稍后再看: " + (state.watchLater ? "已加入" : "未加入");
     }
 
     /**
@@ -3171,6 +3198,15 @@ public class BiliBiliService {
         return !currentFavoured;
     }
 
+    /** @return 动作成功后的新稍后再看状态(方向取快照;90001 列表已满等上游错误码转文案抛出)。 */
+    private boolean toggleWatchLater(String aid, String csrf, boolean currentWatchLater) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("aid", aid);
+        form.add("csrf", csrf);
+        postForm(currentWatchLater ? WATCHLATER_DEL_API : WATCHLATER_ADD_API, form, videoReferer(aid));
+        return !currentWatchLater;
+    }
+
     /** 浏览器从视频页发起这些操作,Referer 对齐视频页(av2bv 失败退站点根)。 */
     private String videoReferer(String aid) {
         try {
@@ -3224,6 +3260,20 @@ public class BiliBiliService {
     private boolean isFavoured(String aid) {
         JsonNode node = getJsonNode(String.format(FAVOURED_API, aid));
         return node != null && node.path("data").path("favoured").asBoolean(false);
+    }
+
+    /** 稍后再看列表是否已含该稿(toview/web 单接口全量≤100 条,与 getWatchLater 同源);未登录/失败兜底未加入。 */
+    private boolean isInWatchLater(String aid) {
+        JsonNode node = getJsonNode(WATCHLATER_API);
+        if (node == null || node.path("code").asInt(-1) != 0) {
+            return false;
+        }
+        for (JsonNode video : node.path("data").path("list")) {
+            if (aid.equals(video.path("aid").asText())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public String getSubtitle(String url) {
