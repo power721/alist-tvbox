@@ -204,6 +204,16 @@ class PluginServiceTest {
     }
 
     @Test
+    void pythonPluginClassifierShouldAcceptUriIllegalCharactersInFileName() {
+        // 文件名含 URI 非法字符时 URI.create 抛 Illegal character in path,须回退字符串判定 (#1081)
+        assertThat(PluginService.isPythonPluginUrl("/static/plugins/[短]红豆短剧.py")).isTrue();
+        assertThat(PluginService.isPythonPluginUrl("/static/plugins/红豆 短剧.py")).isTrue();
+        assertThat(PluginService.isPythonPluginUrl("https://example.com/a[b].py?raw=1")).isTrue();
+        assertThat(PluginService.isPythonPluginUrl("/static/plugins/[短]红豆短剧.txt")).isFalse();
+        assertThat(PluginService.isPythonPluginUrl("/static/plugins/[短]红豆短剧.py.bak")).isFalse();
+    }
+
+    @Test
     void updateShouldRedownloadWhenUrlChangesAndReplaceContent() {
         Plugin plugin = new Plugin();
         plugin.setId(15);

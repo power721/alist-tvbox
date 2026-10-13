@@ -251,6 +251,26 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    void fileBackedPluginWithUriIllegalFileNameShouldServeRawPython() {
+        // static/plugins/ 扫描出的 url 不编码,方括号/空格文件名曾让明文 .py 误判为加密 .txt 下发 (#1081)
+        Plugin plugin = new Plugin();
+        plugin.setId(9);
+        plugin.setName("[短]红豆短剧");
+        plugin.setUrl("/static/plugins/[短]红豆短剧.py");
+
+        assertThat(SubscriptionService.pluginContentUrl("http://atv", "web", plugin))
+                .isEqualTo("http://atv/plugins/web/9.py");
+        Map<String, Object> payload = SubscriptionService.buildPluginExtPayload(
+                plugin, "http://atv", "web", "vod-token", "secret", false, Map.of());
+        assertThat(payload)
+                .containsEntry("loader", "http://atv/Atvp.py?v=preheat-v1")
+                .containsEntry("source", "http://atv/plugins/web/9.py")
+                .containsEntry("raw", true);
+        assertThat(SubscriptionService.selectPluginApi(plugin, true, "http://atv"))
+                .isEqualTo("csp_PyProxy");
+    }
+
+    @Test
     void encryptedTxtPluginShouldKeepSourceAndNativePythonModeBehavior() {
         Plugin plugin = new Plugin();
         plugin.setId(8);

@@ -726,11 +726,14 @@ public class PluginService {
     }
 
     static boolean isPythonPluginUrl(String url) {
+        String trimmed = StringUtils.trimToEmpty(url);
         try {
-            String path = URI.create(StringUtils.trimToEmpty(url)).getPath();
-            return StringUtils.endsWithIgnoreCase(path, ".py");
-        } catch (Exception e) {
-            return false;
+            return StringUtils.endsWithIgnoreCase(URI.create(trimmed).getPath(), ".py");
+        } catch (IllegalArgumentException e) {
+            // 文件名含 []、空格等 URI 非法字符时 URI.create 抛异常(static/plugins/ 扫描出的 url 不编码),
+            // 回退字符串判定:误判 false 会让明文 .py 按加密 .txt 下发,客户端解密失败搜索无结果 (#1081)
+            String path = trimmed.split("[?#]", 2)[0];
+            return StringUtils.endsWithIgnoreCase(path.substring(path.lastIndexOf('/') + 1), ".py");
         }
     }
 
