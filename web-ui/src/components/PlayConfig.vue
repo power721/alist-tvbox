@@ -662,6 +662,9 @@ onUnmounted(() => {
           </div>
           <el-table v-else :data="playbackTokens" size="small" border class="no-hover" style="width: 100%">
             <el-table-column prop="name" label="名称" min-width="120"/>
+            <el-table-column label="关联 Token" min-width="140">
+              <template #default="{ row }">{{ row.syncScopeLabel || '全局互通' }}</template>
+            </el-table-column>
             <el-table-column prop="token" label="令牌" min-width="240">
               <template #default="{ row }">
                 <span class="token-text">{{ row.token }}</span>

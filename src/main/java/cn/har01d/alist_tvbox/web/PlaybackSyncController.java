@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.playback.PlaybackScopeDto;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncPage;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncInput;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackDeleteInput;
@@ -97,8 +98,15 @@ public class PlaybackSyncController {
     public Page<PlaybackSyncInput> records(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int pageSize,
-            @RequestParam(required = false) Boolean webPlayable) {
-        return playbackSyncService.list(currentUid(), page, pageSize, Boolean.TRUE.equals(webPlayable));
+            @RequestParam(required = false) Boolean webPlayable,
+            @RequestParam(required = false) String scope) {
+        return playbackSyncService.list(currentUid(), page, pageSize, Boolean.TRUE.equals(webPlayable), scope);
+    }
+
+    /** 播放记录页「按安全 Token 筛选」的分区选项(含展示名)。 */
+    @GetMapping("/api/playback/records/-/scopes")
+    public List<PlaybackScopeDto> scopes() {
+        return playbackSyncService.listScopes(currentUid());
     }
 
     @GetMapping("/api/playback/records/-/item")

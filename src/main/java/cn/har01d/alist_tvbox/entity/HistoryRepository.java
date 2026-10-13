@@ -20,6 +20,16 @@ public interface HistoryRepository extends JpaRepository<History, Integer> {
     /** 「网页播放」筛选:仅返回 sourceKey 命中可播放白名单的记录。 */
     Page<History> findPageByUidAndSourceKeyIn(int uid, Collection<String> sourceKeys, Pageable pageable);
 
+    /** 管理页「按安全 Token 筛选」:uid 级分区(全局互通)。 */
+    Page<History> findPageByUidAndSourceKindIsNotNullAndSyncScopeIsNull(int uid, Pageable pageable);
+
+    /** 管理页「按安全 Token 筛选」:指定同步分区(安全 Token 或 token/订阅id)。 */
+    Page<History> findPageByUidAndSourceKindIsNotNullAndSyncScope(int uid, String syncScope, Pageable pageable);
+
+    /** 该用户现存记录出现过的同步分区(distinct,含 null 行=uid 级),供筛选选项。 */
+    @Query("SELECT DISTINCT h.syncScope FROM History h WHERE h.uid = :uid AND h.sourceKind IS NOT NULL")
+    List<String> findDistinctSyncScope(@Param("uid") int uid);
+
     List<History> findAllByUidAndSourceKindAndSourceKeyAndVodId(
             int uid, String sourceKind, String sourceKey, String vodId);
 

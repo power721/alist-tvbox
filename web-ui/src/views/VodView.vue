@@ -30,6 +30,11 @@
             <el-radio-button value="web">网页播放</el-radio-button>
             <el-radio-button value="sync">多端同步</el-radio-button>
           </el-radio-group>
+          <el-select v-if="isHistory&&historySource==='sync'" v-model="historyScope"
+                     @change="changeHistorySource" clearable placeholder="全部分区" style="width: 170px">
+            <el-option v-for="item in historyScopes" :key="item.scope ?? '-'"
+                       :label="item.label" :value="item.scope ?? '-'"/>
+          </el-select>
           <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源"
                     style="width: 300px;">
             <template #append>
@@ -131,6 +136,9 @@
             </el-table-column>
             <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
             <el-table-column prop="source_label" label="来源" width="160" v-if="isHistory&&historySource==='sync'"/>
+            <el-table-column label="Token" width="150" v-if="isHistory&&historySource==='sync'">
+              <template #default="scope">{{ scopeLabelOf(scope.row.sync_scope) }}</template>
+            </el-table-column>
             <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
             <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
             <el-table-column width="140" v-if="isHistory">
@@ -217,6 +225,9 @@
             </el-table-column>
             <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
             <el-table-column prop="source_label" label="来源" width="160" v-if="isHistory&&historySource==='sync'"/>
+            <el-table-column label="Token" width="150" v-if="isHistory&&historySource==='sync'">
+              <template #default="scope">{{ scopeLabelOf(scope.row.sync_scope) }}</template>
+            </el-table-column>
             <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
             <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
             <el-table-column width="140" v-if="isHistory">
@@ -900,6 +911,21 @@ const settingVisible = ref(false)
 const addVisible = ref(false)
 const isHistory = ref(false)
 const historySource = ref('sync')
+// 按安全 Token(同步分区)筛选播放记录:''=全部;'-'=uid 级(全局互通);其它=具体分区
+const historyScope = ref('')
+const historyScopes = ref<{ scope: string | null, label: string }[]>([])
+
+const loadHistoryScopes = () => {
+  axios.get('/api/playback/records/-/scopes').then(({data}) => {
+    historyScopes.value = data
+  }).catch(() => {})
+}
+
+const scopeLabelOf = (scope: string | null | undefined) => {
+  const key = scope ?? '-'
+  const hit = historyScopes.value.find(item => (item.scope ?? '-') === key)
+  return hit ? hit.label : key
+}
 // 网页端可直接续播的来源(须与后端 PlaybackSyncService.WEB_PLAYABLE_SITE_KEYS 保持一致)
 const WEB_PLAYABLE_SOURCE_KEYS = new Set([
   'csp_AList', 'csp_XiaoYa',
@@ -2179,8 +2205,10 @@ const getHistory = (id: string, sourceKey: string = 'csp_AList') => {
 }
 
 const loadHistory = () => {
+  loadHistoryScopes()
   const url = '/api/playback/records?page=' + (page.value - 1) + '&pageSize=' + size.value
     + (historySource.value === 'web' ? '&webPlayable=true' : '')
+    + (historySource.value === 'sync' && historyScope.value ? '&scope=' + encodeURIComponent(historyScope.value) : '')
   axios.get(url).then(({data}) => {
     total.value = data.totalElements
     files.value = data.content.map(e => ({
@@ -2195,6 +2223,7 @@ const loadHistory = () => {
       source_label: e.sourceName || e.sourceKey || e.sourceKind,
       source_kind: e.sourceKind,
       source_key: e.sourceKey,
+      sync_scope: e.syncScope,
       sync_record: true,
     }))
     isHistory.value = true

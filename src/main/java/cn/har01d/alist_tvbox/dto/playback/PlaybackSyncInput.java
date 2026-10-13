@@ -44,6 +44,8 @@ public class PlaybackSyncInput {
     private String driveShareKey;
     private String drivePath;
     private String event;
+    /** 记录归属的同步分区(只读展示字段,服务端 toInput 填充;入站 fromMap 不解析,恒由令牌身份决定)。 */
+    private String syncScope;
 
     /** webhtv 客户端按 siteKey 读取来源标识;序列化时随 sourceKey 一并输出,兼容 Fish/默影视。 */
     public String getSiteKey() {

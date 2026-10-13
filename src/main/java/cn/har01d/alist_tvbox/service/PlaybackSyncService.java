@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.auth.TokenService;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackDeleteInput;
+import cn.har01d.alist_tvbox.dto.playback.PlaybackScopeDto;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncInput;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackSyncPage;
 import cn.har01d.alist_tvbox.dto.playback.PlaybackTokenDto;
@@ -14,6 +15,8 @@ import cn.har01d.alist_tvbox.entity.PlaybackToken;
 import cn.har01d.alist_tvbox.entity.PlaybackTokenRepository;
 import cn.har01d.alist_tvbox.entity.PlaybackTombstone;
 import cn.har01d.alist_tvbox.entity.PlaybackTombstoneRepository;
+import cn.har01d.alist_tvbox.entity.Subscription;
+import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -39,6 +42,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
+import static cn.har01d.alist_tvbox.util.Constants.USER_TOKEN_PREFIX;
 
 /**
  * 多端播放记录同步核心服务。
@@ -79,6 +84,7 @@ public class PlaybackSyncService {
     private final PlaybackTokenRepository tokenRepository;
     private final PlaybackTombstoneRepository tombstoneRepository;
     private final PlaybackChangeSequenceRepository changeSequenceRepository;
+    private final SubscriptionRepository subscriptionRepository;
     private final TokenService tokenService;
     private final AppProperties appProperties;
     private final ProxyService proxyService;
@@ -541,24 +547,54 @@ public class PlaybackSyncService {
     /** 分页返回该用户数据库中的同步记录，页码从 0 开始。 */
     @Transactional(readOnly = true)
     public Page<PlaybackSyncInput> list(int uid, int page, int pageSize) {
-        return list(uid, page, pageSize, false);
+        return list(uid, page, pageSize, false, null);
+    }
+
+    /** 分页返回该用户数据库中的同步记录，页码从 0 开始。 */
+    @Transactional(readOnly = true)
+    public Page<PlaybackSyncInput> list(int uid, int page, int pageSize, boolean webPlayable) {
+        return list(uid, page, pageSize, webPlayable, null);
     }
 
     /**
      * 分页返回该用户数据库中的同步记录，页码从 0 开始。
      *
      * @param webPlayable true = 仅返回网页端可播放的来源(「网页播放」tab);false = 全部(「多端同步」tab)
+     * @param scope 同步分区筛选:null/空白 = 全部;"-" = uid 级(syncScope 为空,全局互通);其它 = 精确匹配
      */
     @Transactional(readOnly = true)
-    public Page<PlaybackSyncInput> list(int uid, int page, int pageSize, boolean webPlayable) {
+    public Page<PlaybackSyncInput> list(int uid, int page, int pageSize, boolean webPlayable, String scope) {
         int safePage = Math.max(page, 0);
         int safePageSize = pageSize > 0 && pageSize <= MAX_LIMIT ? pageSize : DEFAULT_LIMIT;
         PageRequest pageable = PageRequest.of(safePage, safePageSize,
                 Sort.by(Sort.Direction.DESC, "updatedAt", "id"));
-        Page<History> rows = webPlayable
-                ? historyRepository.findPageByUidAndSourceKeyIn(uid, WEB_PLAYABLE_SITE_KEYS, pageable)
-                : historyRepository.findPageByUidAndSourceKindIsNotNull(uid, pageable);
+        Page<History> rows;
+        if (scope != null && !scope.isBlank()) {
+            String trimmed = scope.trim();
+            rows = "-".equals(trimmed)
+                    ? historyRepository.findPageByUidAndSourceKindIsNotNullAndSyncScopeIsNull(uid, pageable)
+                    : historyRepository.findPageByUidAndSourceKindIsNotNullAndSyncScope(uid, trimmed, pageable);
+        } else if (webPlayable) {
+            rows = historyRepository.findPageByUidAndSourceKeyIn(uid, WEB_PLAYABLE_SITE_KEYS, pageable);
+        } else {
+            rows = historyRepository.findPageByUidAndSourceKindIsNotNull(uid, pageable);
+        }
         return rows.map(this::toInput);
+    }
+
+    /** 播放记录页「按安全 Token 筛选」的分区选项:来自该用户现存记录的 distinct syncScope。 */
+    @Transactional(readOnly = true)
+    public List<PlaybackScopeDto> listScopes(int uid) {
+        List<PlaybackScopeDto> result = new ArrayList<>();
+        for (String scope : historyRepository.findDistinctSyncScope(uid)) {
+            PlaybackScopeDto dto = new PlaybackScopeDto();
+            dto.setScope(scope);
+            dto.setLabel(scope == null ? "全局互通" : scopeLabel(scope));
+            result.add(dto);
+        }
+        result.sort(Comparator.comparing(PlaybackScopeDto::getScope,
+                Comparator.nullsFirst(Comparator.naturalOrder())));
+        return result;
     }
 
     /** 按跨端身份返回单条记录，供网页播放器恢复其他设备上报的进度。 */
@@ -1194,6 +1230,7 @@ public class PlaybackSyncService {
         in.setDriveDirId(h.getDriveDirId());
         in.setDriveShareKey(h.getDriveShareKey());
         in.setDrivePath(h.getDrivePath());
+        in.setSyncScope(h.getSyncScope());
         return in;
     }
 
@@ -1213,9 +1250,52 @@ public class PlaybackSyncService {
         dto.setId(t.getId());
         dto.setName(t.getName());
         dto.setToken(mask ? maskToken(t.getToken()) : t.getToken());
+        dto.setSyncScope(t.getSyncScope());
+        dto.setSyncScopeLabel(scopeLabel(t.getSyncScope()));
         dto.setCreatedTime(t.getCreatedTime());
         dto.setLastUsedAt(t.getLastUsedAt());
         return dto;
+    }
+
+    /**
+     * 同步分区展示名:u-{username} → 「用户 {username}」(用户名禁含 '-',凭证形态按首个 '-' 截取);
+     * {token}/{订阅id} → 基础名 + 「 · 订阅 {名称|#id}」;共享 token 等其它形态 → 脱敏原值。
+     * uid 级(null)返回 null,由前端显示「全局互通」。
+     */
+    private String scopeLabel(String syncScope) {
+        if (syncScope == null || syncScope.isBlank()) {
+            return null;
+        }
+        String scope = syncScope.trim();
+        String suffix = "";
+        int slash = scope.indexOf('/');
+        if (slash >= 0) {
+            suffix = " · " + subscriptionLabel(scope.substring(slash + 1));
+            scope = scope.substring(0, slash);
+        }
+        if (scope.startsWith(USER_TOKEN_PREFIX)) {
+            String rest = scope.substring(USER_TOKEN_PREFIX.length());
+            int dash = rest.indexOf('-');
+            String username = dash >= 0 ? rest.substring(0, dash) : rest;
+            if (!username.isBlank()) {
+                return "用户 " + username + suffix;
+            }
+        }
+        return maskToken(scope) + suffix;
+    }
+
+    /** 订阅分区后缀(id)的展示:能查到订阅用名称,否则回落「订阅 #id」。 */
+    private String subscriptionLabel(String id) {
+        String raw = id.trim();
+        try {
+            Subscription sub = subscriptionRepository.findById(Integer.parseInt(raw)).orElse(null);
+            if (sub != null && sub.getName() != null && !sub.getName().isBlank()) {
+                return "订阅 " + clamp(sub.getName(), 40);
+            }
+        } catch (NumberFormatException ignored) {
+            // 非数字后缀(异常数据):按原值展示
+        }
+        return "订阅 #" + raw;
     }
 
     private String maskToken(String token) {
