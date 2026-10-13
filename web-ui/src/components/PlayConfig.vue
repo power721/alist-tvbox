@@ -663,7 +663,11 @@ onUnmounted(() => {
           <el-table v-else :data="playbackTokens" size="small" border class="no-hover" style="width: 100%">
             <el-table-column prop="name" label="名称" min-width="120"/>
             <el-table-column label="关联 Token" min-width="140">
-              <template #default="{ row }">{{ row.syncScopeLabel || '全局互通' }}</template>
+              <template #default="{ row }">
+                <el-tooltip :content="row.syncScope" :disabled="!row.syncScope" placement="top">
+                  <span>{{ row.syncScopeLabel || '全局互通' }}</span>
+                </el-tooltip>
+              </template>
             </el-table-column>
             <el-table-column prop="token" label="令牌" min-width="240">
               <template #default="{ row }">

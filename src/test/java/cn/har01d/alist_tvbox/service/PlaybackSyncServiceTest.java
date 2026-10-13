@@ -504,17 +504,20 @@ class PlaybackSyncServiceTest {
         sub.setName("客厅电视");
         when(subscriptionRepository.findById(3)).thenReturn(java.util.Optional.of(sub));
         when(subscriptionRepository.findById(99)).thenReturn(java.util.Optional.empty());
+        // 默认共享 token 恰为 8 字符(Utils.generateUsername):不得被全遮成 "****"
         when(historyRepository.findDistinctSyncScope(UID))
-                .thenReturn(new ArrayList<>(Arrays.asList("shared-tok123456", "u-alice", "u-bob/99", "u-alice/3", null)));
+                .thenReturn(new ArrayList<>(Arrays.asList(
+                        "shared-tok123456", "ab12Cd34", "u-alice", "u-bob/99", "u-alice/3", null)));
 
         List<PlaybackScopeDto> scopes = service.listScopes(UID);
 
         // uid 级(null)排最前;其余按 scope 字典序
         assertThat(scopes).extracting(PlaybackScopeDto::getScope)
-                .containsExactly(null, "shared-tok123456", "u-alice", "u-alice/3", "u-bob/99");
+                .containsExactly(null, "ab12Cd34", "shared-tok123456", "u-alice", "u-alice/3", "u-bob/99");
         assertThat(scopes).extracting(PlaybackScopeDto::getLabel)
                 .containsExactly(
                         "全局互通",
+                        "ab12Cd34",
                         "shar...3456",
                         "用户 alice",
                         "用户 alice · 订阅 客厅电视",

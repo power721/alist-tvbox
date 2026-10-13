@@ -1281,7 +1281,20 @@ public class PlaybackSyncService {
                 return "用户 " + username + suffix;
             }
         }
-        return maskToken(scope) + suffix;
+        return maskScope(scope) + suffix;
+    }
+
+    /**
+     * 分区展示脱敏:默认共享 token 恰为 8 字符(Utils.generateUsername),
+     * 走 maskToken 会被全遮成 "****" 失去区分度(即 #1080 要解决的区分)。
+     * 短 token 完整显示——共享分区只归 ADMIN(播放令牌按用户回落建主),本人界面上
+     * 本就可见完整 token;长者保留前4后4。
+     */
+    private String maskScope(String scope) {
+        if (scope.length() <= 8) {
+            return scope;
+        }
+        return maskToken(scope);
     }
 
     /** 订阅分区后缀(id)的展示:能查到订阅用名称,否则回落「订阅 #id」。 */

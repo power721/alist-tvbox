@@ -137,7 +137,11 @@
             <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
             <el-table-column prop="source_label" label="来源" width="160" v-if="isHistory&&historySource==='sync'"/>
             <el-table-column label="Token" width="150" v-if="isHistory&&historySource==='sync'">
-              <template #default="scope">{{ scopeLabelOf(scope.row.sync_scope) }}</template>
+              <template #default="scope">
+                <el-tooltip :content="scope.row.sync_scope" :disabled="!scope.row.sync_scope" placement="top">
+                  <span>{{ scopeLabelOf(scope.row.sync_scope) }}</span>
+                </el-tooltip>
+              </template>
             </el-table-column>
             <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
             <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
@@ -226,7 +230,11 @@
             <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
             <el-table-column prop="source_label" label="来源" width="160" v-if="isHistory&&historySource==='sync'"/>
             <el-table-column label="Token" width="150" v-if="isHistory&&historySource==='sync'">
-              <template #default="scope">{{ scopeLabelOf(scope.row.sync_scope) }}</template>
+              <template #default="scope">
+                <el-tooltip :content="scope.row.sync_scope" :disabled="!scope.row.sync_scope" placement="top">
+                  <span>{{ scopeLabelOf(scope.row.sync_scope) }}</span>
+                </el-tooltip>
+              </template>
             </el-table-column>
             <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
             <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
