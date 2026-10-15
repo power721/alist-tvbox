@@ -62,6 +62,10 @@ import java.util.stream.Collectors;
  * 302 到 43.248.128.118:12512),补直连终点入池首位;木偶 666.666291.xyz 提首位(服务存活,
  * 部分网络环境 444 拒连,探测兜底),停放页 muou.site 降后;闪电 shandian.blog、多多 tv.214521.xyz
  * 实测存活提首位;欧哥/虎斑入口未变。
+ * <p>2026-10-15 pan-site-monitor 恢复更新(9 站全 success),按其 /api/data 同步:玩偶剔两个
+ * DNS 已亡的 xxooo.cf 域名、www.wogg.net 提首位;蜡笔 tvpanpan.site 复活提回首位;花卷/快映
+ * 补挂 monitorKey(monitor 的「小斑」键即 :12512 快映池);二小 monitor 虽删键、2xiaopan.one
+ * 实测仍存活,种子不动。
  *
  * <p>站点域名池 = 静态种子 ∪ 监控服务(pan-site-monitor)下发的候选(含其标记失败的域名,
  * 可能复活);本服务定时主动探测各域名可达性与延迟(判定参考自建 domain-monitor:200 且
@@ -142,11 +146,11 @@ public class WanouSearchService {
                             "https://tv.yydsys.top", "https://pan.yydsys.de"),
                     null, 10, null, null),
             new Site("wanou", "玩偶", "玩偶",
-                    List.of("https://woggpan.xxooo.cf", "https://wogg.xxooo.cf", "https://woggpan.888484.xyz",
-                            "https://www.wogg.net", "https://www.wogg.live"),
+                    List.of("https://www.wogg.net", "https://woggpan.888484.xyz", "https://www.wogg.live"),
                     "/vodsearch/-------------.html?wd={keyword}&page={page}", 10, null, null),
-            // 快映:与虎斑同款裸 IP 轮换(38.76.197.172:12521 实测 302 到 43.248.128.118:12512),直连终点居首省一跳
-            new Site("kuaiying", "快映", null,
+            // 快映:与虎斑同款裸 IP 轮换(38.76.197.172:12521 实测 302 到 43.248.128.118:12512),直连终点居首省一跳;
+            // monitor 的「小斑」键跟踪的就是这个 :12512 池(站名两个叫法),裸 IP 轮换入口靠监控下发新地址
+            new Site("kuaiying", "快映", "小斑",
                     List.of("http://43.248.128.118:12512", "http://38.76.197.172:12521",
                             "http://xsayang.fun:12512", "http://103.45.162.207:12512"),
                     null, 10, null, null),
@@ -156,7 +160,7 @@ public class WanouSearchService {
             new Site("biaoge", "表哥", null,
                     List.of("http://xn--4yqy17f.xn--yi7aa.vip:3155"),
                     null, 10, null, null),
-            new Site("huajuan", "花卷", null,
+            new Site("huajuan", "花卷", "花卷",
                     List.of("https://www.hjzhencai.top"),
                     null, 10, ".module-card-item-poster", ".down-card-url"),
             // 欧歌/虎斑:2026-09-26 随 py 复活回归;详情形状是 module-row-info 容器文本自身(标准站是其下 p)
@@ -173,10 +177,10 @@ public class WanouSearchService {
             new Site("erxiao", "二小", "二小",
                     List.of("https://www.2xiaopan.one", "https://www.2xiaopan.top", "https://www.wexwp.cc"),
                     null, 10, null, null),
-            // 蜡笔:2026-10-01 换域名——tvpanpan.site 实测已死、新入口 www.mmpanpan.site 存活居首;
-            // 旧主入口与 xiaocgege.shop(CF 409)降为恢复候选,探测复活自动顶回
+            // 蜡笔:2026-10-01 tvpanpan.site 实测已死换 mmpanpan.site 居首,2026-10-15 随 monitor 复活提回首位;
+            // xiaocgege.shop(CF 409)保持恢复候选,探测复活自动顶回
             new Site("labi", "蜡笔", "蜡笔",
-                    List.of("https://www.mmpanpan.site", "http://tvpanpan.site",
+                    List.of("http://tvpanpan.site", "https://www.mmpanpan.site",
                             "http://www.xiaocgege.shop", "http://xiaocgege.shop"),
                     null, 10, null, null));
 

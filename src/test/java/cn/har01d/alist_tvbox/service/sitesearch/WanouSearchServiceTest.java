@@ -237,7 +237,7 @@ class WanouSearchServiceTest {
                 if (url.startsWith("https://tv.yydsys.top") && url.contains("/vod/search/")) {
                     return SEARCH_HTML;
                 }
-                if (url.startsWith("https://woggpan.xxooo.cf") && url.contains("/vodsearch/")) {
+                if (url.startsWith("https://www.wogg.net") && url.contains("/vodsearch/")) {
                     return """
                             <div class="module-search-item">
                               <a class="video-serial" href="/voddetail/2.html" title="难哄"></a>
