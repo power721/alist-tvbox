@@ -33,6 +33,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -263,9 +264,23 @@ public class ProxyService {
     public void downloadStraight(String url, HttpServletRequest request, HttpServletResponse response, Map<String, String> headers) throws IOException {
         HttpURLConnection urlConnection = openConnection(url, headers);
         urlConnection.setRequestMethod(request.getMethod());
-        response.setStatus(urlConnection.getResponseCode());
+        int status = urlConnection.getResponseCode();
+        response.setStatus(status);
         urlConnection.getHeaderFields().forEach((key, value) -> response.setHeader(key, value.get(0)));
-        copyAndCloseInput(urlConnection.getInputStream(), response.getOutputStream());
+        // 上游 4xx/5xx 时 getInputStream() 会抛异常,真实状态码和错误体(如夸克 CDN 412 风控页)
+        // 被 Spring 包成 500 白板、客户端无从辨别;改读 getErrorStream() 原样透传,并留一段日志便于排查
+        InputStream stream = status >= 400 ? urlConnection.getErrorStream() : urlConnection.getInputStream();
+        if (stream == null) {
+            return;
+        }
+        OutputStream output = response.getOutputStream();
+        if (status >= 400) {
+            byte[] prefix = stream.readNBytes(2048);
+            log.warn("proxy upstream {}: {} body={}", status, url,
+                    StringUtils.abbreviate(new String(prefix, StandardCharsets.UTF_8), 200));
+            output.write(prefix);
+        }
+        copyAndCloseInput(stream, output);
     }
 
     private static void copyAndCloseInput(InputStream is, OutputStream os) throws IOException {
