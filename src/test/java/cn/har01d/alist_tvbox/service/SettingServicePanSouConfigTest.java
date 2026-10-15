@@ -83,9 +83,10 @@ class SettingServicePanSouConfigTest {
     }
 
     @Test
-    void blankLinkCheckTypesBecomesNull() {
+    void blankLinkCheckTypesBecomesEmptyList() {
+        // parseList 空白不再返回 null(#1083):下游 CollectionUtils.isEmpty 对空列表同样回落默认全量可检类型
         service.update(new Setting("pan_sou_link_check_types", ""));
-        assertNull(appProperties.getPanSouLinkCheckTypes());
+        assertTrue(appProperties.getPanSouLinkCheckTypes().isEmpty());
     }
 
     @Test

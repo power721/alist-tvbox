@@ -217,9 +217,10 @@ public class SettingService {
         }
     }
 
+    /** 空白返回空列表而非 null:调用方有 String.join(",", ...) 直接消费,null 会 NPE(live 平台管理空保存,#1083)。 */
     private List<String> parseList(String value) {
         if (StringUtils.isBlank(value)) {
-            return null;
+            return List.of();
         }
         return Arrays.stream(value.split(",")).map(String::trim).filter(StringUtils::isNotBlank).toList();
     }
