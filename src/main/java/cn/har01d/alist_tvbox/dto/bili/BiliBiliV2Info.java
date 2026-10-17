@@ -41,7 +41,7 @@ public class BiliBiliV2Info {
 
     @Data
     public static class Owner {
-        private long mid;
+        private long memberId;
         private String name;
         private String face;
     }
