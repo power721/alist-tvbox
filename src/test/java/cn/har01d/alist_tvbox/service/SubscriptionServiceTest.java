@@ -227,7 +227,7 @@ class SubscriptionServiceTest {
         assertThat(SubscriptionService.selectPluginApi(plugin, false, "http://atv"))
                 .isEqualTo("csp_PyProxy");
         assertThat(payload)
-                .containsEntry("loader", "http://atv/Atvp.py?v=preheat-v1")
+                .containsEntry("loader", "http://atv/Atvp.py?v=" + SubscriptionService.ATVP_RUNTIME_REVISION)
                 .containsEntry("source", "http://atv/plugins/web/7.py")
                 .containsEntry("raw", true)
                 .containsEntry("api", "http://atv")
@@ -263,7 +263,7 @@ class SubscriptionServiceTest {
         Map<String, Object> payload = SubscriptionService.buildPluginExtPayload(
                 plugin, "http://atv", "web", "vod-token", "secret", false, Map.of());
         assertThat(payload)
-                .containsEntry("loader", "http://atv/Atvp.py?v=preheat-v1")
+                .containsEntry("loader", "http://atv/Atvp.py?v=" + SubscriptionService.ATVP_RUNTIME_REVISION)
                 .containsEntry("source", "http://atv/plugins/web/9.py")
                 .containsEntry("raw", true);
         assertThat(SubscriptionService.selectPluginApi(plugin, true, "http://atv"))
@@ -282,7 +282,7 @@ class SubscriptionServiceTest {
                 plugin, "http://atv", "web", "", "secret", true, localProxyConfig);
 
         assertThat(SubscriptionService.selectPluginApi(plugin, true, "http://atv"))
-                .isEqualTo("http://atv/Atvp.py?v=preheat-v1");
+                .isEqualTo("http://atv/Atvp.py?v=" + SubscriptionService.ATVP_RUNTIME_REVISION);
         assertThat(SubscriptionService.selectPluginApi(plugin, false, "http://atv"))
                 .isEqualTo("csp_PyProxy");
         assertThat(payload)
@@ -295,7 +295,7 @@ class SubscriptionServiceTest {
         Map<String, Object> javaPayload = SubscriptionService.buildPluginExtPayload(
                 plugin, "http://atv", "web", "", "secret", false, localProxyConfig);
         assertThat(javaPayload)
-                .containsEntry("loader", "http://atv/Atvp.py?v=preheat-v1")
+                .containsEntry("loader", "http://atv/Atvp.py?v=" + SubscriptionService.ATVP_RUNTIME_REVISION)
                 .containsEntry("local_proxy_config", localProxyConfig);
     }
 

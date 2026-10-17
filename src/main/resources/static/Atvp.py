@@ -227,6 +227,13 @@ class Spider(HostSpider):
         source_text = package_text if self._is_raw_source(payload) else self._decrypt_secspider_source(package_text)
         spider_cls = self._load_inner_spider_class(source_text)
         self._inner = spider_cls()
+        # 宿主标记: inner 据此感知自己运行在 TVBox(Atvp)环境。
+        # 如红果据此在 playerContent 里经 hgdanmaku:// 标记下发弹幕(由 spring.jar
+        # VideoStreamProxy 原生拉取), atv-player 直载宿主不打标记, 走 danmakuContent。
+        try:
+            self._inner._atvp_host = True
+        except Exception:
+            pass
         result = self._inner.init(inner_extend)
         self._filters = self._load_filters(payload)
         return result
