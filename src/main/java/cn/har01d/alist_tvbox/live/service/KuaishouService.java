@@ -349,15 +349,16 @@ public class KuaishouService implements LivePlatform {
         return result;
     }
 
-    private void parsePlayUrls(MovieDetail movieDetail, JsonNode playUrls) {
+    void parsePlayUrls(MovieDetail movieDetail, JsonNode playUrls) {
         try {
-            List<String> playFrom = new ArrayList<>();
-            List<String> playUrlList = new ArrayList<>();
-
-            JsonNode adaptationSet = playUrls.path("h264").path("adaptationSet");
-            JsonNode representations = adaptationSet.path("representation");
-
-            if (representations.isArray()) {
+            List<String> urls = new ArrayList<>();
+            // H.265 里可能有 H.264 没有的档位(4K、蓝光质臻):两套都列,hevc 档位带标记排在 h264 之后
+            for (String codec : new String[]{"h264", "hevc"}) {
+                boolean hevc = codec.equals("hevc");
+                JsonNode representations = playUrls.path(codec).path("adaptationSet").path("representation");
+                if (!representations.isArray()) {
+                    continue;
+                }
                 List<JsonNode> qualityList = new ArrayList<>();
                 representations.forEach(qualityList::add);
                 // 按level降序排序
@@ -367,19 +368,20 @@ public class KuaishouService implements LivePlatform {
                     return Integer.compare(levelB, levelA);
                 });
 
-                List<String> urls = new ArrayList<>();
                 for (JsonNode quality : qualityList) {
                     String name = quality.path("name").asText();
+                    if (hevc) {
+                        name += "·H.265";
+                    }
                     String url = quality.path("url").asText();
                     urls.add(name + "$" + url);
                 }
-
-                playFrom.add("原画");
-                playUrlList.add(String.join("#", urls));
             }
 
-            movieDetail.setVod_play_from(String.join("$$$", playFrom));
-            movieDetail.setVod_play_url(String.join("$$$", playUrlList));
+            if (!urls.isEmpty()) {
+                movieDetail.setVod_play_from("原画");
+                movieDetail.setVod_play_url(String.join("#", urls));
+            }
         } catch (Exception e) {
             log.error("快手播放URL解析失败", e);
         }

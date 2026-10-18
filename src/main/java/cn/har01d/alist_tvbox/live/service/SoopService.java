@@ -15,6 +15,7 @@ import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -96,9 +97,9 @@ public class SoopService implements LivePlatform {
         for (JsonNode item : broad) {
             MovieDetail detail = new MovieDetail();
             detail.setVod_id(getType() + "$" + item.path("user_id").asText());
-            detail.setVod_name(item.path("broad_title").asText());
+            detail.setVod_name(soopText(item.path("broad_title").asText()));
             detail.setVod_pic(fixUrl(item.path("broad_thumb").asText()));
-            detail.setVod_actor(item.path("user_nick").asText());
+            detail.setVod_actor(soopText(item.path("user_nick").asText()));
             detail.setVod_remarks(playCount(item.path("current_view_cnt")));
             list.add(detail);
         }
@@ -150,9 +151,9 @@ public class SoopService implements LivePlatform {
         for (JsonNode item : items) {
             MovieDetail detail = new MovieDetail();
             detail.setVod_id(getType() + "$" + item.path("user_id").asText());
-            detail.setVod_name(item.path("broad_title").asText());
+            detail.setVod_name(soopText(item.path("broad_title").asText()));
             detail.setVod_pic(fixUrl(item.path("thumbnail").asText()));
-            detail.setVod_actor(item.path("user_nick").asText());
+            detail.setVod_actor(soopText(item.path("user_nick").asText()));
             detail.setVod_remarks(playCount(item.path("view_cnt")));
             list.add(detail);
         }
@@ -190,9 +191,9 @@ public class SoopService implements LivePlatform {
         for (JsonNode item : getJson(SCH_URL, params).path("REAL_BROAD")) {
             MovieDetail detail = new MovieDetail();
             detail.setVod_id(getType() + "$" + item.path("user_id").asText());
-            detail.setVod_name(item.path("broad_title").asText());
+            detail.setVod_name(soopText(item.path("broad_title").asText()));
             detail.setVod_pic(fixUrl(item.path("broad_img").asText()));
-            detail.setVod_actor(item.path("user_nick").asText());
+            detail.setVod_actor(soopText(item.path("user_nick").asText()));
             detail.setVod_remarks(playCount(item.path("current_view_cnt")));
             list.add(detail);
         }
@@ -236,9 +237,9 @@ public class SoopService implements LivePlatform {
         JsonNode viewpreset = data == null ? null : data.path("viewpreset");
         boolean live = viewpreset != null && viewpreset.isArray() && !viewpreset.isEmpty();
         if (data != null) {
-            detail.setVod_name(data.path("broad_title").asText(bjId));
+            detail.setVod_name(soopText(data.path("broad_title").asText(bjId)));
             detail.setVod_pic(fixUrl(data.path("thumbnail").asText()));
-            detail.setVod_actor(data.path("user_nick").asText());
+            detail.setVod_actor(soopText(data.path("user_nick").asText()));
             JsonNode tags = data.path("category_tags");
             detail.setType_name(tags.isArray() && !tags.isEmpty() ? tags.get(0).asText() : "");
             detail.setVod_remarks(live ? playCount(data.path("view_cnt")) : "未开播");
@@ -355,5 +356,13 @@ public class SoopService implements LivePlatform {
             return "https:" + url;
         }
         return url;
+    }
+
+    // SOOP 的标题与昵称带 HTML 实体(&amp; 之类),展示前解码
+    private static String soopText(String text) {
+        if (text == null || text.isEmpty() || !text.contains("&")) {
+            return text;
+        }
+        return HtmlUtils.htmlUnescape(text);
     }
 }

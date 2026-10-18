@@ -589,19 +589,41 @@ public class DouyinService implements LivePlatform {
         JsonNode room = data.path("room");
         JsonNode owner = room.path("owner");
         JsonNode user = data.path("user");
-        int status = room.path("status").asInt();
-        boolean isLive = status == 2;
+        boolean isLive = douyinIsLive(room, data);
 
         detail.setVod_name(room.path("title").asText());
         detail.setVod_pic(getFirstUrl(room.path("cover").path("url_list")));
         detail.setVod_actor(isLive ? owner.path("nickname").asText() : user.path("nickname").asText());
         detail.setVod_remarks(room.path("room_view_stats").path("display_value").asText());
         detail.setVod_content(owner.path("signature").asText());
+        detail.setType_name(douyinArea(room, data.path("partition_road_map")));
 
         if (isLive) {
             JsonNode streamUrl = room.path("stream_url");
             parsePlayUrls(detail, streamUrl);
         }
+    }
+
+    // room.status 优先(2=直播中),缺失时看信封 room_status(0=直播中),两者都没有按未开播
+    static boolean douyinIsLive(JsonNode room, JsonNode envelope) {
+        JsonNode status = room.path("status");
+        if (status.isValueNode() && !status.asText("").isBlank()) {
+            return status.asInt(-1) == 2;
+        }
+        return envelope.path("room_status").asInt(-1) == 0;
+    }
+
+    // 分区优先游戏名(game_tag_name),否则取 partition_road_map 最具体一层(子分区再到分区)
+    static String douyinArea(JsonNode room, JsonNode roadMap) {
+        String gameName = room.path("game_data").path("game_tag_info").path("game_tag_name").asText("").trim();
+        if (!gameName.isEmpty()) {
+            return gameName;
+        }
+        String sub = roadMap.path("sub_partition").path("partition").path("title").asText("").trim();
+        if (!sub.isEmpty()) {
+            return sub;
+        }
+        return roadMap.path("partition").path("title").asText("").trim();
     }
 
     private void parseRoomDetailFromHtml(MovieDetail detail, JsonNode state, String webRid) {

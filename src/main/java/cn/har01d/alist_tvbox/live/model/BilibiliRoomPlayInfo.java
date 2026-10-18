@@ -6,6 +6,8 @@ import java.util.List;
 
 @Data
 public class BilibiliRoomPlayInfo {
+    // 0=未开播 1=直播中 2=轮播
+    private int live_status;
     private PlayInfo playurl_info;
 
     @Data

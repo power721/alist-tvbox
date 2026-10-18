@@ -428,7 +428,14 @@ public class BilibiliService implements LivePlatform {
         var response = restTemplate.exchange(url, HttpMethod.GET, buildHttpEntity(null), BilibiliRoomPlayResponse.class).getBody();
 
         // 房间未开播时接口不返回 playurl_info,无流可播;返回后 vod_play_url 为空即"未开播"标记
-        if (response == null || response.getData() == null || response.getData().getPlayurl_info() == null) {
+        if (response == null || response.getData() == null) {
+            return;
+        }
+        if (response.getData().getPlayurl_info() == null) {
+            // 轮播房(live_status=2)播的是循环视频:getRoundPlayVideo 拿稿件,x/player/playurl(html5)取 MP4
+            if (response.getData().getLive_status() == 2) {
+                resolveCarouselVideo(movieDetail, id);
+            }
             return;
         }
 
@@ -460,6 +467,47 @@ public class BilibiliService implements LivePlatform {
 
         movieDetail.setVod_play_from(String.join("$$$", playFrom));
         movieDetail.setVod_play_url(String.join("$$$", playUrl));
+    }
+
+    private void resolveCarouselVideo(MovieDetail movieDetail, String id) {
+        try {
+            var round = restTemplate.exchange("https://api.live.bilibili.com/live/getRoundPlayVideo?room_id=" + id,
+                    HttpMethod.GET, buildHttpEntity(null), ObjectNode.class).getBody();
+            if (round == null || round.path("code").asInt(-1) != 0) {
+                return;
+            }
+            String bvid = round.path("data").path("bvid").asText("");
+            long cid = round.path("data").path("cid").asLong(0);
+            if (cid <= 0 || !bvid.matches("BV[0-9A-Za-z]{10}")) {
+                log.debug("B站轮播房无正在循环的稿件: {}", id);
+                return;
+            }
+            String url = "https://api.bilibili.com/x/player/playurl?bvid=" + bvid + "&cid=" + cid
+                    + "&qn=80&fnval=0&fnver=0&fourk=1&platform=html5&high_quality=1";
+            var play = restTemplate.exchange(url, HttpMethod.GET, buildHttpEntity(null), ObjectNode.class).getBody();
+            if (play == null || play.path("code").asInt(-1) != 0) {
+                return;
+            }
+            List<String> urls = new ArrayList<>();
+            for (JsonNode part : play.path("data").path("durl")) {
+                String raw = part.path("url").asText("");
+                if (raw.startsWith("http") && !urls.contains(raw)) {
+                    urls.add(raw);
+                }
+                for (JsonNode backup : part.path("backup_url")) {
+                    raw = backup.asText("");
+                    if (raw.startsWith("http") && !urls.contains(raw)) {
+                        urls.add(raw);
+                    }
+                }
+            }
+            if (!urls.isEmpty()) {
+                movieDetail.setVod_play_from("轮播");
+                movieDetail.setVod_play_url(String.join("#", urls));
+            }
+        } catch (Exception e) {
+            log.warn("B站轮播房取流失败: {}", id, e);
+        }
     }
 
     private String getRealRoomId(String roomId) {

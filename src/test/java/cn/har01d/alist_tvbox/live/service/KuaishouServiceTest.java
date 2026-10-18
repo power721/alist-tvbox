@@ -61,4 +61,47 @@ class KuaishouServiceTest {
         assertTrue(service.parseAuthorSearch(objectMapper.readTree("{\"data\":{\"list\":[]}}")).isEmpty());
         assertTrue(service.parseAuthorSearch(objectMapper.readTree("{\"result\":10,\"data\":null}")).isEmpty());
     }
+
+    @Test
+    void parsePlayUrlsListsHevcOnlyQualitiesAfterH264() throws Exception {
+        // H.265 里有 H.264 没有的档位(4K、蓝光质臻):两套都列,hevc 档位带标记排在 h264 之后
+        String body = """
+                {"h264":{"adaptationSet":{"representation":[
+                  {"name":"原画","url":"https://h.flv","level":0},
+                  {"name":"超清","url":"https://h2.flv","level":2}
+                ]}},
+                 "hevc":{"adaptationSet":{"representation":[
+                  {"name":"蓝光质臻","url":"https://e.flv","level":66},
+                  {"name":"4K","url":"https://e2.flv","level":70}
+                ]}}}""";
+        var detail = new cn.har01d.alist_tvbox.tvbox.MovieDetail();
+        service.parsePlayUrls(detail, objectMapper.readTree(body));
+        assertEquals("原画", detail.getVod_play_from());
+        // h264 按 level 降序在前,hevc 同样降序在后
+        assertEquals("超清$https://h2.flv#原画$https://h.flv"
+                + "#4K·H.265$https://e2.flv#蓝光质臻·H.265$https://e.flv", detail.getVod_play_url());
+    }
+
+    @Test
+    void parsePlayUrlsH264OnlyKeepsLegacyShape() throws Exception {
+        String body = """
+                {"h264":{"adaptationSet":{"representation":[
+                  {"name":"原画","url":"https://h.flv","level":0}
+                ]}}}""";
+        var detail = new cn.har01d.alist_tvbox.tvbox.MovieDetail();
+        service.parsePlayUrls(detail, objectMapper.readTree(body));
+        assertEquals("原画", detail.getVod_play_from());
+        assertEquals("原画$https://h.flv", detail.getVod_play_url());
+    }
+
+    @Test
+    void parsePlayUrlsEmptyShapesLeavePlayableBlank() throws Exception {
+        var detail = new cn.har01d.alist_tvbox.tvbox.MovieDetail();
+        service.parsePlayUrls(detail, objectMapper.readTree("{}"));
+        // 无任何可播档位:不设线路,等效未开播标记
+        assertEquals(null, detail.getVod_play_from());
+        service.parsePlayUrls(detail, objectMapper.readTree(
+                "{\"h264\":{\"adaptationSet\":{\"representation\":[]}},\"hevc\":{\"adaptationSet\":{}}}"));
+        assertEquals(null, detail.getVod_play_from());
+    }
 }

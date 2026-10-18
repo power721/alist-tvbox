@@ -304,7 +304,8 @@ public class HuyaService implements LivePlatform {
                     }
                     url += "&cdn=" + cdn + "&name=" + streamName + "&uid=" + puid;
                     String qualityName = bitRateInfo.getSDisplayName();
-                    if (!qualityName.contains("HDR")) {
+                    // 4K 是 VIP 房间专属档位且播放需要虎牙 VIP 会员身份,普通用户选中只会 403;"4K HDR" 形态已被 HDR 过滤覆盖
+                    if (!qualityName.contains("HDR") && !qualityName.equals("4K")) {
                         urls.add(qualityName + "$" + buildProxyUrl(url));
                     }
                 }
