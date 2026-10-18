@@ -11,7 +11,11 @@
 
 2026-09-15 追记：潇洒**在线接口**迁至 `https://9877.kstore.space/sun.json`——2423 开头的 hex 密文（内嵌 `$#密钥#$`，AES/CBC/PKCS5，FongMi `Decoder.cbc` / `SubscriptionService.convertResult` 同源算法），解密后是完整 TVBox 配置（非市场 json，无「本地包/点击下载」）。xs.txt 曾改指 sun.json，消费端 `FileDownloader` 随之双模式化：指针内容解密后按市场（数组含 zip 链接）走原 zip 流程、按配置（对象含 sites）直接落盘为 `/static/xs/TVBoxOSC/tvbox/api.json`（订阅地址不变）。同日 `8866033.xyz` 整域失效，xs.txt/xs.version.txt 固定回 `d.har01d.cn` 单镜像；xs.txt 已由作者手工指回 single.json（走 zip 流程），双模式支持保留——指针在市场/接口两种形态间切换均可工作。生产端 `xs-version-sync.sh` 逻辑不变，下次版本号变化仍按 zip 内 ext 重写 xs.txt。
 
-2026-10-17 追记：**生产端镜像化改造**。家宽/企业路由器安全过滤（趋势科技 AiProtection 类，本机实证 cat_id=75 恶意站点类）大量拦截 `kstore.space` 整域——消费端 443 握手失败（`SSLException: Unsupported or unrecognized SSL message`）、HTTP 被劫持为路由器拦截页，潇洒包更新全军覆没；而阿里云同步侧访问 kstore 一切正常（上游也在正常发版，版本号 10.16 已同步）。定论：不是上游死了，是消费端网络到上游的路径被过滤。修复=生产端把已下载的 zip（`xs-package.zip`）与「点击下载」地址改写为本站 zip 的市场 json（`xs-single.json`）一并镜像到 `d.har01d.cn`，xs.txt **固定指向 `https://d.har01d.cn/xs-single.json`**（不再写上游 ext，ext 仅记日志观察指针动向）——消费端**零改动、零发版**，全程只访问 d.har01d.cn，对任何被过滤网络免疫。消费端双模式支持保留：若上游彻底转向 sun.json 接口形态，改 xs.txt 指向即可。落盘顺序=先 zip 后市场 json 最后 xs.txt，xs.txt 指到的资源必须先就位。
+2026-10-17 追记：**镜像化 + 多地址回退**。家宽/企业路由器安全过滤（趋势科技 AiProtection 类，本机实证 cat_id=75 恶意站点类）大量拦截 `kstore.space` 整域——消费端 443 握手失败（`SSLException: Unsupported or unrecognized SSL message`）、HTTP 被劫持为路由器拦截页，潇洒包更新全军覆没；而阿里云同步侧访问 kstore 一切正常（上游也在正常发版，版本号 10.16 已同步）。定论：不是上游死了，是消费端网络到上游的路径被过滤。
+
+修复分两层（生产端 dc494ebf 终态）：
+- **生产端镜像**：xs-version-sync.sh 把已下载的 zip（`xs-package.zip`）与「点击下载」地址改写为本站 zip 的市场 json（`xs-single.json`）一并镜像到 `d.har01d.cn`。落盘顺序=先 zip 后市场 json 最后 xs.txt，xs.txt 指到的资源必须先就位。
+- **xs.txt 多行指针 + 消费端按序回退**：服务器带宽小，正常流量必须走上游。xs.txt 写两行——首行上游原始地址（zip 内 api.json 的 csp_Market ext，上游随包迁移自动跟随）、次行本站镜像。消费端 `parseXsUrls` 解析全部非空行（去重保序），`downloadXs` 逐候选尝试完整链路（指针 json → zip 下载 → 解压 → 落版本），单候选失败只告警不抛、降级下一候选，全部失败才上抛走重试。老版消费端只读首行=纯上游行为（被过滤网络须升级新版才恢复，接受）。上游 ext 若转 sun.json 接口形态，首行即接口指针，回退行仍是 zip 流程，双模式兼容。
 
 ## 2. 目标
 
