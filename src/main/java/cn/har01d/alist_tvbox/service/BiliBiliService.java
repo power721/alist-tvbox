@@ -2390,7 +2390,7 @@ public class BiliBiliService {
         result.put("subs", getSubtitles(playerInfo));
         result.put("chapters", getChapters(playerInfo));
 
-        result.put("danmaku", "https://comment.bilibili.com/" + cid + ".xml");
+        result.put("danmaku", List.of(Map.of("name", "哔哩哔哩弹幕", "url", "https://comment.bilibili.com/" + cid + ".xml")));
 
         if ("gui".equals(client)) {
             // atv-player 详情动作(点赞/投币/收藏/稍后再看):状态查询并发,失败兜底默认态不影响播放

@@ -136,7 +136,7 @@ class BiliBiliServiceTest {
                 Map.of("from", 37L, "to", 522L, "title", "第一集")
         ), result.get("chapters"));
         assertEquals(List.of(), result.get("subs"));
-        assertEquals("https://comment.bilibili.com/40168587741.xml", result.get("danmaku"));
+        assertEquals(List.of(Map.of("name", "哔哩哔哩弹幕", "url", "https://comment.bilibili.com/40168587741.xml")), result.get("danmaku"));
     }
 
     @Test
