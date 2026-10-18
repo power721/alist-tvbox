@@ -308,28 +308,45 @@ public class FileDownloader {
         }
 
         if (!localVersion.equals(remoteVersion)) {
-            String url = resolveXsSingleUrl();
-            String content = decryptXsContent(getRemoteText(url, XS_USER_AGENT));
-            String downloadUrl = findXsZipUrl(content);
-            if (downloadUrl != null) {
-                log.debug("download xs file {} from {}", remoteVersion, downloadUrl);
-                downloadFile(downloadUrl, xsZip, XS_USER_AGENT);
-
-                logFileInfo(xsZip);
-
-                deleteDirectory(xsWebDir);
-
-                log.debug("unzip xs file to {}", xsWebDir);
-                unzipFile(xsZip, xsWebDir);
-            } else {
-                writeXsInterface(content);
+            // xs.txt 多行指针按序尝试：首行上游原始地址（省镜像带宽），失败回退后续镜像。
+            // 单候选失败不抛——同一网络下其余候选可能可达（如路由器过滤只拦上游域）
+            List<String> candidates = resolveXsUrls();
+            Exception lastError = null;
+            for (String url : candidates) {
+                try {
+                    updateXsFrom(url, remoteVersion);
+                    taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
+                    return;
+                } catch (Exception e) {
+                    lastError = e;
+                    log.warn("xs update from {} failed, trying next candidate", url, e);
+                }
             }
-
-            log.debug("save xs version: {}", remoteVersion);
-            saveVersion(xsVersionFile, remoteVersion);
+            throw new IOException("xs update failed from " + candidates.size() + " candidates " + candidates, lastError);
         }
 
         taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
+    }
+
+    private void updateXsFrom(String url, String remoteVersion) throws IOException {
+        String content = decryptXsContent(getRemoteText(url, XS_USER_AGENT));
+        String downloadUrl = findXsZipUrl(content);
+        if (downloadUrl != null) {
+            log.debug("download xs file {} from {}", remoteVersion, downloadUrl);
+            downloadFile(downloadUrl, xsZip, XS_USER_AGENT);
+
+            logFileInfo(xsZip);
+
+            deleteDirectory(xsWebDir);
+
+            log.debug("unzip xs file to {}", xsWebDir);
+            unzipFile(xsZip, xsWebDir);
+        } else {
+            writeXsInterface(content);
+        }
+
+        log.debug("save xs version: {}", remoteVersion);
+        saveVersion(xsVersionFile, remoteVersion);
     }
 
     public String getPgVersion() {
@@ -432,16 +449,24 @@ public class FileDownloader {
         log.info("wrote xs interface config to {}", target);
     }
 
-    static String parseXsSingleUrl(String text) {
+    /**
+     * xs.txt 多行指针：每行一个地址，按序尝试（首行原始地址，后续行为镜像回退）。
+     * 兼容单行历史格式；返回前去重保序。
+     */
+    static List<String> parseXsUrls(String text) {
+        List<String> urls = new ArrayList<>();
         if (text != null) {
             for (String line : text.split("\\R")) {
                 String s = line.trim();
-                if (!s.isEmpty()) {
-                    return s;
+                if (!s.isEmpty() && !urls.contains(s)) {
+                    urls.add(s);
                 }
             }
         }
-        throw new IllegalStateException("xs.txt 内容为空");
+        if (urls.isEmpty()) {
+            throw new IllegalStateException("xs.txt 内容为空");
+        }
+        return urls;
     }
 
     // HttpURLConnection 不做 URL 编码：路径含非 ASCII（如上游 zip 名「单线路」）时原样 UTF-8 字节进请求行，
@@ -462,8 +487,8 @@ public class FileDownloader {
         }
     }
 
-    private String resolveXsSingleUrl() throws IOException {
-        return parseXsSingleUrl(fetchXsSyncText("xs.txt"));
+    private List<String> resolveXsUrls() throws IOException {
+        return parseXsUrls(fetchXsSyncText("xs.txt"));
     }
 
     private String fetchXsSyncText(String name) throws IOException {

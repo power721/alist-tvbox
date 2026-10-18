@@ -9,7 +9,8 @@
 #   2. 拉上游版本 $XS_BASE/version.txt
 #   3. 不同则：拉 single.json → 取 zip 地址 → 下载 zip → 解压
 #      → 镜像 zip 与改写后的市场 json 到本站（xs-package.zip / xs-single.json）
-#      → 原子写 /var/www/alist/xs.txt（固定指向本站镜像），更新 xs.version.txt
+#      → 原子写 /var/www/alist/xs.txt（多行：首行上游原始地址，次行本站镜像），
+#        更新 xs.version.txt
 #
 # ⚠️ 只能检测「同一 XS_BASE 内」的版本号变化。上游换 host/路径时，改下面的 XS_BASE
 #    （或用环境变量 XS_BASE=... 覆盖）。这是唯一需要人工介入的情形。
@@ -28,8 +29,9 @@ set -euo pipefail
 # 2026-10-17：镜像化改造。家宽/企业路由器安全过滤（趋势科技 AiProtection 类，cat_id=75）大量拦截
 #         kstore.space 整域——消费端 TLS 握手失败、潇洒包无法更新（上游版本同步本身正常）。
 #         本脚本已下载 zip，索性把 zip（xs-package.zip）与改写「点击下载」地址后的市场 json
-#         （xs-single.json）一并镜像到本站，xs.txt 固定指向 xs-single.json——消费端全程只访问
-#         d.har01d.cn，不再直连上游。上游 zip 内 api.json 的 csp_Market ext 仅记日志不再写入 xs.txt。
+#         （xs-single.json）一并镜像到本站，作为消费端回退源（服务器带宽小，正常流量仍走上游）；
+#         xs.txt 写多行指针：首行上游原始地址、次行本站镜像——消费端新版按序尝试，上游失败才碰本站。
+#         上游 zip 内 api.json 的 csp_Market ext 即首行原始地址。
 XS_BASE="${XS_BASE:-https://9877.kstore.space}"
 XS_MIRROR_BASE="${XS_MIRROR_BASE:-https://d.har01d.cn}"
 USER_AGENT="okhttp/5.3.2"
@@ -120,7 +122,7 @@ sys.exit("Cannot find ext (版本信息) in api.json")
 PY
 )" || { log "解析 ext 失败：$api_json"; exit 1; }
 
-log "上游 ext=$upstream_ext（不再写入 xs.txt，仅观察）"
+log "上游 ext=$upstream_ext（作 xs.txt 首行原始地址）"
 
 # 9. 镜像产物：市场 json 的「点击下载」改指本站 zip，连同 zip 本体一并落本站
 mirror_single="$WORK_DIR/xs-single.json"
@@ -147,10 +149,12 @@ mv -f "$XS_MIRROR_ZIP.new" "$XS_MIRROR_ZIP"
 cp -f "$mirror_single" "$XS_MIRROR_SINGLE.new"
 mv -f "$XS_MIRROR_SINGLE.new" "$XS_MIRROR_SINGLE"
 
-printf '%s\n' "$XS_MIRROR_BASE/xs-single.json" > "$WORK_DIR/xs.txt.new"
+# xs.txt 多行指针：首行上游原始地址（流量走上游，省本站带宽），次行本站镜像（上游被过滤/挂掉时回退）。
+# 消费端新版按序尝试；老版消费端只读首行=纯上游行为。去重保序。
+printf '%s\n' "$upstream_ext" "$XS_MIRROR_BASE/xs-single.json" | awk '!seen[$0]++' > "$WORK_DIR/xs.txt.new"
 mv -f "$WORK_DIR/xs.txt.new" "$XS_TXT"
 
 printf '%s\n' "$online_version" > "$WORK_DIR/xs.version.txt.new"
 mv -f "$WORK_DIR/xs.version.txt.new" "$VERSION_FILE"
 
-log "已镜像 $XS_MIRROR_SINGLE + $XS_MIRROR_ZIP；xs.txt -> $XS_MIRROR_BASE/xs-single.json；版本 $local_version -> $online_version"
+log "已镜像 $XS_MIRROR_SINGLE + $XS_MIRROR_ZIP；xs.txt -> $upstream_ext + $XS_MIRROR_BASE/xs-single.json；版本 $local_version -> $online_version"

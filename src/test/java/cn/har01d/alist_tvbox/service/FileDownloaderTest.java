@@ -74,20 +74,26 @@ class FileDownloaderTest {
 //    }
 
     @Test
-    void parseXsSingleUrl_returnsFirstNonEmptyLine() {
-        assertThat(FileDownloader.parseXsSingleUrl("https://x/236/single.json\n"))
-                .isEqualTo("https://x/236/single.json");
+    void parseXsUrls_returnsAllNonEmptyLinesInOrder() {
+        assertThat(FileDownloader.parseXsUrls("https://x/single.json\nhttps://d.har01d.cn/xs-single.json\n"))
+                .containsExactly("https://x/single.json", "https://d.har01d.cn/xs-single.json");
     }
 
     @Test
-    void parseXsSingleUrl_trimsAndSkipsBlankLines() {
-        assertThat(FileDownloader.parseXsSingleUrl("\n  https://x/236/single.json  \n"))
-                .isEqualTo("https://x/236/single.json");
+    void parseXsUrls_trimsSkipsBlankAndDedupes() {
+        assertThat(FileDownloader.parseXsUrls("\n  https://x/single.json  \n\nhttps://x/single.json\n"))
+                .containsExactly("https://x/single.json");
     }
 
     @Test
-    void parseXsSingleUrl_throwsOnEmpty() {
-        assertThatThrownBy(() -> FileDownloader.parseXsSingleUrl(""))
+    void parseXsUrls_singleLineLegacyFormat() {
+        assertThat(FileDownloader.parseXsUrls("https://x/236/single.json\n"))
+                .containsExactly("https://x/236/single.json");
+    }
+
+    @Test
+    void parseXsUrls_throwsOnEmpty() {
+        assertThatThrownBy(() -> FileDownloader.parseXsUrls(""))
                 .isInstanceOf(IllegalStateException.class);
     }
 
