@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.auth.TokenFilter;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.domain.Role;
+import cn.har01d.alist_tvbox.dto.ClientSyncRule;
 import cn.har01d.alist_tvbox.dto.DanmakuConfig;
 import cn.har01d.alist_tvbox.dto.MediaSubscriptionPoolFilter;
 import cn.har01d.alist_tvbox.dto.SearchSetting;
@@ -19,6 +20,7 @@ import cn.har01d.alist_tvbox.service.backup.DatabaseBackupService;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -99,6 +101,9 @@ public class SettingService {
         appProperties.setActionSeparateLine(settingRepository.findById("bilibili_action_separate_line").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setSupportDash(settingRepository.findById("bilibili_dash").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setReplaceAliToken(settingRepository.findById("replace_ali_token").map(Setting::getValue).orElse("").equals("true"));
+        // 默认关:仅显式 "true" 开启(凭证不出服务端,安全优先)
+        appProperties.setClientCookieSync(settingRepository.findById("client_cookie_sync").map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setClientCookieScope(parseClientCookieScope(settingRepository.findById("client_cookie_scope").map(Setting::getValue).orElse("")));
         appProperties.setEnableHttps(settingRepository.findById("enable_https").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setCleanInvalidShares(settingRepository.findById("clean_invalid_shares").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setEnabledToken(settingRepository.findById(Constants.ENABLED_TOKEN).map(Setting::getValue).orElse("").equals("true"));
@@ -532,6 +537,17 @@ public class SettingService {
         if ("replace_ali_token".equals(setting.getName())) {
             appProperties.setReplaceAliToken("true".equals(setting.getValue()));
         }
+        if ("client_cookie_sync".equals(setting.getName())) {
+            appProperties.setClientCookieSync("true".equals(setting.getValue()));
+        }
+        if ("client_cookie_scope".equals(setting.getName())) {
+            // 与全局开关不同,坏矩阵直接 400(不落库):静默回落会让用户以为已生效
+            Map<String, ClientSyncRule> scope = requireClientCookieScope(setting.getValue());
+            // 归一化回写:剔除与"行缺失"等价的默认行,存进去的即为生效配置
+            scope.values().removeIf(ClientSyncRule::isDefault);
+            setting.setValue(writeClientCookieScope(scope));
+            appProperties.setClientCookieScope(scope);
+        }
         if ("enable_https".equals(setting.getName())) {
             appProperties.setEnableHttps("true".equals(setting.getValue()));
         }
@@ -809,6 +825,39 @@ public class SettingService {
                 .orElseGet(() -> new Setting(danmakuConfigKey(uid), null));
         setting.setValue(writeDanmakuConfig(normalized));
         settingRepository.save(setting);
+    }
+
+    /** 启动装载:空白/坏值回落空矩阵(矩阵只是细粒度策略,坏值不该 brick 启动),update 路径才 400。 */
+    private Map<String, ClientSyncRule> parseClientCookieScope(String value) {
+        if (StringUtils.isBlank(value)) {
+            return new HashMap<>();
+        }
+        try {
+            return objectMapper.readValue(value, new TypeReference<Map<String, ClientSyncRule>>() {
+            });
+        } catch (Exception e) {
+            log.warn("parse client_cookie_scope failed, fallback to empty scope: {}", value, e);
+            return new HashMap<>();
+        }
+    }
+
+    /** 配置更新用:非合法 JSON 直接 400。 */
+    private Map<String, ClientSyncRule> requireClientCookieScope(String value) {
+        try {
+            Map<String, ClientSyncRule> scope = objectMapper.readValue(value, new TypeReference<Map<String, ClientSyncRule>>() {
+            });
+            return scope == null ? new HashMap<>() : scope;
+        } catch (Exception e) {
+            throw new BadRequestException("配置 client_cookie_scope 必须是 {plugin:{enabled,drives}} 形态的 JSON");
+        }
+    }
+
+    private String writeClientCookieScope(Map<String, ClientSyncRule> scope) {
+        try {
+            return objectMapper.writeValueAsString(scope);
+        } catch (JsonProcessingException e) {
+            return "{}";
+        }
     }
 
     /** 允许用户级覆盖的设置键白名单(普通用户经 /api/user-settings 读写自己的值,全局值仅管理员可改)。 */

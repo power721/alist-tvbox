@@ -440,6 +440,50 @@
             <el-button type="primary" :loading="savingOfflineDownloadConfig" @click="saveOfflineDownloadConfig">保存离线下载配置</el-button>
           </div>
         </el-tab-pane>
+        <el-tab-pane label="凭证同步">
+          <el-form label-width="190">
+            <el-form-item label="第三方插件网盘凭证同步">
+              <el-switch v-model="clientCookieSync" inline-prompt active-text="开启" inactive-text="关闭" @change="updateClientCookieSync"/>
+              <span class="hint">总开关,默认关闭;仅控制后续凭证下发,关闭不会清理客户端已写入的凭证</span>
+            </el-form-item>
+          </el-form>
+          <div class="credential-sync-matrix">
+            <div class="proxy-config-row proxy-config-head">
+              <span>第三方插件</span>
+              <span>启用</span>
+              <span>允许同步的网盘(留空 = 全部)</span>
+            </div>
+            <div class="proxy-config-row" v-for="item in syncPlugins" :key="item.key">
+              <span>{{ item.label }}</span>
+              <el-switch
+                v-model="syncMatrix[item.key].enabled"
+                inline-prompt
+                active-text="开"
+                inactive-text="关"
+              />
+              <el-select
+                v-model="syncMatrix[item.key].drives"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                clearable
+                placeholder="全部网盘"
+                style="max-width: 480px"
+              >
+                <el-option v-for="drive in syncDrives" :key="drive.key" :label="drive.label" :value="drive.key"/>
+              </el-select>
+            </div>
+            <div class="config-actions">
+              <el-button type="primary" :loading="savingSyncMatrix" @click="saveSyncMatrix">保存同步矩阵</el-button>
+            </div>
+          </div>
+          <el-alert type="info" :closable="false">
+            <p>开启时,服务端会把网盘账号凭证下发到客户端的第三方插件兼容位置,供各插件免扫码登录;上表可按插件 × 网盘细分同步范围,未提及行为均为「允许全部」。</p>
+            <p>总开关关闭:停止一切凭证下发(凭证下载接口返回空、订阅配置不再注入凭证地址),各插件需自行扫码或手动登录;内置小雅的网盘解析与播放不受影响。</p>
+            <p>矩阵生效说明:饭太硬/摸鱼/潇洒/王二小/VOX/OK影视/嗷呜 行由客户端 spring.jar 执行,需客户端更新到新版 spring.jar(旧版会忽略细分策略仍全量写入);PG 行由服务端执行,保存后立即按新范围执行。</p>
+            <p>注意:客户端已写入的凭证文件不会被自动删除。如需彻底清除,可删除播放器应用数据,或删除盒子存储中的 TVBox、TV、VOX 目录;若担心凭证已被第三方插件滥用,建议重新登录对应网盘账号使旧 Cookie 失效。</p>
+          </el-alert>
+        </el-tab-pane>
       </el-tabs>
       <template #footer>
       <span class="dialog-footer">
@@ -707,6 +751,37 @@ const tempShareExpiration = ref(72)
 const aliLazyLoad = ref(true)
 const validateSharesInterval = ref(4)
 const cleanInvalidShares = ref(false)
+// 网盘账号配置 · 第三方插件网盘凭证同步(默认关,仅显式 true 开启)
+const clientCookieSync = ref(false)
+// 凭证同步矩阵:插件 × 网盘。drives 空 = 全部网盘;整行默认(启用+全盘)保存时由服务端剔除
+const syncPlugins = [
+  {key: 'fty', label: '饭太硬'},
+  {key: 'fish', label: '摸鱼'},
+  {key: 'xs', label: '潇洒'},
+  {key: 'wex', label: '王二小'},
+  {key: 'vox', label: 'VOX'},
+  {key: 'ok', label: 'OK影视'},
+  {key: 'aowu', label: '嗷呜'},
+  {key: 'pg', label: 'PG'},
+]
+const syncDrives = [
+  {key: 'quark', label: '夸克'},
+  {key: 'uc', label: 'UC'},
+  {key: 'baidu', label: '百度'},
+  {key: '115', label: '115'},
+  {key: 'ali', label: '阿里'},
+  {key: 'xunlei', label: '迅雷'},
+  {key: '189', label: '天翼'},
+  {key: '123', label: '123网盘'},
+  {key: '139', label: '移动云盘'},
+  {key: 'guangya', label: '光鸭'},
+  {key: 'quarkTv', label: '夸克TV'},
+  {key: 'ucTv', label: 'UCTV'},
+  {key: 'bili', label: 'B站'},
+  {key: 'pikpak', label: 'PikPak(仅PG)'},
+]
+const syncMatrix = ref<Record<string, { enabled: boolean; drives: string[] }>>({})
+const savingSyncMatrix = ref(false)
 const offlineAccounts = computed(() => accounts.value.filter((item) => item.type === offlineDownloadConfig.value.driverType))
 const offlineMountFolder = computed(() => {
   const account = offlineAccounts.value.find((item) => item.id === offlineDownloadConfig.value.accountId)
@@ -925,6 +1000,37 @@ const loadDriverPlaySettings = async () => {
   aliLazyLoad.value = data.ali_lazy_load !== 'false'
   validateSharesInterval.value = +data.validateSharesInterval || 4
   cleanInvalidShares.value = data.clean_invalid_shares === 'true'
+  clientCookieSync.value = data.client_cookie_sync === 'true'
+  loadSyncMatrix(data.client_cookie_scope)
+}
+
+// 矩阵初始/回填:未配置的行一律「启用+全部网盘」(与缺行等价);服务端存的是剔除默认行后的 JSON
+const loadSyncMatrix = (raw: string | undefined) => {
+  const saved: Record<string, { enabled?: boolean; drives?: string[] }> = (() => {
+    try {
+      return raw ? JSON.parse(raw) : {}
+    } catch {
+      return {}
+    }
+  })()
+  const matrix: Record<string, { enabled: boolean; drives: string[] }> = {}
+  for (const plugin of syncPlugins) {
+    const rule = saved[plugin.key] || {}
+    matrix[plugin.key] = {
+      enabled: rule.enabled !== false,
+      drives: Array.isArray(rule.drives) ? rule.drives : [],
+    }
+  }
+  syncMatrix.value = matrix
+}
+
+const saveSyncMatrix = () => {
+  savingSyncMatrix.value = true
+  axios.post('/api/settings', {name: 'client_cookie_scope', value: JSON.stringify(syncMatrix.value)}).then(() => {
+    ElMessage.success('矩阵保存成功')
+  }).finally(() => {
+    savingSyncMatrix.value = false
+  })
 }
 
 const updateBaiduShareDirect = () => {
@@ -1010,6 +1116,11 @@ const updateValidateSharesInterval = () => {
 const updateCleanInvalidShares = () => {
   axios.post('/api/settings', {name: 'clean_invalid_shares', value: cleanInvalidShares.value}).then(() => {
     ElMessage.success('更新成功，重启生效')
+  })
+}
+const updateClientCookieSync = () => {
+  axios.post('/api/settings', {name: 'client_cookie_sync', value: clientCookieSync.value}).then(() => {
+    ElMessage.success('更新成功')
   })
 }
 
@@ -1393,6 +1504,11 @@ onMounted(() => {
 
 .proxy-config-head {
   font-weight: 600;
+}
+
+/* 凭证同步矩阵:插件名/启用/网盘多选 三列 */
+.credential-sync-matrix .proxy-config-row {
+  grid-template-columns: 120px 90px 1fr;
 }
 
 .config-actions {

@@ -1305,6 +1305,10 @@ public class AccountService {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         // 常量时间比较:secret 校验用 equals 可被计时侧信道逐字节探测
         if (constantTimeEquals(aliSecret, id)) {
+            // 凭证同步关闭(#1084):合法密钥也不下发(客户端缓存的旧配置里的注入直链随之失效)
+            if (!appProperties.isClientCookieSync()) {
+                return null;
+            }
             return accountRepository.getFirstByMasterTrue()
                     .map(Account::getRefreshToken)
                     .orElseThrow(NotFoundException::new);
@@ -1315,6 +1319,9 @@ public class AccountService {
     public String getAliOpenRefreshToken(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (constantTimeEquals(aliSecret, id)) {
+            if (!appProperties.isClientCookieSync()) {
+                return null;
+            }
             return accountRepository.getFirstByMasterTrue()
                     .map(Account::getOpenToken)
                     .orElseThrow(NotFoundException::new);

@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriveId;
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.ClientSyncRule;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.dto.ShareLink;
@@ -737,6 +738,9 @@ public class ShareService {
     }
 
     public String getQuarkCookie(String id) {
+        if (!appProperties.isClientCookieSync()) {
+            return "";
+        }
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
             return driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("").trim();
@@ -745,6 +749,9 @@ public class ShareService {
     }
 
     public String getUcCookie(String id) {
+        if (!appProperties.isClientCookieSync()) {
+            return "";
+        }
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
             return driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).map(DriverAccount::getCookie).orElse("").trim();
@@ -753,6 +760,9 @@ public class ShareService {
     }
 
     public String get115Cookie(String id) {
+        if (!appProperties.isClientCookieSync()) {
+            return "";
+        }
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
             return driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("").trim();
@@ -761,6 +771,9 @@ public class ShareService {
     }
 
     public String getBaiduCookie(String id) {
+        if (!appProperties.isClientCookieSync()) {
+            return "";
+        }
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
             return driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).map(DriverAccount::getCookie).orElse("").trim();
@@ -788,6 +801,16 @@ public class ShareService {
         }
         if (!aliSecret.equals(id) && uid == 0) {
             return result;
+        }
+        // 凭证同步关闭(#1084):合法密钥也返回空,spring.jar 拿到空响应即不写任何
+        // 第三方插件兼容位置;对已部署的存量 spring.jar 同样生效(它们只写服务端下发的内容)
+        if (!appProperties.isClientCookieSync()) {
+            log.info("client cookie sync disabled, credentials not distributed");
+            return result;
+        }
+        ObjectNode policy = buildSyncPolicy();
+        if (policy != null) {
+            result.set("syncPolicy", policy);
         }
 
         Optional<DriverAccount> quark = account(DriverType.QUARK, uid);
@@ -870,9 +893,36 @@ public class ShareService {
         return result;
     }
 
+    /**
+     * 矩阵策略下发(#1084):/cookies 响应携带 syncPolicy(仅 spider 侧消费的 7 个插件键,
+     * pg 行由 tokenm 端点直接执行不下发)。只发非默认行;全默认/未配置不下发该键
+     * (旧版 spring.jar 不认识未知键会忽略,矩阵过滤需新版 spring.jar)。
+     */
+    private ObjectNode buildSyncPolicy() {
+        Map<String, ClientSyncRule> scope = appProperties.getClientCookieScope();
+        if (scope == null || scope.isEmpty()) {
+            return null;
+        }
+        ObjectNode node = objectMapper.createObjectNode();
+        for (String plugin : ClientSyncRule.SPIDER_PLUGINS) {
+            ClientSyncRule rule = scope.get(plugin);
+            if (rule == null || rule.isDefault()) {
+                continue;
+            }
+            ObjectNode row = node.putObject(plugin);
+            row.put("enabled", rule.isEnabled());
+            if (rule.getDrives() != null && !rule.getDrives().isEmpty()) {
+                var drives = row.putArray("drives");
+                for (String drive : rule.getDrives()) {
+                    drives.add(drive);
+                }
+            }
+        }
+        return node.isEmpty() ? null : node;
+    }
+
     /** getCookies 账号选取:共享 secret(uid=0)取全局 master;用户 token 取其本人账号。 */
-    private Optional<DriverAccount> account(DriverType type, int uid) {
-        return uid == 0 ? driverAccountRepository.findByTypeAndMasterTrue(type)
+    private Optional<DriverAccount> account(DriverType type, int uid) {        return uid == 0 ? driverAccountRepository.findByTypeAndMasterTrue(type)
                 : driverAccountRepository.findFirstByOwnerUidAndTypeOrderByIdAsc(uid, type);
     }
 

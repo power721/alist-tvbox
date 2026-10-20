@@ -816,6 +816,11 @@ public class SubscriptionService {
         if (credentialUidFor(getCurrentToken()) > 0) {
             return;
         }
+        // 凭证同步关闭(#1084):不再向第三方站点 ext 注入凭证直链(/ali/token、/quark/cookie)
+        // 与 B站 cookie 原文,占位符原样保留,第三方插件按未配置降级(扫码/手贴登录)
+        if (!appProperties.isClientCookieSync()) {
+            return;
+        }
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String secret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         String tokenUrl = shareRepository.countByType(0) > 0 ? readHostAddress("/ali/token/" + secret) : null;

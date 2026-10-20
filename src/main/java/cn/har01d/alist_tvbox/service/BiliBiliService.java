@@ -465,6 +465,9 @@ public class BiliBiliService {
     }
 
     public String getBiliBiliCookie(String id) {
+        if (!appProperties.isClientCookieSync()) {
+            return "";
+        }
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
             return settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");

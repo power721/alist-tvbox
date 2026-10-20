@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.config;
 
+import cn.har01d.alist_tvbox.dto.ClientSyncRule;
 import cn.har01d.alist_tvbox.dto.DanmakuConfig;
 import cn.har01d.alist_tvbox.tvbox.Site;
 import cn.har01d.alist_tvbox.util.Constants;
@@ -28,6 +29,14 @@ public class AppProperties {
     private boolean merge;
     private boolean mix;
     private boolean replaceAliToken;
+    // 客户端网盘凭证同步(#1084):false=停止向客户端下发一切凭证——/cookies 返回空、
+    // 各凭证直链端点返回空、订阅配置不再注入凭证直链。spring.jar 据此不再写第三方插件
+    // 兼容位置(饭太硬/摸鱼/潇洒/王二小/VOX/OK影视/嗷呜),内置小雅解析播放全走服务端代理不受影响。
+    // Setting 键 client_cookie_sync,默认关(凭证不出服务端,安全优先;需要第三方插件免扫码的用户自行开启)
+    private boolean clientCookieSync = false;
+    // 矩阵策略(Setting 键 client_cookie_scope):plugin 键 → ClientSyncRule。
+    // 行缺失/全默认 = 允许全部;空 map = 整个矩阵未配置(现行为)
+    private Map<String, ClientSyncRule> clientCookieScope = new HashMap<>();
     private boolean searchable;
     private boolean enableHttps;
     private boolean cleanInvalidShares;
