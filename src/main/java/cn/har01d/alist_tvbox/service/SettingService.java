@@ -101,8 +101,8 @@ public class SettingService {
         appProperties.setActionSeparateLine(settingRepository.findById("bilibili_action_separate_line").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setSupportDash(settingRepository.findById("bilibili_dash").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setReplaceAliToken(settingRepository.findById("replace_ali_token").map(Setting::getValue).orElse("").equals("true"));
-        // 默认关:仅显式 "true" 开启(凭证不出服务端,安全优先)
-        appProperties.setClientCookieSync(settingRepository.findById("client_cookie_sync").map(Setting::getValue).orElse("").equals("true"));
+        // 默认开:仅显式 "false" 关闭(存量行为不变;行级出厂默认见 ClientSyncRule)
+        appProperties.setClientCookieSync(!settingRepository.findById("client_cookie_sync").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setClientCookieScope(parseClientCookieScope(settingRepository.findById("client_cookie_scope").map(Setting::getValue).orElse("")));
         appProperties.setEnableHttps(settingRepository.findById("enable_https").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setCleanInvalidShares(settingRepository.findById("clean_invalid_shares").map(Setting::getValue).orElse("").equals("true"));
@@ -538,13 +538,13 @@ public class SettingService {
             appProperties.setReplaceAliToken("true".equals(setting.getValue()));
         }
         if ("client_cookie_sync".equals(setting.getName())) {
-            appProperties.setClientCookieSync("true".equals(setting.getValue()));
+            appProperties.setClientCookieSync(!"false".equals(setting.getValue()));
         }
         if ("client_cookie_scope".equals(setting.getName())) {
             // 与全局开关不同,坏矩阵直接 400(不落库):静默回落会让用户以为已生效
             Map<String, ClientSyncRule> scope = requireClientCookieScope(setting.getValue());
-            // 归一化回写:剔除与"行缺失"等价的默认行,存进去的即为生效配置
-            scope.values().removeIf(ClientSyncRule::isDefault);
+            // 归一化回写:剔除与出厂默认等价的行(含显式写回出厂值的行),存进去的即为生效配置
+            scope.entrySet().removeIf(e -> ClientSyncRule.isFactoryDefault(e.getKey(), e.getValue()));
             setting.setValue(writeClientCookieScope(scope));
             appProperties.setClientCookieScope(scope);
         }

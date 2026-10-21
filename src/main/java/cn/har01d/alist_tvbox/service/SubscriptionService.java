@@ -648,13 +648,14 @@ public class SubscriptionService {
         json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret) + "?client=" + biliDeviceKey);
         json = json.replace("YOUTUBE_URL", readHostAddress("/youtube" + secret));
         json = json.replace("EMBY_URL", readHostAddress("/emby" + secret));
-        // 凭证注入按 token 归属:u- token 只注入本人账号凭证,全局 master 凭证不下发给普通用户
-        String ali = credentialAliAccount().map(Account::getRefreshToken).orElse("");
+        // 凭证注入按 token 归属:u- token 只注入本人账号凭证,全局 master 凭证不下发给普通用户;
+        // 猫源占位符受矩阵 cat 行控制(#1084,行关/总开关关时替换为空值,模板结构不动)
+        String ali = appProperties.allowPluginDrive("cat", "ali") ? credentialAliAccount().map(Account::getRefreshToken).orElse("") : "";
         json = json.replace("ALI_TOKEN", ali);
-        ali = credentialAliAccount().map(Account::getOpenToken).orElse("");
+        ali = appProperties.allowPluginDrive("cat", "ali") ? credentialAliAccount().map(Account::getOpenToken).orElse("") : "";
         json = json.replace("ALI_OPEN_TOKEN", ali);
 
-        String quarkCookie = credentialQuarkAccount().map(DriverAccount::getCookie).orElse("");
+        String quarkCookie = appProperties.allowPluginDrive("cat", "quark") ? credentialQuarkAccount().map(DriverAccount::getCookie).orElse("") : "";
         json = json.replace("QUARK_COOKIE", quarkCookie);
 
         String address = readHostAddress();
@@ -2008,10 +2009,18 @@ public class SubscriptionService {
                 // u- 用户 token 升级为凭证形态再入 URL:tokenm 只认带密钥形态(裸 u- 无熵),
                 // zx/tvfan 目前本就只收共享 token,嵌入哪种都会 400,不影响
                 subToken = userService.toCredentialToken(subToken);
-                json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
-                json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
-                json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
-                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                // 凭证接口 URL 注入按矩阵行控制(#1084):行关(或总开关关)则保留原相对占位符,
+                // 插件取不到配置入口;行开时端点本身还会按行逐盘过滤凭证字段
+                if (appProperties.allowPlugin("pg")) {
+                    json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                }
+                if (appProperties.allowPlugin("zx")) {
+                    json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                    json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                }
+                if (appProperties.allowPlugin("fty")) {
+                    json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                }
                 json = json.replace("./", address + folder);
                 //json = json.replace(address + folder + "lib/tokenm.json", "./lib/tokenm.json");
                 json = json.replace("DOCKER_ADDRESS", address);
@@ -2124,15 +2133,18 @@ public class SubscriptionService {
             json = json.replace("\r", " ").replace("\n", " ");
             json = json.replace("{Cloud-drive", "{\"Cloud-drive");
             if (json.contains("tvfan/Cloud-drive.txt")) {
-                String address = readHostAddress();
-                // 同 loadLocalConfigJson:用户请求(含空 token "")原样注入,仅 currentToken==null 的可信内部场景回退全局首个;
-                // 亲友共享模式下匿名请求同样回退首个 token
-                String currentReqToken = currentToken.get();
-                String subToken = currentReqToken != null ? currentReqToken : getFirstSubscriptionToken();
-                if (StringUtils.isBlank(subToken) && anonymousAccess) {
-                    subToken = getFirstSubscriptionToken();
+                // fty 行关(或总开关关)不注入凭证配置入口,占位符原样保留(#1084)
+                if (appProperties.allowPlugin("fty")) {
+                    String address = readHostAddress();
+                    // 同 loadLocalConfigJson:用户请求(含空 token "")原样注入,仅 currentToken==null 的可信内部场景回退全局首个;
+                    // 亲友共享模式下匿名请求同样回退首个 token
+                    String currentReqToken = currentToken.get();
+                    String subToken = currentReqToken != null ? currentReqToken : getFirstSubscriptionToken();
+                    if (StringUtils.isBlank(subToken) && anonymousAccess) {
+                        subToken = getFirstSubscriptionToken();
+                    }
+                    json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 }
-                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
             }
 
             return objectMapper.readValue(json, Map.class);

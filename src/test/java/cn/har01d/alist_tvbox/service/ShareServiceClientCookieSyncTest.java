@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,8 +32,8 @@ import static org.mockito.Mockito.when;
 /**
  * #1084 第三方插件网盘凭证同步开关:client_cookie_sync 关闭后,
  * /cookies/{secret} 即使密钥合法也必须返回空——spring.jar 只写服务端下发的
- * 内容,空响应即零写入(饭太硬/摸鱼/潇洒/wex/VOX/OK影视/傲物兼容位置全停),
- * 且不能触发任何账号查询(凭证不进内存更不出网)。
+ * 内容,空响应即零写入,且不能触发任何账号查询(凭证不进内存更不出网)。
+ * 出厂默认(2026-10-21 定规):饭太硬/真心/PG/猫源开,摸鱼/潇洒/王二小/VOX/OK影视/嗷呜关。
  */
 class ShareServiceClientCookieSyncTest {
 
@@ -84,6 +86,7 @@ class ShareServiceClientCookieSyncTest {
     @Test
     void getCookiesReturnsEmptyWhenDisabled() {
         when(appProperties.isClientCookieSync()).thenReturn(false);
+        when(appProperties.getClientCookieScope()).thenReturn(new HashMap<>());
         stubQuarkAccount();
 
         ObjectNode result = service.getCookies("topsecret");
@@ -109,6 +112,7 @@ class ShareServiceClientCookieSyncTest {
     @Test
     void getCookiesStillDistributesWhenEnabled() {
         when(appProperties.isClientCookieSync()).thenReturn(true);
+        when(appProperties.getClientCookieScope()).thenReturn(new HashMap<>());
         stubQuarkAccount();
 
         ObjectNode result = service.getCookies("topsecret");
@@ -117,35 +121,47 @@ class ShareServiceClientCookieSyncTest {
         assertThat(result.get("quark").get("cookie").asText()).isEqualTo("__pus=abc");
     }
 
-    /** 矩阵未配置(默认):不下发 syncPolicy 键(旧版 jar 全量,新版 jar 也全量)。 */
+    /**
+     * 矩阵未配置:syncPolicy 显式下发 6 个出厂关行(spider 侧「行缺失」语义是启用,
+     * 必须显式禁用);出厂开的 fty 与 server 端行(zx/pg/cat)不下发。
+     */
     @Test
-    void getCookiesOmitsSyncPolicyWhenScopeEmpty() {
+    void getCookiesEmitsFactoryDisabledRowsWhenScopeEmpty() {
         when(appProperties.isClientCookieSync()).thenReturn(true);
-        when(appProperties.getClientCookieScope()).thenReturn(new java.util.HashMap<>());
+        when(appProperties.getClientCookieScope()).thenReturn(new HashMap<>());
         stubQuarkAccount();
 
         ObjectNode result = service.getCookies("topsecret");
 
-        assertThat(result.has("syncPolicy")).isFalse();
+        assertThat(result.has("syncPolicy")).isTrue();
+        var policy = result.get("syncPolicy");
+        for (String plugin : new String[]{"fish", "xs", "wex", "vox", "ok", "aowu"}) {
+            assertThat(policy.has(plugin)).as("plugin %s 应显式下发 enabled:false", plugin).isTrue();
+            assertThat(policy.get(plugin).get("enabled").asBoolean()).isFalse();
+        }
+        assertThat(policy.has("fty")).isFalse();
+        assertThat(policy.has("zx")).isFalse();
+        assertThat(policy.has("pg")).isFalse();
+        assertThat(policy.has("cat")).isFalse();
         assertThat(result.has("quark")).isTrue();
     }
 
-    /** 矩阵配置:只下发非默认行(禁用行/盘白名单行);默认行与非 spider 插件键(如 pg)不下发。 */
+    /** 矩阵配置:只下发与 spider 缺省(启用+全部网盘)不等价的行;等价行(含显式开+全盘)不下发。 */
     @Test
-    void getCookiesEmbedsNonDefaultSyncPolicyRows() {
+    void getCookiesEmbedsNonFactoryDefaultRows() {
         when(appProperties.isClientCookieSync()).thenReturn(true);
-        java.util.Map<String, ClientSyncRule> scope = new java.util.HashMap<>();
-        ClientSyncRule xs = new ClientSyncRule();
+        Map<String, ClientSyncRule> scope = new HashMap<>();
+        ClientSyncRule fty = new ClientSyncRule(); // 出厂开,显式关 → 下发
+        fty.setEnabled(false);
+        scope.put("fty", fty);
+        ClientSyncRule wex = new ClientSyncRule(); // 出厂关,显式开+全盘 = spider 缺省等价 → 不下发(效果同开)
+        scope.put("wex", wex);
+        ClientSyncRule xs = new ClientSyncRule(); // 显式关+全盘,出厂也是关 → 下发(与 spider 缺省不等价)
         xs.setEnabled(false);
         scope.put("xs", xs);
-        ClientSyncRule fty = new ClientSyncRule();
-        fty.getDrives().add("quark");
-        scope.put("fty", fty);
-        ClientSyncRule wexDefault = new ClientSyncRule(); // 启用+全盘 = 默认行,不下发
-        scope.put("wex", wexDefault);
-        ClientSyncRule pg = new ClientSyncRule(); // 非 spider 插件键(tokenm 主动拉取已出矩阵),不下发
-        pg.setEnabled(false);
-        scope.put("pg", pg);
+        ClientSyncRule fish = new ClientSyncRule(); // 出厂关,显式开+盘白名单 → 下发带 drives
+        fish.getDrives().add("quark");
+        scope.put("fish", fish);
         when(appProperties.getClientCookieScope()).thenReturn(scope);
         stubQuarkAccount();
 
@@ -153,35 +169,53 @@ class ShareServiceClientCookieSyncTest {
 
         assertThat(result.has("syncPolicy")).isTrue();
         var policy = result.get("syncPolicy");
-        assertThat(policy.has("xs")).isTrue();
-        assertThat(policy.get("xs").get("enabled").asBoolean()).isFalse();
-        assertThat(policy.get("xs").has("drives")).isFalse();
-        assertThat(policy.has("fty")).isTrue();
-        assertThat(policy.get("fty").get("enabled").asBoolean()).isTrue();
-        assertThat(policy.get("fty").get("drives").get(0).asText()).isEqualTo("quark");
+        assertThat(policy.get("fty").get("enabled").asBoolean()).isFalse();
         assertThat(policy.has("wex")).isFalse();
-        assertThat(policy.has("pg")).isFalse();
-        // 策略键不参与凭证下发,quark 凭证照常在
-        assertThat(result.has("quark")).isTrue();
+        assertThat(policy.get("fish").get("enabled").asBoolean()).isTrue();
+        assertThat(policy.get("fish").get("drives").get(0).asText()).isEqualTo("quark");
+        // 出厂关且未配置的行仍显式禁用;显式关的 xs 同样禁用
+        assertThat(policy.get("xs").get("enabled").asBoolean()).isFalse();
+        assertThat(policy.get("aowu").get("enabled").asBoolean()).isFalse();
     }
 
-    /** ClientSyncRule 语义:drives 空 = 允许全部;默认行判定。 */
+    /** 出厂默认与统一判定语义(AppProperties 真实实例,非 mock)。 */
     @Test
-    void clientSyncRuleSemantics() {
-        ClientSyncRule rule = new ClientSyncRule();
-        assertThat(rule.isDefault()).isTrue();
-        assertThat(rule.allowsDrive("quark")).isTrue();
-        rule.getDrives().add("quark");
-        assertThat(rule.isDefault()).isFalse();
-        assertThat(rule.allowsDrive("quark")).isTrue();
-        assertThat(rule.allowsDrive("115")).isFalse();
-        rule.setEnabled(false);
-        assertThat(rule.isDefault()).isFalse();
-    }
-
-    /** 总开关默认关(#1084 定规:凭证不出服务端,安全优先;需要第三方插件免扫码的用户自行开启)。 */
-    @Test
-    void clientCookieSyncDefaultsToDisabled() {
-        assertThat(new AppProperties().isClientCookieSync()).isFalse();
+    void factoryDefaultsAndAllowPluginDrive() {
+        AppProperties props = new AppProperties();
+        // 总开关默认开(存量行为不变)
+        assertThat(props.isClientCookieSync()).isTrue();
+        // 出厂默认:fty/zx/pg/cat 开,其余关
+        assertThat(ClientSyncRule.factoryEnabled("fty")).isTrue();
+        assertThat(ClientSyncRule.factoryEnabled("zx")).isTrue();
+        assertThat(ClientSyncRule.factoryEnabled("pg")).isTrue();
+        assertThat(ClientSyncRule.factoryEnabled("cat")).isTrue();
+        assertThat(ClientSyncRule.factoryEnabled("fish")).isFalse();
+        assertThat(ClientSyncRule.factoryEnabled("aowu")).isFalse();
+        // 未配置:出厂开的全盘允许,出厂关的全拒
+        assertThat(props.allowPluginDrive("fty", "ali")).isTrue();
+        assertThat(props.allowPluginDrive("fish", "quark")).isFalse();
+        // 总开关关:全部拒绝
+        props.setClientCookieSync(false);
+        assertThat(props.allowPluginDrive("fty", "ali")).isFalse();
+        assertThat(props.allowPlugin("pg")).isFalse();
+        // 行显式开+盘白名单:白名单外拒绝
+        props.setClientCookieSync(true);
+        ClientSyncRule fty = new ClientSyncRule();
+        fty.getDrives().add("quark");
+        Map<String, ClientSyncRule> scope = new HashMap<>();
+        scope.put("fty", fty);
+        props.setClientCookieScope(scope);
+        assertThat(props.allowPluginDrive("fty", "quark")).isTrue();
+        assertThat(props.allowPluginDrive("fty", "ali")).isFalse();
+        assertThat(props.allowPlugin("fty")).isTrue();
+        // 出厂等价判定:isFactoryDefault
+        assertThat(ClientSyncRule.isFactoryDefault("fty", null)).isTrue();
+        assertThat(ClientSyncRule.isFactoryDefault("fish", null)).isTrue(); // null 行=出厂=等价
+        assertThat(ClientSyncRule.isFactoryDefault("fty", fty)).isFalse();
+        ClientSyncRule fishOn = new ClientSyncRule(); // 开+全盘,出厂是关 → 不等价
+        assertThat(ClientSyncRule.isFactoryDefault("fish", fishOn)).isFalse();
+        // spider 缺省等价判定(下发依据,与出厂无关)
+        assertThat(ClientSyncRule.matchesSpiderDefault("fty", null)).isTrue(); // 出厂开未配置=缺省等价,不发
+        assertThat(ClientSyncRule.matchesSpiderDefault("fish", null)).isFalse(); // 出厂关必须显式发 false
     }
 }

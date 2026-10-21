@@ -444,7 +444,7 @@
           <el-form label-width="190">
             <el-form-item label="第三方插件网盘凭证同步">
               <el-switch v-model="clientCookieSync" inline-prompt active-text="开启" inactive-text="关闭" @change="updateClientCookieSync"/>
-              <span class="hint">总开关,默认关闭;仅控制后续凭证下发,关闭不会清理客户端已写入的凭证</span>
+              <span class="hint">总开关,默认开启;关闭后矩阵内全部通道停发,仅控制后续下发,不会清理客户端已写入的凭证</span>
             </el-form-item>
           </el-form>
           <div class="credential-sync-matrix">
@@ -478,9 +478,9 @@
             </div>
           </div>
           <el-alert type="info" :closable="false">
-            <p>开启时,服务端会把网盘账号凭证下发到客户端的第三方插件兼容位置,供各插件免扫码登录;上表可按插件 × 网盘细分同步范围,未提及行为均为「允许全部」。</p>
-            <p>总开关只控制 spring.jar 的被动凭证注入(拉取 /cookies 后写入各插件兼容位置)及其配套的凭证直链;用户自行添加的插件(如饭太硬、真心)主动拉取的配置接口不受影响——选择了这些插件即视为授权其取用对应凭证。</p>
-            <p>矩阵生效说明:各插件行由客户端 spring.jar 执行,需客户端更新到新版 spring.jar(旧版会忽略细分策略仍全量写入)。</p>
+            <p>开启时,服务端会按上表向各插件下发网盘账号凭证;表内已按出厂默认区分——饭太硬/真心/PG/猫源默认开(维持存量插件免扫码),摸鱼/潇洒/王二小/VOX/OK影视/嗷呜默认关(此前它们无需任何请求就会被写入凭证,#1084 的治理对象),可自行调整。</p>
+            <p>总开关关闭:矩阵内全部通道停发,各插件需自行扫码或手动登录;内置小雅的网盘解析与播放不受影响。</p>
+            <p>生效说明:饭太硬/真心/PG/猫源行由服务端执行,保存后立即生效(含对应的配置接口与猫源占位符);摸鱼/潇洒/王二小/VOX/OK影视/嗷呜行由客户端 spring.jar 执行,需客户端更新到新版 spring.jar(旧版会忽略细分策略仍全量写入)。</p>
             <p>注意:客户端已写入的凭证文件不会被自动删除。如需彻底清除,可删除播放器应用数据,或删除盒子存储中的 TVBox、TV、VOX 目录;若担心凭证已被第三方插件滥用,建议重新登录对应网盘账号使旧 Cookie 失效。</p>
           </el-alert>
         </el-tab-pane>
@@ -751,11 +751,16 @@ const tempShareExpiration = ref(72)
 const aliLazyLoad = ref(true)
 const validateSharesInterval = ref(4)
 const cleanInvalidShares = ref(false)
-// 网盘账号配置 · 第三方插件网盘凭证同步(默认关,仅显式 true 开启)
-const clientCookieSync = ref(false)
-// 凭证同步矩阵:插件 × 网盘。drives 空 = 全部网盘;整行默认(启用+全盘)保存时由服务端剔除
+// 网盘账号配置 · 第三方插件网盘凭证同步(默认开,仅显式 false 关)
+const clientCookieSync = ref(true)
+// 凭证同步矩阵:插件 × 网盘。出厂默认:饭太硬/真心/PG/猫源开(存量在用的主动拉取通道),
+// 摸鱼/潇洒/王二小/VOX/OK影视/嗷呜关(纯被动注入对象);drives 空 = 全部网盘;
+// 与出厂默认等价的行保存时由服务端剔除
 const syncPlugins = [
   {key: 'fty', label: '饭太硬'},
+  {key: 'zx', label: '真心'},
+  {key: 'pg', label: 'PG'},
+  {key: 'cat', label: '猫源'},
   {key: 'fish', label: '摸鱼'},
   {key: 'xs', label: '潇洒'},
   {key: 'wex', label: '王二小'},
@@ -763,6 +768,7 @@ const syncPlugins = [
   {key: 'ok', label: 'OK影视'},
   {key: 'aowu', label: '嗷呜'},
 ]
+const SYNC_DEFAULT_ON = ['fty', 'zx', 'pg', 'cat']
 const syncDrives = [
   {key: 'quark', label: '夸克'},
   {key: 'uc', label: 'UC'},
@@ -777,6 +783,7 @@ const syncDrives = [
   {key: 'quarkTv', label: '夸克TV'},
   {key: 'ucTv', label: 'UCTV'},
   {key: 'bili', label: 'B站'},
+  {key: 'pikpak', label: 'PikPak(仅PG)'},
 ]
 const syncMatrix = ref<Record<string, { enabled: boolean; drives: string[] }>>({})
 const savingSyncMatrix = ref(false)
@@ -998,11 +1005,11 @@ const loadDriverPlaySettings = async () => {
   aliLazyLoad.value = data.ali_lazy_load !== 'false'
   validateSharesInterval.value = +data.validateSharesInterval || 4
   cleanInvalidShares.value = data.clean_invalid_shares === 'true'
-  clientCookieSync.value = data.client_cookie_sync === 'true'
+  clientCookieSync.value = data.client_cookie_sync !== 'false'
   loadSyncMatrix(data.client_cookie_scope)
 }
 
-// 矩阵初始/回填:未配置的行一律「启用+全部网盘」(与缺行等价);服务端存的是剔除默认行后的 JSON
+// 矩阵初始/回填:未配置的行按出厂默认(饭太硬/真心/PG/猫源开,其余关);服务端存的是剔除出厂等价行后的 JSON
 const loadSyncMatrix = (raw: string | undefined) => {
   const saved: Record<string, { enabled?: boolean; drives?: string[] }> = (() => {
     try {
@@ -1013,10 +1020,10 @@ const loadSyncMatrix = (raw: string | undefined) => {
   })()
   const matrix: Record<string, { enabled: boolean; drives: string[] }> = {}
   for (const plugin of syncPlugins) {
-    const rule = saved[plugin.key] || {}
+    const rule = saved[plugin.key]
     matrix[plugin.key] = {
-      enabled: rule.enabled !== false,
-      drives: Array.isArray(rule.drives) ? rule.drives : [],
+      enabled: rule && rule.enabled !== undefined ? rule.enabled : SYNC_DEFAULT_ON.includes(plugin.key),
+      drives: rule && Array.isArray(rule.drives) ? rule.drives : [],
     }
   }
   syncMatrix.value = matrix

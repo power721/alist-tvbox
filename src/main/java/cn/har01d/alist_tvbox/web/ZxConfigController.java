@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
@@ -23,17 +24,20 @@ import java.util.Map;
 @RequestMapping("/zx")
 public class ZxConfigController {
     private final SubscriptionService subscriptionService;
+    private final AppProperties appProperties;
     private final AccountRepository accountRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final FileDownloader fileDownloader;
     private final ObjectMapper objectMapper;
 
     public ZxConfigController(SubscriptionService subscriptionService,
+                              AppProperties appProperties,
                               AccountRepository accountRepository,
                               DriverAccountRepository driverAccountRepository,
                               FileDownloader fileDownloader,
                               ObjectMapper objectMapper) {
         this.subscriptionService = subscriptionService;
+        this.appProperties = appProperties;
         this.accountRepository = accountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.fileDownloader = fileDownloader;
@@ -52,6 +56,10 @@ public class ZxConfigController {
         return Map.of("local", local, "remote", remote);
     }
 
+    /**
+     * 真心主动拉取的配置。授权=持有合法订阅 token;凭证下发受矩阵 zx 行控制
+     * (zx 行默认开,总开关关则全停,#1084)。exeAddr 与 data/zx.json 覆盖段非凭证,保留。
+     */
     @GetMapping("/config")
     public ObjectNode config(String token) throws IOException {
         subscriptionService.requireSubscriptionToken(token);
@@ -60,24 +68,42 @@ public class ZxConfigController {
 
         ObjectNode objectNode = (ObjectNode) objectMapper.readTree(json);
 
-        accountRepository.getFirstByMasterTrue().ifPresent(account -> {
-            objectNode.put("aliToken", account.getRefreshToken());
-        });
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> objectNode.put("quarkCookie", share.getCookie()));
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> {
-            objectNode.put("115Cookie", share.getCookie());
-            try {
-                objectNode.put("pwdRb115", objectMapper.readTree(share.getAddition()).get("delete_code").asText());
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        });
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).stream().findFirst().ifPresent(share -> objectNode.put("baiduCookie", share.getCookie()));
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("ucCookie", share.getCookie()));
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC_TV).stream().findFirst().ifPresent(share -> objectNode.put("ucToken", share.getToken()));
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).stream().findFirst().ifPresent(share -> objectNode.put("tyAuth", share.getUsername() + "|" + share.getPassword()));
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(share -> objectNode.put("p123Auth", share.getUsername() + "|" + share.getPassword()));
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).stream().findFirst().ifPresent(share -> objectNode.put("ydAuth", share.getToken()));
+        if (appProperties.allowPluginDrive("zx", "ali")) {
+            accountRepository.getFirstByMasterTrue().ifPresent(account -> {
+                objectNode.put("aliToken", account.getRefreshToken());
+            });
+        }
+        if (appProperties.allowPluginDrive("zx", "quark")) {
+            driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> objectNode.put("quarkCookie", share.getCookie()));
+        }
+        if (appProperties.allowPluginDrive("zx", "115")) {
+            driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> {
+                objectNode.put("115Cookie", share.getCookie());
+                try {
+                    objectNode.put("pwdRb115", objectMapper.readTree(share.getAddition()).get("delete_code").asText());
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
+            });
+        }
+        if (appProperties.allowPluginDrive("zx", "baidu")) {
+            driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).stream().findFirst().ifPresent(share -> objectNode.put("baiduCookie", share.getCookie()));
+        }
+        if (appProperties.allowPluginDrive("zx", "uc")) {
+            driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("ucCookie", share.getCookie()));
+        }
+        if (appProperties.allowPluginDrive("zx", "ucTv")) {
+            driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC_TV).stream().findFirst().ifPresent(share -> objectNode.put("ucToken", share.getToken()));
+        }
+        if (appProperties.allowPluginDrive("zx", "189")) {
+            driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).stream().findFirst().ifPresent(share -> objectNode.put("tyAuth", share.getUsername() + "|" + share.getPassword()));
+        }
+        if (appProperties.allowPluginDrive("zx", "123")) {
+            driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(share -> objectNode.put("p123Auth", share.getUsername() + "|" + share.getPassword()));
+        }
+        if (appProperties.allowPluginDrive("zx", "139")) {
+            driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).stream().findFirst().ifPresent(share -> objectNode.put("ydAuth", share.getToken()));
+        }
 
         objectNode.put("exeAddr", subscriptionService.readHostAddress("/zx/lib/"));
 

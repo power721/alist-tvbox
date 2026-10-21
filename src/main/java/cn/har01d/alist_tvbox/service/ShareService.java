@@ -894,24 +894,24 @@ public class ShareService {
     }
 
     /**
-     * 矩阵策略下发(#1084):/cookies 响应携带 syncPolicy(仅 spider 侧消费的 7 个插件键)。
-     * 只发非默认行;全默认/未配置不下发该键(旧版 spring.jar 不认识未知键会忽略,
-     * 矩阵过滤需新版 spring.jar)。
+     * 矩阵策略下发(#1084):/cookies 响应携带 syncPolicy(仅 spider 侧消费的 7 个插件键;
+     * zx/pg/cat 由服务端通道直接执行不下发)。与 spider「行缺失」语义(启用+全部网盘)等价的行
+     * 不下发——出厂关的行(摸鱼/潇洒/王二小/VOX/OK影视/嗷呜)未配置时也必须显式下发
+     * enabled:false;出厂开的行(饭太硬)未配置则与缺省等价、不下发。
+     * 旧版 spring.jar 忽略未知键(矩阵过滤需新版 spring.jar)。
      */
     private ObjectNode buildSyncPolicy() {
-        Map<String, ClientSyncRule> scope = appProperties.getClientCookieScope();
-        if (scope == null || scope.isEmpty()) {
-            return null;
-        }
+        Map<String, ClientSyncRule> scope = appProperties.getClientCookieScope() == null
+                ? Map.of() : appProperties.getClientCookieScope();
         ObjectNode node = objectMapper.createObjectNode();
         for (String plugin : ClientSyncRule.SPIDER_PLUGINS) {
             ClientSyncRule rule = scope.get(plugin);
-            if (rule == null || rule.isDefault()) {
+            if (ClientSyncRule.matchesSpiderDefault(plugin, rule)) {
                 continue;
             }
             ObjectNode row = node.putObject(plugin);
-            row.put("enabled", rule.isEnabled());
-            if (rule.getDrives() != null && !rule.getDrives().isEmpty()) {
+            row.put("enabled", ClientSyncRule.effectiveEnabled(plugin, rule));
+            if (rule != null && rule.getDrives() != null && !rule.getDrives().isEmpty()) {
                 var drives = row.putArray("drives");
                 for (String drive : rule.getDrives()) {
                     drives.add(drive);

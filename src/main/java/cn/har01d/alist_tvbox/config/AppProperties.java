@@ -29,13 +29,13 @@ public class AppProperties {
     private boolean merge;
     private boolean mix;
     private boolean replaceAliToken;
-    // 客户端网盘凭证同步(#1084):false=停止向客户端下发一切凭证——/cookies 返回空、
-    // 各凭证直链端点返回空、订阅配置不再注入凭证直链。spring.jar 据此不再写第三方插件
-    // 兼容位置(饭太硬/摸鱼/潇洒/王二小/VOX/OK影视/嗷呜),内置小雅解析播放全走服务端代理不受影响。
-    // Setting 键 client_cookie_sync,默认关(凭证不出服务端,安全优先;需要第三方插件免扫码的用户自行开启)
-    private boolean clientCookieSync = false;
+    // 客户端网盘凭证同步(#1084):false=停止向客户端下发一切受控凭证——/cookies 返回空、
+    // 各凭证直链端点返回空、订阅配置不再注入凭证直链、矩阵各通道(tvfan/zx/tokenm/猫源)停发。
+    // Setting 键 client_cookie_sync,默认开(存量行为不变;矩阵行级默认见 ClientSyncRule:
+    // 饭太硬/真心/PG/猫源默认开,摸鱼/潇洒/王二小/VOX/OK影视/嗷呜默认关)
+    private boolean clientCookieSync = true;
     // 矩阵策略(Setting 键 client_cookie_scope):plugin 键 → ClientSyncRule。
-    // 行缺失/全默认 = 允许全部;空 map = 整个矩阵未配置(现行为)
+    // 行缺失/出厂等价 = 出厂默认;空 map = 整个矩阵未配置
     private Map<String, ClientSyncRule> clientCookieScope = new HashMap<>();
     private boolean searchable;
     private boolean enableHttps;
@@ -283,5 +283,27 @@ public class AppProperties {
         item.put("concurrency", concurrency);
         item.put("chunk_size", chunkSize);
         return item;
+    }
+
+    /**
+     * 矩阵统一判定(#1084):总开关开 && 插件行启用(未配置按出厂默认)&& 网盘在行允许范围
+     * (drives 空 = 全部)。tvfan/zx/tokenm/猫源占位符等服务端通道与 syncPolicy 下发共用此口径。
+     */
+    public boolean allowPluginDrive(String plugin, String drive) {
+        return allowPlugin(plugin) && driveAllowed(plugin, drive);
+    }
+
+    /** 行级判定(不限盘):控制配置文件里凭证接口 URL 的注入与否。 */
+    public boolean allowPlugin(String plugin) {
+        if (!clientCookieSync) {
+            return false;
+        }
+        ClientSyncRule rule = clientCookieScope == null ? null : clientCookieScope.get(plugin);
+        return ClientSyncRule.effectiveEnabled(plugin, rule);
+    }
+
+    private boolean driveAllowed(String plugin, String drive) {
+        ClientSyncRule rule = clientCookieScope == null ? null : clientCookieScope.get(plugin);
+        return rule == null || rule.allowsDrive(drive);
     }
 }
