@@ -32,6 +32,18 @@
 
 注:系统设置页「Cookie地址」的链接指向上述直链端点,开关关闭后同样返回空(这是同一批端点,不是独立的手动通道)。
 
+### 范围边界:只管被动注入,不管主动拉取
+
+开关的设计边界是**被动注入**——spring.jar 初始化时拉 `/cookies` 把凭证写进进程内**所有**插件的兼容位置,哪怕用户从未使用那些插件(#1084 的原问题:凭证因此流向未选用的插件并产生 Aowu/Quarktemp 转存)。
+
+以下**主动拉取**通道**不在开关范围内**(用户自行添加对应订阅/站点即视为授权):
+
+- 饭太硬 `/tvfan/config?token=…`(`TvFanController.config`,主动请求 token/ali/quark/baidu/uc/ucTv)
+- 真心 `/zx/config?token=…`(`ZxConfigController.config`,主动请求 aliToken/quark/115/baidu/uc/ucTv/189/123/139)
+- 猫源配置的 `ALI_TOKEN`/`ALI_OPEN_TOKEN`/`QUARK_COOKIE` 占位符替换(`SubscriptionService` 猫源模板填充)
+
+即:关掉开关后,这些接口仍按原样返回凭证——插件是用户自己选择安装使用的,其配置接口取用凭证属于既定功能,不是本开关要拦截的注入行为。
+
 ### 矩阵 `client_cookie_scope`(总开关开启时生效的细粒度策略)
 
 设置值形态(Setting 键 `client_cookie_scope`,JSON,默认行保存时自动剔除):
@@ -52,6 +64,7 @@
 
 - 内置小雅的网盘解析与播放(全走服务端 `/p` 代理与 `/vod` API)。
 - 内置 B站站点的登录态功能(走服务端 `/bilibili/{token}` API,Cookie 在服务端侧使用)。
+- 用户自行添加的插件的主动配置接口:饭太硬 `/tvfan/config`、真心 `/zx/config`、猫源占位符替换(见上节范围边界)。
 - 播放记录同步、追剧等所有其它功能。
 
 ## 已写入客户端凭证的清理指引(开关不做自动清理)
