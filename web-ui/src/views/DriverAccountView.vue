@@ -480,7 +480,7 @@
           <el-alert type="info" :closable="false">
             <p>开启时,服务端会把网盘账号凭证下发到客户端的第三方插件兼容位置,供各插件免扫码登录;上表可按插件 × 网盘细分同步范围,未提及行为均为「允许全部」。</p>
             <p>总开关只控制 spring.jar 的被动凭证注入(拉取 /cookies 后写入各插件兼容位置)及其配套的凭证直链;用户自行添加的插件(如饭太硬、真心)主动拉取的配置接口不受影响——选择了这些插件即视为授权其取用对应凭证。</p>
-            <p>矩阵生效说明:饭太硬/摸鱼/潇洒/王二小/VOX/OK影视/嗷呜 行由客户端 spring.jar 执行,需客户端更新到新版 spring.jar(旧版会忽略细分策略仍全量写入);PG 行由服务端执行,保存后立即按新范围执行。</p>
+            <p>矩阵生效说明:各插件行由客户端 spring.jar 执行,需客户端更新到新版 spring.jar(旧版会忽略细分策略仍全量写入)。</p>
             <p>注意:客户端已写入的凭证文件不会被自动删除。如需彻底清除,可删除播放器应用数据,或删除盒子存储中的 TVBox、TV、VOX 目录;若担心凭证已被第三方插件滥用,建议重新登录对应网盘账号使旧 Cookie 失效。</p>
           </el-alert>
         </el-tab-pane>
@@ -762,7 +762,6 @@ const syncPlugins = [
   {key: 'vox', label: 'VOX'},
   {key: 'ok', label: 'OK影视'},
   {key: 'aowu', label: '嗷呜'},
-  {key: 'pg', label: 'PG'},
 ]
 const syncDrives = [
   {key: 'quark', label: '夸克'},
@@ -778,7 +777,6 @@ const syncDrives = [
   {key: 'quarkTv', label: '夸克TV'},
   {key: 'ucTv', label: 'UCTV'},
   {key: 'bili', label: 'B站'},
-  {key: 'pikpak', label: 'PikPak(仅PG)'},
 ]
 const syncMatrix = ref<Record<string, { enabled: boolean; drives: string[] }>>({})
 const savingSyncMatrix = ref(false)

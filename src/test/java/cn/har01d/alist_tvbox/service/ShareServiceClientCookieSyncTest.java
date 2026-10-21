@@ -130,7 +130,7 @@ class ShareServiceClientCookieSyncTest {
         assertThat(result.has("quark")).isTrue();
     }
 
-    /** 矩阵配置:只下发非默认行(禁用行/盘白名单行);默认行与 pg 行不下发。 */
+    /** 矩阵配置:只下发非默认行(禁用行/盘白名单行);默认行与非 spider 插件键(如 pg)不下发。 */
     @Test
     void getCookiesEmbedsNonDefaultSyncPolicyRows() {
         when(appProperties.isClientCookieSync()).thenReturn(true);
@@ -143,7 +143,7 @@ class ShareServiceClientCookieSyncTest {
         scope.put("fty", fty);
         ClientSyncRule wexDefault = new ClientSyncRule(); // 启用+全盘 = 默认行,不下发
         scope.put("wex", wexDefault);
-        ClientSyncRule pg = new ClientSyncRule(); // pg 行服务端直接消费,不下发给 spider
+        ClientSyncRule pg = new ClientSyncRule(); // 非 spider 插件键(tokenm 主动拉取已出矩阵),不下发
         pg.setEnabled(false);
         scope.put("pg", pg);
         when(appProperties.getClientCookieScope()).thenReturn(scope);

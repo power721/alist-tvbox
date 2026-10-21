@@ -27,7 +27,6 @@
 | `/quark|uc|115|baidu/cookie/{secret}`(legacy 单盘直链) | `ShareService.getXXXCookie` | 返回空串;客户端缓存的旧注入直链随之失效 |
 | `/ali/token/{secret}`、`/ali/open/{secret}` | `AccountService.getAliRefreshToken/getAliOpenRefreshToken` | 合法密钥返回 null(不下发) |
 | `/bili/cookie/{secret}` | `BiliBiliService.getBiliBiliCookie` | 返回空串 |
-| `/pg/lib/tokenm`(PG/猫源 drpy 的 tokenm.json) | `PgTokenController.tokenm` | 只回模板与 data/tokenm.json 覆盖段,不注入任何账号凭证 |
 | 订阅配置 ext 注入(`/ali/token`、`/quark/cookie` 直链替换 tvfan 占位符、csp_Bili cookie 原文) | `SubscriptionService.replaceAliToken` | 整体跳过,占位符原样保留,第三方插件按未配置降级(扫码/手贴登录) |
 
 注:系统设置页「Cookie地址」的链接指向上述直链端点,开关关闭后同样返回空(这是同一批端点,不是独立的手动通道)。
@@ -36,10 +35,11 @@
 
 开关的设计边界是**被动注入**——spring.jar 初始化时拉 `/cookies` 把凭证写进进程内**所有**插件的兼容位置,哪怕用户从未使用那些插件(#1084 的原问题:凭证因此流向未选用的插件并产生 Aowu/Quarktemp 转存)。
 
-以下**主动拉取**通道**不在开关范围内**(用户自行添加对应订阅/站点即视为授权):
+以下**主动拉取**通道**不在开关与矩阵范围内**(用户自行添加对应订阅/站点即视为授权):
 
 - 饭太硬 `/tvfan/config?token=…`(`TvFanController.config`,主动请求 token/ali/quark/baidu/uc/ucTv)
 - 真心 `/zx/config?token=…`(`ZxConfigController.config`,主动请求 aliToken/quark/115/baidu/uc/ucTv/189/123/139)
+- PG/猫源 `/pg/lib/tokenm?token=…`(`PgTokenController.tokenm`,主动请求阿里/夸克/115/UC/百度/123/天翼/139/迅雷/PikPak)
 - 猫源配置的 `ALI_TOKEN`/`ALI_OPEN_TOKEN`/`QUARK_COOKIE` 占位符替换(`SubscriptionService` 猫源模板填充)
 
 即:关掉开关后,这些接口仍按原样返回凭证——插件是用户自己选择安装使用的,其配置接口取用凭证属于既定功能,不是本开关要拦截的注入行为。
@@ -52,19 +52,17 @@
 {"fty": {"enabled": false}, "xs": {"drives": ["quark", "bili"]}}
 ```
 
-- **行键(第三方插件)**:`fty`(饭太硬)/`fish`(摸鱼)/`xs`(潇洒)/`wex`(王二小)/`vox`/`ok`(OK影视)/`aowu`(嗷呜)/`pg`(PG,猫源 tokenm)。
+- **行键(第三方插件)**:`fty`(饭太硬)/`fish`(摸鱼)/`xs`(潇洒)/`wex`(王二小)/`vox`/`ok`(OK影视)/`aowu`(嗷呜),全部 7 行由 spring.jar 执行。
 - **行规则**:`enabled`(默认 true)+ `drives` 允许同步的网盘白名单(**空 = 全部**)。行缺失 = 允许全部(现行为)。
-- **网盘词表**(即 `/cookies` 顶层键):`quark/uc/baidu/115/ali/xunlei/189/123/139/guangya/quarkTv/ucTv/bili`,另 `pikpak` 仅 pg 行有效(tokenm 特有)。
-- **执行位置**:
-  - 前 7 行由 spring.jar 执行:服务端把矩阵作为 `/cookies` 响应的 `syncPolicy` 键下发(只发非默认行;全默认/未配置则不下发),spider 按行裁剪每个 CookieTarget 的写入视图(裁剪对 target 透明:所有 target 只从传入 JsonObject 取值)。旧版 spring.jar 忽略未知键 → 矩阵需客户端更新到新版 spring.jar(服务端升级重启后,客户端重新拉取订阅即可获得新 jar)。
-  - `pg` 行由服务端 `PgTokenController` 直接执行(tokenm 按 `syncDrive(drive)` 逐盘判定),保存后立即按新范围执行。
-- **不归矩阵管的通道**:legacy 单盘直链(`/quark/cookie` 等 4 个)、`/ali/token`、`/bili/cookie`、`replaceAliToken` 注入——它们只受总开关控制(无法按插件归属)。播放器私有 `files/bili`(通用兼容位置,无插件归属)同样只跟总开关。
+- **网盘词表**(即 `/cookies` 顶层键):`quark/uc/baidu/115/ali/xunlei/189/123/139/guangya/quarkTv/ucTv/bili`。
+- **执行位置**:服务端把矩阵作为 `/cookies` 响应的 `syncPolicy` 键下发(只发非默认行;全默认/未配置则不下发),spider 按行裁剪每个 CookieTarget 的写入视图(裁剪对 target 透明:所有 target 只从传入 JsonObject 取值)。旧版 spring.jar 忽略未知键 → 矩阵需客户端更新到新版 spring.jar(服务端升级重启后,客户端重新拉取订阅即可获得新 jar)。
+- **不归矩阵管的通道**:legacy 单盘直链(`/quark/cookie` 等 4 个)、`/ali/token`、`/bili/cookie`、`replaceAliToken` 注入——它们只受总开关控制(无法按插件归属)。插件主动拉取的配置接口(tvfan/zx/tokenm/猫源占位符)总开关与矩阵均不管。播放器私有 `files/bili`(通用兼容位置,无插件归属)同样只跟总开关。
 
 ## 不受影响的部分
 
 - 内置小雅的网盘解析与播放(全走服务端 `/p` 代理与 `/vod` API)。
 - 内置 B站站点的登录态功能(走服务端 `/bilibili/{token}` API,Cookie 在服务端侧使用)。
-- 用户自行添加的插件的主动配置接口:饭太硬 `/tvfan/config`、真心 `/zx/config`、猫源占位符替换(见上节范围边界)。
+- 用户自行添加的插件的主动配置接口:饭太硬 `/tvfan/config`、真心 `/zx/config`、PG tokenm、猫源占位符替换(见上节范围边界)。
 - 播放记录同步、追剧等所有其它功能。
 
 ## 已写入客户端凭证的清理指引(开关不做自动清理)
@@ -81,7 +79,7 @@
 ## 实现要点(代码导航)
 
 - `AppProperties.clientCookieSync/clientCookieScope`;`SettingService` 装载/更新(坏矩阵 update 400,启动装载回落空)。
-- `dto/ClientSyncRule`:`SPIDER_PLUGINS`/`PLUGIN_PG` 常量 + `allowsDrive/isDefault` 语义。
+- `dto/ClientSyncRule`:`SPIDER_PLUGINS` 常量 + `allowsDrive/isDefault` 语义。
 - `ShareService.buildSyncPolicy` 只发非默认行;spider 端 `Init.writeCookies/filterCookies`(CatVodTVSpider)按 `CookieTarget.id()` 裁剪。
 - 测试:`ShareServiceClientCookieSyncTest`(服务端)+ `InitTest.writeCookiesAppliesSyncPolicyMatrix`(spider)。
 - 已知无关问题:系统设置里的「订阅替换阿里token地址」(`replace_ali_token`)开关历史上从未被消费(死设置),本开关与其无关,未顺手改动以免改变存量行为。

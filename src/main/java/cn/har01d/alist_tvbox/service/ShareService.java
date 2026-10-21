@@ -894,9 +894,9 @@ public class ShareService {
     }
 
     /**
-     * 矩阵策略下发(#1084):/cookies 响应携带 syncPolicy(仅 spider 侧消费的 7 个插件键,
-     * pg 行由 tokenm 端点直接执行不下发)。只发非默认行;全默认/未配置不下发该键
-     * (旧版 spring.jar 不认识未知键会忽略,矩阵过滤需新版 spring.jar)。
+     * 矩阵策略下发(#1084):/cookies 响应携带 syncPolicy(仅 spider 侧消费的 7 个插件键)。
+     * 只发非默认行;全默认/未配置不下发该键(旧版 spring.jar 不认识未知键会忽略,
+     * 矩阵过滤需新版 spring.jar)。
      */
     private ObjectNode buildSyncPolicy() {
         Map<String, ClientSyncRule> scope = appProperties.getClientCookieScope();
