@@ -1,6 +1,9 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.SearchTargets;
+import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
@@ -13,6 +16,7 @@ import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -24,13 +28,16 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class TelegramServiceTest {
@@ -648,16 +655,122 @@ class TelegramServiceTest {
         server.verify();
     }
 
+    @Test
+    void listDoubanSuggestionMixesMovieAndTvRecommendations() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), requestTo("https://m.douban.com/rexxar/api/v2/movie/suggestion?start=0&count=15&new_struct=1&with_review=1&for_mobile=1"))
+                .andRespond(withSuccess("""
+                        {"total":2,"items":[
+                          {"id":"1","title":"电影甲","year":"2024","rating":{"value":8.5},"pic":{"normal":"https://img/movie1.jpg"}},
+                          {"id":"2","title":"电影乙","year":"2023","rating":{"value":7.1},"pic":{"normal":"https://img/movie2.jpg"}}
+                        ]}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("https://m.douban.com/rexxar/api/v2/tv/suggestion?start=0&count=15&new_struct=1&with_review=1&for_mobile=1"))
+                .andRespond(withSuccess("""
+                        {"total":1,"items":[
+                          {"id":"3","title":"剧集丙","year":"2025","rating":{"value":9.0},"pic":{"normal":"https://img/tv1.jpg"}}
+                        ]}
+                        """, MediaType.APPLICATION_JSON));
+
+        var result = service.listDouban("suggestion", null, null, null, null, null, 1, 30);
+
+        assertThat(result.getList()).extracting(MovieDetail::getVod_name)
+                .containsExactly("电影甲", "剧集丙", "电影乙");
+        assertThat(result.getTotal()).isEqualTo(3);
+        server.verify();
+    }
+
+    @Test
+    void listDoubanSubjectEntrySearchesTelegramByResolvedTitle() {
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setTgDrivers(List.of("5"));
+        RestTemplate restTemplate = new RestTemplate();
+        TelegramChannelRepository channelRepository = mock(TelegramChannelRepository.class);
+        when(channelRepository.findAll(Sort.by("sortOrder"))).thenReturn(List.of());
+        MovieRepository movieRepository = mock(MovieRepository.class);
+        Movie movie = new Movie();
+        movie.setName("沙丘2");
+        when(movieRepository.findById(36675942)).thenReturn(Optional.of(movie));
+        RemoteSearchService remoteSearchService = mock(RemoteSearchService.class);
+        when(remoteSearchService.getSearchChannels(List.of())).thenReturn(List.of());
+        Message message = new Message();
+        message.setType("5");
+        message.setLink("https://pan.quark.cn/s/abc");
+        message.setCover("https://img.example/cover1.jpg");
+        message.setName("沙丘2 4K");
+        message.setContent("沙丘2 全集");
+        when(remoteSearchService.search("沙丘2", List.of(), (SearchTargets) null)).thenReturn(List.of(message));
+        TelegramService service = createService(appProperties, restTemplate, channelRepository, remoteSearchService, movieRepository);
+
+        var result = service.listDouban("db:36675942", null, null, null, null, null, 1, 30);
+
+        assertThat(result.getList()).hasSize(1);
+        assertThat(result.getList().get(0).getVod_name()).isEqualTo("沙丘2 4K");
+    }
+
+    @Test
+    void detailSubjectEntrySearchesTelegramUsingSpiderTitle() {
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setTgDrivers(List.of("5"));
+        RestTemplate restTemplate = new RestTemplate();
+        TelegramChannelRepository channelRepository = mock(TelegramChannelRepository.class);
+        when(channelRepository.findAll(Sort.by("sortOrder"))).thenReturn(List.of());
+        MovieRepository movieRepository = mock(MovieRepository.class);
+        RemoteSearchService remoteSearchService = mock(RemoteSearchService.class);
+        when(remoteSearchService.getSearchChannels(List.of())).thenReturn(List.of());
+        Message message = new Message();
+        message.setType("5");
+        message.setLink("https://pan.quark.cn/s/xyz");
+        message.setCover("https://img.example/cover2.jpg");
+        message.setName("沙丘 2160p");
+        message.setContent("沙丘 全集");
+        when(remoteSearchService.search("沙丘", List.of(), (SearchTargets) null)).thenReturn(List.of(message));
+        TelegramService service = createService(appProperties, restTemplate, channelRepository, remoteSearchService, movieRepository);
+
+        // 爬虫 titleCache 随 id 带片名:直接用,零解析
+        var result = service.detail("db:36675942", null, "沙丘", null);
+        assertThat(result.getList()).hasSize(1);
+        assertThat(result.getList().get(0).getVod_name()).isEqualTo("沙丘 2160p");
+
+        // 无片名且本地库/在线兜底都解析不出(单测 provider 为 null):空列表收场不炸
+        var empty = service.detail("db:999", null, null, null);
+        assertThat(empty.getList()).isEmpty();
+    }
+
+    @Test
+    void listDoubanUnknownSubjectCollectionReturnsEmptyList() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        TelegramService service = createService(new AppProperties(), restTemplate, mock(TelegramChannelRepository.class));
+
+        server.expect(once(), requestTo("https://m.douban.com/rexxar/api/v2/subject_collection/no_such/items?os=linux&for_mobile=1&callback=&start=0&count=30&loc_id=108288&_=0"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        var result = service.listDouban("no_such", null, null, null, null, null, 1, 30);
+
+        assertThat(result.getList()).isEmpty();
+        server.verify();
+    }
+
     private TelegramService createService(AppProperties appProperties, RestTemplate restTemplate, TelegramChannelRepository channelRepository) {
         return createService(appProperties, restTemplate, channelRepository, mock(RemoteSearchService.class));
     }
 
     private TelegramService createService(AppProperties appProperties, RestTemplate restTemplate, TelegramChannelRepository channelRepository, RemoteSearchService remoteSearchService) {
+        return createService(appProperties, restTemplate, channelRepository, remoteSearchService, mock(MovieRepository.class));
+    }
+
+    private TelegramService createService(AppProperties appProperties, RestTemplate restTemplate, TelegramChannelRepository channelRepository, RemoteSearchService remoteSearchService, MovieRepository movieRepository) {
         return new TelegramService(
                 appProperties,
                 channelRepository,
                 mock(SettingRepository.class),
-                mock(MovieRepository.class),
+                movieRepository,
                 mock(ShareService.class),
                 mock(TvBoxService.class),
                 remoteSearchService,

@@ -40,6 +40,8 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Example;
@@ -53,6 +55,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -102,6 +105,7 @@ public class TelegramService {
     private final RemoteSearchService remoteSearchService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final ObjectProvider<PianDanService> pianDanServiceProvider;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
     private final OkHttpClient httpClient = new OkHttpClient();
     private final LoadingCache<String, List<Message>> searchCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(15)).build(this::getFromChannel);
@@ -212,6 +216,21 @@ public class TelegramService {
                            RemoteSearchService remoteSearchService,
                            RestTemplateBuilder restTemplateBuilder,
                            ObjectMapper objectMapper) {
+        this(appProperties, telegramChannelRepository, settingRepository, movieRepository, shareService,
+                tvBoxService, remoteSearchService, restTemplateBuilder, objectMapper, null);
+    }
+
+    @Autowired
+    public TelegramService(AppProperties appProperties,
+                           TelegramChannelRepository telegramChannelRepository,
+                           SettingRepository settingRepository,
+                           MovieRepository movieRepository,
+                           ShareService shareService,
+                           TvBoxService tvBoxService,
+                           RemoteSearchService remoteSearchService,
+                           RestTemplateBuilder restTemplateBuilder,
+                           ObjectMapper objectMapper,
+                           ObjectProvider<PianDanService> pianDanServiceProvider) {
         this.appProperties = appProperties;
         this.telegramChannelRepository = telegramChannelRepository;
         this.settingRepository = settingRepository;
@@ -221,6 +240,8 @@ public class TelegramService {
         this.remoteSearchService = remoteSearchService;
         this.restTemplate = restTemplateBuilder.build();
         this.objectMapper = objectMapper;
+        // PianDanService 构造期依赖本类,直接注入成环:延迟解析(仅 db: 条目片名在线兜底用)
+        this.pianDanServiceProvider = pianDanServiceProvider;
     }
 
     @PostConstruct
@@ -389,6 +410,18 @@ public class TelegramService {
     }
 
     public MovieList detail(String tid, String ac, String title, String keyword) {
+        // 豆瓣条目卡片(db:/s:)不是分享链接:本源语义=按片名搜电报,与 listDouban 同口径;
+        // 爬虫 titleCache 会随 id 带上片名,优先用之省一次解析
+        if (tid.startsWith(PianDanService.DOUBAN_SUBJECT_PREFIX) || tid.startsWith("s:")) {
+            String name = title;
+            if (StringUtils.isBlank(name)) {
+                name = tid.startsWith("s:") ? PianDanService.parseSubjectId(tid).name() : resolveDoubanSubjectTitle(tid);
+            }
+            if (StringUtils.isBlank(name)) {
+                return new MovieList();
+            }
+            return searchMovies(name, false, 20);
+        }
         if (tid.startsWith("%2Fv%2F")) {
             tid = StringUtils.trimToEmpty(URLDecoder.decode(tid, StandardCharsets.UTF_8));
         }
@@ -789,6 +822,15 @@ public class TelegramService {
             return searchMovies(PianDanService.parseSubjectId(type).name(), false, size);
         }
 
+        if (type.startsWith(PianDanService.DOUBAN_SUBJECT_PREFIX)) {
+            // db:{id} 条目被 TVBox 前端当分类 t 发来(点击豆瓣卡片加载详情):与 s: 同语义,按片名搜电报
+            String name = resolveDoubanSubjectTitle(type);
+            if (StringUtils.isBlank(name)) {
+                return new MovieList();
+            }
+            return searchMovies(name, false, size);
+        }
+
         return getDoubanList(type, ac, sort, year, genre, region, page, size);
     }
 
@@ -807,6 +849,11 @@ public class TelegramService {
 
         if (type.equals("random")) {
             return getRandomMovie(ac, size);
+        }
+
+        if (type.equals("suggestion")) {
+            // TVBox 首页推荐位固定发 t=0(控制器映射为裸 suggestion):电影+剧集推荐交错混合
+            return getSuggestionList(ac, page, size, key);
         }
 
         if (type.startsWith("suggestion_")) {
@@ -839,9 +886,19 @@ public class TelegramService {
         String url = "https://m.douban.com/rexxar/api/v2/subject_collection/" + type + "/items?os=linux&for_mobile=1&callback=&start=" + start + "&count=" + size + "&loc_id=108288&_=0";
         HttpEntity<Void> httpEntity = buildHttpEntity();
 
-        var response = restTemplate.exchange(url, HttpMethod.GET, httpEntity, JsonNode.class);
-        int total = response.getBody().get("total").asInt();
-        ArrayNode items = (ArrayNode) response.getBody().get("subject_collection_items");
+        JsonNode body;
+        try {
+            var response = restTemplate.exchange(url, HttpMethod.GET, httpEntity, JsonNode.class);
+            body = response.getBody();
+        } catch (HttpClientErrorException.NotFound e) {
+            // 未知分类(榜单下线/前端误传条目 id):空列表收场,不给客户端炸 500
+            log.warn("douban subject_collection not found: {}", type);
+            result = new MovieList();
+            douban.put(key, result);
+            return result;
+        }
+        int total = body.get("total").asInt();
+        ArrayNode items = (ArrayNode) body.get("subject_collection_items");
         for (JsonNode item : items) {
             MovieDetail movieDetail = getMovieDetail(item);
             if ("web".equals(ac)) {
@@ -1017,6 +1074,52 @@ public class TelegramService {
         douban.put(cacheKey, result);
         log.debug("list result: {}", result);
         return result;
+    }
+
+    /** 裸 suggestion(TVBox 首页推荐位):电影/剧集推荐两池交错混合,池子容量小(实测 total 各 ~60)不翻深页。 */
+    private MovieList getSuggestionList(String ac, int page, int size, String cacheKey) {
+        int half = Math.max(1, size / 2);
+        MovieList movies = getDoubanItems("suggestion_movie", ac, page, half, cacheKey + ":movie");
+        MovieList tvs = getDoubanItems("suggestion_tv", ac, page, Math.max(1, size - half), cacheKey + ":tv");
+
+        List<MovieDetail> mixed = new ArrayList<>();
+        int max = Math.max(movies.getList().size(), tvs.getList().size());
+        for (int i = 0; i < max && mixed.size() < size; i++) {
+            if (i < movies.getList().size()) {
+                mixed.add(movies.getList().get(i));
+            }
+            if (mixed.size() < size && i < tvs.getList().size()) {
+                mixed.add(tvs.getList().get(i));
+            }
+        }
+
+        MovieList result = new MovieList();
+        result.setList(mixed);
+        result.setLimit(mixed.size());
+        result.setTotal(movies.getTotal() + tvs.getTotal());
+        result.setPagecount(Math.max(1, (movies.getTotal() + tvs.getTotal() + size - 1) / size));
+        douban.put(cacheKey, result);
+        log.debug("list result: {}", result);
+        return result;
+    }
+
+    /** db:{豆瓣id} → 片名:本地豆瓣库 id 直取(Movie.id 即豆瓣 subject id),未收录的榜单新片回落
+     *  rexxar 在线解析(PianDanService.doubanSubjectDetail,tv 404 再试 movie,自带短缓存)。 */
+    private String resolveDoubanSubjectTitle(String id) {
+        String digits = id.substring(PianDanService.DOUBAN_SUBJECT_PREFIX.length());
+        if (!digits.matches("\\d+")) {
+            return null;
+        }
+        int doubanId = Integer.parseInt(digits);
+        return movieRepository.findById(doubanId)
+                .map(Movie::getName)
+                .orElseGet(() -> {
+                    if (pianDanServiceProvider == null) {
+                        return null;
+                    }
+                    MovieDetail detail = pianDanServiceProvider.getObject().doubanSubjectDetail(doubanId);
+                    return detail == null ? null : detail.getVod_name();
+                });
     }
 
     /**
