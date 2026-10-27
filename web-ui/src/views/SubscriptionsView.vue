@@ -353,6 +353,13 @@
             导入仓库
           </el-button>
         </el-form-item>
+        <el-form-item>
+          <el-tooltip content="开启后每天自动按该仓库地址重新导入对齐（地址以最近一次导入或保存为准）" placement="top">
+            <el-checkbox v-model="pluginImportForm.autoUpdate" :disabled="!pluginImportForm.url.trim()" @change="savePluginAutoUpdate">
+              每天自动更新
+            </el-checkbox>
+          </el-tooltip>
+        </el-form-item>
       </el-form>
       <el-progress v-if="importingPlugins" :percentage="100" :indeterminate="true" :duration="5"/>
 
@@ -1314,7 +1321,8 @@ const pluginForm = ref<Plugin>({
   lastError: ''
 })
 const pluginImportForm = ref({
-  url: localStorage.getItem(PLUGIN_REPO_URL_KEY) || ''
+  url: localStorage.getItem(PLUGIN_REPO_URL_KEY) || '',
+  autoUpdate: false
 })
 const pluginSettingsForm = ref({
   githubProxy: '',
@@ -2195,6 +2203,15 @@ const loadPluginSettings = () => {
   axios.get('/api/settings/plugin_run_mode').then(({data}) => {
     pluginSettingsForm.value.pluginRunMode = data?.value || 'java'
   })
+  axios.get('/api/settings/plugin_auto_update_enabled').then(({data}) => {
+    pluginImportForm.value.autoUpdate = data?.value === 'true'
+  })
+  axios.get('/api/settings/plugin_auto_update_url').then(({data}) => {
+    // 服务端保存的自动更新地址兜底回填（localStorage 为空时，如换浏览器）
+    if (data?.value && !pluginImportForm.value.url.trim()) {
+      pluginImportForm.value.url = data.value
+    }
+  })
   loadGitHubProxyNodes()
   loadGitHubProxyList()
 }
@@ -2808,6 +2825,22 @@ const addPluginFilter = () => {
   })
 }
 
+const savePluginAutoUpdate = () => {
+  const url = pluginImportForm.value.url.trim()
+  if (!url && pluginImportForm.value.autoUpdate) {
+    pluginImportForm.value.autoUpdate = false
+    return
+  }
+  axios.post('/api/settings', {
+    name: 'plugin_auto_update_enabled',
+    value: String(pluginImportForm.value.autoUpdate)
+  })
+  axios.post('/api/settings', {
+    name: 'plugin_auto_update_url',
+    value: url
+  })
+}
+
 const importPlugins = async () => {
   const url = pluginImportForm.value.url.trim()
   if (!url) {
@@ -2815,6 +2848,8 @@ const importPlugins = async () => {
   }
   importingPlugins.value = true
   try {
+    // 导入即对齐：把当前仓库地址与自动更新开关一并落库，供每日定时任务使用
+    savePluginAutoUpdate()
     const {data} = await axios.post('/api/plugins/import', {
       url
     })

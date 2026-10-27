@@ -22,11 +22,18 @@ class AutoUpdateServiceTest {
     @Mock IndexService indexService;
     @Mock DoubanService doubanService;
     @Mock Index115Service index115Service;
+    @Mock PluginService pluginService;
     @InjectMocks AutoUpdateService service;
 
     @Test
     void autoSyncCatDelegatesWithJitter() {
         service.autoSyncCat();
+        verify(executor).scheduleWithJitter(any(Runnable.class));
+    }
+
+    @Test
+    void autoSyncPluginsDelegatesWithJitter() {
+        service.autoSyncPlugins();
         verify(executor).scheduleWithJitter(any(Runnable.class));
     }
 

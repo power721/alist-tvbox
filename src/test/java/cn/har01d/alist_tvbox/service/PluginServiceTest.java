@@ -748,4 +748,76 @@ class PluginServiceTest {
         // 重扫只刷新检查时间,不重排用户调过的顺序
         verify(subscriptionSourceService, never()).moveToFrontOfPlugins(org.mockito.ArgumentMatchers.anyString());
     }
+
+    @Test
+    void importShouldNotRepointUserManagedFilePlugins() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String pluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/new.txt";
+        String payload = """
+                [
+                  {"id": "abc123", "version": 2, "file": "py/new.txt"}
+                ]
+                """;
+        Plugin local = new Plugin();
+        local.setId(9);
+        local.setExternalId("abc123");
+        local.setName("local");
+        local.setSourceName("local");
+        local.setUrl("/static/plugins/local.py");
+        local.setVersion(1);
+        local.setContent("local-body");
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
+        when(pluginRepository.findByExternalId("abc123")).thenReturn(Optional.of(local));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        // 用户上传的 file-backed 插件即使与仓库条目同 id 也不被改写/下载
+        assertThat(result.skipped()).containsExactly(pluginUrl);
+        assertThat(result.createdCount()).isZero();
+        assertThat(result.refreshedCount()).isZero();
+        assertThat(local.getUrl()).isEqualTo("/static/plugins/local.py");
+        assertThat(local.getContent()).isEqualTo("local-body");
+        verify(restTemplate, never()).getForObject(URI.create(pluginUrl), String.class);
+    }
+
+    @Test
+    void autoSyncShouldImportFromConfiguredSource() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String pluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/demo.txt";
+        when(settingRepository.findById(PluginService.AUTO_UPDATE_ENABLED_SETTING))
+                .thenReturn(Optional.of(new Setting(PluginService.AUTO_UPDATE_ENABLED_SETTING, "true")));
+        when(settingRepository.findById(PluginService.AUTO_UPDATE_URL_SETTING))
+                .thenReturn(Optional.of(new Setting(PluginService.AUTO_UPDATE_URL_SETTING, sourceUrl)));
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn("[\"py/demo.txt\"]");
+        when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("body");
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        pluginService.autoSyncFromConfiguredSource();
+
+        verify(pluginRepository).save(any(Plugin.class));
+    }
+
+    @Test
+    void autoSyncShouldSkipWhenDisabledOrMissingUrl() {
+        when(settingRepository.findById(PluginService.AUTO_UPDATE_ENABLED_SETTING))
+                .thenReturn(Optional.of(new Setting(PluginService.AUTO_UPDATE_ENABLED_SETTING, "false")));
+
+        pluginService.autoSyncFromConfiguredSource();
+
+        verify(restTemplate, never()).getForObject(any(URI.class), eq(String.class));
+    }
+
+    @Test
+    void autoSyncShouldSwallowImportFailure() {
+        String sourceUrl = "https://example.com/repo/spiders_v2.json";
+        when(settingRepository.findById(PluginService.AUTO_UPDATE_ENABLED_SETTING))
+                .thenReturn(Optional.of(new Setting(PluginService.AUTO_UPDATE_ENABLED_SETTING, "true")));
+        when(settingRepository.findById(PluginService.AUTO_UPDATE_URL_SETTING))
+                .thenReturn(Optional.of(new Setting(PluginService.AUTO_UPDATE_URL_SETTING, sourceUrl)));
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenThrow(new RuntimeException("boom"));
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> pluginService.autoSyncFromConfiguredSource());
+    }
 }

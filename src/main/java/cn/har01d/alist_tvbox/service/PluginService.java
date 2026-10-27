@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import cn.har01d.alist_tvbox.entity.Plugin;
 import cn.har01d.alist_tvbox.entity.PluginRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
@@ -47,6 +48,9 @@ public class PluginService {
     // spider 插件配置结构声明：脚本顶层 PLUGIN_CONFIG_SCHEMA = { ... }；解析逻辑见 ConfigSchemaParser。
     private static final String PLUGIN_CONFIG_CONST = "PLUGIN_CONFIG_SCHEMA";
     private static final String GITHUB_PROXY = "github_proxy";
+    // 订阅源每日自动对齐：仓库地址与开关均由用户在订阅源管理中设置，不内置默认源
+    public static final String AUTO_UPDATE_URL_SETTING = "plugin_auto_update_url";
+    public static final String AUTO_UPDATE_ENABLED_SETTING = "plugin_auto_update_enabled";
 
     // 文件-backed 插件：url 形如 /static/plugins/<相对路径>.py，由静态文件目录双向同步管理
     public static final String STATIC_URL_PREFIX = "/static/";
@@ -263,6 +267,11 @@ public class PluginService {
 
             try {
                 Plugin existing = findExistingPlugin(normalizedPluginUrl, entry.externalId());
+                // 用户本地维护的插件(上传的 py / 自定义网页源)即使与仓库条目同 id 也不改写，保持本地版本
+                if (existing != null && isUserManagedPlugin(existing)) {
+                    skipped.add(normalizedPluginUrl);
+                    continue;
+                }
                 boolean samePluginType = existing != null
                         && isPythonPluginUrl(existing.getUrl()) == isPythonPluginUrl(normalizedPluginUrl);
                 if (existing != null && samePluginType
@@ -314,6 +323,44 @@ public class PluginService {
                 skipped,
                 failed
         );
+    }
+
+    /**
+     * 每日自动对齐入口：按用户在订阅源管理中保存的仓库地址重新执行仓库导入。
+     * 无内置默认源——未开启或未配置地址时静默跳过；供定时任务调用，异常只记日志不抛出。
+     */
+    public void autoSyncFromConfiguredSource() {
+        boolean enabled = Boolean.parseBoolean(readSettingValue(AUTO_UPDATE_ENABLED_SETTING));
+        String url = readSettingValue(AUTO_UPDATE_URL_SETTING);
+        if (!enabled || url.isBlank()) {
+            log.debug("plugin auto-sync skipped: enabled={} urlConfigured={}", enabled, !url.isBlank());
+            return;
+        }
+        try {
+            ImportResult result = importFromSource(url);
+            if (result.failedCount() > 0) {
+                log.warn("plugin auto-sync from [{}]: created {} refreshed {} skipped {} failed {} - {}",
+                        url, result.createdCount(), result.refreshedCount(), result.skippedCount(), result.failedCount(), result.failed());
+            } else {
+                log.info("plugin auto-sync from [{}]: created {} refreshed {} skipped {}",
+                        url, result.createdCount(), result.refreshedCount(), result.skippedCount());
+            }
+        } catch (Exception e) {
+            log.warn("plugin auto-sync from [{}] failed: {}", url, e.getMessage());
+        }
+    }
+
+    private String readSettingValue(String name) {
+        return settingRepository.findById(name)
+                .map(Setting::getValue)
+                .map(String::trim)
+                .orElse("");
+    }
+
+    /** url 落在静态目录(/static/plugins/ 上传、/static/webhome/pages/ 网页源)的插件由本地文件双向同步管理。 */
+    private static boolean isUserManagedPlugin(Plugin plugin) {
+        String url = plugin.getUrl();
+        return url != null && (url.startsWith(FILE_PLUGIN_URL_PREFIX) || url.startsWith(WEB_PAGE_URL_PREFIX));
     }
 
     @Transactional
