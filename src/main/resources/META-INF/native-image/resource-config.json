@@ -1,36 +1,42 @@
 {
-  "resources": {
-    "includes": [
-      {
-        "pattern": "ua.txt"
-      },
-      {
-        "pattern": "shares.txt"
-      },
-      {
-        "pattern": "telemetry.properties"
-      },
-      {
-        "pattern": "115_shares.txt"
-      },
-      {
-        "pattern": "channels.json"
-      },
-      {
-        "pattern": "channels.txt"
-      },
-      {
-        "pattern": "countries.json"
-      },
-      {
-        "pattern": "META-INF/services/org.flywaydb.core.api.migration.JavaMigration"
-      },
-      {
-        "pattern": "db/migration/.*"
-      },
-      {
-        "pattern": "static/webhome/.*"
-      }
-    ]
-  }
+ "resources": {
+  "includes": [
+   {
+    "pattern": "ua.txt"
+   },
+   {
+    "pattern": "shares.txt"
+   },
+   {
+    "pattern": "telemetry.properties"
+   },
+   {
+    "pattern": "115_shares.txt"
+   },
+   {
+    "pattern": "channels.json"
+   },
+   {
+    "pattern": "channels.txt"
+   },
+   {
+    "pattern": "countries.json"
+   },
+   {
+    "pattern": "META-INF/services/org.flywaydb.core.api.migration.JavaMigration"
+   },
+   {
+    "pattern": "db/migration/.*"
+   },
+   {
+    "pattern": "static/webhome/.*"
+   },
+   {
+    "pattern": "scripts/t4worker.py"
+   },
+   {
+    "pattern": "static/Atvp.py"
+   }
+  ]
+ }
 }

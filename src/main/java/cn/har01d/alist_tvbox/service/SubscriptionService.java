@@ -730,6 +730,14 @@ public class SubscriptionService {
      * T4 壳子完全不下载 jar。归属隔离与 /sub 同口径。
      */
     public Map<String, Object> subscriptionT4(String token, String id) {
+        return subscriptionT4(token, id, false);
+    }
+
+    /**
+     * @param pluginRuntime 服务端 Python 插件运行时是否就绪(PluginWorkerService.isAvailable()):
+     *                      就绪时插件源(spider 插件)同样 T4 化,否则维持移除口径
+     */
+    public Map<String, Object> subscriptionT4(String token, String id, boolean pluginRuntime) {
         var credentialUser = userService.findUserByCredentialToken(token);
         if (credentialUser != null) {
             token = UserService.userVodToken(credentialUser.getUsername());
@@ -739,7 +747,7 @@ public class SubscriptionService {
             throw new NotFoundException();
         }
         Map<String, Object> config = subscription(token, id);
-        applyT4(token, config);
+        applyT4(token, config, pluginRuntime);
         return config;
     }
 
@@ -749,7 +757,7 @@ public class SubscriptionService {
             "csp_Emby", "csp_Jellyfin", "csp_FeiNiu", "csp_Live", "csp_TgDouBan",
             "csp_TgChannel", "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup");
 
-    private void applyT4(String token, Map<String, Object> config) {
+    private void applyT4(String token, Map<String, Object> config, boolean pluginRuntime) {
         if (!(config.get("sites") instanceof List<?> sites)) {
             return;
         }
@@ -777,7 +785,20 @@ public class SubscriptionService {
                 log.debug("t4 site: {} -> {}", site.get("key"), site.get("api"));
                 continue;
             }
-            // 其余 type 3 站点移除:插件源/上游 spider/Atvp 等都要 jar 或设备端运行时,
+            // 插件源(spider 插件):服务端 Python 运行时就绪时同样 T4 化——api 指回
+            // /t4/{token}/v/{插件站点 key},T4Controller 转投 PluginWorkerService 执行
+            if (pluginRuntime && api != null
+                    && (api.equals("csp_PyProxy") || api.startsWith(base + "/Atvp.py"))) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> site = (Map<String, Object>) raw;
+                site.put("type", 4);
+                site.put("api", base + "/t4/" + (embedToken.isBlank() ? "-" : embedToken) + "/v/" + site.get("key"));
+                site.remove("jar");
+                site.remove("ext");
+                log.debug("t4 plugin site: {} -> {}", site.get("key"), site.get("api"));
+                continue;
+            }
+            // 其余 type 3 站点移除:上游 spider/网页源等要 jar 或设备端运行时,
             // T4 壳子(无 jar 加载器)点开即废;type 0/1/2 的普通 HTTP 站点不受影响
             if (Integer.valueOf(3).equals(raw.get("type"))) {
                 log.debug("t4 remove type 3 site: {}", raw.get("key"));
@@ -1859,7 +1880,7 @@ public class SubscriptionService {
         return url;
     }
 
-    static Map<String, Object> buildPluginExtPayload(Plugin plugin,
+    public static Map<String, Object> buildPluginExtPayload(Plugin plugin,
                                                      String baseUrl,
                                                      String contentToken,
                                                      String token,

@@ -83,5 +83,5 @@
 
 内置 T4 后该 sidecar 的存在意义只剩:不想动主服务部署的用户。对本仓库直接可落成的吸收
 (①②已于 2026-10-28 落地:vod 端点 @RequestMapping+JSON body 兜底;PianDan 详情委托
-/media 片单详情实现服务端代搜):③二期服务端 Python 插件运行时以 atvp_runtime.py 为蓝图
-(需往镜像加 python3+三个 apk 包,Alpine 3.17 的 3.10 版本约束见评估对话记录)。
+/media 片单详情实现服务端代搜):③已落地(2026-10-28 二期):Alpine 升 3.21 + t4worker.py + PluginWorkerService,插件源进 T4;
+蓝图吸收了行协议/AST 探测/stdout 静默/失败响应沿用请求 id 四要点。

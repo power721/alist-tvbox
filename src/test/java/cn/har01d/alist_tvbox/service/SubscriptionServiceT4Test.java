@@ -142,6 +142,30 @@ class SubscriptionServiceT4Test {
     }
 
     @Test
+    void pluginSitesBecomeType4WhenRuntimeAvailable() {
+        // 服务端 Python 运行时就绪:插件源(密文 spider 插件)T4 化,api 指回 /t4/{token}/v/{key}
+        Plugin plugin = new Plugin();
+        plugin.setId(9);
+        plugin.setUrl("https://up.example/spider.txt");
+        plugin.setName("上游源");
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("plugin-9", false, "上游源", "上游源", plugin));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class));
+
+        Map<String, Object> config = service.subscriptionT4("", "0", true);
+
+        Map<String, Object> upstream = findSite(config, "plugin-9");
+        assertEquals(4, upstream.get("type"));
+        assertEquals("http://atv.example/t4/-/v/plugin-9", upstream.get("api"));
+        assertFalse(upstream.containsKey("jar"));
+        assertFalse(upstream.containsKey("ext"));
+
+        // 运行时不可用:维持移除口径
+        Map<String, Object> config2 = service.subscriptionT4("", "0", false);
+        assertTrue(findSiteKeys(config2).stream().noneMatch("plugin-9"::equals));
+    }
+
+    @Test
     void plainHttpUpstreamSitesKept() {
         // type 0/1/2 的普通 HTTP 站点不依赖 jar,保留
         String upstream = "{\"sites\":[{\"key\":\"cms\",\"name\":\"CMS采集\",\"type\":1,\"api\":\"https://cj.example/api.php/provide/vod\"}]}";

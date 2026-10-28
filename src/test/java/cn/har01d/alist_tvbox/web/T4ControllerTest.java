@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.entity.Plugin;
+
 import cn.har01d.alist_tvbox.dto.LiveFollowDto;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.live.web.LiveController;
@@ -24,6 +26,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.same;
@@ -62,6 +65,10 @@ class T4ControllerTest {
     private RemoteSearchController remoteSearchController;
     @Mock
     private PlayController playController;
+    @Mock
+    private cn.har01d.alist_tvbox.service.PluginWorkerService pluginWorkerService;
+    @Mock
+    private cn.har01d.alist_tvbox.entity.PluginRepository pluginRepository;
 
     private T4Controller controller;
     private MockHttpServletRequest request;
@@ -72,7 +79,7 @@ class T4ControllerTest {
         controller = new T4Controller(subscriptionService, tvBoxController, pianDanController,
                 mediaLibraryController, biliBiliController, embyController, jellyfinController,
                 feiniuController, liveController, telegramController, remoteSearchController,
-                playController, new ObjectMapper());
+                playController, pluginWorkerService, pluginRepository, new ObjectMapper());
         request = new MockHttpServletRequest("GET", "/t4/tok/v/csp_AList");
         response = new MockHttpServletResponse();
     }
@@ -260,6 +267,38 @@ class T4ControllerTest {
                 isNull(), eq(1), eq(Map.of()), org.mockito.ArgumentMatchers.any());
         verify(tvBoxController).api(eq(TOKEN), eq("1"), isNull(), isNull(), isNull(), isNull(), isNull(),
                 eq(2), eq(100), eq(1), eq(0), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void pluginSiteDispatchesToWorkerRuntime() throws Exception {
+        // 插件源 T4:非内置站点按插件站点 key 反查 Plugin,五动作转投 Python worker 运行时
+        Plugin plugin = new Plugin();
+        plugin.setId(9);
+        plugin.setUrl("https://up.example/spider.txt");
+        when(pluginRepository.findByExternalId("plugin-9")).thenReturn(java.util.Optional.empty());
+        when(pluginRepository.findById(9)).thenReturn(java.util.Optional.of(plugin));
+        when(pluginWorkerService.isAvailable()).thenReturn(true);
+        when(pluginWorkerService.call(eq("plugin-9"), org.mockito.ArgumentMatchers.anyString(),
+                eq("home"), org.mockito.ArgumentMatchers.anyMap()))
+                .thenReturn(new ObjectMapper().readTree("{\"class\":[]}"));
+
+        Object result = controller.vod(TOKEN, "plugin-9", null, null, null, null, null, null, null, request, response);
+
+        assertTrue(result.toString().contains("class"));
+    }
+
+    @Test
+    void pluginSiteUnavailableRuntimeRejected() {
+        // 运行时不可用(无 python3):插件站点 404(配置层也不会下发该站点)
+        Plugin plugin = new Plugin();
+        plugin.setId(9);
+        plugin.setUrl("https://up.example/spider.txt");
+        when(pluginRepository.findByExternalId("plugin-9")).thenReturn(java.util.Optional.empty());
+        when(pluginRepository.findById(9)).thenReturn(java.util.Optional.of(plugin));
+        when(pluginWorkerService.isAvailable()).thenReturn(false);
+
+        assertThrows(NotFoundException.class,
+                () -> controller.vod(TOKEN, "plugin-9", null, null, null, null, null, null, null, request, response));
     }
 
     @Test

@@ -2,9 +2,12 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.FilterDto;
 import cn.har01d.alist_tvbox.dto.LiveFollowDto;
+import cn.har01d.alist_tvbox.entity.Plugin;
+import cn.har01d.alist_tvbox.entity.PluginRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.live.web.LiveController;
+import cn.har01d.alist_tvbox.service.PluginWorkerService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -70,6 +73,8 @@ public class T4Controller {
     private final TelegramController telegramController;
     private final RemoteSearchController remoteSearchController;
     private final PlayController playController;
+    private final PluginWorkerService pluginWorkerService;
+    private final PluginRepository pluginRepository;
     private final ObjectMapper objectMapper;
 
     private final Cache<String, String> titleCache =
@@ -79,13 +84,13 @@ public class T4Controller {
 
     @GetMapping("/t4/{id}")
     public Map<String, Object> config(@PathVariable String id) {
-        return subscriptionService.subscriptionT4("", id);
+        return subscriptionService.subscriptionT4("", id, pluginWorkerService.isAvailable());
     }
 
     @GetMapping("/t4/{token}/{id}")
     public Map<String, Object> config(@PathVariable String token, @PathVariable String id) {
         subscriptionService.checkToken(token);
-        return subscriptionService.subscriptionT4(token, id);
+        return subscriptionService.subscriptionT4(token, id, pluginWorkerService.isAvailable());
     }
 
     // FongMi type4 恒 GET(catvod 三参 newCall=拼 query);@RequestMapping 兼容杂牌壳子的
@@ -98,7 +103,12 @@ public class T4Controller {
         // URL 路径段不带 csp_ 前缀(applyT4 生成口径);带前缀的旧形态兼容
         String siteKey = site.startsWith("csp_") ? site : "csp_" + site;
         if (!SubscriptionService.T4_SITE_KEYS.contains(siteKey)) {
-            throw new NotFoundException();
+            // 插件源(服务端 Python 运行时,PluginWorkerService);运行时不可用则 404
+            Plugin plugin = findPluginBySiteKey(site);
+            if (plugin == null || !pluginWorkerService.isAvailable()) {
+                throw new NotFoundException();
+            }
+            return pluginVod(token, site, plugin, t, ids, wd, quick, play, ext, pg);
         }
         // JSON POST 形态(部分壳子):查询/表单参数全缺位时从 JSON body 取参
         if (StringUtils.isAllBlank(t, ids, wd, play, ext) && pg == null) {
@@ -148,6 +158,67 @@ public class T4Controller {
             log.debug("t4 json body parse failed", e);
             return Map.of();
         }
+    }
+
+    /** 插件源(服务端 Python 运行时)五动作:extend 服务端自建,worker 返回原样透传。 */
+    private Object pluginVod(String token, String site, Plugin plugin,
+                             String t, String ids, String wd, String quick, String play, String ext, Integer pg)
+            throws IOException {
+        String extend = t4PluginExtend(token, plugin);
+        Map<String, Object> params = new HashMap<>();
+        String method;
+        if (StringUtils.isNotBlank(play)) {
+            method = "play";
+            params.put("play", play);
+        } else if (StringUtils.isNotBlank(ids)) {
+            method = "detail";
+            params.put("ids", ids);
+        } else if (StringUtils.isNotBlank(wd)) {
+            method = "search";
+            params.put("wd", wd);
+            params.put("quick", Boolean.parseBoolean(quick));
+        } else if (StringUtils.isNotBlank(t)) {
+            method = "category";
+            params.put("t", t);
+            params.put("pg", String.valueOf(pg == null ? 1 : pg));
+            Map<String, String> filters = decodeExt(ext);
+            if (!filters.isEmpty()) {
+                params.put("extend", filters);
+            }
+        } else {
+            method = "home";
+        }
+        log.info("t4 plugin: {}  method: {}  t: {}  ids: {}  wd: {}  play: {}", site, method, t, ids, wd, play);
+        return pluginWorkerService.call(site, extend, method, params);
+    }
+
+    /** 服务端 worker 的插件 extend:复用 buildPluginExtPayload,剔除设备端专属字段。 */
+    private String t4PluginExtend(String token, Plugin plugin) throws IOException {
+        String base = subscriptionService.readHostAddress("");
+        Map<String, Object> payload = SubscriptionService.buildPluginExtPayload(plugin, base,
+                token, token, "", false, null);
+        // local_proxy_config 置空:Atvp._play 不带 client-proxy,/play 出 /p 服务端代理直链
+        // (T4 客户端无本地代理);preheatUrl 是设备端预热清单,worker 无此缓存目录
+        payload.remove("local_proxy_config");
+        payload.remove("preheatUrl");
+        return java.util.Base64.getEncoder()
+                .encodeToString(objectMapper.writeValueAsString(payload).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /** 配置站点 key → 插件(pluginSiteKey 反查:externalId 优先,回落 plugin-{id})。 */
+    private Plugin findPluginBySiteKey(String key) {
+        var byExternal = pluginRepository.findByExternalId(key);
+        if (byExternal.isPresent()) {
+            return byExternal.get();
+        }
+        if (key.startsWith("plugin-")) {
+            try {
+                return pluginRepository.findById(Integer.parseInt(key.substring(7))).orElse(null);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
     }
 
     /** home = 分类列表 + homeVideo 推荐位合并(spring.jar 端两次调用,FongMi type 3 合并同构)。 */

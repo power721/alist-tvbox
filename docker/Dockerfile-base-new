@@ -2,18 +2,30 @@ ARG TAG=latest
 
 FROM haroldli/java:21 AS corretto-jdk
 
-FROM haroldli/alist:${TAG}
+FROM haroldli/alist:${TAG} AS alist
+
+# Alpine 3.17 → 3.21:python3 3.12(T4 服务端插件运行时)与新版 musl/openssl;
+# 包清单与旧基础镜像 1:1 对齐(alist 二进制经多阶段拷贝保留,Corretto 21 为 musl 构建跨小版本兼容)
+FROM alpine:3.21
 
 LABEL MAINTAINER="Har01d"
 
 ENV JAVA_HOME=/jre
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
+RUN apk add --no-cache \
+        bash busybox-extras ca-certificates curl jemalloc jq less \
+        nginx nginx-mod-devel-kit nginx-mod-http-js nginx-mod-http-lua onigurama \
+        ripgrep sqlite tzdata unzip \
+        python3 py3-requests py3-lxml py3-pycryptodome
+
 COPY data/update.sql /
 
 RUN sqlite3 /opt/alist/data/data.db "drop table x_storages";\
     sqlite3 /opt/alist/data/data.db ".read /update.sql"; \
     rm -f /update.sql
+
+COPY --from=alist /opt/alist /opt/alist
 
 COPY --from=corretto-jdk /jre $JAVA_HOME
 
