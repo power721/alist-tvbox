@@ -53,7 +53,7 @@ jobs:
           echo "release: ${{ inputs.release }}"
           echo "HEAD_MESSAGE=$(git log -1 --pretty=%B)" >> $GITHUB_ENV
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -82,7 +82,7 @@ jobs:
         working-directory: ./target
         run: java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Login to Docker Hub
