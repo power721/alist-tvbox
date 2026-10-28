@@ -107,6 +107,39 @@ class DashUtilsTest {
     }
 
     @Test
+    void t4UrlWrapperRewritesEveryBaseUrl() {
+        // T4(全走服务端)形态:MPD BaseURL 逐条经 wrapper 改写为服务端代理地址,客户端零头要求
+        Map<String, Object> map = DashUtils.convert(resp(MCDN, List.of(MIRROR), MCDN, List.of(MIRROR)),
+                List.of(), "t4", url -> "http://atv.example/live-proxy/tok?u=" + url);
+        List<String> bases = baseUrls(decodeDataUri((String) map.get("url")));
+        assertEquals(2, bases.size());
+        for (String base : bases) {
+            assertTrue(base.startsWith("http://atv.example/live-proxy/tok?u=https://"), base);
+        }
+    }
+
+    @Test
+    void t4UrlWrapperAlsoRewritesDurlFallback() {
+        // 无 dash 回落(durl 单文件,T4 强制口径):直链同样经 wrapper 改写;空直链不包
+        Resp resp = new Resp();
+        Data data = new Data();
+        cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay.DUrl durl = new cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay.DUrl();
+        durl.setUrl(MIRROR);
+        data.setDurl(List.of(durl));
+        resp.setData(data);
+
+        Map<String, Object> map = DashUtils.convert(resp, List.of(), "t4",
+                url -> "http://atv.example/live-proxy/tok?u=" + url);
+        assertEquals("http://atv.example/live-proxy/tok?u=" + MIRROR, map.get("url"));
+
+        cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay.DUrl empty = new cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay.DUrl();
+        empty.setUrl("");
+        data.setDurl(List.of(empty));
+        assertEquals("", DashUtils.convert(resp, List.of(), "t4",
+                url -> "http://atv.example/live-proxy/tok?u=" + url).get("url"));
+    }
+
+    @Test
     void isPcdnDetectsThirdPartyMcdnEdges() {
         // B 站 PCDN 的第三方边缘域:host 无 mcdn 字样,特征是 4483 端口 + os=mcdn 调度参数
         assertTrue(DashUtils.isPcdn("https://b-baaa1jd6155d3c4bi3ygwqsbok4b.edge.mountaintoys.cn:4483/upgcxcode/x.m4s?e=exp&os=mcdn"));

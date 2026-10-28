@@ -35,6 +35,18 @@ class LiveProxyServiceTest {
     }
 
     @Test
+    void recognizesBiliMediaHostFamily() {
+        // B站视频 CDN 域族:upos 镜像 / mcdn PCDN / szbdyd P2P;T4 分片经代理补 Referer
+        assertTrue(LiveProxyService.isBiliStream("https://upos-sz-mirrorcos.bilivideo.com/upos/C0DE/x.m4s?e=exp&os=upos"));
+        assertTrue(LiveProxyService.isBiliStream("https://xy112x222x23xy.mcdn.bilivideo.cn:4483/upos/C0DE/x.m4s?e=exp&os=mcdn"));
+        assertTrue(LiveProxyService.isBiliStream("https://p2p-ali.szbdyd.com/upos/C0DE/x.m4s?e=exp&os=szbd"));
+        // 前缀伪装域名/其他 CDN 不误判
+        assertFalse(LiveProxyService.isBiliStream("https://bilivideo.com.evil.io/upos/x.m4s"));
+        assertFalse(LiveProxyService.isBiliStream("https://i0.hdslb.com/bfs/archive/x.jpg"));
+        assertFalse(LiveProxyService.isBiliStream("::::"));
+    }
+
+    @Test
     void recognizesYyMediaHostOnly() {
         // YY 流域名:stream-manager 产出的 FLV CDN 与匿名 HLS 清单(4443 端口)
         assertTrue(LiveProxyService.isYyStream("https://tx-flv-web.yy.com/live/15013_xv_1_1_0.flv?codec=orig&t=1"));

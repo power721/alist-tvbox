@@ -721,6 +721,60 @@ public class SubscriptionService {
         return subscription(token, id, apiUrl, override, sort, configUrl);
     }
 
+    /**
+     * T4 模式订阅配置(/t4/{token}/{id}):与 /sub 同一份配置多做一次站点变换 ——
+     * 内置 csp_* 站点改为 type 4 + api 指回本服务 /t4 适配层(T4Controller 逐参数复刻
+     * spring.jar 各 spider 的回源调用),客户端不下 jar、零设备端代码,跨平台壳子可直接接。
+     * 插件源/WebHome/push 保持 type 3(无 jar 能力的壳子这些源不可用,属预期);全局
+     * spider 字段保留(spring.jar 仍随配置下发,插件源继续可用)。归属隔离与 /sub 同口径。
+     */
+    public Map<String, Object> subscriptionT4(String token, String id) {
+        var credentialUser = userService.findUserByCredentialToken(token);
+        if (credentialUser != null) {
+            token = UserService.userVodToken(credentialUser.getUsername());
+        }
+        Subscription subscription = subscriptionRepository.findBySid(id).orElseThrow(NotFoundException::new);
+        if (subscription.getOwnerUid() > 0 && credentialUidFor(token) != subscription.getOwnerUid()) {
+            throw new NotFoundException();
+        }
+        Map<String, Object> config = subscription(token, id);
+        applyT4(token, config);
+        return config;
+    }
+
+    /** T4 可适配的内置站点(= spring.jar 内纯管道 spider,业务全在本服务端控制器)。 */
+    public static final Set<String> T4_SITE_KEYS = Set.of(
+            "csp_AList", "csp_XiaoYa", "csp_PianDan", "csp_Media", "csp_BiliBili",
+            "csp_Emby", "csp_Jellyfin", "csp_FeiNiu", "csp_Live", "csp_TgDouBan",
+            "csp_TgChannel", "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup");
+
+    private void applyT4(String token, Map<String, Object> config) {
+        if (!(config.get("sites") instanceof List<?> sites)) {
+            return;
+        }
+        // api 嵌入凭证形态 token(同 buildSite ext 口径):裸订阅为 "-"
+        String embedToken = token.startsWith(USER_TOKEN_PREFIX)
+                ? token + "-" + userService.vodSecretOf(userService.findByUserVodToken(token))
+                : token;
+        String base = readHostAddress("");
+        for (Object item : sites) {
+            // api 可能缺失(上游配置的无 api 条目);SetN.contains(null) 会 NPE,先判空
+            if (!(item instanceof Map<?, ?> raw) || !(raw.get("api") instanceof String api)
+                    || !T4_SITE_KEYS.contains(api)) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> site = (Map<String, Object>) raw;
+            site.put("type", 4);
+            // URL 路径段去 csp_ 前缀(csp_ 是 type3 的 jar 类寻址约定,T4 的 api 是纯 URL 用不上);
+            // 站点 key 保留 csp_ 原值——T3/T4 两份配置同 key,客户端观看历史按 key 关联对齐
+            site.put("api", base + "/t4/" + (embedToken.isBlank() ? "-" : embedToken) + "/v/" + api.substring(4));
+            site.remove("jar");
+            site.remove("ext");
+            log.debug("t4 site: {} -> {}", site.get("key"), site.get("api"));
+        }
+    }
+
     public Map<String, Object> subscription(String token, String apiUrl, String override, String sort) {
         return subscription(token, "", apiUrl, override, sort, "");
     }

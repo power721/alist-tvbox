@@ -59,7 +59,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -137,6 +136,33 @@ class BiliBiliServiceTest {
         ), result.get("chapters"));
         assertEquals(List.of(), result.get("subs"));
         assertEquals(List.of(Map.of("name", "哔哩哔哩弹幕", "url", "https://comment.bilibili.com/40168587741.xml")), result.get("danmaku"));
+    }
+
+    @Test
+    void getPlayUrlT4StripsCredentialsAndForcesDurl() throws Exception {
+        // T4 最小响应:①header(账号 Cookie)不得下发——凭证不出服务器;字幕/弹幕/章节一并裁掉;
+        // ②强制单文件 durl——通用壳子内核(系统播放器/ijk)不支持音视频分离的 DASH MPD
+        BiliBiliPlayResponse playResponse = new BiliBiliPlayResponse();
+        BiliBiliPlay play = new BiliBiliPlay();
+        BiliBiliPlay.DUrl durl = new BiliBiliPlay.DUrl();
+        durl.setUrl("https://upos-sz-mirrorcos.bilivideo.com/upos/x.flv?e=exp&os=upos");
+        play.setDurl(List.of(durl));
+        playResponse.setData(play);
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(BiliBiliPlayResponse.class)))
+                .thenReturn(ResponseEntity.ok(playResponse));
+        BiliBiliV2InfoResponse playerResponse = new BiliBiliV2InfoResponse();
+        playerResponse.setData(playerInfoWithChapters());
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/v2"), eq(HttpMethod.GET), any(), eq(BiliBiliV2InfoResponse.class)))
+                .thenReturn(ResponseEntity.ok(playerResponse));
+
+        Map<String, Object> result = service.getPlayUrl("116958703918865-40168587741", false, "t4");
+
+        assertFalse(result.containsKey("header"));
+        assertFalse(result.containsKey("subs"));
+        assertFalse(result.containsKey("danmaku"));
+        assertFalse(result.containsKey("chapters"));
+        assertEquals(durl.getUrl(), result.get("url"));
+        assertEquals(0, ((Number) result.get("parse")).intValue());
     }
 
     @Test

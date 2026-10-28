@@ -39,6 +39,8 @@ public class LiveProxyService {
     private static final String INKE_MEDIA_HOST = ".ikstatic.cn";
     private static final String LOOK_MEDIA_HOST = ".live.126.net";
     private static final String YY_MEDIA_HOST = ".yy.com";
+    /** B站视频 CDN 域族:upos 镜像/PCDN(mcdn*.bilivideo.cn、*.szbdyd.com)全覆盖。 */
+    private static final String[] BILI_MEDIA_HOSTS = {".bilivideo.com", ".bilivideo.cn", ".szbdyd.com"};
     private final OkHttpClient okHttpClient;
     /** 拼接中继专用:读超时收紧到 15 秒(新连接关键帧搜寻预算同级),停流连接更快判死触发换源。 */
     private final OkHttpClient relayClient;
@@ -179,6 +181,11 @@ public class LiveProxyService {
 
         Request.Builder builder = new Request.Builder().url(target)
                 .header("User-Agent", Constants.USER_AGENT);
+        if (isBiliStream(target)) {
+            // B站 CDN 分片要求 Referer(缺失高概率 v_voucher 软拦截,#1075 口径);
+            // T4(无设备端代理)与浏览器类客户端经此统一服务端补头
+            builder.header("Referer", "https://www.bilibili.com");
+        }
         // 分片可能带 Range 请求,透传
         String range = request.getHeader("Range");
         if (range != null && !range.isEmpty()) {
@@ -266,6 +273,15 @@ public class LiveProxyService {
 
     static boolean isYyStream(String target) {
         return hostMatches(target, YY_MEDIA_HOST);
+    }
+
+    static boolean isBiliStream(String target) {
+        for (String host : BILI_MEDIA_HOSTS) {
+            if (hostMatches(target, host)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** YY 子频道号(续租双 id 用):yys 参数纯数字即用,缺省回落房间号(单频道房/存量条目)。 */

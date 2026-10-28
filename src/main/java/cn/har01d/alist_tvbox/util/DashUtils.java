@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 @Slf4j
 public final class DashUtils {
@@ -47,6 +48,17 @@ public final class DashUtils {
     }
 
     public static Map<String, Object> convert(Resp resp, List<String> qns, String client) {
+        return convert(resp, qns, client, null);
+    }
+
+    /**
+     * @param urlWrapper 可选的地址改写器:对 MPD 每个 Representation 的 BaseURL 与
+     * 无 dash 回落的单文件 durl 直链应用。T4(全走服务端)形态用 live-proxy 地址替换
+     * CDN 直链——B站分片要求 Referer/UA,设备端由 spring.jar VideoStreamProxy 补头,
+     * T4 由服务端代理端补,客户端零头要求。
+     */
+    public static Map<String, Object> convert(Resp resp, List<String> qns, String client,
+                                              UnaryOperator<String> urlWrapper) {
         Data data = resp.getData() == null ? resp.getResult() : resp.getData();
         Dash dash = data.getDash() == null ? (data.getVideoInfo() != null ? data.getVideoInfo().getDash() : null) : data.getDash();
         if (dash == null) {
@@ -63,7 +75,7 @@ public final class DashUtils {
                 }
             }
             Map<String, Object> map = new HashMap<>();
-            map.put("url", url);
+            map.put("url", urlWrapper != null && !url.isEmpty() ? urlWrapper.apply(url) : url);
             return map;
         }
 
@@ -86,7 +98,7 @@ public final class DashUtils {
         boolean multiBase = supportsMultiBaseUrl(client);
         for (Media video : dash.getVideo()) {
             if (!hasAny || qns.contains(video.getId())) {
-                videoList.append(getMedia(video, multiBase));
+                videoList.append(getMedia(video, multiBase, urlWrapper));
                 urls.add(quality.get(video.getId()) + " " + getCodec(video.getCodecid()));
                 urls.add(resolveUrl(video));
             }
@@ -94,7 +106,7 @@ public final class DashUtils {
 
         StringBuilder audioList = new StringBuilder();
         for (Media audio : dash.getAudio()) {
-            audioList.append(getMedia(audio, multiBase));
+            audioList.append(getMedia(audio, multiBase, urlWrapper));
             if (audioIds.containsKey(audio.getId())) {
                 CatAudio catAudio = new CatAudio();
                 catAudio.setBit(audioIds.get(audio.getId()));
@@ -225,21 +237,29 @@ public final class DashUtils {
         return (audioIds.get(id) / 1024) + "Kbps";
     }
 
-    private static String getMedia(Media media, boolean multiBase) {
+    private static String getMedia(Media media, boolean multiBase, UnaryOperator<String> urlWrapper) {
         if (media.getMimeType().startsWith("video")) {
-            return getAdaptationSet(media, String.format(Locale.getDefault(), "height='%s' width='%s' frameRate='%s' sar='%s'", media.getHeight(), media.getWidth(), media.getFrameRate(), media.getSar()), multiBase);
+            return getAdaptationSet(media, String.format(Locale.getDefault(), "height='%s' width='%s' frameRate='%s' sar='%s'", media.getHeight(), media.getWidth(), media.getFrameRate(), media.getSar()), multiBase, urlWrapper);
         } else if (media.getMimeType().startsWith("audio")) {
-            return getAdaptationSet(media, String.format("numChannels='2' sampleRate='%s'", audioIds.get(media.getId())), multiBase);
+            return getAdaptationSet(media, String.format("numChannels='2' sampleRate='%s'", audioIds.get(media.getId())), multiBase, urlWrapper);
         } else {
             return "";
         }
     }
 
-    private static String getAdaptationSet(Media media, String params, boolean multiBase) {
+    private static String getAdaptationSet(Media media, String params, boolean multiBase,
+                                           UnaryOperator<String> urlWrapper) {
         String id = media.getId() + "_" + media.getCodecid();
         String type = media.getMimeType().split("/")[0];
         StringBuilder baseUrls = new StringBuilder();
         List<String> urls = resolveUrls(media);
+        if (urlWrapper != null) {
+            List<String> wrapped = new ArrayList<>(urls.size());
+            for (String url : urls) {
+                wrapped.add(urlWrapper.apply(url));
+            }
+            urls = wrapped;
+        }
         int count = multiBase ? urls.size() : 1;
         for (int i = 0; i < count; i++) {
             baseUrls.append("<BaseURL>").append(urls.get(i).replace("&", "&amp;")).append("</BaseURL>\n");

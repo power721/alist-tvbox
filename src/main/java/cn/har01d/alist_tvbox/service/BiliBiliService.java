@@ -77,6 +77,7 @@ import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.live.service.LiveProxyService;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -92,6 +93,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -345,6 +347,8 @@ public class BiliBiliService {
     private final RestTemplate restTemplate;
     private final RestTemplate restTemplate1;
     private final ObjectMapper objectMapper;
+    /** T4(全走服务端)播放地址改写用;单测旧构造下为 null。 */
+    private final LiveProxyService liveProxyService;
     /** 无美化输出 mapper:WBI 签名载荷(pagination_str 等)必须是紧凑 JSON,见 getComments 注释。 */
     private static final ObjectMapper COMPACT_JSON = new ObjectMapper();
     private final OkHttpClient client = new OkHttpClient();
@@ -429,6 +433,18 @@ public class BiliBiliService {
                            BiliCookieRefreshService biliCookieRefreshService,
                            RestTemplateBuilder builder,
                            ObjectMapper objectMapper) {
+        this(settingRepository, navigationService, appProperties, biliCookieRefreshService, builder, objectMapper, null);
+    }
+
+    // 双构造器并存(旧 6 参保单测)时 Spring 无法自选,主构造器须显式标注
+    @Autowired
+    public BiliBiliService(SettingRepository settingRepository,
+                           NavigationService navigationService,
+                           AppProperties appProperties,
+                           BiliCookieRefreshService biliCookieRefreshService,
+                           RestTemplateBuilder builder,
+                           ObjectMapper objectMapper,
+                           LiveProxyService liveProxyService) {
         this.settingRepository = settingRepository;
         this.navigationService = navigationService;
         this.appProperties = appProperties;
@@ -443,6 +459,7 @@ public class BiliBiliService {
                 .readTimeout(Duration.ofSeconds(30))
                 .build();
         this.objectMapper = objectMapper;
+        this.liveProxyService = liveProxyService;
     }
 
     public Map<String, Object> updateCookie(CookieData cookieData) {
@@ -2293,6 +2310,16 @@ public class BiliBiliService {
         Map<String, Object> result = new HashMap<>();
         List<String> qns = appProperties.getQns();
         dash = dash || appProperties.isSupportDash() || DashUtils.isClientSupport(client);
+        // T4 强制单文件 durl(FLV/MP4):通用壳子的内核(系统播放器/ijk)不支持音视频分离的
+        // DASH MPD,只有 exo 系(FongMi)能播;单文件经 urlWrapper 代理直出即可播(画质随 durl 上限)
+        if ("t4".equals(client)) {
+            dash = false;
+        }
+        // T4(全走服务端,X-CLIENT: t4):播放地址改写为 live-proxy 服务端地址——
+        // B站 CDN 分片要求 Referer/UA,设备端由 spring.jar VideoStreamProxy 补头,T4 由代理端补,
+        // 客户端对 CDN 零头要求(也天然免疫 FongMi type4 对播放响应 header 的站点头覆盖)
+        java.util.function.UnaryOperator<String> urlWrapper =
+                "t4".equals(client) && liveProxyService != null ? liveProxyService::buildProxyUrl : null;
         String aid;
         String cid;
         String epId = null;
@@ -2327,7 +2354,7 @@ public class BiliBiliService {
                     throw new IOException("B站返回播放信息为空(疑似风控软拦截 v_voucher),请稍后重试: " + bvid);
                 }
             }
-            result = DashUtils.convert(body, qns, client);
+            result = DashUtils.convert(body, qns, client, urlWrapper);
         } else {
             Map<String, Object> map = new HashMap<>();
             map.put("avid", aid);
@@ -2361,7 +2388,7 @@ public class BiliBiliService {
                     }
                 }
 
-                result = DashUtils.convert(body, qns, client);
+                result = DashUtils.convert(body, qns, client, urlWrapper);
             } else {
                 ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
                 BiliBiliPlayResponse res = response.getBody();
@@ -2379,7 +2406,7 @@ public class BiliBiliService {
                 }
 
                 BiliBiliPlay data = res.getData() == null ? res.getResult() : res.getData();
-                result.put("url", data.getDurl().get(0).getUrl());
+                result.put("url", urlWrapper != null ? urlWrapper.apply(data.getDurl().get(0).getUrl()) : data.getDurl().get(0).getUrl());
             }
         }
         String cookie = entity.getHeaders().getFirst("Cookie");
@@ -2404,6 +2431,18 @@ public class BiliBiliService {
 
         if (appProperties.isHeartbeat()) {
             heartbeat(aid, cid);
+        }
+
+        if ("t4".equals(client)) {
+            // T4 最小响应:只保留代理播放地址。header 里的账号 Cookie(SESSDATA/bili_jct)
+            // 会整串泄给客户端,违背"凭证不出服务器"原则(代理端已补 Referer/UA,客户端零头要求);
+            // 字幕/弹幕/章节为设备端增强,跨端壳子消费不了,一并裁掉。
+            // durl 分支无 DashUtils 参与,补直链播放标记(缺省会被播放器当 1 走网页嗅探)
+            result.remove("header");
+            result.remove("subs");
+            result.remove("danmaku");
+            result.remove("chapters");
+            result.putIfAbsent("parse", 0);
         }
 
         log.debug("getPlayUrl: {} {}", bvid, result);

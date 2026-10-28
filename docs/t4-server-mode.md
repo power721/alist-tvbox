@@ -1,0 +1,65 @@
+# T4 模式(全走服务端)
+
+> 2026-10-27 实现。目标:给没有 jar 加载能力的跨平台壳子(纯 HTTP TVBox 客户端、
+> Node 版 TVBOX、iOS 壳等)一条零插件接入路;`/sub` 保持 type 3 不动。
+
+## 入口
+
+| URL | 形态 |
+|---|---|
+| `/t4/{token}/{id}` | T4 订阅配置(与 `/sub/{token}/{id}` 同源,多做一次站点变换) |
+| `/t4/{token}/v/{site}` | T4 VOD 端点(FongMi type 4 五动作全打到这;site = 站点 key 去 csp_ 前缀,如 `AList`、`Media`;带前缀的 `csp_AList` 兼容) |
+
+例:`http://192.168.50.60:4567/t4/Harold/0`,站点 api 形如
+`http://host/t4/Harold/v/AList`。裸订阅(无 token)同 `/sub` 有 `/t4/{id}` 形态;
+站点 api 里 token 段为 `-`。token 归一化、u- 凭证形态、个人订阅归属隔离与 `/sub` 同口径
+(`SubscriptionService.subscriptionT4`)。
+
+## 配置变换(applyT4)
+
+内置 csp_* 站点 → `type: 4` + `api: {host}/t4/{embedToken}/v/{csp_Xxx}`,去掉 `jar`/`ext`;
+`searchable/quickSearch/filterable/order` 等字段原样保留。**不变换**(保持 type 3 + jar):
+
+- 第三方插件源(饭太硬/玩偶等——真爬虫在设备端跑,服务端化是另一个工程)
+- WebHome(`atv_home`,webhtv/fish 按 `homePage` 字段原生渲染,与 api 无关)
+- push_agent(FongMi 对该 key 有内置特判)
+
+全局 `spider` 字段(spring.jar)保留,插件源继续可用。
+
+## VOD 端点契约(T4Controller,FongMi SiteApi 对齐)
+
+| 动作 | 客户端请求 | 适配 |
+|---|---|---|
+| home | `GET api?filter=true` | 裸调用对应端点 + homeVideo 合并 `list`(推荐位) |
+| 分类 | `?ac=detail&t={tid}&pg={页}&ext={base64UrlSafe(JSON筛选)}` | ext 解码:网盘族→`f` JSON;B站→FilterDto;直播→platform;豆瓣→sort/year/genre/region;片单/追剧→flattened Map |
+| 详情 | `?ac=detail&ids={id}` | ids→id 参位(TG/盘搜/追剧族);TG 族自动补 `title`(标题缓存) |
+| 搜索 | `?wd={词}&quick={bool}&pg={页}` | 透传;TG 族记录最近搜索词 |
+| 播放 | `?play={id}&flag={线路}` | 网盘/TG/盘搜/追剧→`/play?id`;B站→`bvid=`(动作前缀由 /play 兜底归位,**X-CLIENT: t4** 身份触发服务端代理地址形态,见下);Emby/Jellyfin/飞牛→`-play?id&t=0`;直播→follow$/unfollow$/offline 服务端等价复刻,直链透传(`jx/parse=0`+移动端头) |
+
+**B站服务端代理形态**:T4 播放请求以 `X-CLIENT: t4` 下发,`BiliBiliService.getPlayUrl` 据此把
+MPD 每个 Representation 的 BaseURL(dash)或单文件直链(durl)改写为 `/live-proxy/{token}?u=...`
+服务端地址;代理端对 bilivideo.com/bilivideo.cn/szbdyd.com 域族自动补 `Referer: bilibili.com`
+(#1075 风控口径),客户端对 B站 CDN 零头要求,也免疫 FongMi type 4 用站点头覆盖播放响应头的问题。
+设备端(T3)spring.jar VideoStreamProxy 的服务端等价物。
+
+**直播服务端代理**:T4 直播详情按 `platform=web` 口径取地址——Twitch/SOOP 仅 web 形态走
+`/live-proxy`,酷狗/Inke/看看/YY web 走纯 proxy 模式;虎牙恒 `/p`。播放直链透传(`jx/parse=0`
++移动端头,与 spring.jar Live.play 同构)。
+
+逐参数对齐 spring.jar 各 spider(CatVodTVSpider)的回源调用;msg 动作(msubadd-/msubcheck-/
+巡检/B站点赞投币收藏等)本就由 `/play/{token}` 服务端拦截,T4 天然全量可用。
+
+## 已知取舍(T4 vs T3)
+
+- **播放进度回传(PlaybackSyncer)没有**:它是 spring.jar 里的设备端组件;T4 无设备端代码。
+  跨端壳子本来就没有,不算回退;要进度同步请用 `/sub`。
+- **巡检/取消追剧的弹窗确认、原生 Toast 没有了**:动作直接执行,回执走 msg 通道显示。
+- **本地分片代理(VideoStreamProxy)没有**:播放地址为服务端 `/p` 代理直链,本就无需客户端代理。
+- **直播弹幕(LiveDanmaku)、B站 DASH 本地换线没有**。
+- 插件源在 T4 配置里保留但无 jar 能力的壳子用不了(预期;等服务端插件运行时另议)。
+
+## TG/盘搜族标题缓存
+
+spring.jar 端爬虫持有 titleCache(浏览时捕获 vod_id→vod_name,详情回带 title 兜底)。服务端
+等价:T4Controller 用 Caffeine(5k 条/2h)旁路捕获响应 list 条目,详情自动补 `title`;
+另记最近搜索词作 `wd` 兜底。
