@@ -39,7 +39,7 @@ jobs:
         env:
           VITE_TELEGRAM_INVITE_LINK: ${{ secrets.TELEGRAM_INVITE_LINK }}
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: setup graalvm
