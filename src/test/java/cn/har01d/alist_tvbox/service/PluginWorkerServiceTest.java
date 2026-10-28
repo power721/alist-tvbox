@@ -116,6 +116,146 @@ class PluginWorkerServiceTest {
     }
 
     @Test
+    void cencEncryptedPlayRewritesToProxyAndDecrypts() throws Exception {
+        // 红果密文流端到端:假插件起本地密文上游(playerContent 返回 #hg-cenc= 片段 URL),
+        // worker 建解密会话改写为 /t4cenc 桥地址,Java forward 到 worker 本地代理,
+        // 断言收到的流包含明文模式(密文=明文^CTR 流,含明文即证明真解密)
+        PluginWorkerService service = new PluginWorkerService(objectMapper);
+        assumeTrue(service.isAvailable(), "python3 not available, skip");
+        Path spider = Files.createTempFile("t4-cenc-spider", ".py");
+        spider.toFile().deleteOnExit();
+        Files.writeString(spider, CENC_SMOKE_SPIDER);
+        String extend = Base64.getEncoder().encodeToString(objectMapper.writeValueAsBytes(Map.of(
+                "source", spider.toString(), "raw", true, "api", "http://localhost:4567")));
+
+        com.fasterxml.jackson.databind.JsonNode play = service.call(
+                "cenc", extend, "play", Map.of("play", "p1", "proxy_base", "http://atv.test/t4cenc/tok/cenc"));
+        String url = play.path("url").asText();
+        assertTrue(url.startsWith("http://atv.test/t4cenc/tok/cenc/cenc/"), url);
+
+        String pathAndQuery = url.substring("http://atv.test/t4cenc/tok/cenc".length());
+        var request = new org.springframework.mock.web.MockHttpServletRequest("GET", pathAndQuery);
+        request.addHeader("Range", "bytes=0-65535");
+        var response = new org.springframework.mock.web.MockHttpServletResponse();
+        service.forward("cenc", pathAndQuery, request, response);
+
+        assertEquals(206, response.getStatus());
+        byte[] body = response.getContentAsByteArray();
+        // 明文视频样本模式:(i*7+1)&0xFF,97 字节——密文里不存在该序列,命中即解密成功
+        boolean found = false;
+        for (int i = 0; i + 97 <= body.length; i++) {
+            boolean match = true;
+            for (int j = 0; j < 97; j++) {
+                if ((body[i + j] & 0xFF) != ((j * 7 + 1) & 0xFF)) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                found = true;
+                break;
+            }
+        }
+        assertTrue(found, "decrypted plaintext pattern not found in " + body.length + " bytes");
+        service.shutdown();
+    }
+
+    /** 合成整段 CENC MP4(单 encv trak,确定性 key 与明文)+ 本地 Range 上游 + playerContent 出密文片段 URL。 */
+    private static final String CENC_SMOKE_SPIDER = """
+            # -*- coding: utf-8 -*-
+            import base64, json, struct, threading
+            from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+            from Crypto.Cipher import AES
+            
+            KEY = bytes.fromhex("86c22eed79003130e78191b09b7588e5")
+            PLAIN = bytes((i * 7 + 1) & 0xFF for i in range(97))
+            IV = bytes(range(0x10, 0x18))
+
+            def _ctr(key, iv, length):
+                cipher = AES.new(key, AES.MODE_CTR, nonce=b"", initial_value=int.from_bytes(iv.ljust(16, b"\\0"), "big"))
+                return cipher.encrypt(b"\\0" * length)
+
+            def _box(fourcc, payload):
+                return struct.pack(">I", len(payload) + 8) + fourcc + payload
+
+            def _full_box(fourcc, version, flags, payload):
+                return _box(fourcc, bytes([version]) + flags.to_bytes(3, "big") + payload)
+
+            def _make_spade_for_key(key):
+                hexbytes = key.hex().encode()
+                after = [0x30] + list(hexbytes)
+                value = bytearray(64)
+                va, vb = 85, 246
+                for index in range(33):
+                    previous = va if index & 1 else vb
+                    before = ((after[index] + 21 + index.bit_count()) & 0xFF) ^ previous
+                    value[index] = before
+                    if index & 1:
+                        va = before
+                    else:
+                        vb = before
+                header = value[0] ^ value[1] ^ 64
+                return base64.b64encode(bytes([header]) + bytes(value[:63]) + bytes(16)).decode()
+
+            def _media():
+                enc = bytes(a ^ b for a, b in zip(PLAIN, _ctr(KEY, IV, len(PLAIN))))
+                def trak(sample_offset, size, aux_offset):
+                    stsz = _full_box(b"stsz", 0, 0, struct.pack(">II", 0, 1) + struct.pack(">I", size))
+                    stco = _full_box(b"stco", 0, 0, struct.pack(">I", 1) + struct.pack(">I", sample_offset))
+                    stsc = _full_box(b"stsc", 0, 0, struct.pack(">I", 1) + struct.pack(">III", 1, 1, 1))
+                    saiz = _full_box(b"saiz", 0, 0, bytes([0]) + struct.pack(">I", 1) + bytes([8]))
+                    saio = _full_box(b"saio", 0, 0, struct.pack(">I", 1) + struct.pack(">I", aux_offset))
+                    sinf = _box(b"sinf", _box(b"frma", b"hvc1"))
+                    entry = _box(b"encv", b"\\0" * 8 + sinf)
+                    stbl = _box(b"stbl", entry + stsz + stco + stsc + saiz + saio)
+                    return _box(b"trak", _box(b"tkhd", b"\\0" * 92) + stbl)
+                def moov(video_offset, aux_offset):
+                    return _box(b"moov", _box(b"mvhd", b"\\0" * 100) + trak(video_offset, len(enc), aux_offset))
+                ftyp = _box(b"ftyp", b"isom\\0\\0\\2\\0isom")
+                moov_size = len(moov(0, 0))
+                mdat_offset = len(ftyp) + moov_size + 8
+                aux_offset = mdat_offset + len(enc)
+                data = ftyp + moov(mdat_offset, aux_offset) + _box(b"mdat", enc) + IV
+                return data
+
+            MEDIA = _media()
+            SPADE = _make_spade_for_key(KEY)
+
+            class _Upstream(BaseHTTPRequestHandler):
+                protocol_version = "HTTP/1.1"
+                def log_message(self, fmt, *args):
+                    pass
+                def do_GET(self):
+                    rng = self.headers.get("Range") or ""
+                    if rng == "bytes=0-0":
+                        body = b"x"
+                        self.send_response(206)
+                        self.send_header("Content-Range", "bytes 0-0/%d" % len(MEDIA))
+                    else:
+                        start = int(rng[6:].split("-", 1)[0]) if rng else 0
+                        end = int(rng[6:].split("-", 1)[1]) if rng and "-" in rng[6:] else len(MEDIA) - 1
+                        body = MEDIA[start:end + 1]
+                        self.send_response(206)
+                        self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, len(MEDIA)))
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+
+            _server = ThreadingHTTPServer(("127.0.0.1", 0), _Upstream)
+            threading.Thread(target=_server.serve_forever, daemon=True).start()
+            UPSTREAM = "http://127.0.0.1:%d/media.mp4" % _server.server_address[1]
+
+            class Spider:
+                def init(self, extend):
+                    return ""
+                def getName(self):
+                    return "cenc-smoke"
+                def playerContent(self, flag, id, vipFlags):
+                    encoded = base64.urlsafe_b64encode(json.dumps({"spade_a": SPADE}, separators=(",", ":")).encode()).decode()
+                    return json.dumps({"parse": 0, "url": UPSTREAM + "#hg-cenc=" + encoded}, ensure_ascii=False)
+            """;
+
+    @Test
     void pluginRuntimeUnavailableDegrades() {
         PluginWorkerService service = new PluginWorkerService(objectMapper);
         ReflectionTestUtils.setField(service, "available", new java.util.concurrent.atomic.AtomicReference<>(Boolean.FALSE));

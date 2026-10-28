@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PreDestroy;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.io.ClassPathResource;
@@ -103,6 +105,7 @@ public class PluginWorkerService {
             Path dir = Files.createTempDirectory("t4-plugins");
             atvpScript = extract("static/Atvp.py", dir.resolve("Atvp.py"));
             workerScript = extract("scripts/t4worker.py", dir.resolve("t4worker.py"));
+            extract("scripts/t4cenc.py", dir.resolve("t4cenc.py"));
             return true;
         } catch (Exception e) {
             log.warn("t4 plugin worker scripts extract failed", e);
@@ -152,6 +155,49 @@ public class PluginWorkerService {
                 return created;
             }
             return worker;
+        }
+    }
+
+    /**
+     * 转发到指定插件 worker 内的本地 HTTP 服务(当前仅 CENC 解密代理):
+     * 目标 http://127.0.0.1:{workerPort}{pathAndQuery},Range 头透传,响应流式拷贝。
+     */
+    public void forward(String siteKey, String pathAndQuery,
+                        HttpServletRequest request, HttpServletResponse response) throws IOException {
+        Worker worker = workers.get(siteKey);
+        if (worker == null || !worker.alive()) {
+            throw new BadGatewayException("插件代理服务未运行: " + siteKey);
+        }
+        int port = worker.localPort();
+        if (port <= 0) {
+            throw new BadGatewayException("插件代理服务未启动(无 CENC 会话): " + siteKey);
+        }
+        String target = "http://127.0.0.1:" + port + pathAndQuery;
+        var connection = (java.net.HttpURLConnection) new java.net.URL(target).openConnection();
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(60000);
+        String range = request.getHeader("Range");
+        if (range != null && !range.isEmpty()) {
+            connection.setRequestProperty("Range", range);
+        }
+        try (var upstream = connection.getInputStream()) {
+            response.setStatus(connection.getResponseCode());
+            for (var entry : connection.getHeaderFields().entrySet()) {
+                if (entry.getKey() == null || entry.getValue().isEmpty()) {
+                    continue;
+                }
+                for (String value : entry.getValue()) {
+                    if (!response.containsHeader(entry.getKey())) {
+                        response.addHeader(entry.getKey(), value);
+                    }
+                }
+            }
+            upstream.transferTo(response.getOutputStream());
+        } catch (IOException e) {
+            if (!response.isCommitted()) {
+                throw new BadGatewayException("插件代理转发失败: " + e.getMessage());
+            }
+            log.debug("t4 cenc forward aborted: {}", e.toString());
         }
     }
 
@@ -279,6 +325,16 @@ public class PluginWorkerService {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new WorkerDeadException();
+            }
+        }
+
+        /** worker 的 CENC 本地代理端口(行协议 port 方法;0 = 未启动)。 */
+        int localPort() {
+            try {
+                JsonNode result = request("port", Map.of(), Duration.ofSeconds(5));
+                return result == null ? 0 : result.asInt(0);
+            } catch (RuntimeException e) {
+                return 0;
             }
         }
 

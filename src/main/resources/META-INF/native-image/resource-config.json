@@ -35,6 +35,9 @@
     "pattern": "scripts/t4worker.py"
    },
    {
+    "pattern": "scripts/t4cenc.py"
+   },
+   {
     "pattern": "static/Atvp.py"
    }
   ]

@@ -170,6 +170,8 @@ public class T4Controller {
         if (StringUtils.isNotBlank(play)) {
             method = "play";
             params.put("play", play);
+            // 红果密文流等需服务端解密的场景:worker 把 #hg-cenc= URL 改写为此桥下地址
+            params.put("proxy_base", subscriptionService.readHostAddress("/t4cenc/" + token + "/" + site));
         } else if (StringUtils.isNotBlank(ids)) {
             method = "detail";
             params.put("ids", ids);
@@ -190,6 +192,25 @@ public class T4Controller {
         }
         log.info("t4 plugin: {}  method: {}  t: {}  ids: {}  wd: {}  play: {}", site, method, t, ids, wd, play);
         return pluginWorkerService.call(site, extend, method, params);
+    }
+
+    // T4 CENC 解密桥:转发到插件 worker 内的 127.0.0.1 解密代理(Range 透传,seek 可用)
+    @RequestMapping("/t4cenc/{token}/{site}/**")
+    public void cenc(@PathVariable String token, @PathVariable String site,
+                     HttpServletRequest request, HttpServletResponse response) throws IOException {
+        subscriptionService.checkToken(token);
+        String uri = request.getRequestURI();
+        int start = uri.indexOf("/t4cenc/" + token + "/" + site + "/");
+        if (start < 0) {
+            throw new NotFoundException();
+        }
+        String path = uri.substring(start + ("/t4cenc/" + token + "/" + site).length());
+        if (path.startsWith("/")) {
+            path = path.substring(1);
+        }
+        String query = request.getQueryString();
+        String siteKey = site.startsWith("csp_") ? site : "csp_" + site;
+        pluginWorkerService.forward(siteKey, "/" + path + (query == null ? "" : "?" + query), request, response);
     }
 
     /** 服务端 worker 的插件 extend:复用 buildPluginExtPayload,剔除设备端专属字段。 */

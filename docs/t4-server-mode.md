@@ -59,3 +59,22 @@ MPD 每个 Representation 的 BaseURL(dash)或单文件直链(durl)改写为 `/l
 spring.jar 端爬虫持有 titleCache(浏览时捕获 vod_id→vod_name,详情回带 title 兜底)。服务端
 等价:T4Controller 用 Caffeine(5k 条/2h)旁路捕获响应 list 条目,详情自动补 `title`;
 另记最近搜索词作 `wd` 兜底。
+
+## 红果密文流服务端解密(CENC 桥)
+
+红果短剧/电影的媒体流是整段 CENC(cenc-aes-ctr)加密 MP4,设备端壳子无法解密。
+插件(红果短剧.py)playerContent 返回的 url 带 `#hg-cenc={base64(spade_a[,audio][,audio_spade_a])}`
+片段——T4 服务端识别并就地解密,链路:
+
+1. T4Controller play 动作多带 `proxy_base` 参数(`/t4cenc/{token}/{site}` 桥地址);
+2. worker(t4worker.py)play 后处理:url 含 `#hg-cenc=` 且有 proxy_base 时,用
+   spade_a 派生内容密钥(derive_content_key,算法 vendor 自 atv-player `cenc.py` →
+   `scripts/t4cenc.py`)建 `CencRangeReader` 流式解密会话,lazy 起 127.0.0.1 随机端口
+   HTTP 服务,把 url 改写为 `proxy_base + /cenc/{token}.mp4`;
+   分离音频(payload.audio,电影 DASH 形态)另建会话并附 `audio_url` 字段;
+3. 客户端按 Range 拉流:请求 `/t4cenc/{token}/{site}/cenc/{sess}.mp4` →
+   T4Controller 校验 token → `PluginWorkerService.forward` 转到 worker 本地端口
+   (行协议 port 方法取端口),Range 透传,206/200 流式回传——seek 即拉即解。
+
+细节:Range 末端超媒体总长须钳制(播放器常发 bytes=0-65535)而非 416;worker 闲置
+回收时 CENC 会话随进程消亡,播放中会话有流量不受影响(60s 读超时兜底)。
