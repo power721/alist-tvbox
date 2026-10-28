@@ -209,8 +209,10 @@ public class T4Controller {
             path = path.substring(1);
         }
         String query = request.getQueryString();
-        String siteKey = site.startsWith("csp_") ? site : "csp_" + site;
-        pluginWorkerService.forward(siteKey, "/" + path + (query == null ? "" : "?" + query), request, response);
+        // 查找键与 pluginVod 注册 worker 的键严格同源:URL 路径段原样(裸 hex 或上游
+        // csp_ 前缀 key 均为插件 key 本身)。插件 key 无 csp_ 寻址约定,勿再补前缀——
+        // 补了查空必报「插件代理服务未运行」(线上 #t4cenc 404 形态)。
+        pluginWorkerService.forward(site, "/" + path + (query == null ? "" : "?" + query), request, response);
     }
 
     /** 服务端 worker 的插件 extend:复用 buildPluginExtPayload,剔除设备端专属字段。 */
