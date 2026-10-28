@@ -18,13 +18,9 @@
 ## 配置变换(applyT4)
 
 内置 csp_* 站点 → `type: 4` + `api: {host}/t4/{embedToken}/v/{csp_Xxx}`,去掉 `jar`/`ext`;
-`searchable/quickSearch/filterable/order` 等字段原样保留。**不变换**(保持 type 3 + jar):
-
-- 第三方插件源(饭太硬/玩偶等——真爬虫在设备端跑,服务端化是另一个工程)
-- WebHome(`atv_home`,webhtv/fish 按 `homePage` 字段原生渲染,与 api 无关)
-- push_agent(FongMi 对该 key 有内置特判)
-
-全局 `spider` 字段(spring.jar)保留,插件源继续可用。
+`searchable/quickSearch/filterable/order` 等字段原样保留。**type 3 站点整体移除**(插件源/
+WebHome/push/上游 spider——无 jar 壳子点开即废);type 0/1/2 的普通 HTTP 站点保留。
+全局 `spider` 字段(spring.jar)一并移除——T4 壳子完全不下载 jar。
 
 ## VOD 端点契约(T4Controller,FongMi SiteApi 对齐)
 

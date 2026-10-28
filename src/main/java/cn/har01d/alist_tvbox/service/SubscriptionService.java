@@ -724,9 +724,10 @@ public class SubscriptionService {
     /**
      * T4 模式订阅配置(/t4/{token}/{id}):与 /sub 同一份配置多做一次站点变换 ——
      * 内置 csp_* 站点改为 type 4 + api 指回本服务 /t4 适配层(T4Controller 逐参数复刻
-     * spring.jar 各 spider 的回源调用),客户端不下 jar、零设备端代码,跨平台壳子可直接接。
-     * 插件源/WebHome/push 保持 type 3(无 jar 能力的壳子这些源不可用,属预期);全局
-     * spider 字段保留(spring.jar 仍随配置下发,插件源继续可用)。归属隔离与 /sub 同口径。
+     * spring.jar 各 spider 的回源调用),客户端零设备端代码,跨平台壳子可直接接。
+     * type 3 站点(插件源/WebHome/push/上游 spider)整体移除:无 jar 能力的壳子用不了,
+     * 留着是死重;type 0/1/2 的普通 HTTP 站点保留。全局 spider 字段(spring.jar)一并移除,
+     * T4 壳子完全不下载 jar。归属隔离与 /sub 同口径。
      */
     public Map<String, Object> subscriptionT4(String token, String id) {
         var credentialUser = userService.findUserByCredentialToken(token);
@@ -757,22 +758,34 @@ public class SubscriptionService {
                 ? token + "-" + userService.vodSecretOf(userService.findByUserVodToken(token))
                 : token;
         String base = readHostAddress("");
-        for (Object item : sites) {
+        Iterator<?> it = sites.iterator();
+        while (it.hasNext()) {
             // api 可能缺失(上游配置的无 api 条目);SetN.contains(null) 会 NPE,先判空
-            if (!(item instanceof Map<?, ?> raw) || !(raw.get("api") instanceof String api)
-                    || !T4_SITE_KEYS.contains(api)) {
+            if (!(it.next() instanceof Map<?, ?> raw)) {
                 continue;
             }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> site = (Map<String, Object>) raw;
-            site.put("type", 4);
-            // URL 路径段去 csp_ 前缀(csp_ 是 type3 的 jar 类寻址约定,T4 的 api 是纯 URL 用不上);
-            // 站点 key 保留 csp_ 原值——T3/T4 两份配置同 key,客户端观看历史按 key 关联对齐
-            site.put("api", base + "/t4/" + (embedToken.isBlank() ? "-" : embedToken) + "/v/" + api.substring(4));
-            site.remove("jar");
-            site.remove("ext");
-            log.debug("t4 site: {} -> {}", site.get("key"), site.get("api"));
+            String api = raw.get("api") instanceof String value ? value : null;
+            if (api != null && T4_SITE_KEYS.contains(api)) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> site = (Map<String, Object>) raw;
+                site.put("type", 4);
+                // URL 路径段去 csp_ 前缀(csp_ 是 type3 的 jar 类寻址约定,T4 的 api 是纯 URL 用不上);
+                // 站点 key 保留 csp_ 原值——T3/T4 两份配置同 key,客户端观看历史按 key 关联对齐
+                site.put("api", base + "/t4/" + (embedToken.isBlank() ? "-" : embedToken) + "/v/" + api.substring(4));
+                site.remove("jar");
+                site.remove("ext");
+                log.debug("t4 site: {} -> {}", site.get("key"), site.get("api"));
+                continue;
+            }
+            // 其余 type 3 站点移除:插件源/上游 spider/Atvp 等都要 jar 或设备端运行时,
+            // T4 壳子(无 jar 加载器)点开即废;type 0/1/2 的普通 HTTP 站点不受影响
+            if (Integer.valueOf(3).equals(raw.get("type"))) {
+                log.debug("t4 remove type 3 site: {}", raw.get("key"));
+                it.remove();
+            }
         }
+        // 全局 spider 字段随移除:type 3 已清空,jar 无人消费,客户端不再下载 spring.jar
+        config.remove("spider");
     }
 
     public Map<String, Object> subscription(String token, String apiUrl, String override, String sort) {

@@ -68,7 +68,7 @@ class SubscriptionServiceT4Test {
     }
 
     @Test
-    void builtinSitesBecomeType4AndPluginsStayType3() {
+    void builtinSitesBecomeType4AndType3SitesRemoved() {
         Plugin plugin = new Plugin();
         plugin.setId(9);
         plugin.setUrl("https://up.example/spider.txt");
@@ -91,10 +91,9 @@ class SubscriptionServiceT4Test {
         assertEquals(4, media.get("type"));
         assertEquals("http://atv.example/t4/-/v/Media", media.get("api"));
 
-        // 插件源保持 type 3 + jar(跨端壳子无 jar 能力时不可用,属预期)
-        Map<String, Object> upstream = findSite(config, "plugin-9");
-        assertEquals(3, upstream.get("type"));
-        assertEquals("http://atv.example/spring.jar", upstream.get("jar"));
+        // type 3 站点(插件源等)整体移除:无 jar 壳子用不了,留着是死重;全局 spider 字段一并移除
+        assertTrue(findSiteKeys(config).stream().noneMatch("plugin-9"::equals));
+        assertFalse(config.containsKey("spider"));
     }
 
     @Test
@@ -131,22 +130,40 @@ class SubscriptionServiceT4Test {
     }
 
     @Test
-    void webHomeStaysType3() {
+    void webHomeType3Removed() {
         List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
                 new SubscriptionSourceService.SubscriptionSourceRef("builtin-atv_home", true, "atv_home", "影视首页", null));
         SubscriptionService service = newService("{}", sources, mock(UserService.class));
 
         Map<String, Object> config = service.subscriptionT4("", "0");
 
-        Map<String, Object> webHome = findSite(config, "atv_home");
-        assertEquals(3, webHome.get("type"));
-        assertEquals("csp_WebHome", webHome.get("api"));
-        assertTrue(((String) webHome.get("jar")).endsWith("/spring.jar"));
+        assertTrue(findSiteKeys(config).stream().noneMatch("atv_home"::equals));
+        assertFalse(config.containsKey("spider"));
+    }
+
+    @Test
+    void plainHttpUpstreamSitesKept() {
+        // type 0/1/2 的普通 HTTP 站点不依赖 jar,保留
+        String upstream = "{\"sites\":[{\"key\":\"cms\",\"name\":\"CMS采集\",\"type\":1,\"api\":\"https://cj.example/api.php/provide/vod\"}]}";
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null));
+        SubscriptionService service = newService(upstream, sources, mock(UserService.class));
+
+        Map<String, Object> config = service.subscriptionT4("", "0");
+
+        Map<String, Object> cms = findSite(config, "cms");
+        assertEquals(1, cms.get("type"));
+        assertEquals("https://cj.example/api.php/provide/vod", cms.get("api"));
     }
 
     private static Map<String, Object> findSite(Map<String, Object> config, String key) {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         return sites.stream().filter(site -> key.equals(site.get("key"))).findFirst().orElseThrow();
+    }
+
+    private static List<String> findSiteKeys(Map<String, Object> config) {
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        return sites.stream().map(site -> String.valueOf(site.get("key"))).toList();
     }
 
     private SubscriptionService newService(String upstreamJson,
