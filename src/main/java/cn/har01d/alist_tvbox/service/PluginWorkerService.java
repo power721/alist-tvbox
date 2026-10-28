@@ -44,6 +44,8 @@ public class PluginWorkerService {
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(30);
 
     private final ObjectMapper objectMapper;
+    /** 行协议写请求专用:全局 mapper 带 pretty-print(缩进多行),会把一个请求拆成 N 行撕裂协议 */
+    private final com.fasterxml.jackson.databind.ObjectWriter compactWriter;
     private final ConcurrentHashMap<String, Worker> workers = new ConcurrentHashMap<>();
     private final AtomicReference<Boolean> available = new AtomicReference<>();
 
@@ -53,6 +55,7 @@ public class PluginWorkerService {
 
     public PluginWorkerService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
+        this.compactWriter = objectMapper.writer().without(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
     }
 
     /** python3 与 worker 脚本是否就绪(结果缓存)。 */
@@ -226,7 +229,7 @@ public class PluginWorkerService {
             request.put("method", method);
             request.set("params", objectMapper.valueToTree(params));
             try {
-                stdin.write((objectMapper.writeValueAsString(request) + "\n").getBytes(StandardCharsets.UTF_8));
+                stdin.write((compactWriter.writeValueAsString(request) + "\n").getBytes(StandardCharsets.UTF_8));
                 stdin.flush();
             } catch (IOException e) {
                 throw new WorkerDeadException();

@@ -24,7 +24,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @EnabledOnOs({OS.LINUX, OS.MAC})
 class PluginWorkerServiceTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    // 复刻生产形态:全局 mapper 带 pretty-print 缩进输出(行协议撕裂事故的根源),服务内部必须自行压缩
+    private final ObjectMapper objectMapper = new ObjectMapper()
+            .enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
 
     @Test
     void fullRoundTripWithRealPythonWorker() throws Exception {
