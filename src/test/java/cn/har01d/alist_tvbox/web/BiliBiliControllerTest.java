@@ -24,13 +24,35 @@ class BiliBiliControllerTest {
     private BiliBiliService biliBiliService;
     @Mock
     private SubscriptionService subscriptionService;
+    @Mock
+    private cn.har01d.alist_tvbox.live.service.LiveProxyService liveProxyService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        BiliBiliController controller = new BiliBiliController(biliBiliService, subscriptionService);
+        BiliBiliController controller = new BiliBiliController(biliBiliService, subscriptionService, liveProxyService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+    }
+
+    @Test
+    void proxyResolvesDurlAndDelegatesToStreamProxy() throws Exception {
+        // T4 短代理:playId 实时解析单文件 durl 后交通用流代理(代理端补 Referer、Range 透传)
+        when(biliBiliService.resolvePlayUrlForProxy("BV1u1no6hEiP"))
+                .thenReturn("https://upos-sz-mirrorcos.bilivideo.com/upos/x.flv?e=exp");
+        org.springframework.mock.web.MockHttpServletResponse resp =
+                new org.springframework.mock.web.MockHttpServletResponse();
+        var req = new org.springframework.mock.web.MockHttpServletRequest("GET", "/proxy/tok/BV1u1no6hEiP");
+        req.setRequestURI("/proxy/tok/BV1u1no6hEiP");
+
+        new BiliBiliController(biliBiliService, subscriptionService, liveProxyService)
+                .proxy("tok", "BV1u1no6hEiP", req, resp);
+
+        verify(biliBiliService).resolvePlayUrlForProxy("BV1u1no6hEiP");
+        org.mockito.Mockito.verify(liveProxyService).proxy(
+                org.mockito.ArgumentMatchers.eq("https://upos-sz-mirrorcos.bilivideo.com/upos/x.flv?e=exp"),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
     }
 
     @Test

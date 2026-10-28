@@ -349,6 +349,8 @@ public class BiliBiliService {
     private final ObjectMapper objectMapper;
     /** T4(全走服务端)播放地址改写用;单测旧构造下为 null。 */
     private final LiveProxyService liveProxyService;
+    /** T4 短代理地址(/proxy/{token}/{id})取当前 token 用;单测旧构造下为 null。 */
+    private final SubscriptionService subscriptionService;
     /** 无美化输出 mapper:WBI 签名载荷(pagination_str 等)必须是紧凑 JSON,见 getComments 注释。 */
     private static final ObjectMapper COMPACT_JSON = new ObjectMapper();
     private final OkHttpClient client = new OkHttpClient();
@@ -433,11 +435,9 @@ public class BiliBiliService {
                            BiliCookieRefreshService biliCookieRefreshService,
                            RestTemplateBuilder builder,
                            ObjectMapper objectMapper) {
-        this(settingRepository, navigationService, appProperties, biliCookieRefreshService, builder, objectMapper, null);
+        this(settingRepository, navigationService, appProperties, biliCookieRefreshService, builder, objectMapper, null, null);
     }
 
-    // 双构造器并存(旧 6 参保单测)时 Spring 无法自选,主构造器须显式标注
-    @Autowired
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
                            AppProperties appProperties,
@@ -445,6 +445,19 @@ public class BiliBiliService {
                            RestTemplateBuilder builder,
                            ObjectMapper objectMapper,
                            LiveProxyService liveProxyService) {
+        this(settingRepository, navigationService, appProperties, biliCookieRefreshService, builder, objectMapper, liveProxyService, null);
+    }
+
+    // 双构造器并存(旧 6/7 参保单测)时 Spring 无法自选,主构造器须显式标注
+    @Autowired
+    public BiliBiliService(SettingRepository settingRepository,
+                           NavigationService navigationService,
+                           AppProperties appProperties,
+                           BiliCookieRefreshService biliCookieRefreshService,
+                           RestTemplateBuilder builder,
+                           ObjectMapper objectMapper,
+                           LiveProxyService liveProxyService,
+                           SubscriptionService subscriptionService) {
         this.settingRepository = settingRepository;
         this.navigationService = navigationService;
         this.appProperties = appProperties;
@@ -460,6 +473,7 @@ public class BiliBiliService {
                 .build();
         this.objectMapper = objectMapper;
         this.liveProxyService = liveProxyService;
+        this.subscriptionService = subscriptionService;
     }
 
     public Map<String, Object> updateCookie(CookieData cookieData) {
@@ -2307,12 +2321,25 @@ public class BiliBiliService {
     }
 
     public Map<String, Object> getPlayUrl(String bvid, boolean dash, String client) throws IOException {
+        if ("t4".equals(client)) {
+            // T4 短代理地址 /proxy/{token}/{id}:回源解析延后到真正拉流时——每次拉流取新鲜
+            // durl(B站 url 时效、PCDN 择优都是当下的),playerContent 零 B站 API 调用
+            String proxyUrl = buildT4ProxyUrl(bvid);
+            if (proxyUrl != null) {
+                Map<String, Object> result = new HashMap<>();
+                result.put("url", proxyUrl);
+                result.put("parse", 0);
+                result.put("jx", 0);
+                return result;
+            }
+            // 无请求上下文等异常场景回落:就地解析并走 live-proxy 包装(旧形态)
+        }
         Map<String, Object> result = new HashMap<>();
         List<String> qns = appProperties.getQns();
         dash = dash || appProperties.isSupportDash() || DashUtils.isClientSupport(client);
-        // T4 强制单文件 durl(FLV/MP4):通用壳子的内核(系统播放器/ijk)不支持音视频分离的
-        // DASH MPD,只有 exo 系(FongMi)能播;单文件经 urlWrapper 代理直出即可播(画质随 durl 上限)
-        if ("t4".equals(client)) {
+        // T4 族(含代理解析态 t4p)强制单文件 durl(FLV/MP4):通用壳子的内核(系统播放器/ijk)
+        // 不支持音视频分离的 DASH MPD,只有 exo 系(FongMi)能播;单文件经代理直出即可播(画质随 durl 上限)
+        if (client != null && client.startsWith("t4")) {
             dash = false;
         }
         // T4(全走服务端,X-CLIENT: t4):播放地址改写为 live-proxy 服务端地址——
@@ -2447,6 +2474,32 @@ public class BiliBiliService {
 
         log.debug("getPlayUrl: {} {}", bvid, result);
         return result;
+    }
+
+    /** /proxy/{token}/{id} 回源:t4p(T4 代理解析态)强制单文件、不包装不裁剪,取当次 durl 直链。 */
+    public String resolvePlayUrlForProxy(String playId) throws IOException {
+        Map<String, Object> result = getPlayUrl(playId, false, "t4p");
+        Object url = result.get("url");
+        return url == null ? "" : url.toString();
+    }
+
+    /** T4 短代理地址 /proxy/{token}/{playId};无请求上下文/依赖缺失(单测旧构造)返回 null 走回落形态。 */
+    private String buildT4ProxyUrl(String playId) {
+        if (subscriptionService == null) {
+            return null;
+        }
+        try {
+            String token = subscriptionService.getCurrentToken();
+            return org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentRequest()
+                    .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
+                    .replacePath("/proxy/" + (token == null || token.isBlank() ? "-" : token) + "/" + playId)
+                    .replaceQuery(null)
+                    .build()
+                    .toUriString();
+        } catch (Exception e) {
+            log.debug("build t4 proxy url failed: {}", playId, e);
+            return null;
+        }
     }
 
     /** player/wbi/v2 一次返回字幕与分段章节(view_points),供 getPlayUrl 组装;失败返回 null,字幕/章节各自兜底为空。 */

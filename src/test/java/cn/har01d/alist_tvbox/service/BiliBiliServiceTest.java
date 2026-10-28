@@ -166,6 +166,48 @@ class BiliBiliServiceTest {
     }
 
     @Test
+    void getPlayUrlT4ReturnsShortProxyUrlWithoutUpstreamCall() throws Exception {
+        // T4 短代理:/proxy/{token}/{id} 直出,playerContent 零 B站 API 调用,解析延后到拉流时
+        org.springframework.mock.web.MockHttpServletRequest req =
+                new org.springframework.mock.web.MockHttpServletRequest("GET", "/t4/Harold/v/BiliBili");
+        req.setServerName("atv.example");
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(req));
+        try {
+            SubscriptionService subscriptionService = Mockito.mock(SubscriptionService.class);
+            when(subscriptionService.getCurrentToken()).thenReturn("Harold");
+            BiliBiliService t4Service = new BiliBiliService(settingRepository, navigationService, appProperties,
+                    biliCookieRefreshService, new org.springframework.boot.restclient.RestTemplateBuilder(),
+                    new ObjectMapper(), Mockito.mock(cn.har01d.alist_tvbox.live.service.LiveProxyService.class),
+                    subscriptionService);
+
+            Map<String, Object> result = t4Service.getPlayUrl("BV1u1no6hEiP", false, "t4");
+
+            assertEquals("http://atv.example/proxy/Harold/BV1u1no6hEiP", result.get("url"));
+            assertEquals(0, ((Number) result.get("parse")).intValue());
+            assertEquals(0, ((Number) result.get("jx")).intValue());
+            Mockito.verifyNoInteractions(restTemplate);
+        } finally {
+            org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
+    @Test
+    void resolvePlayUrlForProxyReturnsRawDurl() throws Exception {
+        // /proxy 回源口径(t4p):强制单文件、不包装,返回 CDN 原始直链
+        BiliBiliPlayResponse playResponse = new BiliBiliPlayResponse();
+        BiliBiliPlay play = new BiliBiliPlay();
+        BiliBiliPlay.DUrl durl = new BiliBiliPlay.DUrl();
+        durl.setUrl("https://upos-sz-mirrorcos.bilivideo.com/upos/x.flv?e=exp&os=upos");
+        play.setDurl(List.of(durl));
+        playResponse.setData(play);
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(BiliBiliPlayResponse.class)))
+                .thenReturn(ResponseEntity.ok(playResponse));
+
+        assertEquals(durl.getUrl(), service.resolvePlayUrlForProxy("116958703918865-40168587741"));
+    }
+
+    @Test
     void getPlayUrlToleratesPlayerInfoFailure() throws Exception {
         stubPlayUrl();
         when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/v2"), eq(HttpMethod.GET), any(), eq(BiliBiliV2InfoResponse.class)))

@@ -7,15 +7,19 @@ import cn.har01d.alist_tvbox.dto.bili.BiliCommentReplyRequest;
 import cn.har01d.alist_tvbox.dto.bili.BiliDanmakuPostRequest;
 import cn.har01d.alist_tvbox.dto.bili.CookieData;
 import cn.har01d.alist_tvbox.dto.bili.QrCode;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.live.service.LiveProxyService;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,10 +31,13 @@ import java.util.Map;
 public class BiliBiliController {
     private final BiliBiliService biliBiliService;
     private final SubscriptionService subscriptionService;
+    private final LiveProxyService liveProxyService;
 
-    public BiliBiliController(BiliBiliService biliBiliService, SubscriptionService subscriptionService) {
+    public BiliBiliController(BiliBiliService biliBiliService, SubscriptionService subscriptionService,
+                              LiveProxyService liveProxyService) {
         this.biliBiliService = biliBiliService;
         this.subscriptionService = subscriptionService;
+        this.liveProxyService = liveProxyService;
     }
 
     @GetMapping("/bili/cookie/{id}")
@@ -79,6 +86,19 @@ public class BiliBiliController {
             result = biliBiliService.getCategoryList(client);
         }
         return result;
+    }
+
+    // T4 短代理地址:playId(bvid/aid-cid/番剧 ep 形态)实时解析单文件 durl 后经通用流代理转发
+    // (代理端对 bilivideo 域族自动补 Referer,Range 透传支持 seek)
+    @RequestMapping("/proxy/{token}/{playId}")
+    public void proxy(@PathVariable String token, @PathVariable String playId,
+                      HttpServletRequest request, HttpServletResponse response) throws IOException {
+        subscriptionService.checkToken(token);
+        String url = biliBiliService.resolvePlayUrlForProxy(playId);
+        if (StringUtils.isBlank(url)) {
+            throw new NotFoundException();
+        }
+        liveProxyService.proxy(url, request, response);
     }
 
     @PostMapping({"/bilibili/action", "/bilibili/{token}/action"})
