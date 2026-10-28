@@ -231,23 +231,28 @@ public class PluginWorkerService {
             } catch (IOException e) {
                 throw new WorkerDeadException();
             }
-            String line = readLine(timeout);
-            if (StringUtils.isBlank(line)) {
-                throw new WorkerDeadException();
-            }
-            try {
-                JsonNode response = objectMapper.readTree(line);
-                if (!requestId.equals(response.path("id").asText())) {
-                    log.warn("t4 worker response id mismatch: {} != {}", response.path("id").asText(), requestId);
+            long deadline = System.nanoTime() + timeout.toNanos();
+            // 防御:插件后台线程(如 Atvp 预热守护)的裸 print 可能混进 stdout——worker 已把
+            // 协议输出与 fd1 隔离,此处再兜一层:非本请求 id 的行跳过继续等,直到超时
+            while (true) {
+                String line = readLine(Duration.ofNanos(Math.max(1, deadline - System.nanoTime())));
+                if (StringUtils.isBlank(line)) {
                     throw new WorkerDeadException();
                 }
-                lastUsed = Instant.now();
-                if (response.path("ok").asBoolean(false)) {
-                    return response.get("result");
+                try {
+                    JsonNode response = objectMapper.readTree(line);
+                    if (!requestId.equals(response.path("id").asText())) {
+                        log.debug("t4 worker skip foreign line: {}", StringUtils.abbreviate(line, 120));
+                        continue;
+                    }
+                    lastUsed = Instant.now();
+                    if (response.path("ok").asBoolean(false)) {
+                        return response.get("result");
+                    }
+                    throw new BadGatewayException("插件执行失败: " + response.path("error").path("message").asText("unknown"));
+                } catch (IOException e) {
+                    throw new WorkerDeadException();
                 }
-                throw new BadGatewayException("插件执行失败: " + response.path("error").path("message").asText("unknown"));
-            } catch (IOException e) {
-                throw new WorkerDeadException();
             }
         }
 

@@ -75,6 +75,45 @@ class PluginWorkerServiceTest {
     }
 
     @Test
+    void backgroundThreadPrintsDoNotBreakProtocol() throws Exception {
+        // 线上回归:Atvp 预热守护等后台线程的裸 print 会混进 stdout——协议输出必须与
+        // fd1 物理隔离,且 Java 侧跳过杂行继续等本请求响应
+        PluginWorkerService service = new PluginWorkerService(objectMapper);
+        assumeTrue(service.isAvailable(), "python3 not available, skip");
+        Path spider = Files.createTempFile("t4-noisy-spider", ".py");
+        spider.toFile().deleteOnExit();
+        Files.writeString(spider, """
+                # -*- coding: utf-8 -*-
+                import json, sys, threading, time
+
+                def _noise():
+                    while True:
+                        print("background noise", file=sys.stdout, flush=True)
+                        time.sleep(0.05)
+
+                class Spider:
+                    def init(self, extend):
+                        threading.Thread(target=_noise, daemon=True).start()
+                        return ""
+
+                    def getName(self):
+                        return "noisy"
+
+                    def homeContent(self, filter):
+                        time.sleep(0.3)  # 让噪声线程有机会打印
+                        return json.dumps({"class": [{"type_id": "1", "type_name": "ok"}]}, ensure_ascii=False)
+                """);
+        String extend = Base64.getEncoder().encodeToString(objectMapper.writeValueAsBytes(Map.of(
+                "source", spider.toString(), "raw", true, "api", "http://localhost:4567")));
+
+        JsonNode home = service.call("noisy", extend, "home", Map.of());
+        assertTrue(home.toString().contains("ok"));
+        // 第二次调用同样干净(复用 worker,噪声线程持续打印中)
+        assertTrue(service.call("noisy", extend, "home", Map.of()).toString().contains("ok"));
+        service.shutdown();
+    }
+
+    @Test
     void pluginRuntimeUnavailableDegrades() {
         PluginWorkerService service = new PluginWorkerService(objectMapper);
         ReflectionTestUtils.setField(service, "available", new java.util.concurrent.atomic.AtomicReference<>(Boolean.FALSE));

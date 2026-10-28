@@ -18,6 +18,7 @@ Python 3.10+(Alpine 3.21 自带 3.12)。
 import ast
 import contextlib
 import json
+import os
 import sys
 import types
 
@@ -190,7 +191,15 @@ def handle(method, params):
     raise RuntimeError("unknown method: " + method)
 
 
+def _protocol_write(payload):
+    # 协议输出直写 fd1:与被改道到 stderr 的 print(含 Atvp 预热守护等后台线程的裸 print)
+    # 物理隔离,任何线程的 stdout 输出都不可能混进协议流
+    os.write(1, (json.dumps(payload, ensure_ascii=False, default=str) + "\n").encode("utf-8"))
+
+
 def main():
+    # 一切 print(任何线程)永久改道 stderr;协议通道只认 _protocol_write
+    sys.stdout = sys.stderr
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -210,14 +219,10 @@ def main():
             if not isinstance(params, dict):
                 raise ValueError("params must be an object")
             result = _normalize_result(method, handle(method, params))
-            sys.stdout.write(json.dumps({"id": request_id, "ok": True, "result": result},
-                                        ensure_ascii=False, default=str) + "\n")
+            _protocol_write({"id": request_id, "ok": True, "result": result})
         except Exception as exc:  # noqa: BLE001 - 协议边界:一切异常转错误响应,沿用请求 id
-            sys.stdout.write(json.dumps(
-                {"id": request_id, "ok": False,
-                 "error": {"code": type(exc).__name__, "message": str(exc)}},
-                ensure_ascii=False, default=str) + "\n")
-        sys.stdout.flush()
+            _protocol_write({"id": request_id, "ok": False,
+                             "error": {"code": type(exc).__name__, "message": str(exc)}})
 
 
 if __name__ == "__main__":
