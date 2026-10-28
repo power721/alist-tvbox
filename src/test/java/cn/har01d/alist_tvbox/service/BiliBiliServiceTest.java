@@ -183,7 +183,7 @@ class BiliBiliServiceTest {
 
             Map<String, Object> result = t4Service.getPlayUrl("BV1u1no6hEiP", false, "t4");
 
-            assertEquals("http://atv.example/proxy/Harold/BV1u1no6hEiP", result.get("url"));
+            assertEquals("http://atv.example/proxy/bilibili/Harold/BV1u1no6hEiP", result.get("url"));
             assertEquals(0, ((Number) result.get("parse")).intValue());
             assertEquals(0, ((Number) result.get("jx")).intValue());
             Mockito.verifyNoInteractions(restTemplate);

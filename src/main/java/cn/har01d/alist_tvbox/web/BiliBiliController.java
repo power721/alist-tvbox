@@ -90,7 +90,7 @@ public class BiliBiliController {
 
     // T4 短代理地址:playId(bvid/aid-cid/番剧 ep 形态)实时解析单文件 durl 后经通用流代理转发
     // (代理端对 bilivideo 域族自动补 Referer,Range 透传支持 seek)
-    @RequestMapping("/proxy/{token}/{playId}")
+    @RequestMapping("/proxy/bilibili/{token}/{playId}")
     public void proxy(@PathVariable String token, @PathVariable String playId,
                       HttpServletRequest request, HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);

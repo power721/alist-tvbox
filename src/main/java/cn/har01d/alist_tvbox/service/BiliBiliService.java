@@ -2483,7 +2483,7 @@ public class BiliBiliService {
         return url == null ? "" : url.toString();
     }
 
-    /** T4 短代理地址 /proxy/{token}/{playId};无请求上下文/依赖缺失(单测旧构造)返回 null 走回落形态。 */
+    /** T4 短代理地址 /proxy/bilibili/{token}/{playId};无请求上下文/依赖缺失(单测旧构造)返回 null 走回落形态。 */
     private String buildT4ProxyUrl(String playId) {
         if (subscriptionService == null) {
             return null;
@@ -2492,7 +2492,7 @@ public class BiliBiliService {
             String token = subscriptionService.getCurrentToken();
             return org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentRequest()
                     .scheme(Utils.publicScheme(appProperties.isEnableHttps())) // nginx https
-                    .replacePath("/proxy/" + (token == null || token.isBlank() ? "-" : token) + "/" + playId)
+                    .replacePath("/proxy/bilibili/" + (token == null || token.isBlank() ? "-" : token) + "/" + playId)
                     .replaceQuery(null)
                     .build()
                     .toUriString();
