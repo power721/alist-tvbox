@@ -2443,11 +2443,14 @@ public class BiliBiliService {
         headers.put(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
         result.put("header", headers);
 
-        BiliBiliV2Info playerInfo = getPlayerInfo(aid, cid);
-        result.put("subs", getSubtitles(playerInfo));
-        result.put("chapters", getChapters(playerInfo));
+        // t4p(代理解析态)只消费 url:跳过 player/wbi/v2(字幕/章节)请求,回源上游调用减半
+        if (!"t4p".equals(client)) {
+            BiliBiliV2Info playerInfo = getPlayerInfo(aid, cid);
+            result.put("subs", getSubtitles(playerInfo));
+            result.put("chapters", getChapters(playerInfo));
 
-        result.put("danmaku", List.of(Map.of("name", "哔哩哔哩弹幕", "url", "https://comment.bilibili.com/" + cid + ".xml")));
+            result.put("danmaku", List.of(Map.of("name", "哔哩哔哩弹幕", "url", "https://comment.bilibili.com/" + cid + ".xml")));
+        }
 
         if ("gui".equals(client)) {
             // atv-player 详情动作(点赞/投币/收藏/稍后再看):状态查询并发,失败兜底默认态不影响播放
@@ -2476,11 +2479,64 @@ public class BiliBiliService {
         return result;
     }
 
-    /** /proxy/{token}/{id} 回源:t4p(T4 代理解析态)强制单文件、不包装不裁剪,取当次 durl 直链。 */
+    /**
+     * /proxy/{token}/{id} 回源:t4p(T4 代理解析态)强制单文件、不包装不裁剪,取当次 durl 直链。
+     * 短缓存按 playId 键(解析与 token 无关,B站账号为服务器全局):播放器断线重连/同视频重播
+     * 免重复打 playurl(风控敏感端点),TTL 跟随直链自带 deadline,不越过其失效点。
+     */
     public String resolvePlayUrlForProxy(String playId) throws IOException {
+        String cached = t4ProxyUrlCache.getIfPresent(playId);
+        if (cached != null) {
+            return cached;
+        }
         Map<String, Object> result = getPlayUrl(playId, false, "t4p");
-        Object url = result.get("url");
-        return url == null ? "" : url.toString();
+        String url = result.get("url") == null ? "" : result.get("url").toString();
+        if (!url.isBlank()) {
+            t4ProxyUrlCache.put(playId, url);
+        }
+        return url;
+    }
+
+    /** T4 代理直链缓存:每条 TTL 按 URL 自身 deadline 收紧(上限 30min,余量 5min,无时效参数兜底 10min)。 */
+    private final Cache<String, String> t4ProxyUrlCache = Caffeine.newBuilder()
+            .maximumSize(300)
+            .expireAfter(new com.github.benmanes.caffeine.cache.Expiry<String, String>() {
+                @Override
+                public long expireAfterCreate(String key, String url, long currentTime) {
+                    return java.util.concurrent.TimeUnit.SECONDS.toNanos(t4ProxyUrlTtlSeconds(url));
+                }
+
+                @Override
+                public long expireAfterUpdate(String key, String url, long currentTime, long currentDuration) {
+                    return expireAfterCreate(key, url, currentTime);
+                }
+
+                @Override
+                public long expireAfterRead(String key, String url, long currentTime, long currentDuration) {
+                    return currentDuration;
+                }
+            })
+            .build();
+
+    private static final java.util.regex.Pattern URL_DEADLINE_PARAM =
+            java.util.regex.Pattern.compile("[?&](?:deadline|e)=(\\d{9,13})");
+
+    /** TTL 秒数 = min(30min, deadline 剩余 - 5min);deadline 已过/缺失/非数字兜底 10min(过期为 0=即过期重解析)。 */
+    static long t4ProxyUrlTtlSeconds(String url) {
+        long now = System.currentTimeMillis() / 1000;
+        java.util.regex.Matcher matcher = URL_DEADLINE_PARAM.matcher(url);
+        if (matcher.find()) {
+            try {
+                long expire = Long.parseLong(matcher.group(1));
+                if (expire > 10_000_000_000L) {
+                    expire /= 1000; // 毫秒级(13 位)兼容
+                }
+                return Math.max(0, Math.min(1800, expire - now - 300));
+            } catch (NumberFormatException ignored) {
+                // e=exp 之类的非数字占位值走兜底
+            }
+        }
+        return 600;
     }
 
     /** T4 短代理地址 /proxy/bilibili/{token}/{playId};无请求上下文/依赖缺失(单测旧构造)返回 null 走回落形态。 */

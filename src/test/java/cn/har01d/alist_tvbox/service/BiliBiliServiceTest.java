@@ -208,6 +208,42 @@ class BiliBiliServiceTest {
     }
 
     @Test
+    void t4ProxyUrlTtlFollowsDeadlineParam() {
+        long now = System.currentTimeMillis() / 1000;
+        // deadline 余量充足 → 触顶 30min;临期按剩余-5min;已过期=0(即过期,重解析)
+        assertEquals(1800, BiliBiliService.t4ProxyUrlTtlSeconds(
+                "https://upos.bilivideo.com/x.flv?deadline=" + (now + 7200)));
+        assertEquals(900, BiliBiliService.t4ProxyUrlTtlSeconds(
+                "https://upos.bilivideo.com/x.flv?e=" + (now + 1200)));
+        assertEquals(0, BiliBiliService.t4ProxyUrlTtlSeconds(
+                "https://upos.bilivideo.com/x.flv?deadline=" + (now - 60)));
+        // 无时效参数/非数字占位(e=exp)兜底 10min;毫秒级 13 位兼容
+        assertEquals(600, BiliBiliService.t4ProxyUrlTtlSeconds("https://upos.bilivideo.com/x.flv?e=exp"));
+        assertEquals(600, BiliBiliService.t4ProxyUrlTtlSeconds("https://upos.bilivideo.com/x.flv"));
+        assertEquals(1800, BiliBiliService.t4ProxyUrlTtlSeconds(
+                "https://upos.bilivideo.com/x.flv?deadline=" + (now + 7200) + "000"));
+    }
+
+    @Test
+    void resolvePlayUrlForProxyCachesResolvedDurl() throws Exception {
+        // 二次回源(断线重连/重播)命中缓存:playurl 只打一次
+        BiliBiliPlayResponse playResponse = new BiliBiliPlayResponse();
+        BiliBiliPlay play = new BiliBiliPlay();
+        BiliBiliPlay.DUrl durl = new BiliBiliPlay.DUrl();
+        durl.setUrl("https://upos-sz-mirrorcos.bilivideo.com/upos/x.flv?deadline=" + (System.currentTimeMillis() / 1000 + 3600));
+        play.setDurl(List.of(durl));
+        playResponse.setData(play);
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(BiliBiliPlayResponse.class)))
+                .thenReturn(ResponseEntity.ok(playResponse));
+
+        assertEquals(durl.getUrl(), service.resolvePlayUrlForProxy("116958703918865-40168587741"));
+        assertEquals(durl.getUrl(), service.resolvePlayUrlForProxy("116958703918865-40168587741"));
+
+        verify(restTemplate, org.mockito.Mockito.times(1))
+                .exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(BiliBiliPlayResponse.class));
+    }
+
+    @Test
     void getPlayUrlToleratesPlayerInfoFailure() throws Exception {
         stubPlayUrl();
         when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/v2"), eq(HttpMethod.GET), any(), eq(BiliBiliV2InfoResponse.class)))
