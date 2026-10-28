@@ -212,6 +212,57 @@ class T4ControllerTest {
     }
 
     @Test
+    void pianDanNavDetailDelegatesToMediaPianDanDetail() throws Exception {
+        // 片单导航服务端代搜:db:/tmdb:/s:/douban: 条目委托 /media 片单详情(豆瓣元数据+搜电报网格+动作),
+        // 通用壳子不执行 indexs=1(FongMi 独有),T3 的客户端全局搜片由服务端代劳
+        when(mediaLibraryController.browse(eq(TOKEN), eq("db:36675942"), isNull(), isNull(), isNull(),
+                isNull(), eq(1), eq(Map.of()), org.mockito.ArgumentMatchers.any())).thenReturn(new MovieList());
+
+        controller.vod(TOKEN, "csp_PianDan", null, "db:36675942", null, null, null, null, null, request, response);
+
+        verify(mediaLibraryController).browse(eq(TOKEN), eq("db:36675942"), isNull(), isNull(), isNull(),
+                isNull(), eq(1), eq(Map.of()), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void pianDanNonNavIdStaysEmpty() throws Exception {
+        Object result = controller.vod(TOKEN, "csp_PianDan", null, "other-form", null, null, null, null, null, request, response);
+
+        assertEquals(Map.of(), result);
+        verify(mediaLibraryController, org.mockito.Mockito.never()).browse(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void formPostAndJsonPostDispatch() throws Exception {
+        // 杂牌壳子双 POST 形态:表单参数由 Spring 绑定;JSON body 在参数缺位时兜底解析
+        org.springframework.mock.web.MockHttpServletRequest formRequest =
+                new org.springframework.mock.web.MockHttpServletRequest("POST", "/t4/tok/v/Media");
+        formRequest.setContentType("application/x-www-form-urlencoded");
+        formRequest.setParameter("ids", "db:1");
+        when(mediaLibraryController.browse(eq(TOKEN), eq("db:1"), isNull(), isNull(), isNull(),
+                isNull(), eq(1), eq(Map.of()), org.mockito.ArgumentMatchers.any())).thenReturn(new MovieList());
+
+        controller.vod(TOKEN, "Media", null, "db:1", null, null, null, null, null, formRequest, response);
+
+        org.springframework.mock.web.MockHttpServletRequest jsonRequest =
+                new org.springframework.mock.web.MockHttpServletRequest("POST", "/t4/tok/v/AList");
+        jsonRequest.setContentType("application/json");
+        jsonRequest.setContent("{\"t\":\"1\",\"pg\":\"2\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        when(tvBoxController.api(eq(TOKEN), eq("1"), isNull(), isNull(), isNull(), isNull(), isNull(),
+                eq(2), eq(100), eq(1), eq(0), org.mockito.ArgumentMatchers.any())).thenReturn(new MovieList());
+
+        controller.vod(TOKEN, "AList", null, null, null, null, null, null, null, jsonRequest, response);
+
+        verify(mediaLibraryController).browse(eq(TOKEN), eq("db:1"), isNull(), isNull(), isNull(),
+                isNull(), eq(1), eq(Map.of()), org.mockito.ArgumentMatchers.any());
+        verify(tvBoxController).api(eq(TOKEN), eq("1"), isNull(), isNull(), isNull(), isNull(), isNull(),
+                eq(2), eq(100), eq(1), eq(0), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void unknownSiteRejected() {
         assertThrows(NotFoundException.class,
                 () -> controller.vod(TOKEN, "csp_Unknown", null, null, null, null, null, null, null, request, response));

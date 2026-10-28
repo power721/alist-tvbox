@@ -28,7 +28,7 @@ WebHome/push/上游 spider——无 jar 壳子点开即废);type 0/1/2 的普通
 |---|---|---|
 | home | `GET api?filter=true` | 裸调用对应端点 + homeVideo 合并 `list`(推荐位) |
 | 分类 | `?ac=detail&t={tid}&pg={页}&ext={base64UrlSafe(JSON筛选)}` | ext 解码:网盘族→`f` JSON;B站→FilterDto;直播→platform;豆瓣→sort/year/genre/region;片单/追剧→flattened Map |
-| 详情 | `?ac=detail&ids={id}` | ids→id 参位(TG/盘搜/追剧族);TG 族自动补 `title`(标题缓存) |
+| 详情 | `?ac=detail&ids={id}` | ids→id 参位(TG/盘搜/追剧族);TG 族自动补 `title`(标题缓存);片单导航(db:/tmdb:/s:/douban: 条目)委托 /media 片单详情=服务端代搜(indexs=1 仅 FongMi 遵守,通用壳子由服务端代劳搜片) |
 | 搜索 | `?wd={词}&quick={bool}&pg={页}` | 透传;TG 族记录最近搜索词 |
 | 播放 | `?play={id}&flag={线路}` | 网盘/TG/盘搜/追剧→`/play?id`;B站→`bvid=`(动作前缀由 /play 兜底归位,**X-CLIENT: t4** 身份触发服务端代理地址形态,见下);Emby/Jellyfin/飞牛→`-play?id&t=0`;直播→follow$/unfollow$/offline 服务端等价复刻,直链透传(`jx/parse=0`+移动端头) |
 

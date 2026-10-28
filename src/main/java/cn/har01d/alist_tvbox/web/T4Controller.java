@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -87,7 +88,9 @@ public class T4Controller {
         return subscriptionService.subscriptionT4(token, id);
     }
 
-    @GetMapping("/t4/{token}/v/{site}")
+    // FongMi type4 恒 GET(catvod 三参 newCall=拼 query);@RequestMapping 兼容杂牌壳子的
+    // 表单 POST(Spring 表单参数自动并入绑定);JSON POST 形态见下方 body 兜底
+    @RequestMapping("/t4/{token}/v/{site}")
     public Object vod(@PathVariable String token, @PathVariable String site,
                       String t, String ids, String wd, String quick, String play, String ext, Integer pg,
                       HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -96,6 +99,21 @@ public class T4Controller {
         String siteKey = site.startsWith("csp_") ? site : "csp_" + site;
         if (!SubscriptionService.T4_SITE_KEYS.contains(siteKey)) {
             throw new NotFoundException();
+        }
+        // JSON POST 形态(部分壳子):查询/表单参数全缺位时从 JSON body 取参
+        if (StringUtils.isAllBlank(t, ids, wd, play, ext) && pg == null) {
+            String contentType = request.getContentType();
+            if (contentType != null && contentType.contains("json")) {
+                Map<String, String> body = readJsonBody(request);
+                t = body.get("t");
+                ids = body.get("ids");
+                wd = body.get("wd");
+                quick = body.get("quick");
+                play = body.get("play");
+                ext = body.get("ext");
+                String page = body.get("pg");
+                pg = page == null ? null : parseInt(page);
+            }
         }
         log.info("t4 site: {}  t: {}  ids: {}  wd: {}  play: {}  page: {}", siteKey, t, ids, wd, play, pg);
         boolean quickSearch = Boolean.parseBoolean(quick);
@@ -112,6 +130,24 @@ public class T4Controller {
             result = home(token, siteKey, request, response);
         }
         return captureTitles(siteKey, result);
+    }
+
+    /** JSON POST body → 参数表;解析失败按空处理(回落 home)。 */
+    private Map<String, String> readJsonBody(HttpServletRequest request) {
+        try (var reader = request.getReader()) {
+            JsonNode node = objectMapper.readTree(reader);
+            Map<String, String> result = new LinkedHashMap<>();
+            node.fieldNames().forEachRemaining(name -> {
+                JsonNode value = node.get(name);
+                if (value != null && value.isValueNode()) {
+                    result.put(name, value.asText());
+                }
+            });
+            return result;
+        } catch (Exception e) {
+            log.debug("t4 json body parse failed", e);
+            return Map.of();
+        }
     }
 
     /** home = 分类列表 + homeVideo 推荐位合并(spring.jar 端两次调用,FongMi type 3 合并同构)。 */
@@ -213,8 +249,13 @@ public class T4Controller {
         return switch (site) {
             case "csp_AList" -> tvBoxController.api(token, null, null, ids, null, null, null, 1, 100, 1, 0, request);
             case "csp_XiaoYa" -> tvBoxController.api(token, null, null, ids, null, null, null, 1, 100, 0, 0, request);
-            // 导航源无详情(客户端点击走全局搜索,同 spring.jar PianDan spider 不实现详情)
-            case "csp_PianDan" -> Map.of();
+            // 片单导航:条目 vod_id(db:/tmdb:/s:/douban:)与 /media 片单 id 同族,委托其片单详情
+            // = 服务端代搜(豆瓣元数据+按片名搜电报资源网格+msubadd 动作)。T3 靠客户端 indexs=1
+            // 全局搜片,但 indexs 仅 FongMi 遵守(docs/t4-sidecar-borrow-assessment.md A3),
+            // 通用壳子须服务端代劳;非片单形态 id 维持空详情
+            case "csp_PianDan" -> isPianDanNavId(ids)
+                    ? mediaLibraryController.browse(token, ids, null, null, null, null, 1, Map.of(), request)
+                    : Map.of();
             case "csp_Media" -> mediaLibraryController.browse(token, ids, null, null, null, null, 1, Map.of(), request);
             case "csp_BiliBili" ->
                     biliBiliController.api(token, null, ids, null, false, new FilterDto(), null, 1, request, response);
@@ -427,5 +468,11 @@ public class T4Controller {
 
     private static String cacheKey(String a, String b) {
         return a + '\u0000' + b;
+    }
+
+    /** 片单导航条目 id 族(与 MediaLibraryController.isPianDanId 同口径)。 */
+    private static boolean isPianDanNavId(String id) {
+        return id != null && (id.startsWith("db:") || id.startsWith("douban:") || id.startsWith("tmdb:")
+                || id.startsWith("s:"));
     }
 }
