@@ -16,7 +16,7 @@ on:
 jobs:
   # Job 1: 构建基础资源
   build-base:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -75,7 +75,7 @@ jobs:
   # Job 2: 构建并测试镜像（并行）
   build-and-test-images:
     needs: build-base
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         image:

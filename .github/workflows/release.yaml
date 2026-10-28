@@ -8,7 +8,7 @@ on:
 jobs:
   # Job 1: 构建基础资源（web UI + Maven jar）
   build-base:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -89,7 +89,7 @@ jobs:
   # Job 2: 快速测试（AMD64 only，本地构建）
   quick-test:
     needs: build-base
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -152,7 +152,7 @@ jobs:
   # Job 3: 构建 JVM 镜像（只推送版本标签）
   build-jvm-images:
     needs: build-base
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         image:
@@ -210,7 +210,7 @@ jobs:
   # Job 6: 测试镜像（测试版本标签）
   test-images:
     needs: [build-jvm-images]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         test:
@@ -262,7 +262,7 @@ jobs:
   # Job 7: 创建 GitHub Release 并上传制品（测试通过后）
   create-release:
     needs: test-images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -286,7 +286,7 @@ jobs:
   # 避免 pull/tag/push 在 amd64 runner 上只取本地架构而丢失 arm64。
   tag-latest:
     needs: test-images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -318,7 +318,7 @@ jobs:
   # Job 9: 发送通知（Release 创建后）
   notify:
     needs: [create-release, tag-latest]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6

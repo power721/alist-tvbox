@@ -8,7 +8,7 @@ on:
 jobs:
   # Job 1: 构建基础资源（web UI + Maven jar）
   build-base:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -89,7 +89,7 @@ jobs:
   # Job 4: 构建 Native 二进制（快速测试通过后才执行）
   build-native:
     needs: build-base
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -149,7 +149,7 @@ jobs:
   # Job 5: 构建 Native 镜像（只推送版本标签）
   build-native-images:
     needs: [build-base, build-native]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         image:
@@ -206,7 +206,7 @@ jobs:
   # Job 6: 测试镜像（测试版本标签）
   test-images:
     needs: [build-native-images]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         test:
@@ -252,7 +252,7 @@ jobs:
   # Job 7: 上传 Native 制品到 release.yaml 已创建的 GitHub Release
   upload-native-release-artifacts:
     needs: test-images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -271,7 +271,7 @@ jobs:
   # Job 8b: 添加 latest 标签 - Native 镜像（仅 linux/amd64，无 arm64，分开处理）
   tag-latest-native:
     needs: test-images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -303,7 +303,7 @@ jobs:
 
   upload-artifcat:
     needs: tag-latest-native
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Send download notification
         env:
