@@ -15,7 +15,7 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 RUN apk add --no-cache \
         bash busybox-extras ca-certificates curl jemalloc jq less \
-        nginx nginx-mod-devel-kit nginx-mod-http-js nginx-mod-http-lua onigurama \
+        nginx nginx-mod-devel-kit nginx-mod-http-js nginx-mod-http-lua oniguruma \
         ripgrep sqlite tzdata unzip \
         python3 py3-requests py3-lxml py3-pycryptodome
 
