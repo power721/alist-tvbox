@@ -551,6 +551,28 @@ class WoniuSearchServiceTest {
         assertEquals("未填写 Cookie 或账号密码", result.message());
     }
 
+    @Test
+    void transientFailureRetriedImmediately() {
+        AtomicInteger searchHits = new AtomicInteger();
+        WoniuSearchService service = new WoniuSearchService(
+                settings("woniu_cookie", "user_check=cfg", "woniu_host", "https://wn.example"),
+                new ObjectMapper()) {
+            @Override
+            protected Resp http(Request request) {
+                if (request.url().toString().startsWith("https://wn.example/vodsearch/")) {
+                    // Cloudflare 后偶发连接重置(SSL EOF/104):首次瞬断,立即重试成功
+                    if (searchHits.incrementAndGet() == 1) {
+                        throw new IllegalStateException("unexpected EOF");
+                    }
+                    return new Resp(200, List.of(), SEARCH_HTML);
+                }
+                return new Resp(404, List.of(), "");
+            }
+        };
+        assertTrue(service.search("难哄").isEmpty()); // 详情 404 无盘链,搜索页本身取回即可
+        assertEquals(2, searchHits.get(), "单次瞬断不该让整页变空:立即重试一次取回页面");
+    }
+
     private static SiteCredentialCheckRequest req(String cookie, String host) {
         return new SiteCredentialCheckRequest("woniu", cookie, host, "", "");
     }

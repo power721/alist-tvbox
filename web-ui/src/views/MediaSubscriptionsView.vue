@@ -970,7 +970,7 @@
           </el-tab-pane>
           <el-tab-pane v-if="store.admin" label="蜗牛" name="woniu">
         <el-form-item label="站点">
-          <el-input v-model="notifyForm.woniuHost" placeholder="留空自动测速双线路(wn4k/zmi);自定义填 https://..."/>
+          <el-input v-model="notifyForm.woniuHost" placeholder="留空用默认线路(wn4k.com);自定义填 https://..."/>
         </el-form-item>
         <el-form-item label="账号">
           <el-input v-model="notifyForm.woniuUsername" placeholder="推荐账号密码(Cookie 过期自动续期)"/>

@@ -36,11 +36,11 @@ import java.util.regex.Pattern;
 
 /**
  * 蜗牛搜索源(atv-spiders/py/蜗牛.py 的 Java 移植,追剧搜索源之一):蜗牛(wn4k)是
- * MacCMS 衍生的网盘影视站,双线路(wn4k.com/zmi.kdns.fr)并发测速取最快;
+ * MacCMS 衍生的网盘影视站,单线路 wn4k.com(原镜像 zmi.kdns.fr 2026-10 起持续超时已移除);
  * <b>游客可搜索但网盘链接被打码成 {@code https://******(登录后可见)}</b>,必须登录才能取链。
  *
  * <p><b>凭证必须用户自配</b>(Setting {@code woniu_username}/{@code woniu_password}
- * 或直接 {@code woniu_cookie},站点 {@code woniu_host} 可覆盖双线路测速),未配置时源静默关闭。
+ * 或直接 {@code woniu_cookie},站点 {@code woniu_host} 可覆盖默认线路),未配置时源静默关闭。
  * 登录:POST {@code /user/login.html}(user_name/user_pwd)→ code=="1" → 只保留
  * {@code user_check/user_id/user_name} 最小凭证集(须有 user_check);链接被打码即视为
  * 登录态失效,自动续期一次,失败 10 分钟冷却防凭证错误刷接口。登录取得的凭证 Cookie
@@ -64,9 +64,10 @@ public class WoniuSearchService {
     /** 登录会话持久化:登录凭证 Cookie 头(k=v; k=v),重启播种免重登 */
     public static final String SESSION_SETTING = "woniu_session";
 
-    private static final List<String> DEFAULT_HOSTS = List.of("https://wn4k.com", "https://zmi.kdns.fr");
+    /** 原镜像 zmi.kdns.fr 2026-10 起持续超时(DNS 在但服务已停),保留只会拖慢每次启动,已移除。 */
+    private static final List<String> DEFAULT_HOSTS = List.of("https://wn4k.com");
     private static final String USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36";
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36";
     private static final int TIMEOUT_SECONDS = 10;
     private static final int PROBE_TIMEOUT_SECONDS = 4;
     /** 每次搜索最多取多少个条目的盘链 */
@@ -189,10 +190,10 @@ public class WoniuSearchService {
             return false;
         }
         try {
-            Request.Builder builder = new Request.Builder()
-                    .url(config.hosts().get(0) + "/user/login.html")
-                    .header("User-Agent", USER_AGENT)
-                    .header("Referer", config.hosts().get(0) + "/user/login/")
+            // 登录继承浏览器导航头(剔除旧登录态 Cookie,避免过期 user_check 干扰换发)
+            Request.Builder builder = browserHeaders(new Request.Builder()
+                            .url(config.hosts().get(0) + "/user/login.html"),
+                    config.hosts().get(0) + "/user/login/")
                     .post(new FormBody.Builder()
                             .add("user_name", config.username())
                             .add("user_pwd", config.password())
@@ -339,10 +340,8 @@ public class WoniuSearchService {
         String lastError = "站点不可达";
         for (String host : config.hosts()) {
             try {
-                Resp resp = http(new Request.Builder()
-                        .url(host + "/user/")
-                        .header("User-Agent", USER_AGENT)
-                        .header("Referer", host + "/")
+                Resp resp = http(browserHeaders(new Request.Builder()
+                                .url(host + "/user/"), host + "/")
                         .header("Cookie", cookie)
                         .build(), false);
                 if (resp.code() >= 300 && resp.code() < 400) {
@@ -504,7 +503,7 @@ public class WoniuSearchService {
         return host;
     }
 
-    /** 双线路请求:当前粘滞线路优先,失败/空响应换下一条(py 无逐请求 failover,此处加固)。 */
+    /** 逐线路请求(粘滞线路优先),失败/空响应换下一条;每线路瞬断立即重试一次(py 无逐请求 failover,此处加固)。 */
     private String requestHtml(Config config, String path) {
         List<String> hosts = new ArrayList<>(config.hosts());
         if (StringUtils.isNotBlank(activeHost)) {
@@ -514,19 +513,20 @@ public class WoniuSearchService {
             probeHosts(config.hosts()); // 全不可达返回 null,下面按默认顺序逐线路尝试
         }
         for (String host : hosts) {
-            try {
-                Resp resp = http(new Request.Builder()
-                        .url(host + path)
-                        .header("User-Agent", USER_AGENT)
-                        .header("Referer", host + "/")
-                        .header("Cookie", StringUtils.defaultString(cookie))
-                        .build());
-                if (resp.code() == 200 && StringUtils.isNotBlank(resp.body())) {
-                    activeHost = host;
-                    return resp.body();
+            // 站点在 Cloudflare 后面,偶发连接被重置(SSL EOF/104),单次瞬断不该让整页变空:失败后立即换新连接重试一次
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    Resp resp = http(browserHeaders(new Request.Builder()
+                                    .url(host + path), host + "/")
+                            .header("Cookie", StringUtils.defaultString(cookie))
+                            .build());
+                    if (resp.code() == 200 && StringUtils.isNotBlank(resp.body())) {
+                        activeHost = host;
+                        return resp.body();
+                    }
+                } catch (Exception e) {
+                    log.debug("woniu request {} failed (attempt {}): {}", host, attempt, e.getMessage());
                 }
-            } catch (Exception e) {
-                log.debug("woniu request {} failed: {}", host, e.getMessage());
             }
         }
         return "";
@@ -573,15 +573,34 @@ public class WoniuSearchService {
     protected long probeHost(String host) {
         long start = System.currentTimeMillis();
         try {
-            Resp resp = http(new Request.Builder()
-                    .url(host + "/")
-                    .header("User-Agent", USER_AGENT)
-                    .header("Referer", host + "/")
+            Resp resp = http(browserHeaders(new Request.Builder()
+                    .url(host + "/"), host + "/")
                     .build());
             return resp.code() == 200 ? System.currentTimeMillis() - start : -1;
         } catch (Exception e) {
             return -1;
         }
+    }
+
+    /**
+     * 浏览器导航头(对齐真机 Chrome 156,2026-10-29 实测可用):站点在 Cloudflare 后面,
+     * 请求若只带 UA+Referer 会被按头打分拦截,导航头须成套(Cookie 由各调用点按登录态补充)。
+     */
+    private static Request.Builder browserHeaders(Request.Builder builder, String referer) {
+        return builder
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                        + "image/avif,image/webp,image/apng,*/*;q=0.8")
+                .header("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7")
+                .header("sec-ch-ua", "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"")
+                .header("sec-ch-ua-mobile", "?0")
+                .header("sec-ch-ua-platform", "\"Linux\"")
+                .header("Sec-Fetch-Dest", "document")
+                .header("Sec-Fetch-Mode", "navigate")
+                .header("Sec-Fetch-Site", "same-origin")
+                .header("Sec-Fetch-User", "?1")
+                .header("Upgrade-Insecure-Requests", "1")
+                .header("Referer", referer);
     }
 
     protected Resp http(Request request) throws IOException {
