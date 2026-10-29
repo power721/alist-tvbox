@@ -41,13 +41,6 @@
             }}/{{ scope.row.sid }}</a>
         </template>
       </el-table-column>
-      <el-table-column prop="url" label="T4地址" sortable>
-        <template #default="scope">
-          <a :href="currentUrl+'/t4'+token+'/'+scope.row.sid" target="_blank">{{ currentUrl }}/t4{{
-              token
-            }}/{{ scope.row.sid }}</a>
-        </template>
-      </el-table-column>
       <el-table-column prop="url" label="多仓聚合地址" sortable>
         <template #default="scope">
           <a :href="currentUrl+'/repo'+token+'/'+scope.row.sid" target="_blank">{{ currentUrl }}/repo{{

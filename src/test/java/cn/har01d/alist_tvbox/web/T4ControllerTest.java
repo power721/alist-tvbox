@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.Plugin;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.LiveFollowDto;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.live.web.LiveController;
@@ -27,8 +28,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,15 +76,20 @@ class T4ControllerTest {
     private cn.har01d.alist_tvbox.entity.PluginRepository pluginRepository;
 
     private T4Controller controller;
+    private AppProperties appProperties;
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
 
     @BeforeEach
     void setUp() {
-        controller = new T4Controller(subscriptionService, tvBoxController, pianDanController,
+        appProperties = new AppProperties();
+        controller = new T4Controller(subscriptionService, appProperties, tvBoxController, pianDanController,
                 mediaLibraryController, biliBiliController, embyController, jellyfinController,
                 feiniuController, liveController, telegramController, remoteSearchController,
                 playController, pluginWorkerService, pluginRepository, new ObjectMapper());
+        // vod/cenc 入口的 T4 专用 token 换算:默认回显(未命中),个别用例按需覆写
+        lenient().when(subscriptionService.resolveT4Token(anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         request = new MockHttpServletRequest("GET", "/t4/tok/v/csp_AList");
         response = new MockHttpServletResponse();
     }
@@ -305,5 +315,102 @@ class T4ControllerTest {
     void unknownSiteRejected() {
         assertThrows(NotFoundException.class,
                 () -> controller.vod(TOKEN, "csp_Unknown", null, null, null, null, null, null, null, request, response));
+    }
+
+    @Test
+    void standaloneConfigWithDedicatedToken() {
+        // 单段 /t4/{t4token}:T4 专用 token 命中 → 独立配置(与订阅无关),先换算回 vod token 过 checkToken
+        when(subscriptionService.isT4Token("t4tok")).thenReturn(true);
+        when(subscriptionService.resolveT4Token("t4tok")).thenReturn("");
+        Map<String, Object> config = Map.of("sites", List.of());
+        when(pluginWorkerService.isAvailable()).thenReturn(false);
+        when(subscriptionService.standaloneT4("t4tok", false)).thenReturn(config);
+
+        assertEquals(config, controller.config("t4tok"));
+
+        verify(subscriptionService).checkToken("");
+        verify(subscriptionService, never()).subscriptionT4(anyString(), anyString(), anyBoolean());
+    }
+
+    @Test
+    void bareSingleSegmentFallsBackToLegacySubscriptionForm() {
+        // 单段路径未命中 T4 token:回落旧裸订阅形态(兼容保留)
+        when(subscriptionService.isT4Token("0")).thenReturn(false);
+        when(pluginWorkerService.isAvailable()).thenReturn(false);
+        when(subscriptionService.subscriptionT4("", "0", false)).thenReturn(Map.of("sites", List.of()));
+
+        controller.config("0");
+
+        verify(subscriptionService).subscriptionT4("", "0", false);
+        verify(subscriptionService, never()).standaloneT4(anyString(), anyBoolean());
+    }
+
+    @Test
+    void vodResolvesDedicatedTokenToBackingVodToken() throws Exception {
+        // 五动作入口:T4 专用 token 换算回背后 vod token 再进业务(业务面只见 vod token)
+        when(subscriptionService.resolveT4Token("t4tok")).thenReturn(TOKEN);
+        when(mediaLibraryController.browse(eq(TOKEN), eq("db:1"), isNull(), isNull(), isNull(),
+                isNull(), eq(1), eq(Map.of()), same(request))).thenReturn(new MovieList());
+
+        controller.vod("t4tok", "csp_Media", null, "db:1", null, null, null, null, null, request, response);
+
+        verify(subscriptionService).checkToken(TOKEN);
+        verify(mediaLibraryController).browse(eq(TOKEN), eq("db:1"), isNull(), isNull(), isNull(),
+                isNull(), eq(1), eq(Map.of()), same(request));
+    }
+
+    @Test
+    void cencBridgeResolvesDedicatedTokenAndKeepsPathSegment() throws Exception {
+        // CENC 桥:token 段换算鉴权,URI 定位用原始路径段(T4 专用 token 形态与 vod token 形态通吃)
+        when(subscriptionService.resolveT4Token("t4tok")).thenReturn(TOKEN);
+        MockHttpServletRequest bridgeRequest =
+                new MockHttpServletRequest("GET", "/t4cenc/t4tok/plugin-9/cenc/abc.mp4");
+
+        controller.cenc("t4tok", "plugin-9", bridgeRequest, response);
+
+        verify(subscriptionService).checkToken(TOKEN);
+        verify(pluginWorkerService).forward(eq("plugin-9"), eq("/cenc/abc.mp4"), same(bridgeRequest), same(response));
+    }
+
+    @Test
+    void disabledSwitchRejectsAllFamilies() throws Exception {
+        // t4_enabled 关闭:配置(独立/双段/裸)、五动作、CENC 桥全部 404
+        appProperties.setT4Enabled(false);
+
+        assertThrows(NotFoundException.class, () -> controller.config("t4tok"));
+        assertThrows(NotFoundException.class, () -> controller.config(TOKEN, "0"));
+        assertThrows(NotFoundException.class,
+                () -> controller.vod(TOKEN, "csp_AList", null, null, null, null, null, null, null, request, response));
+        assertThrows(NotFoundException.class,
+                () -> controller.cenc(TOKEN, "plugin-9",
+                        new MockHttpServletRequest("GET", "/t4cenc/tok/plugin-9/cenc/abc.mp4"), response));
+    }
+
+    @Test
+    void directProxyModeSendsT4dClientForBilibili() throws Exception {
+        // 直连优先(t4_proxy_mode=direct):B站播放以 t4d 身份下发 → 原始 durl + 脱敏 header
+        appProperties.setT4ProxyMode("direct");
+        org.mockito.ArgumentMatcher<jakarta.servlet.http.HttpServletRequest> t4dClient =
+                r -> "t4d".equals(r.getHeader("X-CLIENT"));
+        when(playController.play(eq(TOKEN), isNull(), isNull(), isNull(), eq("BV1xx411c7mD"),
+                isNull(), eq(false), org.mockito.ArgumentMatchers.argThat(t4dClient))).thenReturn(Map.of());
+
+        controller.vod(TOKEN, "csp_BiliBili", null, null, null, null, "BV1xx411c7mD", null, null, request, response);
+
+        verify(playController).play(eq(TOKEN), isNull(), isNull(), isNull(), eq("BV1xx411c7mD"),
+                isNull(), eq(false), org.mockito.ArgumentMatchers.argThat(t4dClient));
+    }
+
+    @Test
+    void directProxyModeLiveDetailUsesDirectClientForm() throws Exception {
+        // 直连优先:直播详情 client 传 null(Twitch/SOOP 裸直链、酷狗/映客/LOOK/YY dual 双线路)
+        appProperties.setT4ProxyMode("direct");
+        when(liveController.browse(eq(TOKEN), eq("huya$1"), isNull(), isNull(), isNull(),
+                isNull(), isNull(), eq(1))).thenReturn(new MovieList());
+
+        controller.vod(TOKEN, "csp_Live", null, "huya$1", null, null, null, null, null, request, response);
+
+        verify(liveController).browse(eq(TOKEN), eq("huya$1"), isNull(), isNull(), isNull(),
+                isNull(), isNull(), eq(1));
     }
 }

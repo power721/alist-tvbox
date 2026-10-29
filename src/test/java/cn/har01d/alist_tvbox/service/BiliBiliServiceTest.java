@@ -166,6 +166,78 @@ class BiliBiliServiceTest {
     }
 
     @Test
+    void getPlayUrlT4dReturnsDirectDurlWithSanitizedHeader() throws Exception {
+        // T4 直连优先(t4_proxy_mode=direct,t4d 身份):原始 durl 直链直出;header 剔除整串
+        // Cookie(凭证不出服务器)只留 Referer/UA 由壳子代发;设备端增强同 t4 裁掉
+        BiliBiliPlayResponse playResponse = new BiliBiliPlayResponse();
+        BiliBiliPlay play = new BiliBiliPlay();
+        BiliBiliPlay.DUrl durl = new BiliBiliPlay.DUrl();
+        durl.setUrl("https://upos-sz-mirrorcos.bilivideo.com/upos/x.flv?e=exp&os=upos");
+        play.setDurl(List.of(durl));
+        playResponse.setData(play);
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(BiliBiliPlayResponse.class)))
+                .thenReturn(ResponseEntity.ok(playResponse));
+        BiliBiliV2InfoResponse playerResponse = new BiliBiliV2InfoResponse();
+        playerResponse.setData(playerInfoWithChapters());
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/v2"), eq(HttpMethod.GET), any(), eq(BiliBiliV2InfoResponse.class)))
+                .thenReturn(ResponseEntity.ok(playerResponse));
+
+        Map<String, Object> result = service.getPlayUrl("116958703918865-40168587741", false, "t4d");
+
+        assertEquals(durl.getUrl(), result.get("url"));
+        Map<?, ?> header = (Map<?, ?>) result.get("header");
+        assertEquals("https://www.bilibili.com", header.get("Referer"));
+        assertEquals("Mozilla/5.0 Test", header.get("User-Agent"));
+        assertFalse(header.containsKey("Cookie"));
+        assertFalse(result.containsKey("subs"));
+        assertFalse(result.containsKey("danmaku"));
+        assertFalse(result.containsKey("chapters"));
+        assertEquals(0, ((Number) result.get("parse")).intValue());
+    }
+
+    @Test
+    void getPlayUrlT4DashFlagReturnsProxiedMpd() throws Exception {
+        // 「强制dash视频格式」(bilibili_dash,既有 B站设置)开启:t4 跳过短地址短路,出代理化 MPD
+        // (data: 形态,BaseURL 走 live-proxy,含音频轨),header 裁剪口径与 t4 一致(代理端补头);
+        // MPD 内密文不含 CDN 裸链,命中 live-proxy 即证明真代理化
+        when(appProperties.isSupportDash()).thenReturn(true);
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/playurl"), eq(HttpMethod.GET), any(), eq(Resp.class)))
+                .thenReturn(ResponseEntity.ok(dashResp()));
+        BiliBiliV2InfoResponse playerResponse = new BiliBiliV2InfoResponse();
+        playerResponse.setData(playerInfoWithChapters());
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/player/wbi/v2"), eq(HttpMethod.GET), any(), eq(BiliBiliV2InfoResponse.class)))
+                .thenReturn(ResponseEntity.ok(playerResponse));
+        RestTemplateBuilder builder = mock(RestTemplateBuilder.class);
+        org.mockito.Mockito.lenient().when(builder.defaultHeader(anyString(), any())).thenReturn(builder);
+        org.mockito.Mockito.lenient().when(builder.connectTimeout(any(java.time.Duration.class))).thenReturn(builder);
+        org.mockito.Mockito.lenient().when(builder.readTimeout(any(java.time.Duration.class))).thenReturn(builder);
+        org.mockito.Mockito.lenient().when(builder.build()).thenReturn(restTemplate);
+        cn.har01d.alist_tvbox.live.service.LiveProxyService liveProxyService =
+                Mockito.mock(cn.har01d.alist_tvbox.live.service.LiveProxyService.class);
+        org.mockito.Mockito.lenient().when(liveProxyService.buildProxyUrl(anyString()))
+                .thenAnswer(invocation -> "http://atv.example/live-proxy/tok?u=enc");
+        BiliBiliService t4Service = new BiliBiliService(settingRepository, navigationService, appProperties,
+                biliCookieRefreshService, builder, new ObjectMapper(), liveProxyService,
+                Mockito.mock(SubscriptionService.class));
+        // 预置 WBI key 跳过 NAV_API 往返(与 setUp 对主 service 同款)
+        ReflectionTestUtils.setField(t4Service, "imgKey", "7cd084941338484aae1ad9425b84077c");
+        ReflectionTestUtils.setField(t4Service, "subKey", "4932caff0ff746eab6f21fae462f4454");
+        ReflectionTestUtils.setField(t4Service, "keyTime", LocalDate.now());
+
+        Map<String, Object> result = t4Service.getPlayUrl("116958703918865-40168587741", false, "t4");
+
+        String url = (String) result.get("url");
+        assertTrue(url.startsWith("data:application/dash+xml;base64,"));
+        String mpd = new String(java.util.Base64.getMimeDecoder()
+                .decode(url.substring("data:application/dash+xml;base64,".length())),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(mpd.contains("/live-proxy/tok?u=enc"));
+        assertTrue(mpd.contains("Representation"));
+        assertFalse(result.containsKey("header"));
+        assertEquals("0", String.valueOf(result.get("parse")));
+    }
+
+    @Test
     void getPlayUrlT4ReturnsShortProxyUrlWithoutUpstreamCall() throws Exception {
         // T4 短代理:/proxy/{token}/{id} 直出,playerContent 零 B站 API 调用,解析延后到拉流时
         org.springframework.mock.web.MockHttpServletRequest req =

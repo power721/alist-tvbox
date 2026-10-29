@@ -25,6 +25,7 @@ import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -586,5 +587,98 @@ class TvBoxServiceTest {
         assertThat(result.getLang()).isEqualTo("chs");
         assertThat(result.getName()).isEqualTo("简体中文");
         assertThat(result.getUrl()).isEqualTo("http://cdn.example/sub.chs.ass");
+    }
+
+    private FsDetail stubPlayRequest(String provider, String rawUrl) {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/play");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(8080);
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        Site site = new Site();
+        site.setId(1);
+        site.setName("AList");
+        FsDetail detail = new FsDetail();
+        detail.setProvider(provider);
+        detail.setName("video.mkv");
+        detail.setRawUrl(rawUrl);
+        when(siteService.getById(1)).thenReturn(site);
+        when(aListService.getFile(site, "/video.mkv")).thenReturn(detail);
+        org.mockito.Mockito.lenient().when(appProperties.isEnableHttps()).thenReturn(false);
+        org.mockito.Mockito.lenient().when(appProperties.getFormats()).thenReturn(Set.of("mkv"));
+        org.mockito.Mockito.lenient().when(appProperties.getUserAgent()).thenReturn("Mozilla/5.0 Test");
+        return detail;
+    }
+
+    @Test
+    void t4DirectSkipsBackendProxyForNonCredentialDriver() {
+        // T4 直连优先(t4_play_type=t4-direct):无凭证屏障的盘(迅雷,直连 header 仅 UA)
+        // 即便本地代理开关开着也直链直出省带宽(T4 壳子没有 VideoStreamProxy,/p 对它只是 302 一跳)
+        stubPlayRequest("ThunderBrowser", "http://raw.example/video.mkv");
+        when(appProperties.getLocalProxyConfig()).thenReturn((Map) Map.of(
+                "THUNDER", Map.of("enabled", true, "concurrency", 8)));
+
+        Map<String, Object> result = tvBoxService.getPlayUrl(1, "/video.mkv", false, null, "t4-direct");
+
+        assertThat((String) result.get("url")).isEqualTo("http://raw.example/video.mkv");
+        assertThat((String) result.get("url")).doesNotContain("/p/");
+        @SuppressWarnings("unchecked")
+        Map<String, String> header = (Map<String, String>) result.get("header");
+        assertThat(header).isNotNull();
+        assertThat(header).containsKey("User-Agent");
+        assertThat(header).doesNotContainKey("Cookie");
+    }
+
+    @Test
+    void t4ForcesProxyAndHidesCookieForQuarkWithoutMarker() {
+        // T4(全代理身份):直连必须带 Cookie 的夸克(非 x-referer 标记形态)强制 /p 中转——
+        // 即便实例没配本地代理(旧形态此处会直连 + Cookie header 泄给壳子),凭证不出服务器
+        stubPlayRequest("Quark", "http://raw.example/video.mkv");
+        when(subscriptionService.getCurrentToken()).thenReturn("test-token");
+        when(proxyService.generateProxyUrl(org.mockito.ArgumentMatchers.any(Site.class),
+                eq("/video.mkv"))).thenReturn(42);
+
+        Map<String, Object> result = tvBoxService.getPlayUrl(1, "/video.mkv", false, null, "t4");
+
+        assertThat((String) result.get("url")).contains("/p/test-token/1@42");
+        assertThat(result.get("header")).isNull();
+    }
+
+    @Test
+    void t4DirectKeepsXRefererMarkerQuarkDirect() {
+        // T4 直连优先 + x-referer 标记的夸克(免 Cookie 形态):本地代理开着也跳过 /p,
+        // 走标记分支剥片段 + UA/Referer 头(无 Cookie)
+        stubPlayRequest("Quark", "http://raw.example/video.mkv#x-referer=raw");
+        when(appProperties.getLocalProxyConfig()).thenReturn((Map) Map.of(
+                "QUARK", Map.of("enabled", true, "concurrency", 8)));
+
+        Map<String, Object> result = tvBoxService.getPlayUrl(1, "/video.mkv", false, null, "t4-direct");
+
+        assertThat((String) result.get("url")).isEqualTo("http://raw.example/video.mkv");
+        assertThat((String) result.get("url")).doesNotContain("x-referer");
+        @SuppressWarnings("unchecked")
+        Map<String, String> header = (Map<String, String>) result.get("header");
+        assertThat(header).isNotNull();
+        assertThat(header).doesNotContainKey("Cookie");
+        assertThat(header.get("Referer")).endsWith("\\ ");
+    }
+
+    @Test
+    void t4PlaySuppressesMultiUrlsCredentials() {
+        // multiUrls 分片 header 含各账号 Cookie,只给 spring.jar VideoStreamProxy 消费;
+        // T4 播放身份不下发(壳子非自有组件),普通身份照常
+        FsDetail detail = stubPlayRequest("AliyundriveOpen", "http://ali.example/video.mkv");
+        when(appProperties.getLocalProxyConfig()).thenReturn((Map) Map.of());
+        FsDetail.MultiSource ms = new FsDetail.MultiSource();
+        ms.setUrl("http://ms.example/a.mkv");
+        detail.setMultiSource(List.of(ms));
+        when(subscriptionService.getCurrentToken()).thenReturn("test-token");
+        when(subscriptionService.verifiedCredentialUidFor("test-token")).thenReturn(0);
+
+        Map<String, Object> t4Result = tvBoxService.getPlayUrl(1, "/video.mkv", false, null, "t4");
+        assertThat(t4Result.get("multiUrls")).isNull();
+
+        Map<String, Object> plainResult = tvBoxService.getPlayUrl(1, "/video.mkv", false, null, null);
+        assertThat(plainResult.get("multiUrls")).isNotNull();
     }
 }

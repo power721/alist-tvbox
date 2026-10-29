@@ -52,6 +52,11 @@ public class AppProperties {
     // dual=「直连优先+代理」双线路,客户端默认直连平台 CDN(零服务器带宽),直连失败由内核自动
     // 落到代理(OK影视切下一集/FongMi切线路均兼容;网页端不受影响恒走代理)。默认直连优先省带宽
     private String liveProxyMode = "dual";
+    // T4 接口总开关(Setting 键 t4_enabled,默认开):关闭后 /t4、/t4cenc 全部 404
+    private boolean t4Enabled = true;
+    // T4 播放代理策略(Setting 键 t4_proxy_mode):all=全代理(默认,通用壳子对 CDN 零头要求,兼容优先);
+    // direct=直连优先(B站直链+脱敏头、直播 dual 双线路,省服务器带宽,依赖壳子按 play 响应 header 带头)
+    private String t4ProxyMode = "all";
     private boolean playbackSyncEnabled = false;
     // 同步分区粒度:uid(不分桶)/ token(按 vod token)/ subscription(按 vod token/id)
     private String playbackSyncScope = "token";

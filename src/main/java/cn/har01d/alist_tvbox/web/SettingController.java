@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.dto.backup.BackupRestoreResponse;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.service.GitHubProxyService;
 import cn.har01d.alist_tvbox.service.SettingService;
+import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -37,10 +38,13 @@ public class SettingController {
 
     private final SettingService service;
     private final GitHubProxyService gitHubProxyService;
+    private final SubscriptionService subscriptionService;
 
-    public SettingController(SettingService service, GitHubProxyService gitHubProxyService) {
+    public SettingController(SettingService service, GitHubProxyService gitHubProxyService,
+                             SubscriptionService subscriptionService) {
         this.service = service;
         this.gitHubProxyService = gitHubProxyService;
+        this.subscriptionService = subscriptionService;
     }
 
     @GetMapping
@@ -57,6 +61,16 @@ public class SettingController {
     @PostMapping("/apikey")
     public String generateApiKey() {
         return service.generateApiKey();
+    }
+
+    /** T4 专用 token:body 带 value=自定义 token(4-64 位,非纯数字);空 body=重新生成随机串。修改后存量专用地址立即失效,旧订阅形态地址不受影响。 */
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")
+    @PostMapping("/t4-token")
+    public String generateT4Token(@RequestBody(required = false) Setting setting) {
+        if (setting != null && StringUtils.isNotBlank(setting.getValue())) {
+            return subscriptionService.updateT4Token(setting.getValue().trim());
+        }
+        return subscriptionService.regenerateT4Token();
     }
 
     @PreAuthorize("hasAnyAuthority('ADMIN', 'CLIENT')")

@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.FilterDto;
 import cn.har01d.alist_tvbox.dto.LiveFollowDto;
 import cn.har01d.alist_tvbox.entity.Plugin;
@@ -39,8 +40,14 @@ import java.util.Set;
 /**
  * T4(type 4)适配层:TVBox 客户端不下 jar,home/category/detail/search/player 五动作全部
  * 以 HTTP 参数打到 /t4/{token}/v/{siteKey},本控制器逐参数复刻 spring.jar 各 csp_* spider
- * 的回源调用(CatVodTVSpider 对应类),业务仍落在既有端点。配置入口 /t4/{token}/{id}
- * (SubscriptionService.subscriptionT4 出 type 4 站点);插件源/WebHome/push 保持 type 3。
+ * 的回源调用(CatVodTVSpider 对应类),业务仍落在既有端点。T4=控制面中转:壳零运行时依赖,
+ * 元数据/鉴权/站点请求全由服务端代劳,PC 应用/网页壳/老盒子/Node 壳均可接。
+ *
+ * 配置入口(三形态):
+ *  /t4/{t4token}           独立地址(推荐,与订阅无关;T4 专用 token 见 SubscriptionService)
+ *  /t4/{token}/{id}        旧订阅形态(vod token + 订阅号;兼容保留,上游 type3 站点本就全删)
+ *  /t4/{id}                旧裸订阅形态(兼容保留)
+ * T4 接口总开关 t4_enabled 关闭后全部 404;代理策略 t4_proxy_mode=all(默认)/direct 见下。
  *
  * FongMi 客户端契约(SiteApi):
  *  home   GET api?filter=true(filter 标志忽略,home 恒带分类+筛选+推荐 list)
@@ -62,6 +69,7 @@ public class T4Controller {
             Set.of("csp_TgDouBan", "csp_TgChannel", "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup");
 
     private final SubscriptionService subscriptionService;
+    private final AppProperties appProperties;
     private final TvBoxController tvBoxController;
     private final PianDanController pianDanController;
     private final MediaLibraryController mediaLibraryController;
@@ -82,15 +90,41 @@ public class T4Controller {
     private final Cache<String, String> keywordCache =
             Caffeine.newBuilder().maximumSize(200).expireAfterAccess(Duration.ofHours(1)).build();
 
-    @GetMapping("/t4/{id}")
-    public Map<String, Object> config(@PathVariable String id) {
-        return subscriptionService.subscriptionT4("", id, pluginWorkerService.isAvailable());
+    // 单段路径双语义消歧:T4 专用 token 命中 → 独立 T4 配置(与订阅无关,新唯一推荐入口);
+    // 未命中 → 旧裸订阅形态(兼容保留)。T4 专用 token 独立于 vod token 体系,泄露只废 T4 一个面。
+    @GetMapping("/t4/{x}")
+    public Map<String, Object> config(@PathVariable String x) {
+        guardT4Enabled();
+        if (subscriptionService.isT4Token(x)) {
+            // 先映射回背后 vod token 再过 checkToken,建立 currentToken/租户上下文
+            subscriptionService.checkToken(subscriptionService.resolveT4Token(x));
+            return subscriptionService.standaloneT4(x, pluginWorkerService.isAvailable());
+        }
+        return subscriptionService.subscriptionT4("", x, pluginWorkerService.isAvailable());
     }
 
     @GetMapping("/t4/{token}/{id}")
     public Map<String, Object> config(@PathVariable String token, @PathVariable String id) {
+        guardT4Enabled();
         subscriptionService.checkToken(token);
         return subscriptionService.subscriptionT4(token, id, pluginWorkerService.isAvailable());
+    }
+
+    /** T4 接口总开关(t4_enabled):关闭后配置/五动作/CENC 桥全部 404。 */
+    private void guardT4Enabled() {
+        if (!appProperties.isT4Enabled()) {
+            throw new NotFoundException();
+        }
+    }
+
+    /** T4 B站播放身份:全代理=t4(服务端代理地址形态);直连优先=t4d(原始 durl+脱敏头)。 */
+    private String t4BiliClient() {
+        return "direct".equals(appProperties.getT4ProxyMode()) ? "t4d" : "t4";
+    }
+
+    /** T4 直播详情 client:全代理=web(服务端代理地址形态);直连优先=null(裸直链/dual 双线路)。 */
+    private String t4LiveClient() {
+        return "direct".equals(appProperties.getT4ProxyMode()) ? null : "web";
     }
 
     // FongMi type4 恒 GET(catvod 三参 newCall=拼 query);@RequestMapping 兼容杂牌壳子的
@@ -99,6 +133,11 @@ public class T4Controller {
     public Object vod(@PathVariable String token, @PathVariable String site,
                       String t, String ids, String wd, String quick, String play, String ext, Integer pg,
                       HttpServletRequest request, HttpServletResponse response) throws IOException {
+        guardT4Enabled();
+        String pathToken = token;
+        // T4 专用 token 命中则换算回背后 vod token(插件 payload/播放均按 vod token 口径);
+        // pathToken 原样保留,用于生成 CENC 桥等对客户端暴露的地址(T4 面不嵌 vod token)
+        token = subscriptionService.resolveT4Token(token);
         subscriptionService.checkToken(token);
         // URL 路径段不带 csp_ 前缀(applyT4 生成口径);带前缀的旧形态兼容
         String siteKey = site.startsWith("csp_") ? site : "csp_" + site;
@@ -108,7 +147,7 @@ public class T4Controller {
             if (plugin == null || !pluginWorkerService.isAvailable()) {
                 throw new NotFoundException();
             }
-            return pluginVod(token, site, plugin, t, ids, wd, quick, play, ext, pg);
+            return pluginVod(token, pathToken, plugin, site, t, ids, wd, quick, play, ext, pg);
         }
         // JSON POST 形态(部分壳子):查询/表单参数全缺位时从 JSON body 取参
         if (StringUtils.isAllBlank(t, ids, wd, play, ext) && pg == null) {
@@ -161,7 +200,7 @@ public class T4Controller {
     }
 
     /** 插件源(服务端 Python 运行时)五动作:extend 服务端自建,worker 返回原样透传。 */
-    private Object pluginVod(String token, String site, Plugin plugin,
+    private Object pluginVod(String token, String pathToken, Plugin plugin, String site,
                              String t, String ids, String wd, String quick, String play, String ext, Integer pg)
             throws IOException {
         String extend = t4PluginExtend(token, plugin);
@@ -171,7 +210,8 @@ public class T4Controller {
             method = "play";
             params.put("play", play);
             // 红果密文流等需服务端解密的场景:worker 把 #hg-cenc= URL 改写为此桥下地址
-            params.put("proxy_base", subscriptionService.readHostAddress("/t4cenc/" + token + "/" + site));
+            // (嵌 pathToken:T4 专用 token 形态下桥地址仍是 T4 面,不泄漏 vod token)
+            params.put("proxy_base", subscriptionService.readHostAddress("/t4cenc/" + pathToken + "/" + site));
         } else if (StringUtils.isNotBlank(ids)) {
             method = "detail";
             params.put("ids", ids);
@@ -198,13 +238,17 @@ public class T4Controller {
     @RequestMapping("/t4cenc/{token}/{site}/**")
     public void cenc(@PathVariable String token, @PathVariable String site,
                      HttpServletRequest request, HttpServletResponse response) throws IOException {
+        guardT4Enabled();
+        // URI 定位用原始路径段(T4 专用 token 形态下 resolved 与之不同);鉴权按换算后的 vod token
+        String pathToken = token;
+        token = subscriptionService.resolveT4Token(token);
         subscriptionService.checkToken(token);
         String uri = request.getRequestURI();
-        int start = uri.indexOf("/t4cenc/" + token + "/" + site + "/");
+        int start = uri.indexOf("/t4cenc/" + pathToken + "/" + site + "/");
         if (start < 0) {
             throw new NotFoundException();
         }
-        String path = uri.substring(start + ("/t4cenc/" + token + "/" + site).length());
+        String path = uri.substring(start + ("/t4cenc/" + pathToken + "/" + site).length());
         if (path.startsWith("/")) {
             path = path.substring(1);
         }
@@ -220,10 +264,13 @@ public class T4Controller {
         String base = subscriptionService.readHostAddress("");
         Map<String, Object> payload = SubscriptionService.buildPluginExtPayload(plugin, base,
                 token, token, "", false, null);
-        // local_proxy_config 置空:Atvp._play 不带 client-proxy,/play 出 /p 服务端代理直链
-        // (T4 客户端无本地代理);preheatUrl 是设备端预热清单,worker 无此缓存目录
+        // local_proxy_config 置空:Atvp._play 不带 client-proxy(T4 客户端无本地代理);
+        // preheatUrl 是设备端预热清单,worker 无此缓存目录。
+        // t4_play_type=T4 播放身份:t4(全代理)=直连带 Cookie 的夸克/UC 强制 /p 且 Cookie/multiUrls
+        // 不下发;t4-direct(直连优先策略)=无凭证屏障盘直链直出省带宽(TvBoxService 判定)
         payload.remove("local_proxy_config");
         payload.remove("preheatUrl");
+        payload.put("t4_play_type", "direct".equals(appProperties.getT4ProxyMode()) ? "t4-direct" : "t4");
         return java.util.Base64.getEncoder()
                 .encodeToString(objectMapper.writeValueAsString(payload).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
@@ -358,9 +405,11 @@ public class T4Controller {
             case "csp_FeiNiu" -> feiniuController.browse(token, ids, null, null, null, 1, request);
             case "csp_Live" ->
                     // platform 参位在 ids 分支语义为 client:web = 服务端代理地址形态
-                    // (Twitch/SOOP 仅 web 代理、酷狗/Inke/看看/YY web 走纯 proxy 模式),
-                    // T4 壳子无本地代理/带头能力,与网页端同口径
-                    liveController.browse(token, ids, null, null, null, "web", null, 1);
+                    // (Twitch/SOOP 仅 web 代理、酷狗/Inke/看看/YY web 走纯代理模式),
+                    // T4 壳子无本地代理/带头能力,与网页端同口径;直连优先策略(t4_proxy_mode=direct)
+                    // 下传 null:Twitch/SOOP 裸直链、酷狗/Inke/看看/YY 走 dual 双线路
+                    // (直连优先+代理兜底),虎牙恒 /p 不受影响
+                    liveController.browse(token, ids, null, null, null, t4LiveClient(), null, 1);
             default -> throw new NotFoundException();
         };
     }
@@ -397,9 +446,10 @@ public class T4Controller {
                  "csp_FishPanSou", "csp_FishPanSouGroup" ->
                     playController.play(token, null, null, play, null, null, false, request);
             // B站条目 id 走 bvid 参位;动作前缀(bili-like- 等)由 /play 的 bvid→id 兜底归位。
-            // X-CLIENT 标记 t4:BiliBiliService 据此把 MPD BaseURL/直链改写为服务端代理地址
+            // X-CLIENT 标记 t4/t4d:BiliBiliService 据此出服务端代理地址形态(t4)或
+            // 直连形态(t4d,原始 durl+脱敏头,由 t4_proxy_mode 直连优先策略触发)
             case "csp_BiliBili" ->
-                    playController.play(token, null, null, null, play, null, false, withT4Client(request));
+                    playController.play(token, null, null, null, play, null, false, withT4Client(request, t4BiliClient()));
             case "csp_Emby" -> embyController.play(token, play, 0L, request);
             case "csp_Jellyfin" -> jellyfinController.play(token, play, 0L, request);
             case "csp_FeiNiu" -> feiniuController.play(token, play, 0L, request);
@@ -408,18 +458,18 @@ public class T4Controller {
         };
     }
 
-    /** B站播放请求以 t4 身份下发(X-CLIENT 头,同 spring.jar 各 spider 报包名的口径)。 */
-    private static HttpServletRequest withT4Client(HttpServletRequest request) {
+    /** B站播放请求以 t4/t4d 身份下发(X-CLIENT 头,同 spring.jar 各 spider 报包名的口径)。 */
+    private static HttpServletRequest withT4Client(HttpServletRequest request, String client) {
         return new jakarta.servlet.http.HttpServletRequestWrapper(request) {
             @Override
             public String getHeader(String name) {
-                return "X-CLIENT".equalsIgnoreCase(name) ? "t4" : super.getHeader(name);
+                return "X-CLIENT".equalsIgnoreCase(name) ? client : super.getHeader(name);
             }
 
             @Override
             public java.util.Enumeration<String> getHeaders(String name) {
                 return "X-CLIENT".equalsIgnoreCase(name)
-                        ? java.util.Collections.enumeration(List.of("t4"))
+                        ? java.util.Collections.enumeration(List.of(client))
                         : super.getHeaders(name);
             }
         };

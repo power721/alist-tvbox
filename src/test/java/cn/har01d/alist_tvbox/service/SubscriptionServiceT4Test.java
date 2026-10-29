@@ -17,6 +17,8 @@ import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.entity.HistoryRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.MediaType;
@@ -40,11 +42,13 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -54,6 +58,8 @@ import static org.mockito.Mockito.when;
 class SubscriptionServiceT4Test {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private SettingRepository settingRepository;
+    private AppProperties appProperties;
 
     @BeforeEach
     void setUp() {
@@ -180,6 +186,84 @@ class SubscriptionServiceT4Test {
         assertEquals("https://cj.example/api.php/provide/vod", cms.get("api"));
     }
 
+    @Test
+    void standaloneT4EmbedsDedicatedTokenWithoutSubscription() {
+        // 独立 T4 配置(/t4/{t4token}):空上游自配置 + 变换,站点 api 嵌 T4 专用 token,
+        // 不挂订阅号、零上游网络(空上游跳过合并循环)
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null),
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_Media", true, "csp_Media", "我的追剧", null));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class));
+        ReflectionTestUtils.setField(service, "t4Token", "t4abcd12");
+
+        Map<String, Object> config = service.standaloneT4("t4abcd12", false);
+
+        Map<String, Object> alist = findSite(config, "csp_AList");
+        assertEquals(4, alist.get("type"));
+        assertEquals("http://atv.example/t4/t4abcd12/v/AList", alist.get("api"));
+        assertFalse(alist.containsKey("jar"));
+        assertFalse(config.containsKey("spider"));
+    }
+
+    @Test
+    void resolveT4TokenMapsDedicatedTokenToBackingVodToken() {
+        SubscriptionService service = newService("{}", List.of(), mock(UserService.class));
+        ReflectionTestUtils.setField(service, "t4Token", "t4abcd12");
+
+        // 未命中:原样返回(旧 vod token 形态继续走 checkToken)
+        assertEquals("abc", service.resolveT4Token("abc"));
+        // 命中但安全订阅关/无共享 token:空串(无 token 口径)
+        assertEquals("", service.resolveT4Token("t4abcd12"));
+        // 命中且安全订阅开:首个共享 token
+        appProperties.setEnabledToken(true);
+        ReflectionTestUtils.setField(service, "tokens", "shared1,shared2");
+        assertEquals("shared1", service.resolveT4Token("t4abcd12"));
+        assertTrue(service.isT4Token("t4abcd12"));
+        assertFalse(service.isT4Token("abc"));
+    }
+
+    @Test
+    void regenerateT4TokenRotatesAndPersists() {
+        SubscriptionService service = newService("{}", List.of(), mock(UserService.class));
+
+        String token = service.regenerateT4Token();
+
+        assertEquals(token, service.getT4Token());
+        assertTrue(service.isT4Token(token));
+        assertFalse(service.isT4Token("t4abcd12"));
+        org.mockito.ArgumentCaptor<Setting> captor = org.mockito.ArgumentCaptor.forClass(Setting.class);
+        verify(settingRepository).save(captor.capture());
+        assertEquals(Constants.T4_TOKEN, captor.getValue().getName());
+        assertEquals(token, captor.getValue().getValue());
+    }
+
+    @Test
+    void t4DisabledRejectsConfigGeneration() {
+        // t4_enabled 关:配置生成(独立/订阅形态)一律 404
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class));
+        ReflectionTestUtils.setField(service, "t4Token", "t4abcd12");
+        appProperties.setT4Enabled(false);
+
+        assertThrows(NotFoundException.class, () -> service.standaloneT4("t4abcd12", false));
+        assertThrows(NotFoundException.class, () -> service.subscriptionT4("", "0"));
+    }
+
+    @Test
+    void updateT4TokenValidatesAndPersists() {
+        SubscriptionService service = newService("{}", List.of(), mock(UserService.class));
+
+        assertEquals("my-t4-key_9", service.updateT4Token("my-t4-key_9"));
+        assertTrue(service.isT4Token("my-t4-key_9"));
+
+        // 纯数字遮蔽旧裸订阅号形态/短值/非法字符/u- 前缀(用户 token 保留空间) → 拒绝
+        assertThrows(BadRequestException.class, () -> service.updateT4Token("123"));
+        assertThrows(BadRequestException.class, () -> service.updateT4Token("ab1"));
+        assertThrows(BadRequestException.class, () -> service.updateT4Token("a b!"));
+        assertThrows(BadRequestException.class, () -> service.updateT4Token("u-alice"));
+    }
+
     private static Map<String, Object> findSite(Map<String, Object> config, String key) {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         return sites.stream().filter(site -> key.equals(site.get("key"))).findFirst().orElseThrow();
@@ -199,7 +283,7 @@ class SubscriptionServiceT4Test {
     private SubscriptionService newService(String upstreamJson,
                                            List<SubscriptionSourceService.SubscriptionSourceRef> sources,
                                            UserService userService, int ownerUid) {
-        SettingRepository settingRepository = mock(SettingRepository.class);
+        settingRepository = mock(SettingRepository.class);
         when(settingRepository.findById(anyString())).thenAnswer(invocation -> {
             Object key = invocation.getArgument(0);
             if (Constants.ALI_SECRET.equals(key)) {
@@ -227,9 +311,10 @@ class SubscriptionServiceT4Test {
         SubscriptionSourceService subscriptionSourceService = mock(SubscriptionSourceService.class);
         when(subscriptionSourceService.findEnabledSources()).thenReturn(sources);
 
+        appProperties = new AppProperties();
         SubscriptionService service = new SubscriptionService(
                 mock(Environment.class),
-                new AppProperties(),
+                appProperties,
                 new RestTemplateBuilder(),
                 objectMapper,
                 mock(JdbcTemplate.class),

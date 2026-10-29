@@ -86,6 +86,7 @@ import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.ANONYMOUS_ACCESS;
 import static cn.har01d.alist_tvbox.util.Constants.ENABLED_TOKEN;
+import static cn.har01d.alist_tvbox.util.Constants.T4_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.USER_TOKEN_PREFIX;
 
@@ -95,7 +96,7 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_TOKEN_PREFIX;
 public class SubscriptionService {
     private static final String PLUGIN_RUN_MODE = "plugin_run_mode";
     private static final String PLUGIN_RUN_MODE_PYTHON = "python";
-    public static final String ATVP_RUNTIME_REVISION = "preheat-v2";
+    public static final String ATVP_RUNTIME_REVISION = "t4-direct-v1";
     private static final String AUTO_UPDATE_PG = "auto_update_pg";
     private static final String AUTO_UPDATE_ZX = "auto_update_zx";
     private static final String AUTO_UPDATE_XS = "auto_update_xs";
@@ -137,6 +138,8 @@ public class SubscriptionService {
     private String tokens = "";
     // 亲友共享模式:安全订阅开启时仍放行无 token 请求,并为其注入首个安全 token(老订阅地址零改动)
     private boolean anonymousAccess;
+    // T4 专用接口 token 缓存(Setting T4_TOKEN):/t4/{t4token} 独立地址的钥匙,与 vod token 体系隔离
+    private String t4Token;
 
     public SubscriptionService(Environment environment,
                                AppProperties appProperties,
@@ -216,6 +219,13 @@ public class SubscriptionService {
         anonymousAccess = Boolean.parseBoolean(settingRepository.findById(ANONYMOUS_ACCESS)
                 .map(Setting::getValue)
                 .orElse("false"));
+
+        // T4 专用 token:启动缺失即生成(短随机串,与共享 token 同款);重新生成走 regenerateT4Token()
+        t4Token = settingRepository.findById(T4_TOKEN).map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(t4Token)) {
+            t4Token = Utils.generateUsername();
+            settingRepository.save(new Setting(T4_TOKEN, t4Token));
+        }
 
         if (list.isEmpty()) {
             Subscription sub = new Subscription();
@@ -738,6 +748,9 @@ public class SubscriptionService {
      *                      就绪时插件源(spider 插件)同样 T4 化,否则维持移除口径
      */
     public Map<String, Object> subscriptionT4(String token, String id, boolean pluginRuntime) {
+        if (!appProperties.isT4Enabled()) {
+            throw new NotFoundException();
+        }
         var credentialUser = userService.findUserByCredentialToken(token);
         if (credentialUser != null) {
             token = UserService.userVodToken(credentialUser.getUsername());
@@ -748,6 +761,71 @@ public class SubscriptionService {
         }
         Map<String, Object> config = subscription(token, id);
         applyT4(token, config, pluginRuntime);
+        return config;
+    }
+
+    /**
+     * T4 专用 token 是否命中(独立于 vod token 体系,不与共享/u- token 撞车)。
+     */
+    public boolean isT4Token(String rawToken) {
+        return t4Token != null && t4Token.equals(rawToken);
+    }
+
+    /**
+     * T4 端点入口统一换算:命中 T4 专用 token → 背后 vod token(安全订阅开启时取首个共享
+     * token,否则空串=无 token 口径);未命中原样返回(旧 vod token 形态继续走 checkToken)。
+     * T4 token 只保护配置地址/五动作这个面;play 响应内嵌的 /p/{vodToken} 与 T3 spring.jar 同口径。
+     */
+    public String resolveT4Token(String rawToken) {
+        if (isT4Token(rawToken)) {
+            if (isTokenEnabled() && StringUtils.isNotBlank(tokens)) {
+                return tokens.split(",")[0].trim();
+            }
+            return "";
+        }
+        return rawToken;
+    }
+
+    /**
+     * 重新生成 T4 专用 token:存量壳子的 /t4 地址立即失效,须改用新地址重新拉取配置。
+     */
+    public String regenerateT4Token() {
+        t4Token = Utils.generateUsername();
+        settingRepository.save(new Setting(T4_TOKEN, t4Token));
+        return t4Token;
+    }
+
+    /**
+     * 自定义 T4 专用 token:4-64 位字母/数字/中划线/下划线(字母或数字开头)。
+     * 纯数字拒绝——单段路径 /t4/{x} 先比对 T4 token 再回落旧裸订阅号,纯数字会遮蔽
+     * 旧 /t4/{订阅号} 形态;u- 前缀拒绝(用户 vod token 保留空间,两个命名空间永不撞车)。
+     */
+    public String updateT4Token(String value) {
+        if (value == null || !value.matches("[A-Za-z0-9][A-Za-z0-9_-]{3,63}") || value.matches("\\d+")
+                || value.startsWith(USER_TOKEN_PREFIX)) {
+            throw new BadRequestException("T4 Token 须为 4-64 位字母/数字/中划线/下划线(字母或数字开头),且不能是纯数字或 u- 前缀");
+        }
+        t4Token = value;
+        settingRepository.save(new Setting(T4_TOKEN, t4Token));
+        return t4Token;
+    }
+
+    public String getT4Token() {
+        return t4Token;
+    }
+
+    /**
+     * 独立 T4 配置(/t4/{t4token}):与订阅无关 —— 上游站点全是 type 3,applyT4 一律删除,
+     * 任何订阅号取出的 T4 配置等价,故不再挂订阅号。空上游生成自配置后做同一变换;
+     * applyT4 对非 u- token 原样透传,站点 api 路径段自然是 /t4/{t4token}/v/...。
+     */
+    public Map<String, Object> standaloneT4(String pathToken, boolean pluginRuntime) {
+        if (!appProperties.isT4Enabled()) {
+            throw new NotFoundException();
+        }
+        String token = resolveT4Token(pathToken);
+        Map<String, Object> config = subscription(token, "", "", "", "", "");
+        applyT4(pathToken, config, pluginRuntime);
         return config;
     }
 
@@ -819,14 +897,17 @@ public class SubscriptionService {
             apiUrl = "";
         }
         Map<String, Object> config = new HashMap<>();
-        for (String url : apiUrl.split(",")) {
-            String[] parts = url.split("@", 2);
-            String prefix = "";
-            if (parts.length == 2) {
-                prefix = parts[0].trim() + "@";
-                url = parts[1].trim();
+        // 空上游(独立 T4 配置等):跳过合并循环,零网络零副作用
+        if (StringUtils.isNotBlank(apiUrl)) {
+            for (String url : apiUrl.split(",")) {
+                String[] parts = url.split("@", 2);
+                String prefix = "";
+                if (parts.length == 2) {
+                    prefix = parts[0].trim() + "@";
+                    url = parts[1].trim();
+                }
+                overrideConfig(config, fixUrl(url.trim()), prefix, getConfigData(url.trim()));
             }
-            overrideConfig(config, fixUrl(url.trim()), prefix, getConfigData(url.trim()));
         }
 
         // 上游订阅的 spider 会在 overrideConfig 中直接写入全局字段,抢占 TVBox 唯一的主 spider 位,

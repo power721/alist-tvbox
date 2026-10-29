@@ -32,7 +32,8 @@ class SettingControllerBackupTest {
         Mockito.when(settingService.exportJsonDatabase()).thenReturn(new FileSystemResource(temp));
         Mockito.when(settingService.importJsonDatabase(any(), eq(BackupRestoreMode.OVERWRITE)))
             .thenReturn(new BackupRestoreResponse());
-        mockMvc = MockMvcBuilders.standaloneSetup(new SettingController(settingService, null)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new SettingController(settingService, null,
+                Mockito.mock(cn.har01d.alist_tvbox.service.SubscriptionService.class))).build();
     }
 
     @Test

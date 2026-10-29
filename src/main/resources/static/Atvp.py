@@ -222,6 +222,9 @@ class Spider(HostSpider):
             f"api={self._backend_api or '-'}, token={'yes' if self._vod_token else 'no'}"
         )
         self._localProxyConfig = payload.get("local_proxy_config") if isinstance(payload, dict) else {}
+        # T4 服务端运行时身份:后端按代理策略注入(t4=凭证屏障盘强制 /p 且 Cookie 不下发;
+        # t4-direct=无凭证屏障盘直链直出)。T3 设备端不注入,维持 client-proxy 语义
+        self._t4PlayType = str(payload.get("t4_play_type") or "")
         self._start_preheat_daemon(payload)
         package_text = self._load_source(source)
         source_text = package_text if self._is_raw_source(payload) else self._decrypt_secspider_source(package_text)
@@ -1423,7 +1426,9 @@ class Spider(HostSpider):
 
     def _play(self, play_id):
         proxy_type = ""
-        if self._localProxyConfig:
+        if getattr(self, "_t4PlayType", ""):
+            proxy_type = self._t4PlayType
+        elif self._localProxyConfig:
             proxy_type = "client-proxy"
         rsp = self.fetch(
             self._build_backend_endpoint("play"),

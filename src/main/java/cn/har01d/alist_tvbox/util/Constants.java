@@ -68,6 +68,12 @@ public final class Constants {
     public static final String BILIBILI_CODE = "6666";
     public static final String BILI_BILI = "BiliBili";
     public static final String ALI_SECRET = "ali_secret";
+    /** T4 专用接口 token:独立于 vod token 体系,只授权 /t4 配置与五动作端点(可轮换,泄露只废 T4 一个面)。 */
+    public static final String T4_TOKEN = "t4_token";
+    /** T4 接口总开关:关闭后 /t4、/t4cenc 全部 404。 */
+    public static final String T4_ENABLED = "t4_enabled";
+    /** T4 播放代理策略:all=全代理(默认,兼容优先)/direct=直连优先(B站直链+脱敏头、直播 dual 双线路)。 */
+    public static final String T4_PROXY_MODE = "t4_proxy_mode";
     public static final String TACIT_0924_ID = "tacit0924_id";
     public static final String TACIT_FOLDER_ID = "tacit0924_folder_id";
     public static final String GLOBAL_SUBSCRIPTION_OVERRIDE = "global_subscription_override";

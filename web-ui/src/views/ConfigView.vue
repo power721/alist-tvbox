@@ -86,6 +86,38 @@
             </el-form-item>
           </el-form>
         </el-card>
+        <el-card class="box-card">
+          <el-form label-width="120px">
+            <el-form-item label="T4接口">
+              <el-switch
+                v-model="t4Enabled"
+                inline-prompt
+                active-text="开启"
+                inactive-text="关闭"
+                @change="updateT4Enabled"
+              />
+              <span class="hint">跨平台壳子(无 jar 加载能力)的纯 HTTP 接入路,关闭后 /t4 全部 404。</span>
+            </el-form-item>
+            <el-form-item label="播放代理">
+              <el-radio-group v-model="t4ProxyMode" @change="updateT4ProxyMode">
+                <el-radio label="all">智能代理</el-radio>
+                <el-radio label="direct">直连优先</el-radio>
+              </el-radio-group>
+              <span class="hint">智能代理(默认)兼容性最好;直连优先省服务器带宽,部分壳子可能播不出。</span>
+            </el-form-item>
+            <el-form-item label="T4地址">
+              <el-input v-model="t4Url" style="width: 300px" readonly/>
+              <el-button class="hint" @click="copyT4Url">复制</el-button>
+              <span class="hint">旧地址 /t4/{安全Token}/{订阅号} 与 /t4/{订阅号} 兼容保留仍可用;重新生成或改 Token 后旧专用地址失效。</span>
+            </el-form-item>
+            <el-form-item label="T4Token">
+              <el-input v-model="t4TokenInput" style="width: 200px" placeholder="自定义 Token"/>
+              <el-button type="primary" class="hint" @click="saveT4Token">保存</el-button>
+              <el-button class="hint" @click="resetT4Token">重新生成</el-button>
+              <span class="hint">4-64 位字母/数字/中划线/下划线,不能是纯数字;留空点「重新生成」出随机串。</span>
+            </el-form-item>
+          </el-form>
+        </el-card>
       </el-col>
 
       <el-col :xs="23" :sm="23" :md="23" :lg="11" :xl="11">
@@ -389,8 +421,9 @@
 
 <script setup lang="ts">
 import {computed, onMounted, ref} from "vue";
-import {ElMessage} from "element-plus";
+import {ElMessage, ElMessageBox} from "element-plus";
 import axios from "axios";
+import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
 import {store} from "@/services/store";
 import RemoteSyncDialog from './RemoteSyncDialog.vue'
@@ -476,6 +509,12 @@ const userAgent = ref('')
 const trustedProxies = ref('')
 const atvPass = ref('')
 const apiKey = ref('')
+const {toClipboard} = clipBorad()
+const t4Enabled = ref(true)
+const t4ProxyMode = ref('all')
+const t4Token = ref('')
+const t4TokenInput = ref('')
+const t4Url = computed(() => currentUrl + '/t4/' + t4Token.value)
 const basicAuthUser = ref('')
 const basicAuthPass = ref('')
 const apiClientId = ref('')
@@ -609,6 +648,58 @@ const resetApiKey = () => {
   axios.post('/api/settings/apikey').then(({data}) => {
     apiKey.value = data
     ElMessage.success('重置成功')
+  })
+}
+
+const updateT4Enabled = () => {
+  axios.post('/api/settings', {name: 't4_enabled', value: t4Enabled.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateT4ProxyMode = () => {
+  axios.post('/api/settings', {name: 't4_proxy_mode', value: t4ProxyMode.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const copyT4Url = () => {
+  if (!t4Token.value) {
+    ElMessage.warning('T4 地址未就绪')
+    return
+  }
+  // navigator.clipboard 仅安全上下文(https/localhost)可用,内网 http 下为 undefined,
+  // 用 vue-clipboard3(execCommand 兜底)与订阅页复制同款
+  toClipboard(t4Url.value).then(() => {
+    ElMessage.success('已复制')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
+}
+
+const saveT4Token = () => {
+  const value = t4TokenInput.value.trim()
+  if (!value) {
+    ElMessage.warning('请输入自定义 Token')
+    return
+  }
+  axios.post('/api/settings/t4-token', {name: 't4_token', value}).then(({data}) => {
+    t4Token.value = data
+    t4TokenInput.value = data
+    ElMessage.success('已保存')
+  }).catch(() => {
+    ElMessage.error('保存失败,请检查 Token 格式(4-64 位字母/数字/中划线/下划线,非纯数字)')
+  })
+}
+
+const resetT4Token = () => {
+  ElMessageBox.confirm('重新生成会使存量壳子的 T4 地址全部失效,需改用新地址重新拉取配置。确定继续?', '提示', {type: 'warning'}).then(() => {
+    axios.post('/api/settings/t4-token').then(({data}) => {
+      t4Token.value = data
+      t4TokenInput.value = data
+      ElMessage.success('重置成功')
+    })
+  }).catch(() => {
   })
 }
 
@@ -806,6 +897,10 @@ onMounted(() => {
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
     apiKey.value = data.api_key
+    t4Enabled.value = data.t4_enabled !== 'false'
+    t4ProxyMode.value = data.t4_proxy_mode === 'direct' ? 'direct' : 'all'
+    t4Token.value = data.t4_token || ''
+    t4TokenInput.value = t4Token.value
     apiClientId.value = data.open_api_client_id || ''
     apiClientSecret.value = data.open_api_client_secret || ''
     quarkDeviceId.value = data.quark_device_id || ''

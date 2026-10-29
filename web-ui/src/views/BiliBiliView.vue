@@ -175,6 +175,7 @@
             inactive-text="关闭"
             @change="updateDash"
           />
+          <span class="hint">1080P+/4K/HDR 需要 dash;对 T4 接口同样生效(出代理化 MPD),但 T4 壳子内核须支持音视频分离(exo 系),普通壳子播不出。</span>
         </el-form-item>
         <el-form-item label="点赞投币收藏单独线路">
           <el-switch

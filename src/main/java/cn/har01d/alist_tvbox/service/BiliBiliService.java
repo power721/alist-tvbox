@@ -2321,7 +2321,10 @@ public class BiliBiliService {
     }
 
     public Map<String, Object> getPlayUrl(String bvid, boolean dash, String client) throws IOException {
-        if ("t4".equals(client)) {
+        // 「强制dash视频格式」(bilibili_dash,既有 B站设置)开启时 t4 跳过短地址短路:
+        // /proxy/{token}/{playId} 契约只装一条 URL,装不下 DASH 分离的音视频两轨,
+        // 须走下方完整解析出(代理化)MPD
+        if ("t4".equals(client) && !appProperties.isSupportDash()) {
             // T4 短代理地址 /proxy/{token}/{id}:回源解析延后到真正拉流时——每次拉流取新鲜
             // durl(B站 url 时效、PCDN 择优都是当下的),playerContent 零 B站 API 调用
             String proxyUrl = buildT4ProxyUrl(bvid);
@@ -2337,10 +2340,17 @@ public class BiliBiliService {
         Map<String, Object> result = new HashMap<>();
         List<String> qns = appProperties.getQns();
         dash = dash || appProperties.isSupportDash() || DashUtils.isClientSupport(client);
-        // T4 族(含代理解析态 t4p)强制单文件 durl(FLV/MP4):通用壳子的内核(系统播放器/ijk)
-        // 不支持音视频分离的 DASH MPD,只有 exo 系(FongMi)能播;单文件经代理直出即可播(画质随 durl 上限)
+        // T4 族默认强制单文件 durl(FLV/MP4):通用壳子的内核(系统播放器/ijk)不支持音视频分离的
+        // DASH MPD,只有 exo 系(FongMi)能播;单文件经代理直出即可播(画质随 durl 上限,封顶 1080P)。
+        // 「强制dash视频格式」(bilibili_dash,既有 B站设置)开启时 t4/t4d 跟随出 DASH(1080P+/4K/HDR):
+        // t4=代理化 MPD(BaseURL 走 live-proxy,壳子零头要求不变,但要求内核支持 DASH);
+        // t4d=原始两轨直链+脱敏头。t4p 恒单文件——/proxy 短代理回源契约只装一条 URL
         if (client != null && client.startsWith("t4")) {
-            dash = false;
+            if ("t4p".equals(client) || !appProperties.isSupportDash()) {
+                dash = false;
+            } else {
+                dash = true;
+            }
         }
         // T4(全走服务端,X-CLIENT: t4):播放地址改写为 live-proxy 服务端地址——
         // B站 CDN 分片要求 Referer/UA,设备端由 spring.jar VideoStreamProxy 补头,T4 由代理端补,
@@ -2469,6 +2479,21 @@ public class BiliBiliService {
             // 字幕/弹幕/章节为设备端增强,跨端壳子消费不了,一并裁掉。
             // durl 分支无 DashUtils 参与,补直链播放标记(缺省会被播放器当 1 走网页嗅探)
             result.remove("header");
+            result.remove("subs");
+            result.remove("danmaku");
+            result.remove("chapters");
+            result.putIfAbsent("parse", 0);
+        }
+
+        if ("t4d".equals(client)) {
+            // T4 直连优先(t4_proxy_mode=direct):原始 durl 直链直出,字节流不经服务器,省带宽;
+            // 但凭证不出服务器——header 剔除整串 Cookie,只留 Referer/UA 由壳子代发(带头能力
+            // 参差的通用壳子可能播不出,故该模式为 opt-in 而非默认);设备端增强同 t4 裁掉,
+            // 并补直链播放标记(缺省会被播放器当 1 走网页嗅探)
+            Map<String, String> directHeaders = new HashMap<>();
+            directHeaders.put(HttpHeaders.REFERER, "https://www.bilibili.com");
+            directHeaders.put(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
+            result.put("header", directHeaders);
             result.remove("subs");
             result.remove("danmaku");
             result.remove("chapters");

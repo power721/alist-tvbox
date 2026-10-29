@@ -1519,7 +1519,13 @@ public class TvBoxService {
 
         if (url.contains("#proxy=0")) {
             // do nothing
-        } else if (isLocalProxyEnabled(driverType) && !shouldSkipBackendProxy(type, driverType)) {
+        } else if (isT4Play(type) && needsCredentialHeader(driverType, url)) {
+            // T4(all/direct):直连必须带 Cookie 的夸克/UC(非 x-referer 标记形态)强制 /p 中转——
+            // T4 壳子非自有组件,凭证不出服务器(Cookie 不下发;/p 中转时 AList 侧自带账号凭证)
+            url = buildProxyUrl(site, name, path);
+            useProxy = true;
+            result.put("url", url);
+        } else if (isLocalProxyEnabled(driverType) && !shouldSkipBackendProxy(type, driverType, url)) {
             url = buildProxyUrl(site, name, path);
             useProxy = true;
             result.put("url", url);
@@ -1578,7 +1584,8 @@ public class TvBoxService {
         // PowerList 多账号分片:把各账号直连 + 各自 header 设到 result.multiUrls,
         // 供 spider.jar(VideoStreamProxy)客户端多账号分片加速。不改变服务端代理(useProxy)逻辑。
         // 分片源 header 含各账号 Cookie,只对管理级凭证视角(共享 token/管理会话)下发;普通用户走单 url(归属人 Cookie 或代理)
-        if (credentialUid() == 0 && fsDetail.getMultiSource() != null && !fsDetail.getMultiSource().isEmpty()) {
+        // T4 播放身份不下发(壳子非自有组件,凭证不出服务器;T4 壳子也没有 VideoStreamProxy 消费方)
+        if (credentialUid() == 0 && !isT4Play(type) && fsDetail.getMultiSource() != null && !fsDetail.getMultiSource().isEmpty()) {
             List<Map<String, Object>> multiUrls = new ArrayList<>();
             for (FsDetail.MultiSource ms : fsDetail.getMultiSource()) {
                 Map<String, Object> item = new HashMap<>();
@@ -1627,8 +1634,27 @@ public class TvBoxService {
         }
     }
 
-    private boolean shouldSkipBackendProxy(String type, DriverType driverType) {
-        return "client-proxy".equals(type) && isLocalProxyEnabled(driverType);
+    private boolean shouldSkipBackendProxy(String type, DriverType driverType, String url) {
+        if ("client-proxy".equals(type) && isLocalProxyEnabled(driverType)) {
+            return true;
+        }
+        // T4 直连优先:无凭证屏障的盘(直连 header 不含 Cookie;x-referer 标记的夸克/UC 同)跳过
+        // 后端代理,直链直出省带宽——本地代理开关对 T4 无意义(T4 壳子没有 VideoStreamProxy,
+        // /p 对这些盘也只是 302 一跳);凭证屏障盘(上方分支已强制 /p)不受影响
+        if ("t4-direct".equals(type)) {
+            return !needsCredentialHeader(driverType, url);
+        }
+        return false;
+    }
+
+    /** T4 播放身份(Atvp payload t4_play_type=t4/t4-direct,经 /play type 参透传)。 */
+    private static boolean isT4Play(String type) {
+        return "t4".equals(type) || "t4-direct".equals(type);
+    }
+
+    /** 直连形态 header 会携带账号 Cookie 的盘(非 x-referer 标记的夸克/UC):T4 一律 /p 中转。 */
+    private static boolean needsCredentialHeader(DriverType driverType, String url) {
+        return (driverType == DriverType.QUARK || driverType == DriverType.UC) && !url.contains("#x-referer=raw");
     }
 
     private boolean isLocalProxyEnabled(DriverType driverType) {
