@@ -41,6 +41,11 @@
             }}/{{ scope.row.sid }}</a>
         </template>
       </el-table-column>
+      <el-table-column prop="url" label="T4配置地址" sortable>
+        <template #default="scope">
+          <a :href="t4Url(scope.row.sid)" target="_blank">{{ t4Url(scope.row.sid) }}</a>
+        </template>
+      </el-table-column>
       <el-table-column prop="url" label="多仓聚合地址" sortable>
         <template #default="scope">
           <a :href="currentUrl+'/repo'+token+'/'+scope.row.sid" target="_blank">{{ currentUrl }}/repo{{
@@ -1166,6 +1171,12 @@ function copyUrl(text: string) {
   }).catch(() => {
     ElMessage.error('复制失败')
   })
+}
+
+// T4 订阅形态地址:每订阅独立站点集(受该订阅覆盖配置 sites-whitelist/blacklist 过滤);
+// 裸订阅(未开安全订阅)=单段 /t4/{订阅号},数字订阅号与 T4 专用 token 命名空间不撞
+function t4Url(sid: string) {
+  return currentUrl + '/t4' + token.value + '/' + sid
 }
 const pgLocal = ref('')
 const pgRemote = ref('')
