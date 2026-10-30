@@ -460,6 +460,7 @@
                 inline-prompt
                 active-text="开"
                 inactive-text="关"
+                @change="saveSyncMatrix"
               />
               <el-select
                 v-model="syncMatrix[item.key].drives"
@@ -469,6 +470,7 @@
                 clearable
                 placeholder="全部网盘"
                 style="max-width: 480px"
+                @change="saveSyncMatrix"
               >
                 <el-option v-for="drive in syncDrives" :key="drive.key" :label="drive.label" :value="drive.key"/>
               </el-select>
