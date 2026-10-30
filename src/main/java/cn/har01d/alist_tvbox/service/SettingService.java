@@ -118,9 +118,10 @@ public class SettingService {
                 .ifPresent(s -> appProperties.setLiveHiddenPlatforms(parseList(s.getValue())));
         appProperties.setLivePlatformOrder(parseList(settingRepository.findById("live_platform_order").map(Setting::getValue).orElse("")));
         appProperties.setLiveProxyMode(normalizeLiveProxyMode(settingRepository.findById("live_proxy_mode").map(Setting::getValue).orElse(null)));
-        // T4:总开关默认开(仅显式 "false" 关闭);代理策略坏值回落 all
+        // T4:总开关默认开(仅显式 "false" 关闭);代理策略坏值回落 all;仅独立地址默认关(显式 "true" 开)
         appProperties.setT4Enabled(!settingRepository.findById(Constants.T4_ENABLED).map(Setting::getValue).orElse("").equals("false"));
         appProperties.setT4ProxyMode("direct".equals(settingRepository.findById(Constants.T4_PROXY_MODE).map(Setting::getValue).orElse("")) ? "direct" : "all");
+        appProperties.setT4StandaloneOnly(settingRepository.findById(Constants.T4_STANDALONE_ONLY).map(Setting::getValue).orElse("").equals("true"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
         appProperties.setTgSearchApiKey(settingRepository.findById("tg_search_api_key").map(Setting::getValue).orElse(""));
@@ -543,6 +544,9 @@ public class SettingService {
         if (Constants.T4_PROXY_MODE.equals(setting.getName())) {
             setting.setValue("direct".equals(setting.getValue()) ? "direct" : "all");
             appProperties.setT4ProxyMode(setting.getValue());
+        }
+        if (Constants.T4_STANDALONE_ONLY.equals(setting.getName())) {
+            appProperties.setT4StandaloneOnly("true".equals(setting.getValue()));
         }
         if ("replace_ali_token".equals(setting.getName())) {
             appProperties.setReplaceAliToken("true".equals(setting.getValue()));

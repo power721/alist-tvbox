@@ -57,6 +57,10 @@ public class AppProperties {
     // T4 播放代理策略(Setting 键 t4_proxy_mode):all=全代理(默认,通用壳子对 CDN 零头要求,兼容优先);
     // direct=直连优先(B站直链+脱敏头、直播 dual 双线路,省服务器带宽,依赖壳子按 play 响应 header 带头)
     private String t4ProxyMode = "all";
+    // T4 仅独立地址(Setting 键 t4_standalone_only,默认关):开启后旧订阅形态
+    // (/t4/{vod token}/{订阅号}、/t4/{订阅号} 及其五动作/CENC 面)全部 404,
+    // T4 只经 /t4/{t4_token} 独立地址开放——发 token 的少数人可用,其余用户只能 /sub
+    private boolean t4StandaloneOnly;
     private boolean playbackSyncEnabled = false;
     // 同步分区粒度:uid(不分桶)/ token(按 vod token)/ subscription(按 vod token/id)
     private String playbackSyncScope = "token";

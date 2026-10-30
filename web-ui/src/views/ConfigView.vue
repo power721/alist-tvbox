@@ -105,10 +105,22 @@
               </el-radio-group>
               <span class="hint">智能代理(默认)兼容性最好;直连优先省服务器带宽,部分壳子可能播不出。</span>
             </el-form-item>
+            <el-form-item label="仅独立地址">
+              <el-switch
+                v-model="t4StandaloneOnly"
+                inline-prompt
+                active-text="开启"
+                inactive-text="关闭"
+                @change="updateT4StandaloneOnly"
+              />
+              <span class="hint">开启后旧地址全部 404,只有下面的 T4 专用地址可用——Token 发给谁谁能用 T4,其他用户只能用 /sub。</span>
+            </el-form-item>
             <el-form-item label="T4地址">
               <el-input v-model="t4Url" style="width: 300px" readonly/>
               <el-button class="hint" @click="copyT4Url">复制</el-button>
-              <span class="hint">旧地址 /t4/{安全Token}/{订阅号} 与 /t4/{订阅号} 兼容保留仍可用;重新生成或改 Token 后旧专用地址失效。</span>
+              <span class="hint">
+                {{ t4StandaloneOnly ? '仅此地址可用;重新生成或改 Token 后失效。' : '旧地址 /t4/{安全Token}/{订阅号} 与 /t4/{订阅号} 兼容保留仍可用;重新生成或改 Token 后旧专用地址失效。' }}
+              </span>
             </el-form-item>
             <el-form-item label="T4Token">
               <el-input v-model="t4TokenInput" style="width: 200px" placeholder="自定义 Token"/>
@@ -512,6 +524,7 @@ const apiKey = ref('')
 const {toClipboard} = clipBorad()
 const t4Enabled = ref(true)
 const t4ProxyMode = ref('all')
+const t4StandaloneOnly = ref(false)
 const t4Token = ref('')
 const t4TokenInput = ref('')
 const t4Url = computed(() => currentUrl + '/t4/' + t4Token.value)
@@ -659,6 +672,12 @@ const updateT4Enabled = () => {
 
 const updateT4ProxyMode = () => {
   axios.post('/api/settings', {name: 't4_proxy_mode', value: t4ProxyMode.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateT4StandaloneOnly = () => {
+  axios.post('/api/settings', {name: 't4_standalone_only', value: t4StandaloneOnly.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -899,6 +918,7 @@ onMounted(() => {
     apiKey.value = data.api_key
     t4Enabled.value = data.t4_enabled !== 'false'
     t4ProxyMode.value = data.t4_proxy_mode === 'direct' ? 'direct' : 'all'
+    t4StandaloneOnly.value = data.t4_standalone_only === 'true'
     t4Token.value = data.t4_token || ''
     t4TokenInput.value = t4Token.value
     apiClientId.value = data.open_api_client_id || ''

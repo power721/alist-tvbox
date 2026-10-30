@@ -74,6 +74,9 @@ public final class Constants {
     public static final String T4_ENABLED = "t4_enabled";
     /** T4 播放代理策略:all=全代理(默认,兼容优先)/direct=直连优先(B站直链+脱敏头、直播 dual 双线路)。 */
     public static final String T4_PROXY_MODE = "t4_proxy_mode";
+    /** T4 仅独立地址:开启后旧订阅形态(/t4/{vod token}/{订阅号}、/t4/{订阅号} 及其五动作/CENC 面)
+     *  一律 404,只有 /t4/{t4_token} 可用——T4 token 发给谁谁能用,其余用户只能 /sub。 */
+    public static final String T4_STANDALONE_ONLY = "t4_standalone_only";
     public static final String TACIT_0924_ID = "tacit0924_id";
     public static final String TACIT_FOLDER_ID = "tacit0924_folder_id";
     public static final String GLOBAL_SUBSCRIPTION_OVERRIDE = "global_subscription_override";

@@ -48,6 +48,8 @@ import java.util.Set;
  *  /t4/{token}/{id}        旧订阅形态(vod token + 订阅号;兼容保留,上游 type3 站点本就全删)
  *  /t4/{id}                旧裸订阅形态(兼容保留)
  * T4 接口总开关 t4_enabled 关闭后全部 404;代理策略 t4_proxy_mode=all(默认)/direct 见下。
+ * 仅独立地址 t4_standalone_only 开启后两个旧形态(含其五动作/CENC 面)全部 404,
+ * T4 只对 /t4/{t4token} 开放——token 发给谁谁能用,其余用户只能 /sub。
  *
  * FongMi 客户端契约(SiteApi):
  *  home   GET api?filter=true(filter 标志忽略,home 恒带分类+筛选+推荐 list)
@@ -100,12 +102,14 @@ public class T4Controller {
             subscriptionService.checkToken(subscriptionService.resolveT4Token(x));
             return subscriptionService.standaloneT4(x, pluginWorkerService.isAvailable());
         }
+        guardT4StandaloneOnly(x);
         return subscriptionService.subscriptionT4("", x, pluginWorkerService.isAvailable());
     }
 
     @GetMapping("/t4/{token}/{id}")
     public Map<String, Object> config(@PathVariable String token, @PathVariable String id) {
         guardT4Enabled();
+        guardT4StandaloneOnly(token);
         subscriptionService.checkToken(token);
         return subscriptionService.subscriptionT4(token, id, pluginWorkerService.isAvailable());
     }
@@ -113,6 +117,17 @@ public class T4Controller {
     /** T4 接口总开关(t4_enabled):关闭后配置/五动作/CENC 桥全部 404。 */
     private void guardT4Enabled() {
         if (!appProperties.isT4Enabled()) {
+            throw new NotFoundException();
+        }
+    }
+
+    /**
+     * 仅独立地址模式(t4_standalone_only):旧订阅形态一律 404——任何持有 vod token/
+     * 订阅号的用户都不再能借 /t4/{token}/{id}、/t4/{id} 及其五动作/CENC 面使用 T4,
+     * 只剩 /t4/{t4_token} 独立地址(token 只发给允许用 T4 的少数人),其余用户只能 /sub。
+     */
+    private void guardT4StandaloneOnly(String rawToken) {
+        if (appProperties.isT4StandaloneOnly() && !subscriptionService.isT4Token(rawToken)) {
             throw new NotFoundException();
         }
     }
@@ -135,6 +150,8 @@ public class T4Controller {
                       HttpServletRequest request, HttpServletResponse response) throws IOException {
         guardT4Enabled();
         String pathToken = token;
+        // 仅独立地址模式:旧形态配置(vod token/裸订阅段)生成的 api 也不再可达
+        guardT4StandaloneOnly(pathToken);
         // T4 专用 token 命中则换算回背后 vod token(插件 payload/播放均按 vod token 口径);
         // pathToken 原样保留,用于生成 CENC 桥等对客户端暴露的地址(T4 面不嵌 vod token)
         token = subscriptionService.resolveT4Token(token);
@@ -240,8 +257,10 @@ public class T4Controller {
     public void cenc(@PathVariable String token, @PathVariable String site,
                      HttpServletRequest request, HttpServletResponse response) throws IOException {
         guardT4Enabled();
-        // URI 定位用原始路径段(T4 专用 token 形态下 resolved 与之不同);鉴权按换算后的 vod token
+        // URI 定位用原始路径段(T4 专用 token 形态下 resolved 与之不同);鉴权按换算后的 vod token。
+        // 仅独立地址模式:旧形态配置生成的桥地址同样不再可达
         String pathToken = token;
+        guardT4StandaloneOnly(pathToken);
         token = subscriptionService.resolveT4Token(token);
         subscriptionService.checkToken(token);
         String uri = request.getRequestURI();

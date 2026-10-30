@@ -288,6 +288,22 @@ class SubscriptionServiceT4Test {
     }
 
     @Test
+    void standaloneOnlyRejectsLegacySubscriptionForm() {
+        // t4_standalone_only 开:旧订阅形态不再生成配置(T4Controller 守卫的服务层双保险),
+        // /t4/{t4token} 独立地址照常
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class));
+        ReflectionTestUtils.setField(service, "t4Token", "t4abcd12");
+        appProperties.setT4StandaloneOnly(true);
+
+        assertThrows(NotFoundException.class, () -> service.subscriptionT4("", "0"));
+        assertThrows(NotFoundException.class, () -> service.subscriptionT4("tok", "0"));
+        Map<String, Object> config = service.standaloneT4("t4abcd12", false);
+        assertTrue(config.containsKey("sites"));
+    }
+
+    @Test
     void updateT4TokenValidatesAndPersists() {
         SubscriptionService service = newService("{}", List.of(), mock(UserService.class));
 

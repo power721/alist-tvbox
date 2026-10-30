@@ -776,6 +776,11 @@ public class SubscriptionService {
         if (!appProperties.isT4Enabled()) {
             throw new NotFoundException();
         }
+        // 仅独立地址模式(t4_standalone_only):旧订阅形态不再生成配置(T4Controller 层守卫的双保险),
+        // T4 只经 /t4/{t4_token} 独立地址开放(standaloneT4 不受影响)
+        if (appProperties.isT4StandaloneOnly()) {
+            throw new NotFoundException();
+        }
         var credentialUser = userService.findUserByCredentialToken(token);
         if (credentialUser != null) {
             token = UserService.userVodToken(credentialUser.getUsername());
