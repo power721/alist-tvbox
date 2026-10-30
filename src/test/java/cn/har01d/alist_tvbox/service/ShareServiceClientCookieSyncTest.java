@@ -178,6 +178,30 @@ class ShareServiceClientCookieSyncTest {
         assertThat(policy.get("aowu").get("enabled").asBoolean()).isFalse();
     }
 
+    /**
+     * 123 账号持有 token(Go 401 重登回写)时随账密一并下发:
+     * 摸鱼 pan123 拿到 user.token 即免在线登录,绕开 123 登录风控(#1088)。
+     */
+    @Test
+    void getCookiesDistributesPan123Token() {
+        when(appProperties.isClientCookieSync()).thenReturn(true);
+        when(appProperties.getClientCookieScope()).thenReturn(new HashMap<>());
+        DriverAccount pan123 = new DriverAccount();
+        pan123.setType(DriverType.PAN123);
+        pan123.setUsername("user");
+        pan123.setPassword("pass");
+        pan123.setToken("tok_live");
+        when(driverAccountRepository.findByTypeAndMasterTrue(any(DriverType.class))).thenReturn(Optional.empty());
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123)).thenReturn(Optional.of(pan123));
+
+        ObjectNode result = service.getCookies("topsecret");
+
+        assertThat(result.has("123")).isTrue();
+        assertThat(result.get("123").get("username").asText()).isEqualTo("user");
+        assertThat(result.get("123").get("password").asText()).isEqualTo("pass");
+        assertThat(result.get("123").get("token").asText()).isEqualTo("tok_live");
+    }
+
     /** 出厂默认与统一判定语义(AppProperties 真实实例,非 mock)。 */
     @Test
     void factoryDefaultsAndAllowPluginDrive() {

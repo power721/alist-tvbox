@@ -837,6 +837,8 @@ public class ShareService {
             ObjectNode node = result.putObject("123");
             node.put("username", account.getUsername());
             node.put("password", account.getPassword());
+            // 123 token(由 Go 401 重登回写):摸鱼等第三方插件持有 token 免在线登录,绕开登录风控
+            node.put("token", account.getToken());
         });
 
         account(DriverType.QUARK_TV, uid).ifPresent(account -> {
