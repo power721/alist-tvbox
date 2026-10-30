@@ -844,6 +844,8 @@ public class SubscriptionService {
                 ? token + "-" + userService.vodSecretOf(userService.findByUserVodToken(token))
                 : token;
         String base = readHostAddress("");
+        // T4 不可见源(订阅源管理「T4」开关):站点从 T4 配置删除;T3 订阅不受影响
+        Set<String> t4Hidden = subscriptionSourceService.t4HiddenSiteKeys();
         Iterator<?> it = sites.iterator();
         while (it.hasNext()) {
             // api 可能缺失(上游配置的无 api 条目);SetN.contains(null) 会 NPE,先判空
@@ -851,7 +853,14 @@ public class SubscriptionService {
                 continue;
             }
             String api = raw.get("api") instanceof String value ? value : null;
+            Object siteKey = raw.get("key");
             if (api != null && T4_SITE_KEYS.contains(api)) {
+                // T4 不可见内置源(订阅源管理「T4」开关):api=siteKey=内置源 key,直接删除
+                if (t4Hidden.contains(api)) {
+                    log.debug("t4 hidden builtin site: {}", siteKey);
+                    it.remove();
+                    continue;
+                }
                 @SuppressWarnings("unchecked")
                 Map<String, Object> site = (Map<String, Object>) raw;
                 site.put("type", 4);
@@ -864,9 +873,11 @@ public class SubscriptionService {
                 continue;
             }
             // 插件源(spider 插件):服务端 Python 运行时就绪时同样 T4 化——api 指回
-            // /t4/{token}/v/{插件站点 key},T4Controller 转投 PluginWorkerService 执行
+            // /t4/{token}/v/{插件站点 key},T4Controller 转投 PluginWorkerService 执行;
+            // T4 不可见者(站点 key=pluginSiteKey 同源)不 T4 化,落到下方 type 3 移除分支删除
             if (pluginRuntime && api != null
-                    && (api.equals("csp_PyProxy") || api.startsWith(base + "/Atvp.py"))) {
+                    && (api.equals("csp_PyProxy") || api.startsWith(base + "/Atvp.py"))
+                    && !(siteKey instanceof String key && t4Hidden.contains(key))) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> site = (Map<String, Object>) raw;
                 site.put("type", 4);

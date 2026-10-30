@@ -59,6 +59,7 @@ class SubscriptionServiceT4Test {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private SettingRepository settingRepository;
+    private SubscriptionSourceService subscriptionSourceService;
     private AppProperties appProperties;
 
     @BeforeEach
@@ -169,6 +170,42 @@ class SubscriptionServiceT4Test {
         // 运行时不可用:维持移除口径
         Map<String, Object> config2 = service.subscriptionT4("", "0", false);
         assertTrue(findSiteKeys(config2).stream().noneMatch("plugin-9"::equals));
+    }
+
+    @Test
+    void t4HiddenPluginSourceRemovedFromT4Config() {
+        // 订阅源管理「T4」开关关闭:插件源不 T4 化,随 type 3 移除;T3 订阅不受影响
+        Plugin plugin = new Plugin();
+        plugin.setId(9);
+        plugin.setUrl("https://up.example/spider.txt");
+        plugin.setName("上游源");
+        plugin.setT4Visible(false);
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null),
+                new SubscriptionSourceService.SubscriptionSourceRef("plugin-9", false, "上游源", "上游源", plugin));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class));
+        when(subscriptionSourceService.t4HiddenSiteKeys()).thenReturn(java.util.Set.of("plugin-9"));
+
+        Map<String, Object> config = service.subscriptionT4("", "0", true);
+
+        assertTrue(findSiteKeys(config).stream().noneMatch("plugin-9"::equals));
+        // 未隐藏的内置源不受牵连
+        assertEquals(4, findSite(config, "csp_AList").get("type"));
+    }
+
+    @Test
+    void t4HiddenBuiltinSiteRemovedFromT4Config() {
+        // 内置源「T4」开关关闭:站点直接从 T4 配置删除(独立地址与订阅 T4 同一变换)
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null),
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_Media", true, "csp_Media", "我的追剧", null));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class));
+        when(subscriptionSourceService.t4HiddenSiteKeys()).thenReturn(java.util.Set.of("csp_AList"));
+
+        Map<String, Object> config = service.subscriptionT4("", "0", true);
+
+        assertTrue(findSiteKeys(config).stream().noneMatch("csp_AList"::equals));
+        assertEquals(4, findSite(config, "csp_Media").get("type"));
     }
 
     @Test
@@ -308,8 +345,9 @@ class SubscriptionServiceT4Test {
         SubscriptionRepository subscriptionRepository = mock(SubscriptionRepository.class);
         when(subscriptionRepository.findBySid("0")).thenReturn(Optional.of(subscription));
 
-        SubscriptionSourceService subscriptionSourceService = mock(SubscriptionSourceService.class);
+        subscriptionSourceService = mock(SubscriptionSourceService.class);
         when(subscriptionSourceService.findEnabledSources()).thenReturn(sources);
+        when(subscriptionSourceService.t4HiddenSiteKeys()).thenReturn(java.util.Set.of());
 
         appProperties = new AppProperties();
         SubscriptionService service = new SubscriptionService(

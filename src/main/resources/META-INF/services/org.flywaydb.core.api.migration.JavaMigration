@@ -48,3 +48,4 @@ db.migration.current.V53__MediaSubscriptionSelfShare
 db.migration.current.V54__OfflineDownloadTaskCleanup
 db.migration.current.V55__OfflineDownloadTaskCleanupBackfill
 db.migration.current.V56__WatchlistItem
+db.migration.current.V57__PluginT4Visible

@@ -35,6 +35,10 @@ public class Plugin {
 
     private boolean enabled = true;
 
+    /** T4 接口可见性(false = 不进 /t4 配置,五动作 404;订阅源管理「T4」开关)。 */
+    @Column(name = "t4_visible", nullable = false)
+    private boolean t4Visible = true;
+
     @Column(name = "sort_order")
     private Integer sortOrder;
 

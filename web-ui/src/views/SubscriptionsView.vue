@@ -574,6 +574,13 @@
             <el-switch v-model="scope.row.enabled" @change="updateSource(scope.row)"/>
           </template>
         </el-table-column>
+        <el-table-column label="T4" width="90">
+          <template #default="scope">
+            <el-tooltip content="关闭后该源不出现在 T4 接口(独立地址与订阅 T4 均生效),插件直连调用也会拒绝;TVBox 订阅不受影响" placement="top">
+              <el-switch v-model="scope.row.t4Visible" :disabled="isWebPageSource(scope.row)" @change="updateSource(scope.row)"/>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column label="最近检查" width="180">
           <template #default="scope">
             <span>{{ formatPluginCheckedAt(scope.row.lastCheckedAt) }}</span>
@@ -1055,6 +1062,7 @@ interface ManagedSource {
   sourceName: string
   url: string
   enabled: boolean
+  t4Visible: boolean
   sortOrder: number
   version: number | null
   extend: string
@@ -2908,6 +2916,7 @@ const updateSource = (source: ManagedSource) => {
   axios.put('/api/subscription-sources/' + source.id, {
     name: source.name,
     enabled: source.enabled,
+    t4Visible: source.t4Visible,
     extend: source.extend
   }).then(({data}) => {
     Object.assign(source, data)

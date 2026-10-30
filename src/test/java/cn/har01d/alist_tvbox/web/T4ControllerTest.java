@@ -312,6 +312,20 @@ class T4ControllerTest {
     }
 
     @Test
+    void pluginSiteHiddenFromT4Rejected() {
+        // 订阅源管理「T4」开关关闭:配置不出现,直连五动作同样 404
+        Plugin plugin = new Plugin();
+        plugin.setId(9);
+        plugin.setUrl("https://up.example/spider.txt");
+        plugin.setT4Visible(false);
+        when(pluginRepository.findByExternalId("plugin-9")).thenReturn(java.util.Optional.empty());
+        when(pluginRepository.findById(9)).thenReturn(java.util.Optional.of(plugin));
+
+        assertThrows(NotFoundException.class,
+                () -> controller.vod(TOKEN, "plugin-9", null, null, null, null, null, null, null, request, response));
+    }
+
+    @Test
     void unknownSiteRejected() {
         assertThrows(NotFoundException.class,
                 () -> controller.vod(TOKEN, "csp_Unknown", null, null, null, null, null, null, null, request, response));

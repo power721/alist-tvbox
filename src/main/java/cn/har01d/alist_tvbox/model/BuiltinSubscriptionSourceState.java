@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.model;
 public class BuiltinSubscriptionSourceState {
     private String name;
     private Boolean enabled;
+    private Boolean t4Visible;
     private Integer sortOrder;
     private String extend;
 
@@ -20,6 +21,15 @@ public class BuiltinSubscriptionSourceState {
 
     public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
+    }
+
+    /** T4 接口可见性(null = 未设置,按默认可见处理;序列化进 builtin_subscription_sources JSON)。 */
+    public Boolean getT4Visible() {
+        return t4Visible;
+    }
+
+    public void setT4Visible(Boolean t4Visible) {
+        this.t4Visible = t4Visible;
     }
 
     public Integer getSortOrder() {

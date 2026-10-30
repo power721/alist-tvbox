@@ -209,4 +209,67 @@ class SubscriptionSourceServiceTest {
                         .returns(false, SubscriptionSourceService.ManagedSource::refreshable)
                         .returns(false, SubscriptionSourceService.ManagedSource::extendable));
     }
+
+    @Test
+    void t4VisibilityUpdateAndHiddenSiteKeys() {
+        // 「T4」开关:插件侧存 Plugin.t4Visible,内置侧存 builtin settings;t4HiddenSiteKeys
+        // 按 pluginSiteKey/内置 siteKey 汇总;update 不带 t4Visible(null)=保持不变(QQ 扫码对话框路径)
+        PluginRepository pluginRepository = mock(PluginRepository.class);
+        SettingRepository settingRepository = mock(SettingRepository.class);
+        SiteRepository siteRepository = mock(SiteRepository.class);
+        EmbyRepository embyRepository = mock(EmbyRepository.class);
+        FeiniuRepository feiniuRepository = mock(FeiniuRepository.class);
+        JellyfinRepository jellyfinRepository = mock(JellyfinRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        when(settingRepository.findById("builtin_subscription_sources")).thenReturn(Optional.empty());
+        when(siteRepository.findById(1)).thenReturn(Optional.empty());
+        when(embyRepository.count()).thenReturn(0L);
+        when(feiniuRepository.count()).thenReturn(0L);
+        when(jellyfinRepository.count()).thenReturn(0L);
+
+        Plugin plugin = new Plugin();
+        plugin.setId(9);
+        plugin.setSortOrder(20);
+        plugin.setName("爬虫");
+        plugin.setExternalId("hexabc123");
+        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of(plugin));
+        when(pluginRepository.findById(9)).thenReturn(Optional.of(plugin));
+        // 内置源 state 存 Setting JSON:save 后 findById 须读回(save 打桩默认无效果)
+        java.util.Map<String, Setting> store = new java.util.HashMap<>();
+        when(settingRepository.findById(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(inv -> Optional.ofNullable(store.get(inv.getArgument(0))));
+        when(settingRepository.save(org.mockito.ArgumentMatchers.any(Setting.class)))
+                .thenAnswer(inv -> {
+                    Setting setting = inv.getArgument(0);
+                    store.put(setting.getName(), setting);
+                    return setting;
+                });
+
+        SubscriptionSourceService service = new SubscriptionSourceService(
+                new AppProperties(),
+                pluginRepository,
+                settingRepository,
+                siteRepository,
+                embyRepository,
+                feiniuRepository,
+                jellyfinRepository,
+                objectMapper
+        );
+
+        assertThat(service.t4HiddenSiteKeys()).isEmpty();
+        assertThat(service.findAll().stream()
+                .filter(source -> "plugin-9".equals(source.id())).findFirst().orElseThrow()
+                .t4Visible()).isTrue();
+
+        // 插件源关闭 T4 可见性 + 内置源 csp_Media 关闭
+        service.update("plugin-9", new SubscriptionSourceService.ManagedSourceUpdate("爬虫", true, false, null));
+        service.update("builtin-csp_Media", new SubscriptionSourceService.ManagedSourceUpdate("我的追剧", true, false, null));
+
+        assertThat(plugin.isT4Visible()).isFalse();
+        assertThat(service.t4HiddenSiteKeys()).containsExactlyInAnyOrder("hexabc123", "csp_Media");
+
+        // null = 保持不变:QQ 扫码对话框只传 name/enabled/extend,不得回滚用户设置
+        service.update("plugin-9", new SubscriptionSourceService.ManagedSourceUpdate("爬虫", true, null, "{}"));
+        assertThat(plugin.isT4Visible()).isFalse();
+    }
 }

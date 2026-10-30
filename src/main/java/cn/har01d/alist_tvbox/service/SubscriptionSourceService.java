@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -69,6 +70,7 @@ public class SubscriptionSourceService {
             String sourceName,
             String url,
             boolean enabled,
+            boolean t4Visible,
             int sortOrder,
             Integer version,
             String extend,
@@ -80,7 +82,8 @@ public class SubscriptionSourceService {
     ) {
     }
 
-    public record ManagedSourceUpdate(String name, boolean enabled, String extend) {
+    /** t4Visible 可空 = 保持不变(QQ 扫码对话框等调用方只传 name/enabled/extend)。 */
+    public record ManagedSourceUpdate(String name, boolean enabled, Boolean t4Visible, String extend) {
     }
 
     public record SubscriptionSourceRef(String id, boolean builtin, String siteKey, String name, Plugin plugin) {
@@ -128,6 +131,26 @@ public class SubscriptionSourceService {
                 .toList();
     }
 
+    /**
+     * T4 接口不可见的源站点 key 集(订阅源管理「T4」开关关闭者):内置源 = siteKey
+     * (与下发的 csp_* 站点 key/api 同值),插件源 = pluginSiteKey(与配置站点 key 同源)。
+     * applyT4 据此把命中站点从 T4 配置删除;T3 订阅不受影响。
+     */
+    public Set<String> t4HiddenSiteKeys() {
+        Set<String> keys = new HashSet<>();
+        for (ManagedSourceHolder item : buildManagedSources()) {
+            if (item.source().t4Visible()) {
+                continue;
+            }
+            if (item.source().builtin()) {
+                keys.add(item.source().key());
+            } else if (item.plugin() != null) {
+                keys.add(SubscriptionService.pluginSiteKey(item.plugin()));
+            }
+        }
+        return keys;
+    }
+
     public ManagedSource update(String id, ManagedSourceUpdate update) {
         if (id.startsWith("builtin-")) {
             String siteKey = id.substring("builtin-".length());
@@ -139,6 +162,9 @@ public class SubscriptionSourceService {
             BuiltinSubscriptionSourceState state = settings.computeIfAbsent(siteKey, ignored -> new BuiltinSubscriptionSourceState());
             state.setName(StringUtils.trimToNull(update.name()));
             state.setEnabled(update.enabled());
+            if (update.t4Visible() != null) {
+                state.setT4Visible(update.t4Visible());
+            }
             state.setExtend(StringUtils.trimToNull(update.extend()));
             if (state.getSortOrder() == null || state.getSortOrder() < 1) {
                 state.setSortOrder(definition.defaultSortOrder());
@@ -151,6 +177,9 @@ public class SubscriptionSourceService {
         Plugin plugin = pluginRepository.findById(pluginId).orElseThrow(NotFoundException::new);
         plugin.setName(StringUtils.defaultIfBlank(StringUtils.trimToNull(update.name()), plugin.getSourceName()));
         plugin.setEnabled(update.enabled());
+        if (update.t4Visible() != null) {
+            plugin.setT4Visible(update.t4Visible());
+        }
         plugin.setExtend(StringUtils.trimToEmpty(update.extend()));
         pluginRepository.save(plugin);
         return buildPluginSource(plugin).source();
@@ -279,6 +308,7 @@ public class SubscriptionSourceService {
                 definition.defaultName(),
                 "",
                 state == null || state.getEnabled() == null || state.getEnabled(),
+                state == null || state.getT4Visible() == null || state.getT4Visible(),
                 state == null || state.getSortOrder() == null || state.getSortOrder() < 1 ? definition.defaultSortOrder() : state.getSortOrder(),
                 null,
                 StringUtils.defaultString(state == null ? null : state.getExtend()),
@@ -311,6 +341,7 @@ public class SubscriptionSourceService {
                 plugin.getSourceName(),
                 plugin.getUrl(),
                 plugin.isEnabled(),
+                plugin.isT4Visible(),
                 plugin.getSortOrder(),
                 plugin.getVersion(),
                 StringUtils.defaultString(plugin.getExtend()),

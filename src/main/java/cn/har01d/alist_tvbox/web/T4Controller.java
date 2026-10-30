@@ -142,9 +142,10 @@ public class T4Controller {
         // URL 路径段不带 csp_ 前缀(applyT4 生成口径);带前缀的旧形态兼容
         String siteKey = site.startsWith("csp_") ? site : "csp_" + site;
         if (!SubscriptionService.T4_SITE_KEYS.contains(siteKey)) {
-            // 插件源(服务端 Python 运行时,PluginWorkerService);运行时不可用则 404
+            // 插件源(服务端 Python 运行时,PluginWorkerService);运行时不可用则 404。
+            // T4 不可见插件(订阅源管理「T4」开关)同样 404:配置不出现,直连五动作也不可达
             Plugin plugin = findPluginBySiteKey(site);
-            if (plugin == null || !pluginWorkerService.isAvailable()) {
+            if (plugin == null || !plugin.isT4Visible() || !pluginWorkerService.isAvailable()) {
                 throw new NotFoundException();
             }
             return pluginVod(token, pathToken, plugin, site, t, ids, wd, quick, play, ext, pg);

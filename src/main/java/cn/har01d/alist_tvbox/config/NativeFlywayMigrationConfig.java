@@ -50,6 +50,7 @@ import db.migration.current.V53__MediaSubscriptionSelfShare;
 import db.migration.current.V54__OfflineDownloadTaskCleanup;
 import db.migration.current.V55__OfflineDownloadTaskCleanupBackfill;
 import db.migration.current.V56__WatchlistItem;
+import db.migration.current.V57__PluginT4Visible;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -130,7 +131,8 @@ public class NativeFlywayMigrationConfig {
                     new V53__MediaSubscriptionSelfShare(),
                     new V54__OfflineDownloadTaskCleanup(),
                     new V55__OfflineDownloadTaskCleanupBackfill(),
-                    new V56__WatchlistItem());
+                    new V56__WatchlistItem(),
+                    new V57__PluginT4Visible());
         };
     }
 }
