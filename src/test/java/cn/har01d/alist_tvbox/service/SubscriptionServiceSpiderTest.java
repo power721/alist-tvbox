@@ -81,7 +81,7 @@ class SubscriptionServiceSpiderTest {
         assertEquals("csp_WebHome", site.get("api"));
         assertEquals("我的电影库", site.get("name"));
         assertEquals("http://atv.example/webhome/pages/电影库.html", site.get("homePage"));
-        assertEquals("http://atv.example/spring.jar", site.get("jar"));
+        assertTrue(((String) site.get("jar")).startsWith("http://atv.example/spring.jar?v="));
         String pageExt = new String(java.util.Base64.getDecoder().decode((String) site.get("ext")));
         assertTrue(pageExt.contains("\"url\":\"http://atv.example/webhome/pages/电影库.html\""));
         // 裸订阅(无 token)ext.token 空串:spider 侧盘检/盘搜后端随关闭;
@@ -157,7 +157,7 @@ class SubscriptionServiceSpiderTest {
         Map<String, Object> config = service.subscription("", "http://up.example/config.json", "", null);
 
         // 全局主 spider 位回归本项目 spring.jar,其代理服务随 TVBox 启动加载
-        assertEquals("http://atv.example/spring.jar", config.get("spider"));
+        assertTrue(((String) config.get("spider")).startsWith("http://atv.example/spring.jar?v="));
 
         Map<String, Object> upCsp = findSite(config, "up_csp");
         // 上游无 jar 的 csp 站点降级为站点级 jar,指向上游自己的 spider
@@ -190,7 +190,7 @@ class SubscriptionServiceSpiderTest {
         Map<String, Object> config = service.subscription("", "", "", null);
 
         // 无上游时同样默认注入,保证 spring.jar 常驻服务随订阅加载
-        assertEquals("http://atv.example/spring.jar", config.get("spider"));
+        assertTrue(((String) config.get("spider")).startsWith("http://atv.example/spring.jar?v="));
         assertNotNull(config.get("sites"));
     }
 
@@ -208,7 +208,7 @@ class SubscriptionServiceSpiderTest {
         assertEquals("csp_WebHome", atvHome.get("api"));
         assertEquals("http://atv.example/webhome/app.html?token=-&v=23", atvHome.get("homePage"));
         // 显式 jar(与其他内置源一致):防宿主不回落全局 spider 或全局位被覆盖
-        assertEquals("http://atv.example/spring.jar", atvHome.get("jar"));
+        assertTrue(((String) atvHome.get("jar")).startsWith("http://atv.example/spring.jar?v="));
         // ext = base64(JSON)(与 csp_Media 等其它源一致;url + pt 播放同步专用令牌,测试桩下 pt 为空)
         String ext = new String(java.util.Base64.getDecoder().decode((String) atvHome.get("ext")));
         assertTrue(ext.contains("\"url\":\"http://atv.example/webhome/app.html?token=-&v=23\""));
@@ -247,7 +247,7 @@ class SubscriptionServiceSpiderTest {
         assertEquals("https://tvbox.example/spring.jar", service.readHostAddress("/spring.jar"));
 
         Map<String, Object> config = service.subscription("", "http://up.example/config.json", "", null);
-        assertEquals("https://tvbox.example/spring.jar", config.get("spider"));
+        assertTrue(((String) config.get("spider")).startsWith("https://tvbox.example/spring.jar?v="));
     }
 
     @Test
