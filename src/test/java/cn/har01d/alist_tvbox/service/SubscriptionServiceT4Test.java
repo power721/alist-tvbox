@@ -301,6 +301,42 @@ class SubscriptionServiceT4Test {
         assertThrows(BadRequestException.class, () -> service.updateT4Token("u-alice"));
     }
 
+    @Test
+    void subscriptionOverrideWhitelistFiltersT4Config() {
+        // T3 订阅 override 的 sites-whitelist 对 T4 订阅形态天然生效(subscriptionT4 先跑完整
+        // subscription() 含 resolveAndApplyFilters,再 applyT4):多入口分站点集复用 T3 机制,
+        // 每个订阅一份白名单,各自的 /t4/{token}/{订阅号} 即不同的站点集
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null),
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_Media", true, "csp_Media", "我的追剧", null));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class), 0,
+                "{\"sites-whitelist\":[\"csp_AList\"]}");
+
+        Map<String, Object> config = service.subscriptionT4("", "0", true);
+
+        assertEquals(4, findSite(config, "csp_AList").get("type"));
+        assertTrue(findSiteKeys(config).stream().noneMatch("csp_Media"::equals));
+    }
+
+    @Test
+    void subscriptionOverrideBlacklistFiltersT4Config() {
+        // sites-blacklist 同理:黑名单里的插件源在 T4 订阅形态不出现(即使 Python 运行时就绪)
+        Plugin plugin = new Plugin();
+        plugin.setId(9);
+        plugin.setUrl("https://up.example/spider.txt");
+        plugin.setName("上游源");
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null),
+                new SubscriptionSourceService.SubscriptionSourceRef("plugin-9", false, "上游源", "上游源", plugin));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class), 0,
+                "{\"sites-blacklist\":[\"plugin-9\"]}");
+
+        Map<String, Object> config = service.subscriptionT4("", "0", true);
+
+        assertEquals(4, findSite(config, "csp_AList").get("type"));
+        assertTrue(findSiteKeys(config).stream().noneMatch("plugin-9"::equals));
+    }
+
     private static Map<String, Object> findSite(Map<String, Object> config, String key) {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         return sites.stream().filter(site -> key.equals(site.get("key"))).findFirst().orElseThrow();
@@ -320,6 +356,12 @@ class SubscriptionServiceT4Test {
     private SubscriptionService newService(String upstreamJson,
                                            List<SubscriptionSourceService.SubscriptionSourceRef> sources,
                                            UserService userService, int ownerUid) {
+        return newService(upstreamJson, sources, userService, ownerUid, null);
+    }
+
+    private SubscriptionService newService(String upstreamJson,
+                                           List<SubscriptionSourceService.SubscriptionSourceRef> sources,
+                                           UserService userService, int ownerUid, String override) {
         settingRepository = mock(SettingRepository.class);
         when(settingRepository.findById(anyString())).thenAnswer(invocation -> {
             Object key = invocation.getArgument(0);
@@ -342,6 +384,7 @@ class SubscriptionServiceT4Test {
         subscription.setSid("0");
         subscription.setUrl("http://up.example/config.json");
         subscription.setOwnerUid(ownerUid);
+        subscription.setOverride(override);
         SubscriptionRepository subscriptionRepository = mock(SubscriptionRepository.class);
         when(subscriptionRepository.findBySid("0")).thenReturn(Optional.of(subscription));
 
