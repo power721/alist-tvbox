@@ -26,6 +26,8 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlayResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliQrCodeResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliRelatedResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliTag;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliTagsResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchInfo;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchInfoResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchPgcResponse;
@@ -80,6 +82,7 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.live.service.LiveProxyService;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -144,6 +147,7 @@ public class BiliBiliService {
     private static final int VIDEO_AV1 = 2048;
     private static final int FN_VAL = VIDEO_DASH + VIDEO_HDR + VIDEO_4K + DOLBY_AUDIO + DOLBY_VIDEO + VIDEO_8K + VIDEO_AV1;
     private static final String INFO_API = "https://api.bilibili.com/x/web-interface/view?bvid=";
+    private static final String TAG_API = "https://api.bilibili.com/x/tag/archive/tags?bvid=";
     private static final String HOT_API = "https://api.bilibili.com/x/web-interface/ranking/v2?type=%s&rid=%d";
     private static final String SEASON_RANK_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/index/result?st=1&style_id=%s&season_version=-1&spoken_language_type=-1&area=-1&is_finish=%s&copyright=-1&season_status=-1&season_month=-1&year=%s&order=0&sort=0&page=%d&season_type=%s&pagesize=30&type=1";
@@ -411,6 +415,12 @@ public class BiliBiliService {
     private final Cache<String, BiliSession> sessions = Caffeine.newBuilder()
             .expireAfterAccess(30, java.util.concurrent.TimeUnit.MINUTES)
             .maximumSize(200)
+            .build();
+
+    /** 视频TAG(详情页「标签」行):稿件标签近乎不变,1h 足够;loader 失败返 null 不落缓存,下轮重试 */
+    private final Cache<String, List<String>> tagCache = Caffeine.newBuilder()
+            .expireAfterWrite(1, java.util.concurrent.TimeUnit.HOURS)
+            .maximumSize(1000)
             .build();
 
     private BiliSession sessionOf(String client) {
@@ -1964,6 +1974,10 @@ public class BiliBiliService {
         final String bvidKey = bvid;
         java.util.concurrent.CompletableFuture<List<BiliBiliInfo>> relatedFuture =
                 java.util.concurrent.CompletableFuture.supplyAsync(() -> fetchRelatedList(bvidKey));
+        // 视频TAG与 related/UP 并发拉取(gui 专属,TVBox 文本客户端不下发),不占详情打开串行路径
+        java.util.concurrent.CompletableFuture<List<String>> tagsFuture = "gui".equals(client)
+                ? java.util.concurrent.CompletableFuture.supplyAsync(() -> tagCache.get(bvidKey, this::getTags))
+                : null;
         String upPlayUrl = null;
         if (info.getOwner() != null) {
             if ("com.fongmi.android.tv".equals(client)) {
@@ -1990,6 +2004,17 @@ public class BiliBiliService {
         if (upPlayUrl != null) {
             movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
             movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + upPlayUrl);
+        }
+        // gui 详情 ext 并入 tags(「标签」行):ext 原为 stat 对象,转 Map 平铺保留 coin/like 等键再添 tags,旧客户端读法不变
+        if (tagsFuture != null) {
+            List<String> tags = tagsFuture.join();
+            if (tags != null && !tags.isEmpty()) {
+                Map<String, Object> ext = movieDetail.getExt() != null
+                        ? objectMapper.convertValue(movieDetail.getExt(), new TypeReference<Map<String, Object>>() {})
+                        : new java.util.HashMap<String, Object>();
+                ext.put("tags", tags);
+                movieDetail.setExt(ext);
+            }
         }
         if (biliActions != null && separateActionLine) {
             movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$操作");
@@ -2087,6 +2112,27 @@ public class BiliBiliService {
         } catch (Exception e) {
             log.warn("get related videos failed", e);
             return List.of();
+        }
+    }
+
+    /** 视频TAG名单(/x/tag/archive/tags,view 接口不含 tags)。失败返 null:不缓存,下次详情再试。 */
+    private List<String> getTags(String bvid) {
+        try {
+            HttpEntity<Void> entity = buildHttpEntity(null);
+            ResponseEntity<BiliBiliTagsResponse> response =
+                    restTemplate.exchange(TAG_API + bvid, HttpMethod.GET, entity, BiliBiliTagsResponse.class);
+            BiliBiliTagsResponse body = response.getBody();
+            if (body == null || body.getCode() != 0 || body.getData() == null) {
+                return null;
+            }
+            return body.getData().stream()
+                    .map(BiliBiliTag::getTag_name)
+                    .filter(StringUtils::isNotBlank)
+                    .map(String::trim)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.warn("get video tags failed: {}", bvid, e);
+            return null;
         }
     }
 
@@ -3573,7 +3619,8 @@ public class BiliBiliService {
         }
 
         if (tid.startsWith("search:")) {
-            String[] parts = tid.split(":");
+            // limit=2:关键词本身可含冒号(详情「标签」点击即拼 search:<tag>),全切会把词截断
+            String[] parts = tid.split(":", 2);
             return search(parts[1], filter.getSort(), filter.getDuration(), page, false, client);
         } else if (tid.startsWith("channel:")) {
             String[] parts = tid.split(":");

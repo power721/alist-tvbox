@@ -11,6 +11,8 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliListResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlayResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliRelatedResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliTag;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliTagsResponse;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2InfoResponse;
@@ -520,6 +522,62 @@ class BiliBiliServiceTest {
                 service.getDetail("116958703918865-40168587741", "gui").getList().get(0).getVod_id());
         assertEquals("BV195KY6YEeY",
                 service.getDetail("116958703918865", "gui").getList().get(0).getVod_id());
+    }
+
+    private void stubTagApi(String... names) {
+        BiliBiliTagsResponse tagsResponse = new BiliBiliTagsResponse();
+        tagsResponse.setCode(0);
+        List<BiliBiliTag> tags = new ArrayList<>();
+        for (String name : names) {
+            BiliBiliTag tag = new BiliBiliTag();
+            tag.setTag_name(name);
+            tags.add(tag);
+        }
+        tagsResponse.setData(tags);
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/tag/archive/tags?bvid="), eq(HttpMethod.GET), any(), eq(BiliBiliTagsResponse.class)))
+                .thenReturn(ResponseEntity.ok(tagsResponse));
+    }
+
+    @Test
+    void getDetailMergesTagsIntoExtForGuiClient() throws Exception {
+        stubInfoApi(videoInfo());
+        stubTagApi("搞笑", "  ", "日常:随笔");
+
+        MovieList detail = service.getDetail("BV195KY6YEeY", "gui");
+
+        // ext 平铺保留 stat 键再添 tags:旧客户端 ext.coin 读法不变;空白 tag 滤除,含冒号的 tag 原样下发
+        Map<?, ?> ext = (Map<?, ?>) detail.getList().get(0).getExt();
+        assertTrue(ext.containsKey("coin"));
+        assertEquals(List.of("搞笑", "日常:随笔"), ext.get("tags"));
+        // 二次详情命中 tagCache,不再打 TAG_API
+        service.getDetail("BV195KY6YEeY", "gui");
+        verify(restTemplate, org.mockito.Mockito.times(1))
+                .exchange(startsWith("https://api.bilibili.com/x/tag/archive/tags?bvid="), eq(HttpMethod.GET), any(), eq(BiliBiliTagsResponse.class));
+    }
+
+    @Test
+    void getDetailSkipsTagApiForNonGuiClients() throws Exception {
+        stubInfoApi(videoInfo());
+
+        MovieList detail = service.getDetail("BV195KY6YEeY", "com.github.tvbox.osc");
+
+        verify(restTemplate, never())
+                .exchange(startsWith("https://api.bilibili.com/x/tag/archive/tags?bvid="), eq(HttpMethod.GET), any(), eq(BiliBiliTagsResponse.class));
+        Object ext = detail.getList().get(0).getExt();
+        assertFalse(ext instanceof Map, "非 gui 客户端 ext 保持 stat 原样: " + ext);
+    }
+
+    @Test
+    void getDetailKeepsStatExtWhenTagApiFails() throws Exception {
+        stubInfoApi(videoInfo());
+        when(restTemplate.exchange(startsWith("https://api.bilibili.com/x/tag/archive/tags?bvid="), eq(HttpMethod.GET), any(), eq(BiliBiliTagsResponse.class)))
+                .thenThrow(new RuntimeException("tag api down"));
+
+        MovieList detail = service.getDetail("BV195KY6YEeY", "gui");
+
+        // TAG 接口故障不拖垮详情:ext 保持 stat 对象,仅缺 tags 键
+        Object ext = detail.getList().get(0).getExt();
+        assertTrue(ext instanceof BiliBiliInfo.Stats, "失败时 ext 应回落 stat 原样: " + ext);
     }
 
 
