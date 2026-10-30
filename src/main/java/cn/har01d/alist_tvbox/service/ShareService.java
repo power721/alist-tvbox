@@ -679,6 +679,12 @@ public class ShareService {
         request.setPassword(password);
         LoginResponse response = restTemplate.postForObject("/api/auth/login", request, LoginResponse.class);
         log.debug("AList login response: {}", response);
+        if (response == null || response.getData() == null || response.getData().getToken() == null) {
+            // data 为 null = 登录被拒(401 账号不存在/密码错、429 连续失败锁定);裸 NPE 会吞掉真实原因
+            String message = response == null ? "无响应" : response.getCode() + " " + response.getMessage();
+            log.error("AList login failed: {}", message);
+            throw new BadRequestException("AList 登录失败: " + message);
+        }
         return response.getData().getToken();
     }
 

@@ -223,10 +223,16 @@ public class AccountService {
 
     private void addAdminUser() {
         try {
-            String sql = "DELETE FROM x_users WHERE username = 'atv'";
-            aListLocalService.executeUpdate(sql);
-            sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,65535)";
-            aListLocalService.executeUpdate(sql);
+            // id=4 是 atv 账号的固定约定(updateAListLogin 的 id=3 同族);外来旧 alist 库可能已有
+            // 占用 id=4 的用户,PK 冲突会让 INSERT 被 executeUpdate 吞掉 → atv 缺失 → 登录恒 401,
+            // 故按用户名与 id 双条件清位
+            aListLocalService.executeUpdate("DELETE FROM x_users WHERE username = 'atv' OR id = 4");
+            int rows = aListLocalService.executeUpdate(
+                    "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES(4,'atv',?,'/',2,65535)",
+                    generatePassword());
+            if (rows == 0) {
+                log.error("创建 AList atv 账号失败,管理接口将持续登录失败;请检查 alist 数据库是否初始化/可写");
+            }
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -821,6 +827,12 @@ public class AccountService {
         request.setPassword(password);
         LoginResponse response = aListClient.postForObject("/api/auth/login", request, LoginResponse.class);
         log.debug("AList login response: {}", response);
+        if (response == null || response.getData() == null || response.getData().getToken() == null) {
+            // data 为 null = 登录被拒(401 账号不存在/密码错、429 连续失败锁定);裸 NPE 会吞掉真实原因
+            String message = response == null ? "无响应" : response.getCode() + " " + response.getMessage();
+            log.error("AList login failed: {}", message);
+            throw new BadRequestException("AList 登录失败: " + message);
+        }
         return response.getData().getToken();
     }
 
