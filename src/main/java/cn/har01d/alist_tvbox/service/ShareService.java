@@ -831,6 +831,16 @@ public class ShareService {
             node.put("cookie", account.getCookie());
             node.put("username", account.getUsername());
             node.put("password", account.getPassword());
+            // 完整会话(sessionKey 体系,PL 登录/刷新回写):摸鱼天翼登录态只认会话文件,
+            // 账密/cookie 形态它还要自己跑 loginSubmit(验证码常挡)
+            try {
+                JsonNode session = objectMapper.readTree(account.getAddition()).get("tianyi_session");
+                if (session != null && !session.isNull()) {
+                    node.put("session", session.asText());
+                }
+            } catch (Exception e) {
+                log.warn("read 189 session failed", e);
+            }
         });
 
         account(DriverType.PAN123, uid).ifPresent(account -> {
@@ -856,13 +866,19 @@ public class ShareService {
 
         account(DriverType.THUNDER, uid).ifPresent(account -> {
             ObjectNode node = result.putObject("xunlei");
-            node.put("refresh_token", account.getCookie());
             node.put("access_token", account.getToken());
+            // 真 refresh_token(PL SetTokenResp 回传落 addition):cookie 列是 captchaToken,
+            // 冒充 refresh_token 下发会让摸鱼刷新必炸;存量无真值时宁缺毋滥
             try {
-                String code = objectMapper.readTree(account.getAddition()).get("device_id").asText();
+                var add = objectMapper.readTree(account.getAddition());
+                JsonNode refresh = add.get("refresh_token");
+                if (refresh != null && !refresh.isNull() && !refresh.asText().isBlank()) {
+                    node.put("refresh_token", refresh.asText());
+                }
+                String code = add.get("device_id").asText();
                 node.put("device_id", code);
-            } catch (JsonProcessingException ex) {
-                // ignore
+            } catch (Exception ex) {
+                // ignore(addition 缺 device_id 等不应炸掉整个 /cookies)
             }
         });
 

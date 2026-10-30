@@ -51,4 +51,12 @@ public class DriverAccount {
     @Transient
     @JsonProperty(value = "access_token", access = JsonProperty.Access.WRITE_ONLY)
     private String accessToken;
+    /** Go 侧回同步的 refresh_token(迅雷),仅入站不落库,updateToken 写进 addition 供 /cookies 下发。 */
+    @Transient
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private String refreshToken;
+    /** Go 侧回同步的完整会话 JSON(天翼 sessionKey 体系),仅入站不落库,updateToken 写进 addition。 */
+    @Transient
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private String session;
 }

@@ -385,6 +385,29 @@ public class DriverAccountService {
         } else if (account.getType() == DriverType.THUNDER) {
             account.setToken(dto.getToken());
             account.setCookie(dto.getCookie());
+            // 迅雷真 refresh_token(PL SetTokenResp 回传):摸鱼刷新/登录判定都要,
+            // cookie 列存的是 captchaToken 不能当 refresh 用,落 addition 供 /cookies 下发
+            if (StringUtils.isNotBlank(dto.getRefreshToken())) {
+                try {
+                    var add = Utils.readJson(account.getAddition());
+                    add.put("refresh_token", dto.getRefreshToken());
+                    account.setAddition(objectMapper.writeValueAsString(add));
+                } catch (Exception e) {
+                    log.warn("sync THUNDER refresh_token failed", e);
+                }
+            }
+        } else if (account.getType() == DriverType.CLOUD189) {
+            // 天翼完整会话(sessionKey 体系):摸鱼登录态只认会话文件,账密/cookie 都换不来
+            account.setCookie(dto.getToken());
+            if (StringUtils.isNotBlank(dto.getSession())) {
+                try {
+                    var add = Utils.readJson(account.getAddition());
+                    add.put("tianyi_session", dto.getSession());
+                    account.setAddition(objectMapper.writeValueAsString(add));
+                } catch (Exception e) {
+                    log.warn("sync CLOUD189 session failed", e);
+                }
+            }
         } else if (account.getType() == DriverType.UC_TV) {
             account.setUsername(dto.getUsername());
             account.setPassword(dto.getPassword());
