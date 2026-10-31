@@ -909,7 +909,19 @@ public class ShareService {
         });
 
         putToken(result, "139", account(DriverType.PAN139, uid).map(DriverAccount::getToken).orElse("").trim());
-        putToken(result, "guangya", account(DriverType.GUANGYA, uid).map(DriverAccount::getToken).orElse("").trim());
+        // 光鸭 access 仅 2h 寿命,客户端无法自刷新即掉登录(#1088):一并下发 addition 里的 refresh_token
+        account(DriverType.GUANGYA, uid).ifPresent(account -> {
+            ObjectNode node = result.putObject("guangya");
+            node.put("token", account.getToken() == null ? "" : account.getToken().trim());
+            try {
+                JsonNode refresh = objectMapper.readTree(account.getAddition()).get("refresh_token");
+                if (refresh != null && !refresh.isNull() && !refresh.asText().isBlank()) {
+                    node.put("refresh_token", refresh.asText());
+                }
+            } catch (Exception e) {
+                log.warn("read guangya refresh_token failed", e);
+            }
+        });
         // B 站 cookie 是全局凭证:仅共享 secret(管理员设备)下发;用户 token 不带,spider 游客降级
         if (uid == 0) {
             putCookie(result, "bili", settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(""));
