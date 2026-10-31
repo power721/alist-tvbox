@@ -41,7 +41,9 @@
             }}/{{ scope.row.sid }}</a>
         </template>
       </el-table-column>
-      <el-table-column prop="url" label="T4配置地址" sortable>
+      <!-- T4 关闭(/t4 全 404)或仅独立地址模式(旧订阅形态全 404)下此列地址不可用,隐藏;
+           独立地址见设置页 T4 卡片 -->
+      <el-table-column v-if="t4Enabled && !t4StandaloneOnly" prop="url" label="T4配置地址" sortable>
         <template #default="scope">
           <a :href="t4Url(scope.row.sid)" target="_blank">{{ t4Url(scope.row.sid) }}</a>
         </template>
@@ -1151,6 +1153,10 @@ const tgPassword = ref('')
 const tgAuthType = ref('qr')
 const base64QrCode = ref('')
 const enabledToken = ref(false)
+// T4 不可用形态下订阅页「T4配置地址」列地址全 404,不再展示:
+// t4_enabled 总开关关闭,或仅独立地址模式(t4_standalone_only,旧订阅形态全 404)
+const t4Enabled = ref(true)
+const t4StandaloneOnly = ref(false)
 const selectedToken = ref('')
 const token = computed(() => enabledToken.value && selectedToken.value ? '/' + selectedToken.value : '')
 const basicAuthUser = ref('')
@@ -3335,6 +3341,13 @@ onMounted(() => {
   axios.get('/api/basic-auth-credentials').then(({data}) => {
     basicAuthUser.value = data.username
     basicAuthPass.value = data.password
+  }).catch(() => {})
+  // 旧版后端无此键/读取失败均按默认处理(t4_enabled 默认开、standalone_only 默认关,列照常显示)
+  axios.get('/api/settings/t4_enabled').then(({data}) => {
+    t4Enabled.value = data?.value !== 'false'
+  }).catch(() => {})
+  axios.get('/api/settings/t4_standalone_only').then(({data}) => {
+    t4StandaloneOnly.value = data?.value === 'true'
   }).catch(() => {})
 })
 
