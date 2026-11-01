@@ -11,6 +11,7 @@ import base64
 import binascii
 import json
 import struct
+import threading
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -357,6 +358,9 @@ class CencRangeReader:
         self._get = get
         self._probe_bytes = probe_bytes
         self._index: CencMediaIndex | None = None
+        # 索引构建双检锁: warmup 预热线程与播放器首请求(HEAD/GET 并发)
+        # 同时到达时只构建一次, 其余等待复用, 不重复探测/拉 moov。
+        self._index_lock = threading.Lock()
         # fMP4(电影逐片段 CENC)状态:tenc 声明的逐样本 IV 长度 + 片段样本缓存。
         self._per_sample_iv_size = 0
         # moof 偏移 -> (样本表, CENC 盒类型字段偏移, seig 组类型字段偏移)。
@@ -436,6 +440,27 @@ class CencRangeReader:
     def ensure_index(self) -> CencMediaIndex:
         if self._index is not None:
             return self._index
+        with self._index_lock:
+            if self._index is not None:
+                return self._index
+            self._index = self._build_index_ensure()
+            return self._index
+
+    def warmup(self) -> "CencRangeReader":
+        """会话注册即后台预热索引: 与播放器启动重叠, 首请求命中热索引,
+        避免探测/moov/IV 表拉取(串行上游往返)全部落在起播关键路径上。
+        失败静默——首请求仍走 ensure_index 原路径兜底。"""
+
+        def _warm() -> None:
+            try:
+                self.ensure_index()
+            except Exception:
+                pass
+
+        threading.Thread(target=_warm, daemon=True).start()
+        return self
+
+    def _build_index_ensure(self) -> CencMediaIndex:
         total_size = self._probe_total_size()
         head = self._fetch_range(0, min(self._probe_bytes, total_size - 1))
         # size_limit=total_size：长内容的 moov（大样本表）可远超探测窗口，
@@ -459,10 +484,9 @@ class CencRangeReader:
             else:
                 moov_bytes = head[moov_start : moov_start + moov_size]
             prefix_bytes = head[:moov_start]
-        self._index = self._build_index(
+        return self._build_index(
             moov_bytes, prefix_bytes, total_size, head_bytes=head
         )
-        return self._index
 
     def _build_index(
         self,
