@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.ExpectedCount.once;
@@ -710,6 +715,41 @@ class TelegramServiceTest {
 
         assertThat(result.getList()).hasSize(1);
         assertThat(result.getList().get(0).getVod_name()).isEqualTo("沙丘2 4K");
+    }
+
+    @Test
+    void detailResolvesShareTitleFromPersistentStore() {
+        // 重启后 titleCache/movies 内存缓存全空,壳子历史/收藏直达详情:title 须从持久层
+        // Share.title 恢复并传给 getPlaylist 匹配,不再退化用防审核拆字目录名匹配豆瓣
+        RestTemplate restTemplate = new RestTemplate();
+        TelegramChannelRepository channelRepository = mock(TelegramChannelRepository.class);
+        ShareService shareService = mock(ShareService.class);
+        String link = "https://pan.baidu.com/s/1abc?pwd=yptv";
+        when(shareService.add(any())).thenReturn("/我的百度分享/temp/baidu@1abc@yptv");
+        when(shareService.resolveShareTitle(eq(link), isNull())).thenReturn("尚公主");
+        TvBoxService tvBoxService = mock(TvBoxService.class);
+        MovieList movieList = new MovieList();
+        when(tvBoxService.getDetail(isNull(), eq("1$/我的百度分享/temp/baidu@1abc@yptv/~playlist"),
+                eq("尚公主"), isNull(), eq(0))).thenReturn(movieList);
+        TelegramService service = new TelegramService(
+                new AppProperties(),
+                channelRepository,
+                mock(SettingRepository.class),
+                mock(MovieRepository.class),
+                shareService,
+                tvBoxService,
+                mock(RemoteSearchService.class),
+                new RestTemplateBuilder()
+                        .messageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                        .detectRequestFactory(false)
+                        .requestFactory(restTemplate::getRequestFactory),
+                objectMapper
+        );
+
+        service.detail(link, null, null, null);
+
+        verify(tvBoxService).getDetail(isNull(), eq("1$/我的百度分享/temp/baidu@1abc@yptv/~playlist"),
+                eq("尚公主"), isNull(), eq(0));
     }
 
     @Test

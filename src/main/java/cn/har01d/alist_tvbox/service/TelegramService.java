@@ -451,6 +451,10 @@ public class TelegramService {
                 title = movie.getVod_name();
             }
         }
+        // 持久层兜底(RemoteSearchService.detail/ParseService.drive 同款):参数/内存缓存命中即回写
+        // Share.title 落库——titleCache/movies 随重启清空后,壳子历史/收藏直达详情仍可恢复剧名,
+        // 不会再退化用防审核拆字目录名(如「S【上@供|住】」)匹配豆瓣
+        title = shareService.resolveShareTitle(tid, title);
 
         MovieList movieList = tvBoxService.getDetail(ac, "1$" + path + "/~playlist", title, keyword, 0);
         log.debug("{}", movieList);
