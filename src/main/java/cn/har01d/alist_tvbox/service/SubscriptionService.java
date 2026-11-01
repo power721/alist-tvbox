@@ -1639,7 +1639,7 @@ public class SubscriptionService {
                         Map<String, Object> site = buildWebHomeSite(token, source.name(), playbackToken);
                         site.put("order", order);
                         applySiteOverride(WEB_HOME_KEY, site, sites);
-                        sites.add(id++, site);
+                        addSiteOrdered(sites, id++, site);
                         log.debug("add builtin source {}: {}", source.siteKey(), site);
                     } else {
                         Map<String, Object> site = buildSite(embedToken, secret, uid, source.siteKey(), source.name(),
@@ -1659,7 +1659,7 @@ public class SubscriptionService {
                         boolean overridden = applySiteOverride(overrideKey, site, sites);
                         // special defaults when no user override
                         applyBuiltinSiteCapabilities(source.siteKey(), overridden, site);
-                        sites.add(id++, site);
+                        addSiteOrdered(sites, id++, site);
                         log.debug("add builtin source {}: {}", source.siteKey(), site);
                     }
                 } else if (source.plugin() != null) {
@@ -1677,7 +1677,7 @@ public class SubscriptionService {
                     site.put("order", order);
                     String overrideKey = (String) site.get("key");
                     applySiteOverride(overrideKey, site, sites);
-                    sites.add(id++, site);
+                    addSiteOrdered(sites, id++, site);
                 }
                 order += 10;
             } catch (Exception e) {
@@ -1803,6 +1803,16 @@ public class SubscriptionService {
             }
         }
         return false;
+    }
+
+    /**
+     * 按生成序插入站点(生成区末尾、全局配置站点之前)。索引必须钳制到列表末尾:
+     * applySiteOverride 同 key 去重与 csp_AList/csp_Push 去重都会收缩列表而 id 不回退,
+     * 一旦 id 越界抛 IndexOutOfBoundsException 且失败后 id 不再增长——断裂点之后的
+     * 所有源被逐个静默丢弃(文件型插件与仓库插件撞 externalId 时整段插件区失踪)。
+     */
+    private static void addSiteOrdered(List<Map<String, Object>> sites, int index, Map<String, Object> site) {
+        sites.add(Math.min(index, sites.size()), site);
     }
 
     public Map<String, Boolean> getCapabilities() {

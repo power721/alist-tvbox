@@ -173,6 +173,43 @@ class SubscriptionServiceT4Test {
     }
 
     @Test
+    void duplicateSiteKeyPluginDoesNotDropLaterSources() {
+        // 线上回归:文件型插件与仓库插件撞 externalId(站点 key 同值)时,applySiteOverride
+        // 去重收缩 sites 列表而 id 计数不回退,sites.add(id) 索引越界且失败后 id 冻结——
+        // 断裂点之后的所有源被静默丢弃(hgtv.py 上传后从 T4/T3 配置失踪的根因)。
+        // 钳制索引后:同 key 去重保留一条,后续源全部在场。
+        Plugin repo = new Plugin();
+        repo.setId(1275);
+        repo.setUrl("https://up.example/free.txt");
+        repo.setName("免费短剧");
+        repo.setExternalId("bfe3ce63e51e460a918d7ab00fea7074849d");
+        Plugin fileBacked = new Plugin();
+        fileBacked.setId(1276);
+        fileBacked.setUrl("/static/plugins/免费短剧.py");
+        fileBacked.setName("免费短剧");
+        fileBacked.setExternalId("bfe3ce63e51e460a918d7ab00fea7074849d");
+        Plugin hgtv = new Plugin();
+        hgtv.setId(1310);
+        hgtv.setUrl("/static/plugins/hgtv.py");
+        hgtv.setName("hgtv");
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null),
+                new SubscriptionSourceService.SubscriptionSourceRef("plugin-1275", false, "免费短剧", "免费短剧", repo),
+                new SubscriptionSourceService.SubscriptionSourceRef("plugin-1276", false, "免费短剧", "免费短剧", fileBacked),
+                new SubscriptionSourceService.SubscriptionSourceRef("plugin-1310", false, "hgtv", "hgtv", hgtv));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class));
+
+        Map<String, Object> config = service.subscriptionT4("", "0", true);
+
+        // 同 key 只留一条(去重语义保留),撞 key 不再炸掉后面的源
+        long duplicates = findSiteKeys(config).stream()
+                .filter("bfe3ce63e51e460a918d7ab00fea7074849d"::equals).count();
+        assertEquals(1, duplicates);
+        assertEquals(4, findSite(config, "plugin-1310").get("type"));
+        assertEquals(4, findSite(config, "csp_AList").get("type"));
+    }
+
+    @Test
     void t4HiddenPluginSourceRemovedFromT4Config() {
         // 订阅源管理「T4」开关关闭:插件源不 T4 化,随 type 3 移除;T3 订阅不受影响
         Plugin plugin = new Plugin();
