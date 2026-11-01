@@ -520,6 +520,12 @@ public class AListLocalService {
                 builder.command(alist, "server", "--no-prefix");
             }
             builder.directory(new File(Utils.getAListPath("")));
+            // 分片预读上限(PL read_ahead_limitMB 的 env 形态,--no-prefix 下无 OPENLIST_ 前缀):
+            // 仅接受纯数字注入,非法/缺省不设,由 PL 默认 64MB 兜底;0=不限。重启 AList 生效。
+            String readAhead = settingRepository.findById("alist_read_ahead_limit").map(Setting::getValue).orElse("");
+            if (readAhead.matches("\\d+")) {
+                builder.environment().put("READ_AHEAD_LIMIT_MB", readAhead);
+            }
             Process process = builder.start();
             settingRepository.save(new Setting(ALIST_RESTART_REQUIRED, "false"));
             settingRepository.save(new Setting(ALIST_START_TIME, Instant.now().toString()));

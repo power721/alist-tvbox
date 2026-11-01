@@ -380,6 +380,14 @@
             />
           </el-form-item>
         </div>
+        <el-form-item label="分片预读上限(MB)">
+          <el-input v-model="aListReadAhead" style="width: 140px" type="text" placeholder="64"/>
+          <el-button type="primary" class="hint" @click="updateAListReadAhead">更新</el-button>
+          <div class="hint" style="width: 100%">
+            多账号分片下载的预读内存上限(播放进度前方最多预读多少字节),默认64,0=不限;
+            网盘下载速度远高于播放速度导致内存被占满时可调小。保存后需重启AList生效。
+          </div>
+        </el-form-item>
         <el-form-item>
           <el-button @click="resetAListToken">重置AList认证Token</el-button>
           <el-button @click="exportDatabase">导出数据库</el-button>
@@ -486,6 +494,7 @@ const mixSiteSource = ref(false)
 const replaceAliToken = ref(false)
 const debugLog = ref(false)
 const aListDebug = ref(false)
+const aListReadAhead = ref('64')
 const enableHttps = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -767,6 +776,16 @@ const updateAListDebug = () => {
   })
 }
 
+const updateAListReadAhead = () => {
+  if (!/^\d+$/.test(aListReadAhead.value)) {
+    ElMessage.warning('预读上限须为 0 或正整数(MB)')
+    return
+  }
+  axios.post('/api/settings', {name: 'alist_read_ahead_limit', value: aListReadAhead.value}).then(() => {
+    ElMessage.success('更新成功，重启生效')
+  })
+}
+
 const updateQuarkDeviceId = () => {
   axios.post('/api/settings', {name: 'quark_device_id', value: quarkDeviceId.value}).then(() => {
     ElMessage.success('更新成功')
@@ -913,6 +932,7 @@ onMounted(() => {
     enableHttps.value = data.enable_https === 'true'
     debugLog.value = data.debug_log === 'true'
     aListDebug.value = data.alist_debug === 'true'
+    aListReadAhead.value = data.alist_read_ahead_limit || '64'
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
     apiKey.value = data.api_key
