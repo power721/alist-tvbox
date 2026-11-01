@@ -558,9 +558,9 @@ public class T4Controller {
         if (list != null) {
             for (MovieDetail item : list) {
                 if (StringUtils.isNotBlank(item.getVod_id()) && StringUtils.isNotBlank(item.getVod_name())) {
-                    // putIfAbsent:分类/搜索的正确标题先到即冻结;detail 响应的 vod_name 可能是
-                    // 挂载目录名(拆字混淆),不得反向覆盖列表捕获的正确标题
-                    titleCache.putIfAbsent(cacheKey(site, normalizeVodId(item.getVod_id())), item.getVod_name());
+                    // putIfAbsent(asMap 并发视图):分类/搜索的正确标题先到即冻结;detail 响应的
+                    // vod_name 可能是挂载目录名(拆字混淆),不得反向覆盖列表捕获的正确标题
+                    titleCache.asMap().putIfAbsent(cacheKey(site, normalizeVodId(item.getVod_id())), item.getVod_name());
                 }
             }
         }
