@@ -122,6 +122,9 @@ public class SettingService {
         appProperties.setT4Enabled(!settingRepository.findById(Constants.T4_ENABLED).map(Setting::getValue).orElse("").equals("false"));
         appProperties.setT4ProxyMode("direct".equals(settingRepository.findById(Constants.T4_PROXY_MODE).map(Setting::getValue).orElse("")) ? "direct" : "all");
         appProperties.setT4StandaloneOnly(settingRepository.findById(Constants.T4_STANDALONE_ONLY).map(Setting::getValue).orElse("").equals("true"));
+        // 详情增强默认关(显式 "true" 开);优先级坏值回落 douban
+        appProperties.setT4DetailEnhance(settingRepository.findById(Constants.T4_DETAIL_ENHANCE).map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setT4EnhancePriority("tmdb".equals(settingRepository.findById(Constants.T4_ENHANCE_PRIORITY).map(Setting::getValue).orElse("")) ? "tmdb" : "douban");
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
         appProperties.setTgSearchApiKey(settingRepository.findById("tg_search_api_key").map(Setting::getValue).orElse(""));
@@ -547,6 +550,13 @@ public class SettingService {
         }
         if (Constants.T4_STANDALONE_ONLY.equals(setting.getName())) {
             appProperties.setT4StandaloneOnly("true".equals(setting.getValue()));
+        }
+        if (Constants.T4_DETAIL_ENHANCE.equals(setting.getName())) {
+            appProperties.setT4DetailEnhance("true".equals(setting.getValue()));
+        }
+        if (Constants.T4_ENHANCE_PRIORITY.equals(setting.getName())) {
+            setting.setValue("tmdb".equals(setting.getValue()) ? "tmdb" : "douban");
+            appProperties.setT4EnhancePriority(setting.getValue());
         }
         if ("replace_ali_token".equals(setting.getName())) {
             appProperties.setReplaceAliToken("true".equals(setting.getValue()));

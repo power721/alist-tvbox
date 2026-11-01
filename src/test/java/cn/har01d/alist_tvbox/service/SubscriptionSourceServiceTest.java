@@ -262,14 +262,14 @@ class SubscriptionSourceServiceTest {
                 .t4Visible()).isTrue();
 
         // 插件源关闭 T4 可见性 + 内置源 csp_Media 关闭
-        service.update("plugin-9", new SubscriptionSourceService.ManagedSourceUpdate("爬虫", true, false, null));
-        service.update("builtin-csp_Media", new SubscriptionSourceService.ManagedSourceUpdate("我的追剧", true, false, null));
+        service.update("plugin-9", new SubscriptionSourceService.ManagedSourceUpdate("爬虫", true, false, null, null));
+        service.update("builtin-csp_Media", new SubscriptionSourceService.ManagedSourceUpdate("我的追剧", true, false, null, null));
 
         assertThat(plugin.isT4Visible()).isFalse();
         assertThat(service.t4HiddenSiteKeys()).containsExactlyInAnyOrder("hexabc123", "csp_Media");
 
         // null = 保持不变:QQ 扫码对话框只传 name/enabled/extend,不得回滚用户设置
-        service.update("plugin-9", new SubscriptionSourceService.ManagedSourceUpdate("爬虫", true, null, "{}"));
+        service.update("plugin-9", new SubscriptionSourceService.ManagedSourceUpdate("爬虫", true, null, null, "{}"));
         assertThat(plugin.isT4Visible()).isFalse();
     }
 }

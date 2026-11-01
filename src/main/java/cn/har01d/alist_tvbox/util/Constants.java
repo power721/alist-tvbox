@@ -77,6 +77,10 @@ public final class Constants {
     /** T4 仅独立地址:开启后旧订阅形态(/t4/{vod token}/{订阅号}、/t4/{订阅号} 及其五动作/CENC 面)
      *  一律 404,只有 /t4/{t4_token} 可用——T4 token 发给谁谁能用,其余用户只能 /sub。 */
     public static final String T4_STANDALONE_ONLY = "t4_standalone_only";
+    /** T4 第三方插件源详情增强总开关(默认关):detail 响应经豆瓣/TMDB 元数据增强(海报/简介/演职员+选集名清洗)。 */
+    public static final String T4_DETAIL_ENHANCE = "t4_detail_enhance";
+    /** 详情增强数据源优先级:douban=豆瓣优先(默认,本地库零网络)/tmdb=TMDB 优先;首选 miss 自动回退另一源。 */
+    public static final String T4_ENHANCE_PRIORITY = "t4_enhance_priority";
     public static final String TACIT_0924_ID = "tacit0924_id";
     public static final String TACIT_FOLDER_ID = "tacit0924_folder_id";
     public static final String GLOBAL_SUBSCRIPTION_OVERRIDE = "global_subscription_override";

@@ -588,6 +588,23 @@
             </el-tooltip>
           </template>
         </el-table-column>
+        <el-table-column label="增强" width="110">
+          <template #default="scope">
+            <el-tooltip content="详情增强(T4)按源覆盖:跟随默认=按全局开关+短剧/音乐自动检测;强制增强/永不增强覆盖自动判定。须先在系统配置开启「详情增强」" placement="top">
+              <el-select
+                :model-value="detailEnhanceChoice(scope.row)"
+                :disabled="scope.row.builtin"
+                size="small"
+                style="width: 90px"
+                @change="(value: string) => updateDetailEnhance(scope.row, value)"
+              >
+                <el-option label="跟随默认" value="default"/>
+                <el-option label="强制增强" value="on"/>
+                <el-option label="永不增强" value="off"/>
+              </el-select>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column label="最近检查" width="180">
           <template #default="scope">
             <span>{{ formatPluginCheckedAt(scope.row.lastCheckedAt) }}</span>
@@ -1070,6 +1087,7 @@ interface ManagedSource {
   url: string
   enabled: boolean
   t4Visible: boolean
+  detailEnhance: boolean | null
   sortOrder: number
   version: number | null
   extend: string
@@ -2930,10 +2948,35 @@ const deleteSelectedPluginFilters = () => {
 }
 
 const updateSource = (source: ManagedSource) => {
+  // 增强三态未显式设置(null=跟随默认)时不下发该字段:null 协议语义是「保持不变」,
+  // 误发 "default" 会把用户已设置的强制/永不重置回跟随
+  const payload: Record<string, unknown> = {
+    name: source.name,
+    enabled: source.enabled,
+    t4Visible: source.t4Visible,
+    extend: source.extend
+  }
+  if (source.detailEnhance === true) payload.detailEnhance = 'on'
+  else if (source.detailEnhance === false) payload.detailEnhance = 'off'
+  axios.put('/api/subscription-sources/' + source.id, payload).then(({data}) => {
+    Object.assign(source, data)
+    ElMessage.success('更新成功')
+  })
+}
+
+// 三态展示值:null=跟随默认 true=强制增强 false=永不增强(内置源不走插件五动作,恒禁用)
+const detailEnhanceChoice = (source: ManagedSource) => {
+  if (source.detailEnhance === true) return 'on'
+  if (source.detailEnhance === false) return 'off'
+  return 'default'
+}
+
+const updateDetailEnhance = (source: ManagedSource, value: string) => {
   axios.put('/api/subscription-sources/' + source.id, {
     name: source.name,
     enabled: source.enabled,
     t4Visible: source.t4Visible,
+    detailEnhance: value,
     extend: source.extend
   }).then(({data}) => {
     Object.assign(source, data)

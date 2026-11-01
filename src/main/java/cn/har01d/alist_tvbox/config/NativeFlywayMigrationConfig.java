@@ -51,6 +51,7 @@ import db.migration.current.V54__OfflineDownloadTaskCleanup;
 import db.migration.current.V55__OfflineDownloadTaskCleanupBackfill;
 import db.migration.current.V56__WatchlistItem;
 import db.migration.current.V57__PluginT4Visible;
+import db.migration.current.V58__PluginDetailEnhance;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -132,7 +133,8 @@ public class NativeFlywayMigrationConfig {
                     new V54__OfflineDownloadTaskCleanup(),
                     new V55__OfflineDownloadTaskCleanupBackfill(),
                     new V56__WatchlistItem(),
-                    new V57__PluginT4Visible());
+                    new V57__PluginT4Visible(),
+                    new V58__PluginDetailEnhance());
         };
     }
 }

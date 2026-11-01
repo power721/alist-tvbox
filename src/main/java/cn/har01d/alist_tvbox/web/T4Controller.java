@@ -10,6 +10,7 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.live.web.LiveController;
 import cn.har01d.alist_tvbox.service.PluginWorkerService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.service.T4DetailEnhancer;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
@@ -86,6 +87,7 @@ public class T4Controller {
     private final PluginWorkerService pluginWorkerService;
     private final PluginRepository pluginRepository;
     private final ObjectMapper objectMapper;
+    private final T4DetailEnhancer t4DetailEnhancer;
 
     private final Cache<String, String> titleCache =
             Caffeine.newBuilder().maximumSize(5000).expireAfterAccess(Duration.ofHours(2)).build();
@@ -250,7 +252,13 @@ public class T4Controller {
             method = "home";
         }
         log.info("t4 plugin: {}  method: {}  t: {}  ids: {}  wd: {}  play: {}", site, method, t, ids, wd, play);
-        return pluginWorkerService.call(site, extend, method, params);
+        JsonNode result = pluginWorkerService.call(site, extend, method, params);
+        // 详情增强(Setting 键 t4_detail_enhance,默认关):豆瓣/TMDB 双源元数据 + 选集名清洗,
+        // 源级短剧/音乐自动跳过;任何异常/超时在增强器内部兜底原样返回
+        if ("detail".equals(method) && appProperties.isT4DetailEnhance() && result instanceof JsonNode) {
+            result = t4DetailEnhancer.enhance(plugin, result);
+        }
+        return result;
     }
 
     // T4 CENC 解密桥:转发到插件 worker 内的 127.0.0.1 解密代理(Range 透传,seek 可用)

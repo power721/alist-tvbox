@@ -251,3 +251,38 @@ applyT4 变换(内置站点直接删,插件源不 T4 化随 type 3 移除);插�
 spring.jar 端爬虫持有 titleCache(浏览时捕获 vod_id→vod_name,详情回带 title 兜底)。服务端
 等价:T4Controller 用 Caffeine(5k 条/2h)旁路捕获响应 list 条目,详情自动补 `title`;
 另记最近搜索词作 `wd` 兜底。
+
+## 详情增强(豆瓣/TMDB 双源,0.7.x 引入)
+
+第三方插件源 detail 响应在 `T4Controller.pluginVod` 返回前经 `T4DetailEnhancer` 增强
+(buye-media 借鉴评估 A2,见 docs/buye-media-borrow-assessment.md)。
+
+**开关与优先级**:全局 Setting 键 `t4_detail_enhance`(默认关)+ `t4_enhance_priority`
+(`douban`=豆瓣优先,默认/TMDB 优先)。豆瓣走本地库(Movie/Alias,零网络零配额),
+未命中自动回退另一源;命中方全套字段,**不跨源混拼**。源级三态 `Plugin.detailEnhance`
+(null=跟随全局+自动检测/TRUE=强制/FALSE=永不),订阅源管理「增强」列,V58 迁移。
+
+**短剧/音乐源自动跳过**(主因是同名正剧误匹配,次因省配额):名称关键词
+(短剧/微短剧/爽剧/红果;音乐/DJ/演唱会/戏曲/相声/有声等)+ detail 运行时信号
+(type_name 关键词、「更新至三位数集」、单线路段数>200、无年份无演员且段数>60),
+运行时裁决按源缓存 24h;强制 TRUE 可绕过。
+
+**混淆文件名**:标题管线 = meta-id 标签快路径([dbid-x]/[tmdbid-x])→
+stripTechBrackets(域名水印/技术段,与追剧集号毒化修复同源管线)→ fixName →
+collapseCjkSpaces(点分隔)→ 拆季/剥季;清洗后无 CJK 且无连续字母 → 直接透传不猜。
+匹配严格:两侧剥季后精确等 or Levenshtein ≤ max(1, len/8),年份都有时 |Δ|≤1,
+不过即透传(绝不降级)。坑:fixName 会把「短剧」「合集」当技术词剥掉(实测
+「红果短剧合集」→「红果」),标题含这些词的源基本已被源级跳过覆盖,但强制增强时需知。
+
+**选集名清洗**(与元数据命中无关,源允许即执行):vod_play_url 混淆段名(域名水印/
+超长无 CJK 串)能解析出集号时重写为「第N集」——先剥水印再 parseEpisode(防域名数字
+毒化集号,八期修复的括号外变体),解析不出保留原名;单段线路不动(电影正片无集序语义);
+线路可解析率<50% 整线跳过;**ID 永不动**(重写时 $ 及其后原样保留,丢了 ID 该集就播不了)。
+
+**应用字段**:vod_pic(经 /images 反代绝对化,豆瓣 Referer/TMDB 端点由 ImageController
+处理)/vod_content/vod_year/vod_actor/vod_director/vod_area/vod_lang/type_name。
+**永不覆写 vod_name**(历史/搜索连续性)与 vod_remarks**(承载更新进度)。
+
+**时延与缓存**:总预算 6s(CompletableFuture 超时原样返回,不缓存负结果);条目级
+正向 6h/负向 1h(负缓存防反复打配额),TMDB 标题匹配 24h;豆瓣本地查询不另缓存。
+T3(客户端侧)无此增强——T4 专属。

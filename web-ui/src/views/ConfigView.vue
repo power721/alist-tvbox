@@ -115,6 +115,23 @@
               />
               <span class="hint">开启后旧地址全部 404,只有下面的 T4 专用地址可用——Token 发给谁谁能用 T4,其他用户只能用 /sub。</span>
             </el-form-item>
+            <el-form-item label="详情增强">
+              <el-switch
+                v-model="t4DetailEnhance"
+                inline-prompt
+                active-text="开启"
+                inactive-text="关闭"
+                @change="updateT4DetailEnhance"
+              />
+              <span class="hint">第三方插件源详情页经豆瓣/TMDB 补海报、简介、演职员,并清洗混淆选集名;短剧/音乐源自动跳过(可在订阅源管理按源强制)。</span>
+            </el-form-item>
+            <el-form-item label="增强优先级" v-if="t4DetailEnhance">
+              <el-radio-group v-model="t4EnhancePriority" @change="updateT4EnhancePriority">
+                <el-radio label="douban">豆瓣优先</el-radio>
+                <el-radio label="tmdb">TMDB 优先</el-radio>
+              </el-radio-group>
+              <span class="hint">豆瓣优先用本地库零网络零配额,未命中自动回退另一源。</span>
+            </el-form-item>
             <el-form-item label="T4地址">
               <el-input v-model="t4Url" style="width: 300px" readonly/>
               <el-button class="hint" @click="copyT4Url">复制</el-button>
@@ -534,6 +551,8 @@ const {toClipboard} = clipBorad()
 const t4Enabled = ref(true)
 const t4ProxyMode = ref('all')
 const t4StandaloneOnly = ref(false)
+const t4DetailEnhance = ref(false)
+const t4EnhancePriority = ref('douban')
 const t4Token = ref('')
 const t4TokenInput = ref('')
 const t4Url = computed(() => currentUrl + '/t4/' + t4Token.value)
@@ -687,6 +706,18 @@ const updateT4ProxyMode = () => {
 
 const updateT4StandaloneOnly = () => {
   axios.post('/api/settings', {name: 't4_standalone_only', value: t4StandaloneOnly.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateT4DetailEnhance = () => {
+  axios.post('/api/settings', {name: 't4_detail_enhance', value: t4DetailEnhance.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateT4EnhancePriority = () => {
+  axios.post('/api/settings', {name: 't4_enhance_priority', value: t4EnhancePriority.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -939,6 +970,8 @@ onMounted(() => {
     t4Enabled.value = data.t4_enabled !== 'false'
     t4ProxyMode.value = data.t4_proxy_mode === 'direct' ? 'direct' : 'all'
     t4StandaloneOnly.value = data.t4_standalone_only === 'true'
+    t4DetailEnhance.value = data.t4_detail_enhance === 'true'
+    t4EnhancePriority.value = data.t4_enhance_priority === 'tmdb' ? 'tmdb' : 'douban'
     t4Token.value = data.t4_token || ''
     t4TokenInput.value = t4Token.value
     apiClientId.value = data.open_api_client_id || ''

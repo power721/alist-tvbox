@@ -71,6 +71,7 @@ public class SubscriptionSourceService {
             String url,
             boolean enabled,
             boolean t4Visible,
+            Boolean detailEnhance,
             int sortOrder,
             Integer version,
             String extend,
@@ -82,8 +83,10 @@ public class SubscriptionSourceService {
     ) {
     }
 
-    /** t4Visible 可空 = 保持不变(QQ 扫码对话框等调用方只传 name/enabled/extend)。 */
-    public record ManagedSourceUpdate(String name, boolean enabled, Boolean t4Visible, String extend) {
+    /** t4Visible 可空 = 保持不变(QQ 扫码对话框等调用方只传 name/enabled/extend)。
+     *  detailEnhance 三态字符串:"on"=强制增强 / "off"=永不增强 / "default"=跟随全局+自动检测;null=保持不变
+     *  (用字符串而非 Boolean:显式恢复默认须与「未提供」区分,null 无法同时表达两者)。 */
+    public record ManagedSourceUpdate(String name, boolean enabled, Boolean t4Visible, String detailEnhance, String extend) {
     }
 
     public record SubscriptionSourceRef(String id, boolean builtin, String siteKey, String name, Plugin plugin) {
@@ -179,6 +182,14 @@ public class SubscriptionSourceService {
         plugin.setEnabled(update.enabled());
         if (update.t4Visible() != null) {
             plugin.setT4Visible(update.t4Visible());
+        }
+        // 详情增强三态:on/off/default;null=保持不变(仅改启用/T4 的调用方不受影响);内置源不走插件五动作,无此字段
+        if (update.detailEnhance() != null) {
+            plugin.setDetailEnhance(switch (update.detailEnhance()) {
+                case "on" -> Boolean.TRUE;
+                case "off" -> Boolean.FALSE;
+                default -> null;
+            });
         }
         plugin.setExtend(StringUtils.trimToEmpty(update.extend()));
         pluginRepository.save(plugin);
@@ -309,6 +320,7 @@ public class SubscriptionSourceService {
                 "",
                 state == null || state.getEnabled() == null || state.getEnabled(),
                 state == null || state.getT4Visible() == null || state.getT4Visible(),
+                null,
                 state == null || state.getSortOrder() == null || state.getSortOrder() < 1 ? definition.defaultSortOrder() : state.getSortOrder(),
                 null,
                 StringUtils.defaultString(state == null ? null : state.getExtend()),
@@ -342,6 +354,7 @@ public class SubscriptionSourceService {
                 plugin.getUrl(),
                 plugin.isEnabled(),
                 plugin.isT4Visible(),
+                plugin.getDetailEnhance(),
                 plugin.getSortOrder(),
                 plugin.getVersion(),
                 StringUtils.defaultString(plugin.getExtend()),

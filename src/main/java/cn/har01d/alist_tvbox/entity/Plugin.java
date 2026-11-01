@@ -39,6 +39,10 @@ public class Plugin {
     @Column(name = "t4_visible", nullable = false)
     private boolean t4Visible = true;
 
+    /** T4 详情增强三态(NULL=跟随全局开关+短剧/音乐源自动检测;TRUE=强制增强;FALSE=永不增强)。 */
+    @Column(name = "detail_enhance")
+    private Boolean detailEnhance;
+
     @Column(name = "sort_order")
     private Integer sortOrder;
 

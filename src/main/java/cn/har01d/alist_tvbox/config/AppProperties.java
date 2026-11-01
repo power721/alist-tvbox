@@ -61,6 +61,11 @@ public class AppProperties {
     // (/t4/{vod token}/{订阅号}、/t4/{订阅号} 及其五动作/CENC 面)全部 404,
     // T4 只经 /t4/{t4_token} 独立地址开放——发 token 的少数人可用,其余用户只能 /sub
     private boolean t4StandaloneOnly;
+    // T4 第三方插件源详情增强(Setting 键 t4_detail_enhance,默认关):detail 响应套豆瓣/TMDB 元数据
+    private boolean t4DetailEnhance;
+    // 详情增强数据源优先级(Setting 键 t4_enhance_priority):douban=豆瓣优先(默认,本地库零网络)/
+    // tmdb=TMDB 优先;首选 miss 自动回退另一源,命中方全套字段不混拼
+    private String t4EnhancePriority = "douban";
     private boolean playbackSyncEnabled = false;
     // 同步分区粒度:uid(不分桶)/ token(按 vod token)/ subscription(按 vod token/id)
     private String playbackSyncScope = "token";

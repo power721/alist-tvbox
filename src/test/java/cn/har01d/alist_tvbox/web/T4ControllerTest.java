@@ -74,6 +74,8 @@ class T4ControllerTest {
     private cn.har01d.alist_tvbox.service.PluginWorkerService pluginWorkerService;
     @Mock
     private cn.har01d.alist_tvbox.entity.PluginRepository pluginRepository;
+    @Mock
+    private cn.har01d.alist_tvbox.service.T4DetailEnhancer t4DetailEnhancer;
 
     private T4Controller controller;
     private AppProperties appProperties;
@@ -86,7 +88,7 @@ class T4ControllerTest {
         controller = new T4Controller(subscriptionService, appProperties, tvBoxController, pianDanController,
                 mediaLibraryController, biliBiliController, embyController, jellyfinController,
                 feiniuController, liveController, telegramController, remoteSearchController,
-                playController, pluginWorkerService, pluginRepository, new ObjectMapper());
+                playController, pluginWorkerService, pluginRepository, new ObjectMapper(), t4DetailEnhancer);
         // vod/cenc 入口的 T4 专用 token 换算:默认回显(未命中),个别用例按需覆写
         lenient().when(subscriptionService.resolveT4Token(anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
