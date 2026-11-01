@@ -227,7 +227,8 @@ public class T4Controller {
         if (StringUtils.isNotBlank(play)) {
             method = "play";
             params.put("play", play);
-            // 红果密文流等需服务端解密的场景:worker 把 #hg-cenc= URL 改写为此桥下地址
+            // 红果密文流等需服务端解密的场景:worker 把 #hg-cenc= URL 改写为此桥下地址;
+            // 自定义 raw 插件自起的 127.0.0.1 流代理(hgtv.py 类)由 worker 改写为 /lp/{port}/ 桥地址
             // (嵌 pathToken:T4 专用 token 形态下桥地址仍是 T4 面,不泄漏 vod token)
             params.put("proxy_base", subscriptionService.readHostAddress("/t4cenc/" + pathToken + "/" + site));
         } else if (StringUtils.isNotBlank(ids)) {

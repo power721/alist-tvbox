@@ -172,6 +172,23 @@ local_proxy_config 与 preheatUrl(设备端专属字段),播放出 `/p` 服务�
 回收时 CENC 会话随进程消亡,播放中会话有流量不受影响(60s 读超时兜底)。
 桥查找键与 pluginVod 注册 worker 的键严格同源:URL 路径段原样透传,勿补 csp_ 前缀。
 
+### 爬虫自起 loopback 服务的 /lp 反代(自定义 .py 插件)
+
+自定义上传的 raw 插件(plugins/ 文件夹的 .py,如 hgtv.py)会在 playerContent 里
+自起 127.0.0.1 流式代理并返回其地址——T3 爬虫在客户端本机跑该地址可达,T4 爬虫在
+服务端 worker 进程里跑,地址指向服务器 loopback,客户端必然连接失败(2026-11 #T4
+自定义爬虫无法播放)。链路(全在 t4worker.py,Java 桥面复用 /t4cenc 路径透传):
+
+1. worker 装载爬虫前 patch `socketserver.TCPServer.server_bind`,记录本进程绑定
+   loopback 的端口(爬虫自起的 HTTP 服务全被记录,含 hgtv 的 10010-10030);
+2. play 后处理:结果 url 为 `http://127.0.0.1:{已记录端口}/…` 时改写为
+   `proxy_base + /lp/{port}/{path}`,与 `#hg-cenc=` → `/cenc/` 同构;
+3. worker 本地服务(CENC 同一端口)新增 `/lp/{port}/**` 路由反代回爬虫自己的服务,
+   Range/HEAD 透传、流式拷贝;客户端拉 `/t4cenc/{token}/{site}/lp/{port}/…`。
+
+端口限定 server_bind 记录集:指向本机其它端口(未记录)的 URL 原样透出,不借 worker
+桥面代理任意本机端口(无 SSRF 面扩大);无 proxy_base(单测)原样透出。
+
 ## 源可见性与多入口分站点集
 
 ### 订阅白/黑名单(不同入口返回不同站点,复用 T3 机制)

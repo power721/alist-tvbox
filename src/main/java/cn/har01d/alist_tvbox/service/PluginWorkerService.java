@@ -159,7 +159,7 @@ public class PluginWorkerService {
     }
 
     /**
-     * 转发到指定插件 worker 内的本地 HTTP 服务(当前仅 CENC 解密代理):
+     * 转发到指定插件 worker 内的本地 HTTP 服务(CENC 解密代理 /cenc + 爬虫自起服务反代 /lp/{port}):
      * 目标 http://127.0.0.1:{workerPort}{pathAndQuery},Range 头透传,响应流式拷贝。
      */
     public void forward(String siteKey, String pathAndQuery,

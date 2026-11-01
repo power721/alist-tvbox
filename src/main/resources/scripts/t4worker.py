@@ -20,9 +20,12 @@ import contextlib
 import json
 import os
 import secrets
+import socketserver
 import sys
 import threading
 import types
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
@@ -48,11 +51,38 @@ sys.modules["base.spider"] = _base_spider
 _spider = None
 _category_filter_json = False
 
-# ---- CENC 解密代理(红果密文流):会话表 + lazy 本地 HTTP 服务,Java 侧 /t4cenc 桥转发 ----
+# ---- worker 本地 HTTP 服务:CENC 解密代理(/cenc)+ 爬虫自起服务反代(/lp),Java 侧 /t4cenc 桥转发 ----
 _CENC_CHUNK = 256 * 1024
 _cenc_sessions = {}
 _cenc_server = None
 _cenc_lock = threading.Lock()
+
+# ---- 爬虫自起的 loopback 服务(自定义 raw 插件流代理):端口记录 + /lp 反代 ----
+# 自定义上传的 .py 插件(如 hgtv.py)会在 playerContent 里自起 127.0.0.1 流式代理,
+# 返回的 URL 在 T4 下指向服务端 loopback,客户端不可达。装载爬虫前 patch
+# TCPServer.server_bind 记录本进程绑定 loopback 的端口,play 时把指向这些端口的
+# URL 改写为 /lp/{port}/ 桥地址,由 worker 本地服务反代回爬虫自己的服务。
+_local_ports = set()
+_local_ports_lock = threading.Lock()
+
+
+def _install_local_port_probe():
+    original = socketserver.TCPServer.server_bind
+
+    def server_bind(self):
+        original(self)
+        try:
+            host, port = self.server_address[:2]
+            if str(host) in ("127.0.0.1", "localhost", "::1", "") and port:
+                with _local_ports_lock:
+                    _local_ports.add(int(port))
+        except Exception:
+            pass
+
+    socketserver.TCPServer.server_bind = server_bind
+
+
+_install_local_port_probe()
 
 
 def _cenc_get(url, headers=None, timeout=20.0, follow_redirects=True):
@@ -83,7 +113,11 @@ class _CencHandler(BaseHTTPRequestHandler):
         self._serve(head_only=False)
 
     def _serve(self, head_only):
-        token = urlparse(self.path).path
+        raw_path = urlparse(self.path).path
+        if raw_path.startswith("/lp/"):
+            self._proxy_local(head_only)
+            return
+        token = raw_path
         if not token.startswith("/cenc/"):
             self._fail(404, "not cenc path")
             return
@@ -132,6 +166,53 @@ class _CencHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def _proxy_local(self, head_only):
+        # /lp/{port}/{rest} → http://127.0.0.1:{port}/{rest}(爬虫自起服务,Range/HEAD 透传流式拷贝)。
+        # 端口限定 server_bind 记录集:未记录端口一律 404,不扩 SSRF 面。
+        rest = self.path[len("/lp/"):]
+        port_text = rest.split("/", 1)[0]
+        if not port_text.isdigit():
+            self._fail(404, "bad lp port")
+            return
+        port = int(port_text)
+        with _local_ports_lock:
+            if port not in _local_ports:
+                self._fail(404, "unknown lp port")
+                return
+        tail = rest[len(port_text) + 1:] if len(rest) > len(port_text) else ""
+        target = "http://127.0.0.1:%d/%s" % (port, tail)
+        headers = {"Connection": "close"}
+        range_header = self.headers.get("Range")
+        if range_header:
+            headers["Range"] = range_header
+        request = urllib.request.Request(
+            target, headers=headers, method="HEAD" if head_only else "GET")
+        try:
+            upstream = urllib.request.urlopen(request, timeout=60)
+        except urllib.error.HTTPError as err:
+            upstream = err  # 4xx/5xx(含爬虫侧 416)同样透传给播放器
+        except Exception as exc:
+            self._fail(502, "lp upstream: %s" % exc)
+            return
+        with upstream:
+            self.send_response(upstream.status)
+            for name, value in upstream.getheaders():
+                if name.lower() in ("connection", "transfer-encoding", "content-encoding", "server", "date"):
+                    continue
+                self.send_header(name, value)
+            self.send_header("Connection", "close")
+            self.end_headers()
+            if head_only:
+                return
+            try:
+                while True:
+                    chunk = upstream.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
 
 def _parse_range(range_header, total):
@@ -182,15 +263,53 @@ def _rewrite_cenc_play(result, proxy_base):
     headers = result.get("header") if isinstance(result.get("header"), dict) else {}
     _ensure_cenc_server()
     token = secrets.token_urlsafe(16)
-    _cenc_sessions[token] = CencRangeReader(upstream, headers, spade_a, get=_cenc_get)
+    # 注册即后台预热索引(与播放器启动重叠), 首请求命中热索引
+    _cenc_sessions[token] = CencRangeReader(upstream, headers, spade_a, get=_cenc_get).warmup()
     result["url"] = proxy_base + "/cenc/" + token + ".mp4"
     audio = parse_cenc_audio_fragment(url)
     if audio is not None:
         audio_url, audio_spade = audio
         audio_token = secrets.token_urlsafe(16)
         _cenc_sessions[audio_token] = CencRangeReader(
-            audio_url, headers, audio_spade or spade_a, get=_cenc_get)
+            audio_url, headers, audio_spade or spade_a, get=_cenc_get).warmup()
         result["audio_url"] = proxy_base + "/cenc/" + audio_token + ".m4a"
+    return result
+
+
+def _rewrite_local_play(result, proxy_base):
+    """play 结果 url 指向本 worker 内自起服务的 loopback 端口 → 改写为 /lp/ 桥地址。
+
+    自定义 raw 插件(如上传到 plugins/ 的 hgtv.py)自起的流代理只在本进程 loopback
+    可达,URL 原样下发 T4 客户端必然连接失败。端口必须是 server_bind 记录集内的
+    (本进程自己绑定的服务);指向本机其它端口的原样透出(客户端仍不可达,但不借
+    worker 桥面代理任意本机端口)。无 proxy_base(单测)保持原样。
+    """
+    if not proxy_base:
+        return result
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except ValueError:
+            return result
+    if not isinstance(result, dict):
+        return result
+    url = str(result.get("url") or "")
+    if not url.startswith(("http://127.0.0.1:", "http://localhost:")):
+        return result
+    parsed = urlparse(url)
+    try:
+        port = int(parsed.port)
+    except (TypeError, ValueError):
+        return result
+    with _local_ports_lock:
+        known = port in _local_ports
+    if not known:
+        return result
+    _ensure_cenc_server()
+    tail = parsed.path.lstrip("/")
+    if parsed.query:
+        tail += "?" + parsed.query
+    result["url"] = "%s/lp/%d/%s" % (proxy_base, port, tail)
     return result
 
 
@@ -309,7 +428,7 @@ def handle(method, params):
     if method == "ping":
         return {"status": "ready"}
     if method == "port":
-        # CENC 本地代理端口(未启动=0);Java 侧 /t4cenc 桥转发目标
+        # worker 本地服务端口(未启动=0);Java 侧 /t4cenc 桥转发目标(/cenc 解密 + /lp 爬虫自起服务反代)
         if _cenc_server is None:
             return 0
         return _cenc_server.server_address[1]
@@ -339,9 +458,9 @@ def handle(method, params):
                            str(params.get("pg") or "1"))
     if method == "play":
         with _quiet_stdout():
-            return _rewrite_cenc_play(
+            return _rewrite_local_play(_rewrite_cenc_play(
                 _invoke("playerContent", str(params.get("flag") or ""), str(params.get("play") or ""), []),
-                str(params.get("proxy_base") or ""))
+                str(params.get("proxy_base") or "")), str(params.get("proxy_base") or ""))
     if method == "action":
         with _quiet_stdout():
             return _invoke("action", str(params.get("do") or ""))

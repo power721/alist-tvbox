@@ -160,6 +160,80 @@ class PluginWorkerServiceTest {
         service.shutdown();
     }
 
+    @Test
+    void selfHostedLoopbackPlayRewritesToLpBridge() throws Exception {
+        // 自定义 raw 插件(上传 plugins/ 的 hgtv.py 类)自起 127.0.0.1 流代理:play 结果 URL 在 T4 下
+        // 指向服务端 loopback 客户端不可达,worker 须改写为 /lp/{port}/ 桥地址并可经 forward 反代拉流
+        PluginWorkerService service = new PluginWorkerService(objectMapper);
+        assumeTrue(service.isAvailable(), "python3 not available, skip");
+        Path spider = Files.createTempFile("t4-lp-spider", ".py");
+        spider.toFile().deleteOnExit();
+        Files.writeString(spider, LP_SMOKE_SPIDER);
+        String extend = Base64.getEncoder().encodeToString(objectMapper.writeValueAsBytes(Map.of(
+                "source", spider.toString(), "raw", true, "api", "http://localhost:4567")));
+
+        JsonNode play = service.call(
+                "lp", extend, "play", Map.of("play", "p1", "proxy_base", "http://atv.test/t4cenc/tok/lp"));
+        String url = play.path("url").asText();
+        assertTrue(url.startsWith("http://atv.test/t4cenc/tok/lp/lp/"), url);
+        assertTrue(url.endsWith("/hg.mp4?vid=7"), url);
+
+        String pathAndQuery = url.substring("http://atv.test/t4cenc/tok/lp".length());
+        var request = new org.springframework.mock.web.MockHttpServletRequest("GET", pathAndQuery);
+        request.addHeader("Range", "bytes=0-99");
+        var response = new org.springframework.mock.web.MockHttpServletResponse();
+        service.forward("lp", pathAndQuery, request, response);
+
+        assertEquals(206, response.getStatus());
+        byte[] body = response.getContentAsByteArray();
+        assertEquals(100, body.length);
+        for (int i = 0; i < body.length; i++) {
+            assertEquals((i * 3 + 5) & 0xFF, body[i] & 0xFF, "byte " + i);
+        }
+        service.shutdown();
+    }
+
+    /** 自起 loopback 服务的假插件(playerContent 返回本进程 HTTP 服务地址)。 */
+    private static final String LP_SMOKE_SPIDER = """
+            # -*- coding: utf-8 -*-
+            import json, threading
+            from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+            MEDIA = bytes((i * 3 + 5) & 0xFF for i in range(1024))
+
+            class _Up(BaseHTTPRequestHandler):
+                protocol_version = "HTTP/1.1"
+                def log_message(self, fmt, *args):
+                    pass
+                def do_GET(self):
+                    rng = self.headers.get("Range") or ""
+                    start, end = (0, len(MEDIA) - 1)
+                    if rng:
+                        left, _, right = rng[6:].partition("-")
+                        start = int(left)
+                        end = int(right) if right else len(MEDIA) - 1
+                    chunk = MEDIA[start:end + 1]
+                    self.send_response(206 if rng else 200)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Content-Length", str(len(chunk)))
+                    if rng:
+                        self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, len(MEDIA)))
+                    self.end_headers()
+                    self.wfile.write(chunk)
+
+            _server = ThreadingHTTPServer(("127.0.0.1", 0), _Up)
+            threading.Thread(target=_server.serve_forever, daemon=True).start()
+            LOCAL = "http://127.0.0.1:%d/hg.mp4?vid=7" % _server.server_address[1]
+
+            class Spider:
+                def init(self, extend):
+                    return ""
+                def getName(self):
+                    return "lp-smoke"
+                def playerContent(self, flag, id, vipFlags):
+                    return json.dumps({"parse": 0, "jx": 0, "url": LOCAL}, ensure_ascii=False)
+            """;
+
     /** 合成整段 CENC MP4(单 encv trak,确定性 key 与明文)+ 本地 Range 上游 + playerContent 出密文片段 URL。 */
     private static final String CENC_SMOKE_SPIDER = """
             # -*- coding: utf-8 -*-
