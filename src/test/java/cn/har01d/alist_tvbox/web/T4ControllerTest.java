@@ -198,6 +198,30 @@ class T4ControllerTest {
     }
 
     @Test
+    void titleCacheMatchesUrlEncodedShareLink() throws Exception {
+        // 频道列表 vod_id 是 encodeUrl 形态(TelegramService.toMovieDetail),壳子回传 ids 经
+        // Spring 参数解码已是裸链接——titleCache key 两侧形态不统一则永不命中,详情退化为用
+        // 挂载目录名(防审核拆字名如「【X】⺌丨Cheng丨丶艮丨Fang」)匹配豆瓣,元数据必失
+        String encoded = "https%3A%2F%2Fpan.baidu.com%2Fs%2F1xIAUak0UwamXryQ9qm9wFg%3Fpwd%3D1030";
+        String decoded = "https://pan.baidu.com/s/1xIAUak0UwamXryQ9qm9wFg?pwd=1030";
+        MovieList categoryResult = new MovieList();
+        MovieDetail item = new MovieDetail();
+        item.setVod_id(encoded);
+        item.setVod_name("小城良方");
+        categoryResult.setList(List.of(item));
+        when(telegramController.browseTgSearch(eq(TOKEN), isNull(), eq("channel1"), isNull(),
+                isNull(), isNull(), eq(1), eq(30))).thenReturn(categoryResult);
+        when(telegramController.browseTgSearch(eq(TOKEN), eq(decoded), isNull(), isNull(),
+                isNull(), eq("小城良方"), eq(1), eq(30))).thenReturn(new MovieList());
+
+        controller.vod(TOKEN, "csp_TgChannel", "channel1", null, null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_TgChannel", null, decoded, null, null, null, null, null, request, response);
+
+        verify(telegramController).browseTgSearch(eq(TOKEN), eq(decoded), isNull(), isNull(),
+                isNull(), eq("小城良方"), eq(1), eq(30));
+    }
+
+    @Test
     void homeMergesCategoriesWithRecommendList() throws Exception {
         CategoryList categories = new CategoryList();
         when(tvBoxController.api(eq(TOKEN), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(),

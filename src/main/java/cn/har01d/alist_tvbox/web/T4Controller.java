@@ -400,7 +400,7 @@ public class T4Controller {
     private Object detail(String token, String site, String ids, HttpServletRequest request,
                           HttpServletResponse response) throws IOException {
         if (TITLE_SITES.contains(site)) {
-            String title = titleCache.getIfPresent(cacheKey(site, ids));
+            String title = titleCache.getIfPresent(cacheKey(site, normalizeVodId(ids)));
             String keyword = keywordCache.getIfPresent(cacheKey(token, site));
             return switch (site) {
                 case "csp_TgDouBan" ->
@@ -553,11 +553,28 @@ public class T4Controller {
         if (list != null) {
             for (MovieDetail item : list) {
                 if (StringUtils.isNotBlank(item.getVod_id()) && StringUtils.isNotBlank(item.getVod_name())) {
-                    titleCache.put(cacheKey(site, item.getVod_id()), item.getVod_name());
+                    titleCache.put(cacheKey(site, normalizeVodId(item.getVod_id())), item.getVod_name());
                 }
             }
         }
         return result;
+    }
+
+    /**
+     * titleCache key 规范化:列表侧 vod_id 是 encodeUrl 形态(TelegramService.toMovieDetail),
+     * 详情侧 ids 经 Spring 参数解码已是裸链接——不统一形态则永不命中,详情退化为用挂载目录名
+     * (防审核拆字名如「【X】⺌丨Cheng丨丶艮丨Fang」)匹配豆瓣,元数据必失。两侧统一解码后作 key。
+     * 仅含 '%' 才尝试解码:裸链接不含 % 直接原样,URLDecoder 的 '+'→空格副作用不会误伤。
+     */
+    private static String normalizeVodId(String id) {
+        if (id == null || id.indexOf('%') < 0) {
+            return id;
+        }
+        try {
+            return java.net.URLDecoder.decode(id, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return id;
+        }
     }
 
     private Object mergeHomeVideo(Object home, Object homeVideo) {
