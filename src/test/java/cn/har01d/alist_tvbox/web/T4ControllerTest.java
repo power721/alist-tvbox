@@ -222,6 +222,31 @@ class T4ControllerTest {
     }
 
     @Test
+    void titleCacheCapturesHomeRecommendCardsBeforeMerge() throws Exception {
+        // home 推荐(t=0)是用户从首页卡片直点详情的唯一入口:homeBody/homeVideoBody 须在
+        // mergeHomeVideo 合并成 Map 前分别捕获——Map 形态 captureTitles 认不出,第一跳必 miss
+        String encoded = "https%3A%2F%2Fpan.baidu.com%2Fs%2F1yMBzP9kR4j3_tXEptNd3Uw%3Fpwd%3Dyptv";
+        String decoded = "https://pan.baidu.com/s/1yMBzP9kR4j3_tXEptNd3Uw?pwd=yptv";
+        when(telegramController.browseTgSearch(eq(TOKEN), isNull(), isNull(), isNull(),
+                isNull(), isNull(), eq(1), eq(30))).thenReturn(new CategoryList());
+        MovieList recommend = new MovieList();
+        MovieDetail card = new MovieDetail();
+        card.setVod_id(encoded);
+        card.setVod_name("尚公主");
+        recommend.setList(List.of(card));
+        when(telegramController.browseTgSearch(eq(TOKEN), isNull(), eq("0"), isNull(),
+                isNull(), isNull(), eq(1), eq(30))).thenReturn(recommend);
+        when(telegramController.browseTgSearch(eq(TOKEN), eq(decoded), isNull(), isNull(),
+                isNull(), eq("尚公主"), eq(1), eq(30))).thenReturn(new MovieList());
+
+        controller.vod(TOKEN, "csp_TgChannel", null, null, null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_TgChannel", null, decoded, null, null, null, null, null, request, response);
+
+        verify(telegramController).browseTgSearch(eq(TOKEN), eq(decoded), isNull(), isNull(),
+                isNull(), eq("尚公主"), eq(1), eq(30));
+    }
+
+    @Test
     void homeMergesCategoriesWithRecommendList() throws Exception {
         CategoryList categories = new CategoryList();
         when(tvBoxController.api(eq(TOKEN), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(),

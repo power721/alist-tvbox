@@ -325,6 +325,11 @@ public class T4Controller {
             throws IOException {
         Object home = homeBody(token, site, request, response);
         Object homeVideo = homeVideoBody(token, site, request, response);
+        // TG/盘搜族:home/video 两段须在合并成 Map 前分别捕获——mergeHomeVideo 产出 Map 形态,
+        // captureTitles 只认 MovieList/CategoryList;用户从 home 推荐卡片直点详情的第一跳
+        // 没有 ?t= 分类请求,不在这里捕获 titleCache 就永远 miss(4567 实测三连环第三环)
+        home = captureTitles(site, home);
+        homeVideo = captureTitles(site, homeVideo);
         return mergeHomeVideo(home, homeVideo);
     }
 
@@ -553,7 +558,9 @@ public class T4Controller {
         if (list != null) {
             for (MovieDetail item : list) {
                 if (StringUtils.isNotBlank(item.getVod_id()) && StringUtils.isNotBlank(item.getVod_name())) {
-                    titleCache.put(cacheKey(site, normalizeVodId(item.getVod_id())), item.getVod_name());
+                    // putIfAbsent:分类/搜索的正确标题先到即冻结;detail 响应的 vod_name 可能是
+                    // 挂载目录名(拆字混淆),不得反向覆盖列表捕获的正确标题
+                    titleCache.putIfAbsent(cacheKey(site, normalizeVodId(item.getVod_id())), item.getVod_name());
                 }
             }
         }
