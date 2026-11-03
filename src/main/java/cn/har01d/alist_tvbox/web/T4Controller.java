@@ -139,6 +139,13 @@ public class T4Controller {
         return "direct".equals(appProperties.getT4ProxyMode()) ? "t4d" : "t4";
     }
 
+    /** T4 网盘族播放身份(经 /play type 参透传,TvBoxService.isT4Play 据此判定):t4=全代理
+     *  (直连须带 Cookie 的夸克/UC 强制 /p,Cookie/multiUrls 不下发);t4-direct=直连优先策略
+     *  (t4_proxy_mode=direct):无凭证屏障的盘直链直出省带宽。与 B站 t4/t4d、直播 client 同口径。 */
+    private String t4DrivePlayType() {
+        return "direct".equals(appProperties.getT4ProxyMode()) ? "t4-direct" : "t4";
+    }
+
     /** T4 直播详情 client:全代理=web(服务端代理地址形态);直连优先=null(裸直链/dual 双线路)。 */
     private String t4LiveClient() {
         return "direct".equals(appProperties.getT4ProxyMode()) ? null : "web";
@@ -476,9 +483,14 @@ public class T4Controller {
 
     private Object player(String token, String site, String play, HttpServletRequest request) throws IOException {
         return switch (site) {
-            case "csp_AList", "csp_XiaoYa", "csp_Media", "csp_TgDouBan", "csp_TgChannel", "csp_TgWeb",
-                 "csp_FishPanSou", "csp_FishPanSouGroup" ->
-                    playController.play(token, null, null, play, null, null, false, request);
+            // 网盘族(含追剧 msubep-/片单动作条目)须带 T4 播放身份(type 参,同插件源 t4_play_type 口径):
+            // 此前漏传 type,T4 独立 token(共享口径 uid=0)下 local proxy 未启用的盘会把夸克/UC Cookie
+            // 直接写进 header 下发给 T4 壳子,含各账号 Cookie 的 multiUrls 也照发(凭证泄漏);
+            // 且网盘族代理策略不受 t4_proxy_mode 管控——全代理(all)时凭证屏障盘强制 /p,
+            // 直连优先(direct)时无屏障盘(百度 netdisk UA/夸克免转存/阿里/115/123)直链直出省带宽
+            case "csp_AList", "csp_XiaoYa", "csp_PianDan", "csp_Media", "csp_TgDouBan", "csp_TgChannel",
+                 "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup" ->
+                    playController.play(token, null, null, play, null, t4DrivePlayType(), false, request);
             // B站条目 id 走 bvid 参位;动作前缀(bili-like- 等)由 /play 的 bvid→id 兜底归位。
             // X-CLIENT 标记 t4/t4d:BiliBiliService 据此出服务端代理地址形态(t4)或
             // 直连形态(t4d,原始 durl+脱敏头,由 t4_proxy_mode 直连优先策略触发)
