@@ -214,6 +214,8 @@ class DiagnosticsServiceTest {
                 mock(org.springframework.beans.factory.ObjectProvider.class);
         java.util.Map<String, String> settings = new java.util.HashMap<>();
         settings.put("quark_to_123", "true");
+        settings.put("ali_to_115", "true");
+        settings.put("ali_to_115_fallback", "false");
         settings.put("use_quark_tv", "true");
         settings.put("quark_multi_account_proxy", "true");
         settings.put("delete_delay_time", "300");
@@ -264,6 +266,7 @@ class DiagnosticsServiceTest {
         assertFalse(text.contains("SECRETTMDBKEY"), "TMDB Key 值绝不进报告");
         // 网盘区块:开关/延时/离线下载/代理驱动名(UI 原名口径)
         assertTrue(text.contains("夸克→123"));
+        assertTrue(text.contains("秒传115失败回退阿里: 关"));
         assertTrue(text.contains("夸克/UC分享用TV帐号: 开"));
         assertTrue(text.contains("夸父逐日: 开"));
         assertTrue(text.contains("文件删除延时: 300 秒"));

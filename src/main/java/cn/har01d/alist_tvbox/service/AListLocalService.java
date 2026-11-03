@@ -123,6 +123,8 @@ public class AListLocalService {
         setSetting("delete_delay_time", time, "number");
         String aliTo115 = settingRepository.findById("ali_to_115").map(Setting::getValue).orElse("false");
         setSetting("ali_to_115", aliTo115, "bool");
+        String aliTo115Fallback = settingRepository.findById("ali_to_115_fallback").map(Setting::getValue).orElse("true");
+        setSetting("ali_to_115_fallback", aliTo115Fallback, "bool");
         String aliTo123 = settingRepository.findById("ali_to_123").map(Setting::getValue).orElse("false");
         setSetting("ali_to_123", aliTo123, "bool");
         String pan115To123 = settingRepository.findById("115_to_123").map(Setting::getValue).orElse("false");

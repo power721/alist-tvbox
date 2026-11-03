@@ -159,6 +159,9 @@ public class DiagnosticsService {
                 }
             }
             section.add("跨盘秒传", rapid.isEmpty() ? "全关" : String.join(", ", rapid));
+            if (settingBool("ali_to_115", false)) {
+                section.add("秒传115失败回退阿里", onOff(settingBool("ali_to_115_fallback", true)));
+            }
 
             List<String> direct = new ArrayList<>();
             if (settingBool("quark_share_direct", true)) {

@@ -330,6 +330,10 @@
           <el-switch v-model="aliTo115" inline-prompt active-text="开启" inactive-text="关闭" @change="updateAliTo115"/>
           <span class="hint">按 MD5 秒传到 115,失败回退阿里直链</span>
         </el-form-item>
+        <el-form-item label="115失败回退阿里">
+          <el-switch v-model="aliTo115Fallback" inline-prompt active-text="开启" inactive-text="关闭" @change="updateAliTo115Fallback"/>
+          <span class="hint">秒传/取链失败时的回退;关闭则直接报错,便于重新尝试115(默认开)</span>
+        </el-form-item>
         <el-form-item label="开启阿里秒传123">
           <el-switch v-model="aliTo123" inline-prompt active-text="开启" inactive-text="关闭" @change="updateAliTo123"/>
           <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退阿里直链</span>
@@ -739,6 +743,7 @@ const quarkShareDirect = ref(true)
 const ucShareDirect = ref(true)
 // 网盘账号配置 · 秒传到 123
 const aliTo115 = ref(false)
+const aliTo115Fallback = ref(true)
 const aliTo123 = ref(false)
 const pan115To123 = ref(false)
 const guangyaTo123 = ref(false)
@@ -994,6 +999,7 @@ const loadDriverPlaySettings = async () => {
   quarkShareDirect.value = data.quark_share_direct !== 'false'
   ucShareDirect.value = data.uc_share_direct !== 'false'
   aliTo115.value = data.ali_to_115 === 'true'
+  aliTo115Fallback.value = data.ali_to_115_fallback !== 'false'
   aliTo123.value = data.ali_to_123 === 'true'
   pan115To123.value = data['115_to_123'] === 'true'
   guangyaTo123.value = data.guangya_to_123 === 'true'
@@ -1057,6 +1063,11 @@ const updateUcShareDirect = () => {
 }
 const updateAliTo115 = () => {
   axios.post('/api/settings', {name: 'ali_to_115', value: aliTo115.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+const updateAliTo115Fallback = () => {
+  axios.post('/api/settings', {name: 'ali_to_115_fallback', value: aliTo115Fallback.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }

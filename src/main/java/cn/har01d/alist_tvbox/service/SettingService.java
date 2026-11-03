@@ -739,6 +739,9 @@ public class SettingService {
         if ("ali_to_115".equals(setting.getName())) {
             aListLocalService.updateSetting("ali_to_115", setting.getValue(), "bool");
         }
+        if ("ali_to_115_fallback".equals(setting.getName())) {
+            aListLocalService.updateSetting("ali_to_115_fallback", setting.getValue(), "bool");
+        }
         if ("ali_to_123".equals(setting.getName())) {
             aListLocalService.updateSetting("ali_to_123", setting.getValue(), "bool");
         }
