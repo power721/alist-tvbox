@@ -43,6 +43,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -72,6 +73,11 @@ public class EmbyService {
     private final AppProperties appProperties;
     private final ProxyService proxyService;
     private final Cache<Integer, EmbyInfo> cache = Caffeine.newBuilder().build();
+    // route case of the episodes endpoint varies across servers: some only accept the
+    // lower-case form (#950, emos.lol), case-sensitive servers only the official /Shows/ form (#1089)
+    private static final String SHOWS_PATH_LOWER = "/shows/";
+    private static final String SHOWS_PATH_UPPER = "/Shows/";
+    private final Cache<Integer, String> showsPathCache = Caffeine.newBuilder().build();
     private final OkHttpClient okHttpClient = new OkHttpClient();
 
     private final List<FilterValue> filters = Arrays.asList(
@@ -364,9 +370,24 @@ public class EmbyService {
     private List<EmbyItem> getAll(Emby emby, EmbyInfo info, String sid) {
         HttpHeaders headers = setHeaders(emby, info);
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/shows/" + sid + "/Episodes";
-        var items = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
-        return items.getItems();
+        String path = showsPathCache.get(emby.getId(), k -> SHOWS_PATH_LOWER);
+        String url = emby.getUrl() + "/emby" + path + sid + "/Episodes";
+        try {
+            var items = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
+            return items.getItems();
+        } catch (HttpClientErrorException.NotFound e) {
+            String fallback = SHOWS_PATH_LOWER.equals(path) ? SHOWS_PATH_UPPER : SHOWS_PATH_LOWER;
+            log.warn("Episodes endpoint {} returned 404, retrying with {}", path, fallback);
+            url = emby.getUrl() + "/emby" + fallback + sid + "/Episodes";
+            try {
+                var items = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
+                showsPathCache.put(emby.getId(), fallback);
+                return items.getItems();
+            } catch (HttpClientErrorException.NotFound e2) {
+                showsPathCache.invalidate(emby.getId());
+                throw e;
+            }
+        }
     }
 
     public MovieList search(String wd) {

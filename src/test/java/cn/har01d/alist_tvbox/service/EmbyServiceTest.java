@@ -13,8 +13,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
@@ -23,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EmbyServiceTest {
     private final EmbyService embyService = new EmbyService(
@@ -102,5 +105,88 @@ class EmbyServiceTest {
         MovieDetail movie = ReflectionTestUtils.invokeMethod(embyService, "getMovieDetail", item, emby);
 
         assertThat(movie.getVod_remarks()).isEmpty();
+    }
+
+    private EmbyInfo buildInfo() {
+        EmbyInfo info = new EmbyInfo();
+        EmbyInfo.User user = new EmbyInfo.User();
+        user.setId("user-1");
+        info.setUser(user);
+        info.setAccessToken("token");
+        return info;
+    }
+
+    private Emby buildEmby() {
+        Emby emby = new Emby();
+        emby.setId(1);
+        emby.setName("Emby");
+        emby.setUrl("http://127.0.0.1:8096");
+        emby.setClientName("Yamby");
+        emby.setClientVersion("1.5.7.18");
+        emby.setDeviceName("AList TvBox");
+        emby.setDeviceId("device-1");
+        return emby;
+    }
+
+    @Test
+    void getAllShouldUseLowercaseShowsPathByDefault() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        ReflectionTestUtils.setField(embyService, "restTemplate", restTemplate);
+        EmbyItems items = new EmbyItems();
+        items.setItems(List.of());
+        Mockito.when(restTemplate.exchange(Mockito.anyString(), Mockito.eq(HttpMethod.GET), Mockito.any(), Mockito.eq(EmbyItems.class)))
+                .thenReturn(ResponseEntity.ok(items));
+
+        List<EmbyItem> result = ReflectionTestUtils.invokeMethod(embyService, "getAll", buildEmby(), buildInfo(), "series-1");
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(restTemplate).exchange(captor.capture(), Mockito.eq(HttpMethod.GET), Mockito.any(), Mockito.eq(EmbyItems.class));
+        assertThat(captor.getValue()).isEqualTo("http://127.0.0.1:8096/emby/shows/series-1/Episodes");
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getAllShouldFallBackToUppercaseShowsOn404AndRememberIt() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        ReflectionTestUtils.setField(embyService, "restTemplate", restTemplate);
+        EmbyItems items = new EmbyItems();
+        items.setItems(List.of());
+        HttpClientErrorException notFound =
+                HttpClientErrorException.NotFound.create(HttpStatus.NOT_FOUND, "Not Found", null, new byte[0], StandardCharsets.UTF_8);
+        Mockito.when(restTemplate.exchange(Mockito.contains("/emby/shows/"), Mockito.eq(HttpMethod.GET), Mockito.any(), Mockito.eq(EmbyItems.class)))
+                .thenThrow(notFound);
+        Mockito.when(restTemplate.exchange(Mockito.contains("/emby/Shows/"), Mockito.eq(HttpMethod.GET), Mockito.any(), Mockito.eq(EmbyItems.class)))
+                .thenReturn(ResponseEntity.ok(items));
+
+        Emby emby = buildEmby();
+        EmbyInfo info = buildInfo();
+
+        List<EmbyItem> first = ReflectionTestUtils.invokeMethod(embyService, "getAll", emby, info, "series-1");
+        assertThat(first).isEmpty();
+
+        // second call goes straight to the remembered upper-case form, no extra 404
+        Mockito.reset(restTemplate);
+        Mockito.when(restTemplate.exchange(Mockito.anyString(), Mockito.eq(HttpMethod.GET), Mockito.any(), Mockito.eq(EmbyItems.class)))
+                .thenReturn(ResponseEntity.ok(items));
+        ReflectionTestUtils.invokeMethod(embyService, "getAll", emby, info, "series-2");
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(restTemplate, Mockito.times(1)).exchange(captor.capture(), Mockito.eq(HttpMethod.GET), Mockito.any(), Mockito.eq(EmbyItems.class));
+        assertThat(captor.getValue()).isEqualTo("http://127.0.0.1:8096/emby/Shows/series-2/Episodes");
+    }
+
+    @Test
+    void getAllShouldThrowOriginal404WhenBothPathFormsFail() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        ReflectionTestUtils.setField(embyService, "restTemplate", restTemplate);
+        HttpClientErrorException notFound =
+                HttpClientErrorException.NotFound.create(HttpStatus.NOT_FOUND, "Not Found", null, new byte[0], StandardCharsets.UTF_8);
+        Mockito.when(restTemplate.exchange(Mockito.anyString(), Mockito.eq(HttpMethod.GET), Mockito.any(), Mockito.eq(EmbyItems.class)))
+                .thenThrow(notFound);
+
+        EmbyInfo info = buildInfo();
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(embyService, "getAll", buildEmby(), info, "bad-sid"))
+                .isInstanceOf(HttpClientErrorException.NotFound.class);
+        Mockito.verify(restTemplate, Mockito.times(2)).exchange(Mockito.anyString(), Mockito.eq(HttpMethod.GET), Mockito.any(), Mockito.eq(EmbyItems.class));
     }
 }
