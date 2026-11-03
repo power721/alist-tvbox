@@ -40,6 +40,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -209,19 +210,20 @@ public class AListLocalService {
     public void updateSetting(String key, String value, String type) {
         if (checkStatus() >= 2) {
             log.debug("update setting {}={}", key, value);
-            Map<String, Object> body = new HashMap<>();
-            body.put("key", key);
-            body.put("value", value);
-            body.put("type", type);
-            body.put("flag", 1);
-            body.put("group", 0);
-            body.put("help", "");
-            body.put("options", "");
+            // PowerList(OpenList 系)无 /setting/update 单条端点(仅 get/list/save/delete/default/
+            // reset_token),此前调 /update 恒 404——proxy_config 等同步从未写入过(4567 实测 PL 库无该行);
+            // 统一改走 /setting/save 数组体(gorm upsert by key + SettingCacheUpdate 失效缓存)
+            Map<String, Object> item = new HashMap<>();
+            item.put("key", key);
+            item.put("value", value);
+            item.put("type", type);
+            item.put("flag", 1);
+            item.put("group", 0);
             HttpHeaders headers = new HttpHeaders();
             Site site = siteRepository.findById(1).orElseThrow();
             headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-            SettingResponse response = restTemplate.postForObject("/api/admin/setting/update", entity, SettingResponse.class);
+            HttpEntity<List<Map<String, Object>>> entity = new HttpEntity<>(List.of(item), headers);
+            SettingResponse response = restTemplate.postForObject("/api/admin/setting/save", entity, SettingResponse.class);
             log.debug("update setting by API: {}", response);
         } else {
             setSetting(key, value, type);
@@ -242,6 +244,11 @@ public class AListLocalService {
                 for (Map.Entry<String, Object> entry : config.entrySet()) {
                     String driver = PROXY_DRIVER_NAMES.get(entry.getKey());
                     if (driver == null || !(entry.getValue() instanceof Map<?, ?> item)) {
+                        continue;
+                    }
+                    // 只同步启用(enabled)的盘:关掉的盘不下发并发参数,
+                    // PowerList 侧维持存储 addition 的驱动默认线程/分片
+                    if (item.get("enabled") instanceof Boolean enabled && !enabled) {
                         continue;
                     }
                     Map<String, Object> out = new HashMap<>();

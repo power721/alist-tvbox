@@ -169,4 +169,45 @@ class AListLocalServiceTest {
         assertEquals(200, result.getCode());
         assertEquals("ok", result.getData());
     }
+
+    @Test
+    void updateSettingShouldPostSaveArrayWhenAListReady() {
+        // PowerList(OpenList 系)只有 /setting/save(数组体),无 /setting/update——此前调
+        // /update 恒 404,proxy_config 等同步从未写入过(4567 实测 PL 库无该行)
+        Site site = new Site();
+        site.setId(1);
+        site.setToken("Bearer test-token");
+        SettingResponse settings = new SettingResponse();
+        settings.setCode(200);
+        when(siteRepository.findById(1)).thenReturn(Optional.of(site));
+        doReturn(ResponseEntity.ok(settings))
+                .when(restTemplate)
+                .getForEntity("/api/public/settings", SettingResponse.class);
+        when(restTemplate.postForObject(
+                eq("/api/admin/setting/save"), any(HttpEntity.class), eq(SettingResponse.class)))
+                .thenReturn(settings);
+
+        service.updateSetting("proxy_config", "{\"BaiduNetdisk\":{\"concurrency\":5}}", "string");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForObject(eq("/api/admin/setting/save"), captor.capture(), eq(SettingResponse.class));
+        org.junit.jupiter.api.Assertions.assertInstanceOf(java.util.List.class, captor.getValue().getBody());
+        verify(restTemplate, never()).postForObject(
+                eq("/api/admin/setting/update"), any(HttpEntity.class), eq(SettingResponse.class));
+    }
+
+    @Test
+    void updateProxyConfigShouldSkipDisabledDriversAndMapNames() {
+        AListLocalService spyService = spy(service);
+
+        spyService.updateProxyConfig("{\"BAIDU\":{\"enabled\":true,\"concurrency\":5,\"chunk_size\":2048},"
+                + "\"QUARK\":{\"enabled\":false,\"concurrency\":16,\"chunk_size\":512}}");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(spyService).updateSetting(eq("proxy_config"), captor.capture(), eq("string"));
+        String json = captor.getValue();
+        org.junit.jupiter.api.Assertions.assertTrue(json.contains("\"BaiduNetdisk\""));
+        org.junit.jupiter.api.Assertions.assertTrue(json.contains("\"concurrency\":5"));
+        org.junit.jupiter.api.Assertions.assertFalse(json.contains("Quark"));
+    }
 }
