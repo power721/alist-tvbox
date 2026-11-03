@@ -146,6 +146,16 @@ public class T4Controller {
         return "direct".equals(appProperties.getT4ProxyMode()) ? "t4-direct" : "t4";
     }
 
+    /** 网盘族按条目定身份:追剧逻辑线路 msubep- 恒 t4(后端代理是追剧的设计——/p 链路由后端掌控,
+     *  死源时重点一次即实时换源,直链过期也由服务端刷新;direct 策略只放行一次性播放:
+     *  网盘文件线路 1@{pid}/TG/盘搜/片单动作,这些直连不损失换源语义)。 */
+    private String drivePlayType(String play) {
+        if (play != null && play.startsWith("msubep-")) {
+            return "t4";
+        }
+        return t4DrivePlayType();
+    }
+
     /** T4 直播详情 client:全代理=web(服务端代理地址形态);直连优先=null(裸直链/dual 双线路)。 */
     private String t4LiveClient() {
         return "direct".equals(appProperties.getT4ProxyMode()) ? null : "web";
@@ -490,7 +500,7 @@ public class T4Controller {
             // 直连优先(direct)时无屏障盘(百度 netdisk UA/夸克免转存/阿里/115/123)直链直出省带宽
             case "csp_AList", "csp_XiaoYa", "csp_PianDan", "csp_Media", "csp_TgDouBan", "csp_TgChannel",
                  "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup" ->
-                    playController.play(token, null, null, play, null, t4DrivePlayType(), false, request);
+                    playController.play(token, null, null, play, null, drivePlayType(play), false, request);
             // B站条目 id 走 bvid 参位;动作前缀(bili-like- 等)由 /play 的 bvid→id 兜底归位。
             // X-CLIENT 标记 t4/t4d:BiliBiliService 据此出服务端代理地址形态(t4)或
             // 直连形态(t4d,原始 durl+脱敏头,由 t4_proxy_mode 直连优先策略触发)

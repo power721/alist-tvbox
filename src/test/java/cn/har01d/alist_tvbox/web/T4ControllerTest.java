@@ -163,6 +163,34 @@ class T4ControllerTest {
     }
 
     @Test
+    void playerMsubEpisodeStaysBackendProxyUnderDirectMode() throws Exception {
+        // 追剧逻辑线路 msubep- 恒 t4(后端代理是追剧的设计:死源重点即实时换源、直链过期由服务端刷新);
+        // direct 策略只放行一次性播放,不得把追剧改成直链
+        appProperties.setT4ProxyMode("direct");
+        when(playController.play(eq(TOKEN), isNull(), isNull(), eq("msubep-75-8"), isNull(),
+                eq("t4"), eq(false), same(request))).thenReturn(Map.of());
+
+        controller.vod(TOKEN, "csp_Media", null, null, null, null, "msubep-75-8", null, null, request, response);
+
+        verify(playController).play(eq(TOKEN), isNull(), isNull(), eq("msubep-75-8"), isNull(),
+                eq("t4"), eq(false), same(request));
+    }
+
+    @Test
+    void playerMediaDriveLineStillDirectUnderDirectMode() throws Exception {
+        // 追剧详情里的盘线路条目(1@{pid} 固定文件播放)是一次性播放:direct 策略照常放行直连,
+        // 与 msubep- 逻辑线路(恒后端代理)区分
+        appProperties.setT4ProxyMode("direct");
+        when(playController.play(eq(TOKEN), isNull(), isNull(), eq("1@248217"), isNull(),
+                eq("t4-direct"), eq(false), same(request))).thenReturn(Map.of());
+
+        controller.vod(TOKEN, "csp_Media", null, null, null, null, "1@248217", null, null, request, response);
+
+        verify(playController).play(eq(TOKEN), isNull(), isNull(), eq("1@248217"), isNull(),
+                eq("t4-direct"), eq(false), same(request));
+    }
+
+    @Test
     void playerPianDanActionRoutesToPlayEndpoint() throws Exception {
         // 片单详情动作条目(msubadd- 等)是 /play id 分支的 msg 伪动作,T4 下同样须路由:
         // 此前 player() 无 csp_PianDan case,点动作条目直接 404
