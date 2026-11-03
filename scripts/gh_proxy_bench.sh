@@ -266,15 +266,6 @@ embedded_nodes_payload() {
       "tag": "donate"
     },
     {
-      "url": "https://ghproxy.imciel.com",
-      "server": "cloudflare",
-      "ip": "104.21.75.115",
-      "location": "  ",
-      "latency": 260,
-      "speed": 0.08,
-      "tag": "search"
-    },
-    {
       "url": "https://tvv.tw",
       "server": "cloudflare",
       "ip": "104.21.70.244",

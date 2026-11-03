@@ -80,7 +80,6 @@ public class GitHubProxyService {
         nodes.add(new GitHubProxyNode("备用节点", "https://gh.jasonzeng.dev/", "gh.jasonzeng.dev", "search", null, null, null, null));
         nodes.add(new GitHubProxyNode("备用节点", "https://j.1lin.dpdns.org/", "j.1lin.dpdns.org", "donate", null, null, null, null));
         nodes.add(new GitHubProxyNode("备用节点", "https://gh.inkchills.cn/", "gh.inkchills.cn", "donate", null, null, null, null));
-        nodes.add(new GitHubProxyNode("备用节点", "https://ghproxy.imciel.com/", "ghproxy.imciel.com", "search", null, null, null, null));
         nodes.add(new GitHubProxyNode("备用节点", "https://tvv.tw/", "tvv.tw", "donate", null, null, null, null));
         nodes.add(new GitHubProxyNode("备用节点", "https://gitproxy.127731.xyz/", "gitproxy.127731.xyz", "donate", null, null, null, null));
         nodes.add(new GitHubProxyNode("备用节点", "https://cdn.akaere.online/", "cdn.akaere.online", "donate", null, null, null, null));
