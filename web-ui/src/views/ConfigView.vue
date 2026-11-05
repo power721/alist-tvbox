@@ -133,7 +133,7 @@
               <span class="hint">豆瓣优先用本地库零网络零配额,未命中自动回退另一源。</span>
             </el-form-item>
             <el-form-item label="T4地址">
-              <el-input v-model="t4Url" style="width: 300px" readonly/>
+              <el-link type="primary" :href="t4Url" target="_blank" class="t4-url">{{ t4Url }}</el-link>
               <el-button class="hint" @click="copyT4Url">复制</el-button>
               <span class="hint">
                 {{ t4StandaloneOnly ? '仅此地址可用;重新生成或改 Token 后失效。' : '旧地址 /t4/{安全Token}/{订阅号} 与 /t4/{订阅号} 兼容保留仍可用;重新生成或改 Token 后旧专用地址失效。' }}
@@ -1039,6 +1039,15 @@ onUnmounted(() => {
 
 .hint {
   margin-left: 16px;
+}
+
+.t4-url {
+  max-width: 300px;
+  white-space: normal;
+  word-break: break-all;
+  vertical-align: middle;
+  line-height: 1.4;
+  margin-right: 8px;
 }
 
 .card-header {
