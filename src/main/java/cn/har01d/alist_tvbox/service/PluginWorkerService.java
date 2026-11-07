@@ -20,6 +20,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -54,6 +55,8 @@ public class PluginWorkerService {
     private volatile Path workerScript;
     private volatile Path atvpScript;
     private volatile String pythonBin;
+    /** 插件 getCache/setCache 持久化目录;null = 探测失败,worker 退化内存态。 */
+    private volatile Path cacheDir;
 
     public PluginWorkerService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -217,6 +220,63 @@ public class PluginWorkerService {
         });
     }
 
+    /**
+     * 插件 getCache/setCache 持久化文件路径(按站点隔离)。
+     * 目录探测失败返回 null,worker 退化为进程内存缓存(不阻塞插件运行)。
+     */
+    private String resolveCacheFile(String siteKey) {
+        Path dir = cacheDir;
+        if (dir == null) {
+            synchronized (workers) {
+                if (cacheDir == null) {
+                    cacheDir = probeCacheDir();
+                    log.info("t4 plugin cache dir: {}", cacheDir != null ? cacheDir : "(unavailable, in-memory only)");
+                }
+                dir = cacheDir;
+            }
+        }
+        if (dir == null) {
+            return null;
+        }
+        String safe = siteKey.replaceAll("[^A-Za-z0-9_-]", "_");
+        if (safe.length() > 64) {
+            safe = safe.substring(0, 48) + "-" + Integer.toHexString(siteKey.hashCode());
+        }
+        return dir.resolve(safe + ".json").toString();
+    }
+
+    private static Path probeCacheDir() {
+        String configured = System.getenv("ATV_T4_CACHE_DIR");
+        if (StringUtils.isNotBlank(configured)) {
+            Path dir = Paths.get(configured.trim());
+            if (ensureDirectory(dir)) {
+                return dir;
+            }
+        }
+        // docker 持久卷 /data(与 H2 /data/atv 同卷)、host 模式 /opt/atv/data 的既定约定
+        for (String base : List.of("/data", "/opt/atv/data")) {
+            Path dir = Paths.get(base, "t4-cache");
+            if (ensureDirectory(dir)) {
+                return dir;
+            }
+        }
+        Path temp = Paths.get(System.getProperty("java.io.tmpdir"), "t4-cache");
+        if (ensureDirectory(temp)) {
+            log.info("t4 plugin cache falls back to temp dir (not persistent across restarts): {}", temp);
+            return temp;
+        }
+        return null;
+    }
+
+    private static boolean ensureDirectory(Path dir) {
+        try {
+            Files.createDirectories(dir);
+            return Files.isWritable(dir);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     @PreDestroy
     public void shutdown() {
         workers.values().forEach(Worker::close);
@@ -236,7 +296,13 @@ public class PluginWorkerService {
 
         void init(String extend) {
             try {
-                process = new ProcessBuilder(pythonBin, workerScript.toString(), atvpScript.toString()).start();
+                ProcessBuilder builder = new ProcessBuilder(pythonBin, workerScript.toString(), atvpScript.toString());
+                // 插件 setCache 持久化:按站点隔离的 JSON 文件,worker 回收/服务重启后缓存仍在
+                String cacheFile = resolveCacheFile(siteKey);
+                if (cacheFile != null) {
+                    builder.environment().put("ATVP_CACHE_FILE", cacheFile);
+                }
+                process = builder.start();
                 stdin = process.getOutputStream();
                 stdout = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
             } catch (IOException e) {

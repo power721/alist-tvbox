@@ -26,6 +26,47 @@ from lxml import etree
 _preheat_daemon_lock = threading.Lock()
 _preheat_daemon_started = False
 
+# getCache/setCache/delCache 的持久化存储(进程级单例):
+# 服务端 T4 运行时由 Java 侧注入 ATVP_CACHE_FILE(按站点隔离的 JSON 文件),
+# 未设置(本地裸跑/无文件系统约定的环境)退化为进程内存,不落盘。
+_kv_store_lock = threading.Lock()
+_kv_store = None
+_KV_MISSING = object()
+
+
+def _load_kv_store():
+    global _kv_store
+    if _kv_store is not None:
+        return _kv_store
+    path = os.environ.get("ATVP_CACHE_FILE", "")
+    _kv_store = {"path": path.strip(), "data": {}}
+    if _kv_store["path"]:
+        try:
+            with open(_kv_store["path"], "r", encoding="utf-8") as handle:
+                loaded = json.load(handle)
+            if isinstance(loaded, dict):
+                _kv_store["data"] = {str(key): str(value) for key, value in loaded.items()}
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError):
+            # 首次启动无文件是常态(FileNotFoundError),坏文件/读失败才提示
+            print("[ATVP] cache file unavailable, starting empty: %s" % _kv_store["path"], file=sys.stderr)
+    return _kv_store
+
+
+def _save_kv_store(store):
+    # 原子写:先写 .tmp 再 os.replace,读端(重启后的新 worker)不会看到半截 JSON
+    if not store.get("path"):
+        return
+    tmp = store["path"] + ".tmp"
+    try:
+        os.makedirs(os.path.dirname(store["path"]) or ".", exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(store["data"], handle, ensure_ascii=False)
+        os.replace(tmp, store["path"])
+    except OSError:
+        print("[ATVP] cache file write failed: %s" % store["path"], file=sys.stderr)
+
 
 class _FallbackSpider(metaclass=ABCMeta):
     _instance = None
@@ -142,13 +183,22 @@ class _FallbackSpider(metaclass=ABCMeta):
             print(f"{msg}")
 
     def getCache(self, key):
-        raise NotImplementedError("cache runtime is not available in local tests")
+        # 服务端 T4 运行时的持久化实现:inner 插件继承本类,经 ATVP_CACHE_FILE 落盘
+        with _kv_store_lock:
+            store = _load_kv_store()
+            return store["data"].get(str(key))
 
     def setCache(self, key, value):
-        raise NotImplementedError("cache runtime is not available in local tests")
+        with _kv_store_lock:
+            store = _load_kv_store()
+            store["data"][str(key)] = str(value)
+            _save_kv_store(store)
 
     def delCache(self, key):
-        raise NotImplementedError("cache runtime is not available in local tests")
+        with _kv_store_lock:
+            store = _load_kv_store()
+            if store["data"].pop(str(key), _KV_MISSING) is not _KV_MISSING:
+                _save_kv_store(store)
 
 
 try:
