@@ -1994,6 +1994,18 @@ public class BiliBiliService {
             }
             upPlayUrl = fetchUpPlayUrl(info.getOwner().getMid(), client);
         }
+        // 联合投稿 staff:「演员」行同款 [a=cr:...] 内联链接(与导演行 owner 链接同通道,点击跳该成员的 UP 主视频列表);文本客户端保持纯名字串
+        if (info.getStaff() != null && !info.getStaff().isEmpty()) {
+            if ("com.fongmi.android.tv".equals(client)) {
+                movieDetail.setVod_actor(info.getStaff().stream()
+                        .map(u -> String.format("[a=cr:{\"id\":\"up:%d\",\"name\":\"%s\"}/]%s[/a]", u.getMid(), u.getName(), u.getName()))
+                        .collect(Collectors.joining(",")));
+            } else if ("gui".equals(client)) {
+                movieDetail.setVod_actor(info.getStaff().stream()
+                        .map(u -> String.format("[a=cr:{\"target\":\"bilibili\",\"type\":\"category\",\"value\":\"up:%d\"}/]%s[/a]", u.getMid(), u.getName()))
+                        .collect(Collectors.joining(",")));
+            }
+        }
 
         List<BiliBiliInfo> list = relatedFuture.join();
         if (list != null && !list.isEmpty()) {

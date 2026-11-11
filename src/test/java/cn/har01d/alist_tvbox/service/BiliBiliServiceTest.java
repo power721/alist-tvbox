@@ -510,6 +510,30 @@ class BiliBiliServiceTest {
     }
 
     @Test
+    void getDetailReturnsClickableActorMarkupForStaffVideos() throws Exception {
+        BiliBiliInfo info = videoInfo();
+        BiliBiliInfo.User actor1 = new BiliBiliInfo.User();
+        actor1.setMid(1586361L);
+        actor1.setName("竹笙Zoe");
+        BiliBiliInfo.User actor2 = new BiliBiliInfo.User();
+        actor2.setMid(2L);
+        actor2.setName("夏目目Natsume");
+        info.setStaff(java.util.List.of(actor1, actor2));
+        stubInfoApi(info);
+
+        // gui/atv-player:「演员」行逐人内联链接,点击跳 t=up:<mid> 的该成员视频列表
+        assertEquals("[a=cr:{\"target\":\"bilibili\",\"type\":\"category\",\"value\":\"up:1586361\"}/]竹笙Zoe[/a],"
+                        + "[a=cr:{\"target\":\"bilibili\",\"type\":\"category\",\"value\":\"up:2\"}/]夏目目Natsume[/a]",
+                service.getDetail("BV195KY6YEeY", "gui").getList().get(0).getVod_actor());
+        assertEquals("[a=cr:{\"id\":\"up:1586361\",\"name\":\"竹笙Zoe\"}/]竹笙Zoe[/a],"
+                        + "[a=cr:{\"id\":\"up:2\",\"name\":\"夏目目Natsume\"}/]夏目目Natsume[/a]",
+                service.getDetail("BV195KY6YEeY", "com.fongmi.android.tv").getList().get(0).getVod_actor());
+        // 文本客户端不受影响:纯名字逗号串
+        assertEquals("竹笙Zoe,夏目目Natsume",
+                service.getDetail("BV195KY6YEeY", "com.github.tvbox.osc").getList().get(0).getVod_actor());
+    }
+
+    @Test
     void getDetailResolvesAidCidEntryIdsThroughBvConversion() throws Exception {
         // 相关视频/合集线路条目 id 为 aid-cid(/play 同款格式)、稍后再看有纯 aid 回落:
         // 详情必须折 BV 后照常返回(stub 只认折转后的 BV,拿到响应即证明走了转换),而非恒 404
