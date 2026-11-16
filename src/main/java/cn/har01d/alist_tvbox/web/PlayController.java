@@ -149,6 +149,12 @@ public class PlayController {
             return infoPianDan(uid, id.substring(MediaSubscriptionService.INFO_PLAY_PREFIX.length()));
         }
 
+        if (StringUtils.isNotBlank(id) && id.startsWith(MediaSubscriptionService.SEARCH_PLAY_PREFIX)) {
+            // 片单条目「全局搜索」:T3 由 spring.jar 本地拦截跳播放器搜索页(msubsearch- 从不上链),
+            // T4 壳子无本地拦截落到服务端 —— msg 通道提示改用客户端搜索入口
+            return Map.of("msg", "此客户端不支持跳转搜索,请用首页搜索输入片名");
+        }
+
         if (StringUtils.isNotBlank(id) && id.startsWith("watchadd-")) {
             // 片单条目「加入稍后再看」(watchadd-{vodId}|{剧名}):载荷同 msubadd-,msg 通道回执
             int uid = mediaSubscriptionService.resolveUid(token);

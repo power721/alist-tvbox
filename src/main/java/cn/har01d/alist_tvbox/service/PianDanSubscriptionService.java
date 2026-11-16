@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -139,6 +141,7 @@ public class PianDanSubscriptionService {
      *  订阅/取消零网络;多季剧的季号让订阅精确到季(create 对显式 >1 的季号不覆盖)。
      *  无内嵌名的条目现拉一次标题兜底(TMDB zh-CN / db: 按 id 本地直取或 rexxar);s: 条目标题在 id 里、年份取后缀。 */
     public PianDanEntry pianDanEntry(String payload) {
+        payload = decodeT4Payload(payload);
         String[] parts = payload.split("\\|", -1);
         String vodId = parts[0];
         String name = parts.length > 1 ? parts[1].trim() : "";
@@ -182,6 +185,23 @@ public class PianDanSubscriptionService {
             year = PianDanService.parseSubjectId(vodId).year();
         }
         return new PianDanEntry(vodId, name, season, year, doubanId);
+    }
+
+    /** T4 壳子(FongMi 系 type4)双重编码载荷补解:vod_play_url 里的动作 id 按 T3 spider
+     *  裸拼 GET 契约预编码一次,T4 客户端经 addQueryParameter 上链会再编码一次,服务端查询
+     *  参数只解一层 → 收到的载荷仍是编码态(分隔符 | 残留 %7C,拆分与前缀判定全废,一键追剧 400)。
+     *  识别形态:无字面 | 但含 %7C(合法载荷装配恒有字面 |,T3 路径不受影响);解码失败
+     *  (标题含孤立 % 序列)保持原样走原逻辑。 */
+    private static String decodeT4Payload(String payload) {
+        if (payload == null || payload.indexOf('|') >= 0
+                || !(payload.contains("%7C") || payload.contains("%7c"))) {
+            return payload;
+        }
+        try {
+            return URLDecoder.decode(payload, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return payload;
+        }
     }
 
     /** TMDB vodId(tmdb:tv:42 / tmdb:movie:42)→ 详情;格式非法 400。 */
