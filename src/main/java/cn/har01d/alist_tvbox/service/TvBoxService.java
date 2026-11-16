@@ -261,9 +261,10 @@ public class TvBoxService {
 
     private Site getXiaoyaOrFirstSite() {
         List<Site> list = siteService.list();
+        log.debug("sites: {}", list);
         Site result = null;
         for (Site site : list) {
-            if (site.isSearchable() && !site.isDisabled()) {
+            if (!site.isDisabled()) {
                 if (site.isXiaoya()) {
                     return site;
                 }
@@ -280,6 +281,7 @@ public class TvBoxService {
 
         if (type == 0) {
             Site site = getXiaoyaOrFirstSite();
+            log.debug("site: {}", site);
             if (site != null) {
                 setTypes(result, site);
             }
