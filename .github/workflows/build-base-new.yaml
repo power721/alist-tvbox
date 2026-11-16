@@ -19,7 +19,7 @@ jobs:
         run: mvn -B package --file pom.xml
       - name: Extract Spring Boot layers
         working-directory: ./target
-        run: java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract
+        run: java -Djarmode=tools -jar alist-tvbox-1.0.jar extract --layers --launcher --destination . --force
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Login to Docker Hub

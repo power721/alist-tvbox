@@ -13,7 +13,7 @@ npm run build || exit 1
 cd .. && \
 mvn clean package || exit 1
 
-cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
+cd target && java -Djarmode=tools -jar alist-tvbox-1.0.jar extract --layers --launcher --destination . --force && cd ..
 
 docker image prune -f
 docker pull haroldli/alist-base:hostmode

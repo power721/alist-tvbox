@@ -21,6 +21,10 @@ public class V56__WatchlistItem extends BaseJavaMigration {
     public void migrate(Context context) throws Exception {
         Connection connection = context.getConnection();
 
+        // year 在 H2 是保留字须加引号;MySQL 默认 sql_mode(无 ANSI_QUOTES)下双引号是字符串字面量,
+        // 须用驱动声明的标识符引号符(MySQL 反引号 / H2、PG 双引号),否则 CREATE TABLE 直接语法错。
+        String q = identifierQuote(connection);
+
         execute(connection, """
                 CREATE TABLE IF NOT EXISTS watchlist_item (
                     id INTEGER NOT NULL PRIMARY KEY,
@@ -28,13 +32,13 @@ public class V56__WatchlistItem extends BaseJavaMigration {
                     vod_id VARCHAR(250) NOT NULL,
                     status VARCHAR(16) NOT NULL,
                     title VARCHAR(250) NOT NULL,
-                    "year" INTEGER,
+                    %syear%s INTEGER,
                     season INTEGER,
                     pic VARCHAR(512),
                     remarks VARCHAR(250),
                     created_time BIGINT NOT NULL,
                     status_time BIGINT
-                )""");
+                )""".formatted(q, q));
 
         // (uid, vod_id) 唯一:防重复加入;uid 前缀即可按用户查列表
         createIndexIfMissing(connection, "watchlist_item", "uk_watchlist_item", true, "uid", "vod_id");
@@ -45,6 +49,12 @@ public class V56__WatchlistItem extends BaseJavaMigration {
         try (Statement statement = connection.createStatement()) {
             statement.execute(sql);
         }
+    }
+
+    private String identifierQuote(Connection connection) throws SQLException {
+        String quote = connection.getMetaData().getIdentifierQuoteString();
+        // JDBC 规范:空格 = 驱动不支持标识符引号,按不加引号处理
+        return (quote == null || quote.isBlank() || " ".equals(quote)) ? "" : quote;
     }
 
     private void createIndexIfMissing(Connection connection, String table, String indexName, boolean unique, String... columns)

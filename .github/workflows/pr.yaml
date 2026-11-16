@@ -51,7 +51,7 @@ jobs:
 
       - name: Extract Spring Boot layers
         working-directory: ./target
-        run: java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract
+        run: java -Djarmode=tools -jar alist-tvbox-1.0.jar extract --layers --launcher --destination . --force
 
       - name: Set APP version
         run: |

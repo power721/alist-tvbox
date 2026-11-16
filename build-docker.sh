@@ -53,7 +53,7 @@ cd ..
 #sed -i '/sites:/r add.txt' src/main/resources/application.yaml
 
 mvn clean package || exit 1
-cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
+cd target && java -Djarmode=tools -jar alist-tvbox-1.0.jar extract --layers --launcher --destination . --force && cd ..
 
 #mv application-backup.yaml src/main/resources/application.yaml
 

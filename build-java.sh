@@ -3,7 +3,7 @@ echo "=== build maven ==="
 mvn clean package
 
 cd target
-java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract
+java -Djarmode=tools -jar alist-tvbox-1.0.jar extract --layers --launcher --destination . --force
 cd ..
 
 echo "=== build haroldli/java:21 ==="

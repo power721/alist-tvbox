@@ -68,7 +68,7 @@ cd .. && \
 echo "========= build maven =========" && \
 mvn clean package
 
-cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
+cd target && java -Djarmode=tools -jar alist-tvbox-1.0.jar extract --layers --launcher --destination . --force && cd ..
 pwd
 
 [ "$BUILD_BASE" = "true" ] && echo "========= build haroldli/alist-base =========" && docker build -f docker/Dockerfile-base --tag=haroldli/alist-base:latest .
