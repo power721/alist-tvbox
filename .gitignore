@@ -70,3 +70,5 @@ default.conf
 telemetry.properties
 /src/test/python/
 __pycache__/
+/data/connections.json
+/data/maintenance-connections.json

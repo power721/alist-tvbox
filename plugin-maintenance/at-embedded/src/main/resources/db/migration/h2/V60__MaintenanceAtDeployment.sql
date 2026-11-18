@@ -1,0 +1,25 @@
+CREATE TABLE maintenance_at_deployment (
+    id VARCHAR(36) PRIMARY KEY,
+    plugin_id INTEGER NOT NULL,
+    active_plugin_id INTEGER UNIQUE,
+    site_key VARCHAR(200) NOT NULL,
+    plan_id VARCHAR(36) NOT NULL,
+    request_key VARCHAR(80) NOT NULL,
+    request_sha256 VARCHAR(64) NOT NULL,
+    baseline_sha256 VARCHAR(64) NOT NULL,
+    candidate_sha256 VARCHAR(64) NOT NULL,
+    baseline_content TEXT NOT NULL,
+    candidate_content TEXT NOT NULL,
+    configuration_sha256 VARCHAR(64) NOT NULL,
+    expected_generation VARCHAR(32),
+    loaded_generation VARCHAR(32),
+    interrupt_playback BOOLEAN NOT NULL,
+    state VARCHAR(32) NOT NULL,
+    error_code VARCHAR(80),
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    row_version BIGINT NOT NULL DEFAULT 0,
+    UNIQUE (plugin_id, request_key),
+    CHECK (state IN ('PREPARED', 'SAVED', 'DEPLOYED', 'ROLLING_BACK', 'ROLLED_BACK', 'RECOVERY_REQUIRED', 'REJECTED'))
+);
+CREATE INDEX idx_maintenance_at_deployment_site ON maintenance_at_deployment(site_key, state);

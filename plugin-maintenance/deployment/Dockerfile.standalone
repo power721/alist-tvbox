@@ -1,0 +1,13 @@
+ARG RUNTIME_IMAGE
+FROM ${RUNTIME_IMAGE}
+USER root
+RUN mkdir -p /data /opt/maintenance && chmod 755 /opt/maintenance && chown 65532:65532 /data
+COPY --chmod=644 application.jar /opt/maintenance/application.jar
+COPY --chmod=644 service_entry.py /opt/maintenance/service_entry.py
+ENV MAINTENANCE_DEPLOYMENT=standalone MAINTENANCE_PYTHON=/usr/bin/python3 MAINTENANCE_DATA_DIR=/data HOME=/tmp
+WORKDIR /data
+USER 65532:65532
+EXPOSE 8797
+HEALTHCHECK NONE
+ENTRYPOINT ["/usr/bin/python3", "-I", "/opt/maintenance/service_entry.py"]
+CMD []

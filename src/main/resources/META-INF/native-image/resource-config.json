@@ -35,6 +35,15 @@
     "pattern": "scripts/t4worker.py"
    },
    {
+    "pattern": "worker/source_egress.py"
+   },
+   {
+    "pattern": "worker/source_origin_discovery.py"
+   },
+   {
+    "pattern": "worker/read_public_python_source.py"
+   },
+   {
     "pattern": "scripts/t4cenc.py"
    },
    {

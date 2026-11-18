@@ -1,0 +1,14 @@
+# Same-host deployment overlay. Only the IPC directory is visible to the workbench.
+services:
+  standalone:
+    environment:
+      MAINTENANCE_MANAGED_SOURCE_ROUTES_FILE: ${MAINTENANCE_T4_IPC_ROOT:?Set the installed same-host T4 IPC directory}/routes.json
+      MAINTENANCE_MANAGED_SOURCE_SETUP_SOCKET: ${MAINTENANCE_T4_IPC_ROOT}/setup.sock
+    volumes:
+      - ${MAINTENANCE_T4_IPC_ROOT}:${MAINTENANCE_T4_IPC_ROOT}:ro
+  embedded:
+    environment:
+      MAINTENANCE_MANAGED_SOURCE_ROUTES_FILE: ${MAINTENANCE_T4_IPC_ROOT:?Set the installed same-host T4 IPC directory}/routes.json
+      MAINTENANCE_MANAGED_SOURCE_SETUP_SOCKET: ${MAINTENANCE_T4_IPC_ROOT}/setup.sock
+    volumes:
+      - ${MAINTENANCE_T4_IPC_ROOT}:${MAINTENANCE_T4_IPC_ROOT}:ro

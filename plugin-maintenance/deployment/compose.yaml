@@ -1,0 +1,34 @@
+services:
+  standalone:
+    profiles: [standalone]
+    image: ${MAINTENANCE_STANDALONE_IMAGE:?Set the accepted immutable standalone image ID or tag}
+    ports:
+      - "${MAINTENANCE_LISTEN_IP:-127.0.0.1}:${MAINTENANCE_STANDALONE_PORT:-18991}:8797"
+    environment:
+      MAINTENANCE_ADMIN_PASSWORD: ${MAINTENANCE_ADMIN_PASSWORD:?Set a private standalone password}
+    volumes:
+      - standalone-data:/data
+    tmpfs:
+      - /tmp:rw,exec,nosuid,size=256m,uid=65532,gid=65532
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  embedded:
+    profiles: [embedded]
+    image: ${MAINTENANCE_EMBEDDED_IMAGE:?Set the accepted immutable embedded image ID or tag}
+    ports:
+      - "${MAINTENANCE_LISTEN_IP:-127.0.0.1}:${MAINTENANCE_EMBEDDED_PORT:-18992}:4567"
+    volumes:
+      - embedded-data:/data
+      - embedded-alist:/opt/alist/data
+      - embedded-www:/www
+    tmpfs:
+      - /tmp:rw,exec,nosuid,size=256m,uid=65532,gid=65532
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+volumes:
+  standalone-data:
+  embedded-data:
+  embedded-alist:
+  embedded-www:
