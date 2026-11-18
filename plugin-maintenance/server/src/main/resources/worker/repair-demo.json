@@ -1,0 +1,20 @@
+{
+  "name": "静态修复示例",
+  "filename": "repair-demo.py",
+  "authority": "data_only",
+  "content": "# Static repair data: never import or execute this source.\nraise RuntimeError('REPAIR_SOURCE_MUST_NOT_EXECUTE')\nclass Spider:\n    def init(self, extend=''):\n        return None\n    def homeContent(self, filter):\n        return {'class': []}\n    def homeContent(self, filter):\n        return {'class': [], 'duplicate': True}\n",
+  "proposal": {
+    "schemaVersion": 1,
+    "expectedBaselineSha256": "",
+    "targetFile": "source.py",
+    "diagnosis": "重复定义 homeContent，后一个方法覆盖前一个方法。",
+    "expectedEffect": "移除重复定义并保留原方法输入合同；运行时仍须另行验证。",
+    "validationTargets": ["S03"],
+    "edits": [
+      {
+        "oldText": "    def homeContent(self, filter):\n        return {'class': [], 'duplicate': True}\n",
+        "newText": ""
+      }
+    ]
+  }
+}

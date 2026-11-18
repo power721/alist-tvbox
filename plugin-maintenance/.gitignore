@@ -1,0 +1,4 @@
+server/data/
+web-ui/node_modules/
+web-ui/dist/
+.env

@@ -1,0 +1,7 @@
+ARG SOURCE_IMAGE
+FROM ${SOURCE_IMAGE}
+ARG EGRESS_PAYLOAD_SHA256
+ARG EGRESS_BRIDGE_SHA256
+LABEL org.alist-tvbox.maintenance.egress-payload=${EGRESS_PAYLOAD_SHA256}
+LABEL org.alist-tvbox.maintenance.egress-bridge=${EGRESS_BRIDGE_SHA256}
+COPY egress_payload.py egress_bridge.py /opt/at-maintenance/managed/

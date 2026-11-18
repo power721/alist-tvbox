@@ -1,0 +1,3 @@
+# Trusted broker only. Install into the owned runtime/vendor directory, not the NAS global Python.
+m3u8==6.0.0
+pycryptodome==3.23.0

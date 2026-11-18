@@ -1,0 +1,3 @@
+*.py text eol=lf
+server/src/main/resources/worker/runtime/manifest.json text eol=lf
+at-contract-lab/candidates/*.patch text eol=lf

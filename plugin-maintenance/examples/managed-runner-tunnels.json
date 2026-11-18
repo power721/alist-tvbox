@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "ssh": {
+    "hostEnv": "MAINTENANCE_NAS_HOST",
+    "portEnv": "MAINTENANCE_NAS_PORT",
+    "userEnv": "MAINTENANCE_NAS_USER",
+    "passwordEnv": "MAINTENANCE_NAS_PASSWORD",
+    "sudoPasswordEnv": "MAINTENANCE_NAS_PASSWORD"
+  },
+  "runners": [
+    {
+      "id": "image-api",
+      "localPort": 19001,
+      "remoteSocket": "/srv/at-maintenance/image-api/executor.sock",
+      "instanceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "imageId": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "bundleSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "egressPolicySha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "httpImageId": ""
+    }
+  ]
+}
