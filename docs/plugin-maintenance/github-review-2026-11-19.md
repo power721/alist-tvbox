@@ -29,3 +29,11 @@
 ## 分发范围
 
 优先更新用户已有的 `wab201/alist-tvbox` GitHub fork 并向原仓库贡献，保留 AT 原署名，不另造上游许可证。AT 上游未声明根许可证，GitHub 平台上的 fork/PR 不等于站外镜像、JAR 或独立项目再分发授权。独立公开发行及第三方许可材料仍须确认，见 [NOTICE](standalone-notice.md)。不公开私有验收库、真实来源源码、连接配置、访问令牌或 NAS 操作脚本。
+
+## 本轮验证
+
+宿主层在不启用维护 profile、没有维护模块源码的独立副本中执行 `mvn -o -Dmaven.test.skip=true compile` 通过。最新 AT Web 和独立维护 Web 各构建一次通过。
+
+内置 profile 的 114 项定向用例首轮 112 项通过，2 项测试夹具失败；修正 Flyway 测试类命名和归档子进程 stderr 读取后，按失败范围续验，最终 114 项均有通过记录，未重复已通过的宿主测试。迁移测试覆盖 AT 与维护各自版本历史、重启幂等及旧私有历史拒绝；冷备覆盖两套历史与活动库拒绝。
+
+另执行 `EmbeddedMaintenanceIntegrationTest#nativeRuntimeEndpointUsesAdminAndSavedLoaderSnapshot` 一项真实 Spring/HTTP/T4 夹具集成。首次发现上文 gRPC 缺类，排除未使用组件后该项通过，内置 JAR 打包成功。测试不执行真实站点、不调用模型，不等于 NAS 新版本验收。真实维修的失败回执和首次测试结果均保留在私有项目盘，不进入公开源码。
