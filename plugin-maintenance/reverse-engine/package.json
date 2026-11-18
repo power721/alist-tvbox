@@ -1,0 +1,8 @@
+{
+  "name": "at-maintenance-reverse-worker",
+  "version": "1.0.29",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test tests/*.test.mjs" },
+  "dependencies": { "chrome-remote-interface": "0.34.0", "playwright-core": "1.58.2", "webcrack": "2.15.1" }
+}

@@ -1,0 +1,99 @@
+server:
+  address: ${MAINTENANCE_BIND:127.0.0.1}
+  port: ${MAINTENANCE_PORT:8797}
+spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
+  datasource:
+    url: jdbc:h2:file:${MAINTENANCE_DATA_DIR:./data}/maintenance;DB_CLOSE_ON_EXIT=FALSE;WRITE_DELAY=0
+    username: sa
+    password: ${MAINTENANCE_DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    locations: classpath:db/migration/h2
+  security:
+    user:
+      name: admin
+      password: ${MAINTENANCE_ADMIN_PASSWORD:admin}
+      roles: ADMIN
+maintenance:
+  at-publish:
+    automatic-enabled: ${MAINTENANCE_AT_AUTO_PUBLISH_ENABLED:false}
+    automatic-instance-key: ${MAINTENANCE_AT_AUTO_PUBLISH_INSTANCE_KEY:}
+  python: ${MAINTENANCE_PYTHON:python3}
+  reverse-engine:
+    directory: ${MAINTENANCE_REVERSE_ENGINE_DIR:}
+    node: ${MAINTENANCE_REVERSE_ENGINE_NODE:node}
+    browser: ${MAINTENANCE_REVERSE_ENGINE_BROWSER:}
+    tunnels-file: ${MAINTENANCE_REVERSE_ENGINE_TUNNELS_FILE:}
+    tunnel-script: ${MAINTENANCE_REVERSE_ENGINE_TUNNEL_SCRIPT:}
+  media:
+    enabled: ${MAINTENANCE_MEDIA_ENABLED:false}
+    allowed-origins: ${MAINTENANCE_MEDIA_ALLOWED_ORIGINS:}
+    allow-http: ${MAINTENANCE_MEDIA_ALLOW_HTTP:false}
+    daily-probe-limit: ${MAINTENANCE_MEDIA_DAILY_PROBE_LIMIT:24}
+    daily-request-limit: ${MAINTENANCE_MEDIA_DAILY_REQUEST_LIMIT:288}
+    daily-retained-bytes: ${MAINTENANCE_MEDIA_DAILY_RETAINED_BYTES:12582912}
+    source-daily-probe-limit: ${MAINTENANCE_MEDIA_SOURCE_DAILY_PROBE_LIMIT:4}
+    source-daily-request-limit: ${MAINTENANCE_MEDIA_SOURCE_DAILY_REQUEST_LIMIT:48}
+    source-daily-retained-bytes: ${MAINTENANCE_MEDIA_SOURCE_DAILY_RETAINED_BYTES:2097152}
+    source-interval-seconds: ${MAINTENANCE_MEDIA_SOURCE_INTERVAL_SECONDS:21600}
+    host-interval-seconds: ${MAINTENANCE_MEDIA_HOST_INTERVAL_SECONDS:1800}
+  model:
+    enabled: ${MAINTENANCE_MODEL_ENABLED:false}
+    auto-submit-enabled: ${MAINTENANCE_MODEL_AUTO_SUBMIT_ENABLED:false}
+    endpoint: ${MAINTENANCE_MODEL_ENDPOINT:}
+    base-url: ${MAINTENANCE_MODEL_BASE_URL:}
+    model: ${MAINTENANCE_MODEL_NAME:}
+    key-env: ${MAINTENANCE_MODEL_KEY_ENV:}
+    timeout-millis: ${MAINTENANCE_MODEL_TIMEOUT_MILLIS:8000}
+    max-request-bytes: ${MAINTENANCE_MODEL_MAX_REQUEST_BYTES:1048576}
+    max-response-bytes: ${MAINTENANCE_MODEL_MAX_RESPONSE_BYTES:65536}
+    max-completion-tokens: ${MAINTENANCE_MODEL_MAX_COMPLETION_TOKENS:2048}
+    max-token-parameter: ${MAINTENANCE_MODEL_MAX_TOKEN_PARAMETER:max_completion_tokens}
+    json-mode: ${MAINTENANCE_MODEL_JSON_MODE:json_object}
+    include-store-parameter: ${MAINTENANCE_MODEL_INCLUDE_STORE_PARAMETER:true}
+    daily-call-limit: ${MAINTENANCE_MODEL_DAILY_CALL_LIMIT:0}
+    daily-input-bytes: ${MAINTENANCE_MODEL_DAILY_INPUT_BYTES:0}
+    daily-output-tokens: ${MAINTENANCE_MODEL_DAILY_OUTPUT_TOKENS:0}
+    source-daily-call-limit: ${MAINTENANCE_MODEL_SOURCE_DAILY_CALL_LIMIT:0}
+    source-daily-input-bytes: ${MAINTENANCE_MODEL_SOURCE_DAILY_INPUT_BYTES:0}
+    source-daily-output-tokens: ${MAINTENANCE_MODEL_SOURCE_DAILY_OUTPUT_TOKENS:0}
+    model-daily-call-limit: ${MAINTENANCE_MODEL_MODEL_DAILY_CALL_LIMIT:0}
+    model-daily-input-bytes: ${MAINTENANCE_MODEL_MODEL_DAILY_INPUT_BYTES:0}
+    model-daily-output-tokens: ${MAINTENANCE_MODEL_MODEL_DAILY_OUTPUT_TOKENS:0}
+    input-price-usd-per-million: ${MAINTENANCE_MODEL_INPUT_PRICE_USD_PER_MILLION:}
+    output-price-usd-per-million: ${MAINTENANCE_MODEL_OUTPUT_PRICE_USD_PER_MILLION:}
+    daily-cost-usd: ${MAINTENANCE_MODEL_DAILY_COST_USD:}
+    source-daily-cost-usd: ${MAINTENANCE_MODEL_SOURCE_DAILY_COST_USD:}
+    model-daily-cost-usd: ${MAINTENANCE_MODEL_MODEL_DAILY_COST_USD:}
+    input-token-bound: ${MAINTENANCE_MODEL_INPUT_TOKEN_BOUND:}
+  container:
+    enabled: ${MAINTENANCE_CONTAINER_ENABLED:false}
+    executable: ${MAINTENANCE_CONTAINER_EXECUTABLE:}
+    endpoint: ${MAINTENANCE_CONTAINER_ENDPOINT:}
+    image-id: ${MAINTENANCE_CONTAINER_IMAGE_ID:}
+  managed-source:
+    enabled: ${MAINTENANCE_MANAGED_SOURCE_ENABLED:false}
+    socket: ${MAINTENANCE_MANAGED_SOURCE_SOCKET:}
+    instance-id: ${MAINTENANCE_MANAGED_SOURCE_INSTANCE_ID:}
+    image-id: ${MAINTENANCE_MANAGED_SOURCE_IMAGE_ID:}
+    egress-policy-sha256: ${MAINTENANCE_MANAGED_SOURCE_EGRESS_POLICY_SHA256:}
+    http-image-id: ${MAINTENANCE_MANAGED_SOURCE_HTTP_IMAGE_ID:}
+  scheduling:
+    enabled: ${MAINTENANCE_SCHEDULING_ENABLED:false}
+    daily-limit: ${MAINTENANCE_SCHEDULING_DAILY_LIMIT:48}
+  at:
+    excluded-plugin-ids: ${MAINTENANCE_AT_EXCLUDED_PLUGIN_IDS:}
+    origin: ${MAINTENANCE_AT_ORIGIN:}
+    instance-id: ${MAINTENANCE_AT_INSTANCE_ID:}
+    revision: ${MAINTENANCE_AT_REVISION:unverified}
+    auth-mode: ${MAINTENANCE_AT_AUTH_MODE:session}
+    api-key: ${MAINTENANCE_AT_API_KEY:}
+    session-token: ${MAINTENANCE_AT_SESSION_TOKEN:}
+    allow-http: ${MAINTENANCE_AT_ALLOW_HTTP:false}
+    runtime-identity-path: ${MAINTENANCE_AT_RUNTIME_IDENTITY_PATH:}

@@ -1,0 +1,314 @@
+{
+  "schemaVersion": 1,
+  "matrixSha256": "83c0b61e2eba2d92fa5d210cced7b88dd6d1ddba62e7fb5a40fe9620aa2ed3aa",
+  "nodes": [
+    {
+      "id": "S01",
+      "title": "身份与类型",
+      "inputs": "绑定 AT 实例、Plugin ID、externalId、来源 URL、实际 siteKey，识别 raw/secspider/网页等",
+      "assertions": "重命名不改绑定；冲突能显式发现",
+      "boundary": "停止覆盖式同步，先消除身份冲突"
+    },
+    {
+      "id": "S02",
+      "title": "完整源码与包",
+      "inputs": "固定字节及 SHA，核对包格式、清单和依赖；源码与封装包分别记身份",
+      "assertions": "版本可恢复，大小/哈希与 manifest 一致",
+      "boundary": "不使用不完整包进入修复"
+    },
+    {
+      "id": "S03",
+      "title": "语法与静态声明",
+      "inputs": "raw PY AST/compile、schema 静态解析；其他语言走对应适配器",
+      "assertions": "明确目标 Python 版本下语法成立；声明能解析",
+      "boundary": "将语法失败记 fail，不以规则“未命中”判通过"
+    },
+    {
+      "id": "S04",
+      "title": "依赖与宿主合同",
+      "inputs": "固定依赖镜像，核对 imports、base.spider、宿主/系统路径、可选模块",
+      "assertions": "指定服务端环境可装载；依赖清单与镜像吻合",
+      "boundary": "区分缺依赖、平台不支持、源码错误"
+    },
+    {
+      "id": "S05",
+      "title": "配置与凭据",
+      "inputs": "检查 EXT 字段、dict/字符串合同、schema、服务端允许字段、凭据引用",
+      "assertions": "必需配置齐备，错误类型不进入真实网络动作",
+      "boundary": "缺值/权限记 blocked，生成配置建议"
+    },
+    {
+      "id": "S06",
+      "title": "初始化与版本回执",
+      "inputs": "真实 ATVP/raw或包加载、inner.init，记录 worker/loader/source/filter 身份",
+      "assertions": "限时初始化成功，实际装载版本可核验",
+      "boundary": "装载回执未提供则记身份未核验，不冒充源码已生效"
+    },
+    {
+      "id": "S07",
+      "title": "进程协议",
+      "inputs": "JSONL 请求 ID、stdout 污染、异常返回、超时与退出",
+      "assertions": "响应对应原请求；错误可定位；候选进程可结束",
+      "boundary": "修执行器或源的输出污染，保留原错"
+    },
+    {
+      "id": "S08",
+      "title": "冷启动/热调用与缓存",
+      "inputs": "分别新 worker 与连续调用；独立 cache 目录，记录 TTL与命中",
+      "assertions": "不靠旧 cache 掩盖加载失败；同一 worker 状态按合同复用",
+      "boundary": "针对过期缓存、会话丢失或状态串扰修复"
+    },
+    {
+      "id": "C01",
+      "title": "首页分类",
+      "inputs": "`homeContent(filter)`，验证 class、filters 结构与类别 ID",
+      "assertions": "类别可作为下游 category 输入；无非法空 ID",
+      "boundary": "搜索型源可不适用；空结果需有画像依据"
+    },
+    {
+      "id": "C02",
+      "title": "首页推荐",
+      "inputs": "`homeVideoContent` 或目标运行链的首页合并结果",
+      "assertions": "推荐条目能进入详情，结构符合真实客户端消费方式",
+      "boundary": "无推荐源可不适用；当前插件 T4 home 调用差异见规划 C6"
+    },
+    {
+      "id": "C03",
+      "title": "分类首/中/末页",
+      "inputs": "来自首页的真实 category ID 与已知/推导页码",
+      "assertions": "条目结构、分页元数据成立，第二页非错误重放首页，末页可结束",
+      "boundary": "单页源不强求第二页有数据"
+    },
+    {
+      "id": "C04",
+      "title": "筛选",
+      "inputs": "从源返回的真实 filters 取值，先单维再有限组合",
+      "assertions": "字段传入正确，响应符合语义或有可解释的弱排序；不要求所有组合都不同",
+      "boundary": "无筛选可不适用；记录已覆盖组合"
+    },
+    {
+      "id": "C05",
+      "title": "搜索",
+      "inputs": "正常词、无结果词、中文/特殊字符、quick 的适用档位",
+      "assertions": "正常词结果可进入详情；无结果合法为空，错误页不能冒充空列表",
+      "boundary": "画像声明可搜则必需"
+    },
+    {
+      "id": "C06",
+      "title": "搜索分页",
+      "inputs": "实际第二页，核对 T4 入口到 worker 的 pg",
+      "assertions": "与首屏及服务响应合同一致；无第二页时正常结束",
+      "boundary": "C2 适配差异必须用夹具区分"
+    },
+    {
+      "id": "C07",
+      "title": "详情基本信息",
+      "inputs": "使用 C02/C03/C05 返回的真实 ID，保留嵌套编码",
+      "assertions": "返回对应内容、必要字段与简介；错误 ID 不返回另一条默认影片",
+      "boundary": "不用人工拼 ID 冒充全链验证"
+    },
+    {
+      "id": "C08",
+      "title": "AT 包装/分组详情",
+      "inputs": "`atvp_detail:`、编码分组、后端返回 ID 按原值逐层传递",
+      "assertions": "路径能回到正确内容/分组，未被过度解码或二次编码破坏",
+      "boundary": "只有相应包装模式适用"
+    },
+    {
+      "id": "C09",
+      "title": "封面图片",
+      "inputs": "来自被测条目的真实图片 URL 与必要 headers，经实际图片代理路径",
+      "assertions": "限量读取后检查格式/可解码信息，防 HTML/JSON 错页假图片；记录客户端可达性",
+      "boundary": "图片失败与视频失败分项报告"
+    },
+    {
+      "id": "C10",
+      "title": "线路与选集",
+      "inputs": "解析 `vod_play_from / vod_play_url`，保持分组顺序与原始 ID",
+      "assertions": "组数与选集映射成立；名称/ID不空；每个采样能进入正确线路 player",
+      "boundary": "显示已知总线路和采样数；不把空组静默删掉"
+    },
+    {
+      "id": "C11",
+      "title": "详情增强对照",
+      "inputs": "原始详情和启用 T4DetailEnhancer 后的结果",
+      "assertions": "增强不丢原播放分组/ID；增强失败按原设计保留原结果",
+      "boundary": "开关与源级三态进入上下文指纹"
+    },
+    {
+      "id": "R01",
+      "title": "原始取链",
+      "inputs": "从 C10 取实际 flag、play ID 和可用 vipFlags",
+      "assertions": "响应结构、parse/jx、url、header 等字段符合源合同；仍未证明媒体可用",
+      "boundary": "不直接把非空 url 当成功"
+    },
+    {
+      "id": "R02",
+      "title": "ATVP 包装与后端解析",
+      "inputs": "同一 ID 经真实 Atvp，分别检查 backend_parse 与相应 AT 后端",
+      "assertions": "原始与包装结果差异可解释；后端地址/身份正确",
+      "boundary": "缺后端测试条件记 blocked"
+    },
+    {
+      "id": "R03",
+      "title": "过滤器阶段",
+      "inputs": "固定 filters 的顺序、stages、scope、EXT、error strategy；输入前后对照",
+      "assertions": "每个阶段按合同修改结果；必需过滤器失效不得被 skip 后静默算通过",
+      "boundary": "T4 未下发过滤器时归属适配层"
+    },
+    {
+      "id": "R04",
+      "title": "T4 五动作参数",
+      "inputs": "GET/表单/受支持JSON形态；ext 使用实际 URL-safe Base64 JSON；play flag与搜索pg夹具",
+      "assertions": "参数从入口到真实 worker 保真，类型/默认行为明确",
+      "boundary": "当前 C1/C2/C5 需先验证并明确合同"
+    },
+    {
+      "id": "R05",
+      "title": "T4 运行档位",
+      "inputs": "t4、t4-direct，真实服务端 EXT 与代理地址",
+      "assertions": "输出地址符合对应模式，客户端不依赖服务器的裸 localhost",
+      "boundary": "不能照抄 T3 设备端代理配置"
+    },
+    {
+      "id": "R06",
+      "title": "headers 与会话",
+      "inputs": "跟踪 UA、Referer、Origin、Cookie 的消费位置和媒体请求上下文",
+      "assertions": "实际媒体请求拥有必需头；密钥/凭据不因诊断外泄",
+      "boundary": "响应可有多种 header 表示，按真实消费者合同验证"
+    },
+    {
+      "id": "R07",
+      "title": "跳转链",
+      "inputs": "有界手动跟随，记录每跳状态/域名/头变化",
+      "assertions": "在限制内到达媒体，凭据传播符合目标范围，循环能停止",
+      "boundary": "不盲随无限重定向或转发所有凭据"
+    },
+    {
+      "id": "R08",
+      "title": "worker 本地服务桥",
+      "inputs": "使用实际 `/lp` 或 CENC 桥输出，读取小段/Range，验证路径和会话",
+      "assertions": "客户端可通过 AT 地址取到相同会话的媒体；端口与 worker 生命周期匹配",
+      "boundary": "不把生成桥 URL 当作桥已经可用"
+    },
+    {
+      "id": "R09",
+      "title": "资源与清理",
+      "inputs": "超时/取消/异常退出，记录进程、线程、临时文件和代理端口",
+      "assertions": "候选可清理且不影响生产/其他候选；达到限额能结束",
+      "boundary": "单纯线程超时不代表底层请求已停止"
+    },
+    {
+      "id": "R10",
+      "title": "发布后身份",
+      "inputs": "写入前后版本对照与实际 runtime 加载回执",
+      "assertions": "实际加载 source/runtime/config/filter 身份等于发布目标",
+      "boundary": "未切换或无回执只标待生效/未核验"
+    },
+    {
+      "id": "M01",
+      "title": "媒体响应分类",
+      "inputs": "R01–R08 得到的实际地址与请求上下文，有界读取",
+      "assertions": "内容与声明相符；排除 HTML 登录页、挑战页、错误 JSON",
+      "boundary": "HTTP 200 与视频可播分开"
+    },
+    {
+      "id": "M02",
+      "title": "HLS master",
+      "inputs": "解析真实清单；有界选择 variant，解析相对 URI",
+      "assertions": "清单语法成立，选中 variant 可继续访问",
+      "boundary": "只覆盖记录的 variant，非全部清晰度"
+    },
+    {
+      "id": "M03",
+      "title": "HLS media playlist",
+      "inputs": "解析 EXTINF、序列、结束标记、相对片段地址、byterange",
+      "assertions": "有可用片段且 URI 解析正确，直播窗口和点播结束语义成立",
+      "boundary": "不要求直播拥有 ENDLIST"
+    },
+    {
+      "id": "M04",
+      "title": "HLS key / init",
+      "inputs": "按清单处理授权范围内所需 key、EXT-X-MAP 和对应headers",
+      "assertions": "必需资源可获取且与分片需求匹配；敏感内容不进入普通报告",
+      "boundary": "不对不支持的 DRM 承诺解密或自动修复"
+    },
+    {
+      "id": "M05",
+      "title": "HLS 多分片取样",
+      "inputs": "首/中/后位置或直播滚动窗口，执行字节上限",
+      "assertions": "有媒体特征且非错误页；记录采样序列、窗口和限额",
+      "boundary": "单个 TS 头不能证明整个清单可播"
+    },
+    {
+      "id": "M06",
+      "title": "MP4 多位置 Range",
+      "inputs": "首/中/后有界请求，核对 Content-Range/返回位置与封装信息",
+      "assertions": "支持可解释的范围请求，封装信息与媒体相符；服务端忽略 Range 也不无限下载",
+      "boundary": "不能只看扩展名或首字节；完整解码是更高层验证"
+    },
+    {
+      "id": "M07",
+      "title": "有限连续窗口",
+      "inputs": "在独立时间/流量预算内持续取样或受控解复用",
+      "assertions": "记录窗口内连续获取情况与失败位置",
+      "boundary": "超出窗口的长播仍未验证"
+    },
+    {
+      "id": "M08",
+      "title": "seek / 切集 / 切线",
+      "inputs": "选定场景重新取链或做Range/客户端seek",
+      "assertions": "新位置/集/线可用，不误复用过期地址或错会话",
+      "boundary": "源端接口与客户端两层证据分开"
+    },
+    {
+      "id": "M09",
+      "title": "地址过期与恢复",
+      "inputs": "按 TTL 或故障夹具，重新请求取链和会话",
+      "assertions": "能重新得到可用地址；旧 URL 失败不直接归为源永久失效",
+      "boundary": "不能为触发过期而高频重复请求"
+    },
+    {
+      "id": "M10",
+      "title": "字幕/音轨等声明能力",
+      "inputs": "按画像检查关联资源、语言与容器映射",
+      "assertions": "声明的采样能力有对应资源与消费证据",
+      "boundary": "无声明时不强制作为首版合格门槛"
+    },
+    {
+      "id": "P01",
+      "title": "配置与源展示",
+      "inputs": "实际订阅输出、指定客户端版本和网络位置",
+      "assertions": "源能显示，EXT与加载器模式匹配，T4可见性符合开关",
+      "boundary": "独立于后台业务节点"
+    },
+    {
+      "id": "P02",
+      "title": "起播",
+      "inputs": "实际选集→player→媒体解码，保留日志和观察时点",
+      "assertions": "客户端进入播放、出现有效画面/音频，错误可关联源/集",
+      "boundary": "只声明该客户端的实测"
+    },
+    {
+      "id": "P03",
+      "title": "切线/切集/seek",
+      "inputs": "从真实界面执行选定用例",
+      "assertions": "行为生效且播放不串线，不因header或桥丢失失败",
+      "boundary": "用例范围明确"
+    },
+    {
+      "id": "P04",
+      "title": "长播",
+      "inputs": "约定时间窗口与资源预算",
+      "assertions": "记录实际播放时长、中断/恢复与网络条件",
+      "boundary": "未跑则 not_tested，不用 M07 替代"
+    },
+    {
+      "id": "P05",
+      "title": "故障与重启恢复",
+      "inputs": "worker异常、AT重启、过期会话、发布切换夹具",
+      "assertions": "新请求可恢复；旧会话行为符合声明；部署状态不丢失",
+      "boundary": "仅在测试实例注入故障"
+    }
+  ]
+}
