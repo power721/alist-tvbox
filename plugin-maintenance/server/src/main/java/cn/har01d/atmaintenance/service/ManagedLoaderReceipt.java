@@ -80,6 +80,9 @@ final class ManagedLoaderReceipt {
             "ValueError", "KeyError", "IndexError", "ZeroDivisionError", "RuntimeError",
             "NotImplementedError", "RecursionError", "UnicodeDecodeError", "JSONDecodeError",
             "TimeoutError", "ConnectionError", "OSError", "SyntaxError");
+    private static final Set<String> PLAYER_URL_SHAPES = Set.of("not_string", "empty", "absolute_http",
+            "magnet", "protocol_relative", "relative_path", "json_like", "html_like",
+            "percent_encoded_url", "base64_encoded_url", "custom_scheme", "opaque", "malformed");
 
     ManagedLoaderReceipt(ObjectMapper mapper) { this.mapper = mapper; }
 
@@ -122,7 +125,27 @@ final class ManagedLoaderReceipt {
                 if (contract.path(field).isBoolean()) playback.set(field, contract.path(field));
             if (!playback.isEmpty()) result.set("playbackContract", playback);
         }
+        if ("R01".equals(node.path("id").asText())) {
+            var player = playerContractObservations(mapper, node.path("playerContract"));
+            if (!player.isEmpty()) result.set("playerContract", player);
+        }
         return result;
+    }
+
+    private static ObjectNode playerContractObservations(ObjectMapper mapper, JsonNode contract) {
+        var player = mapper.createObjectNode();
+        for (String field : List.of("detailCallId", "playCallId", "returnedUrlBytes"))
+            if (integer(contract.path(field), 40_000_000)) player.set(field, contract.path(field));
+        for (String field : List.of("selectedIdentifierShape", "returnedUrlShape"))
+            if (PLAYER_URL_SHAPES.contains(contract.path(field).asText())) player.set(field, contract.path(field));
+        if (Set.of("missing", "null", "string", "boolean", "number", "object", "array", "other")
+                .contains(contract.path("returnedUrlType").asText()))
+            player.set("returnedUrlType", contract.path("returnedUrlType"));
+        if (Set.of("direct", "parse_required").contains(contract.path("parseMode").asText()))
+            player.set("parseMode", contract.path("parseMode"));
+        for (String field : List.of("returnedUrlMatchesIdentifier", "hasWhitespace", "hasFragment", "hasUserInfo", "hasHostname"))
+            if (contract.path(field).isBoolean()) player.set(field, contract.path(field));
+        return player;
     }
 
     void applyHttp(ObjectNode loader, JsonNode phase, JsonNode binding) throws IOException {
@@ -555,6 +578,21 @@ final class ManagedLoaderReceipt {
                                 && "detail".equals(call.path("method").asText()) && flag(call, "ok", true)),
                         "MANAGED_LOADER_RECEIPT_INVALID");
                 node.set("playbackContract", contractObservations(mapper, row).path("playbackContract"));
+            }
+            if (row.has("playerContract")) {
+                var contract = playerContractObservations(mapper, row.path("playerContract"));
+                require(id.equals("R01") && row.path("playerContract").isObject() && contract.size() == 12
+                        && integer(contract.path("detailCallId"), 32) && contract.path("detailCallId").asInt() > 0
+                        && integer(contract.path("playCallId"), 32)
+                        && contract.path("playCallId").asInt() > contract.path("detailCallId").asInt()
+                        && input.path("calls").valueStream().anyMatch(call ->
+                            call.path("id").equals(contract.path("detailCallId"))
+                                && "detail".equals(call.path("method").asText()) && flag(call, "ok", true))
+                        && input.path("calls").valueStream().anyMatch(call ->
+                            call.path("id").equals(contract.path("playCallId"))
+                                && "play".equals(call.path("method").asText()) && flag(call, "ok", true)),
+                        "MANAGED_LOADER_RECEIPT_INVALID");
+                node.set("playerContract", contract);
             }
             if (passed && reason.equals("FIRST_SECOND_PAGE_WINDOW_CONTRACT"))
                 node.put("paginationMode", "page-window");

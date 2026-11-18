@@ -927,6 +927,46 @@ class ModelClientTest {
     }
 
     @Test
+    void playerOutputShapesReachOrdinaryAndEnhancedRequestsWithoutRawValues() throws Exception {
+        var client = new ModelClient(mapper, validator, enabled());
+        try {
+            String source = "def player():\n    return 1\n";
+            var repair = coverRepair(source);
+            var frozen = (ObjectNode) repair.frozen();
+            frozen.withObject("policy").putArray("targetNodes").add("R01");
+            frozen.withObject("/baseline/profile").putArray("requiredNodes").add("S06").add("R01");
+            var baseline = frozen.withObject("/baseline/result/managedSourceEvidence");
+            baseline.remove("resourceEvidence");
+            var node = (ObjectNode) baseline.path("loaderValidation").path("nodes").get(0);
+            node.put("id", "R01").put("reason", "PLAYER_URL_INVALID");
+            node.putObject("playerContract").put("detailCallId", 5).put("playCallId", 7)
+                    .put("returnedUrlShape", "opaque").put("returnedUrlMatchesIdentifier", true).put("rawUrl", "PRIVATE");
+            var candidate = coverCandidate(repair, source);
+            var result = (ObjectNode) candidate.result();
+            var runtime = result.withObject("runtimeEvidence");
+            runtime.remove("resourceEvidence");
+            var after = (ObjectNode) runtime.path("loaderValidation").path("nodes").get(0);
+            after.put("id", "R01").put("status", "blocked").put("reason", "PLAYER_URL_INVALID");
+            after.putObject("playerContract").put("detailCallId", 5).put("playCallId", 7)
+                    .put("returnedUrlShape", "base64_encoded_url").put("returnedUrlMatchesIdentifier", true)
+                    .put("rawUrl", "PRIVATE");
+            result.putObject("runtimeAcceptance").putArray("nodes").addObject()
+                    .put("id", "R01").put("status", "blocked").put("reason", "PLAYER_URL_INVALID");
+            for (boolean enhanced : List.of(false, true)) {
+                var request = client.request(repair, source, List.of(candidate), enhanced);
+                var data = mapper.readTree(mapper.readTree(request).path("messages").get(1).path("content").asText());
+                assertEquals("opaque", data.path("loaderFailures").get(0).path("contractObservations")
+                        .path("playerContract").path("returnedUrlShape").asText());
+                var observed = data.path("previousCandidates").get(0).path("unresolvedNodes").get(0)
+                        .path("contractObservations").path("playerContract");
+                assertEquals("base64_encoded_url", observed.path("returnedUrlShape").asText());
+                assertTrue(observed.path("returnedUrlMatchesIdentifier").asBoolean());
+                assertFalse(request.contains("PRIVATE"));
+            }
+        } finally { client.close(); }
+    }
+
+    @Test
     void ordinaryAndEnhancedRequestsKeepActionHttpEvidenceWithoutChangingTargets() throws Exception {
         var client = new ModelClient(mapper, validator, enabled());
         try {

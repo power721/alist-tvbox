@@ -55,6 +55,17 @@ test('host header rejection identifies the unsupported field without exposing it
     requestDiagnostic: { reason: 'header_not_allowed', headerName: 'x-requested-with' } }), '请求头未适配：x-requested-with')
 })
 
+test('player output diagnostics name the observed shape without turning hints into success', () => {
+  const view = panel()
+  const finding = { contractObservations: { playerContract: { playCallId: 7, detailCallId: 5,
+    returnedUrlShape: 'base64_encoded_url', returnedUrlMatchesIdentifier: true, parseMode: 'parse_required',
+    hasWhitespace: true, hasFragment: true, url: 'PRIVATE' } } }
+  const label = view.contractLabel(finding)
+  assert.equal(label, '取链调用 #7；返回值：Base64 编码地址；原样返回选集标识；要求外部解析；含空白或控制字符；含地址片段')
+  assert.ok(!label.includes('PRIVATE'))
+  assert.equal(view.requests.length, 0)
+})
+
 test('Cloudflare explicit denial is not presented as a waiting challenge', () => {
   const view = panel()
   assert.match(view.findingLabel({ reason: 'CONTENT_LIST_EMPTY_OR_INVALID', accessClassification: 'cloudflare_access_denied' }),

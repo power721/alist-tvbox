@@ -135,6 +135,12 @@ public class ModelClient {
             identifies the observed detail call, group/episode indexes and missing name/separator/identifier,
             without exposing opaque identifiers. Fix the extraction/serialization at that boundary;
             do not skip malformed episodes just to pass validation or treat magnet identifiers as HTTP URLs.
+            R01 playerContract binds a successful detail and play call and reports only redacted URL
+            shapes, parser mode, whitespace/fragment/userinfo flags and whether the returned URL
+            equals the selected identifier. Use it to distinguish opaque passthrough from relative,
+            encoded or malformed output. Shapes are diagnostic hints, not decoded values or proof
+            of a usable route; do not invent a base URL, decoder or parser, normalize invalid output
+            into acceptance, or infer that a challenge on a discovered script caused this play result.
             A cover match alone does not establish detail identity. Counts describe the sampled
             calls, not expected totals or permission to hardcode output. Preserve valid magnet
             handoffs and source-specific pagination. Missing observations do not prove a defect.

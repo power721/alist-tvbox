@@ -11,7 +11,7 @@ import subprocess
 import threading
 import time
 from html.parser import HTMLParser
-from urllib.parse import urlsplit, parse_qsl, urljoin, urldefrag
+from urllib.parse import urlsplit, parse_qsl, urljoin, urldefrag, unquote
 
 
 def digest(value):
@@ -429,6 +429,70 @@ def detail_identity(selected, detail):
     }
 
 
+def player_url_shape(value):
+    if not isinstance(value, str):
+        return "not_string"
+    if not value.strip():
+        return "empty"
+    text = value.strip()
+    try:
+        parsed = urlsplit(text)
+        if parsed.scheme in {"http", "https"}:
+            return "absolute_http" if parsed.hostname else "malformed"
+        if parsed.scheme == "magnet":
+            return "magnet"
+        if text.startswith("//"):
+            return "protocol_relative"
+        if text.startswith(("/", "./", "../")):
+            return "relative_path"
+        if text.startswith(("{", "[", '"')):
+            return "json_like"
+        if text.startswith("<"):
+            return "html_like"
+        # Recognition only: never replace the URL, execute decoded text or request it.
+        if len(text) <= 8192:
+            if unquote(text).lower().startswith(("http://", "https://", "//")):
+                return "percent_encoded_url"
+            if re.fullmatch(r"[A-Za-z0-9_+/-]+={0,2}", text):
+                try:
+                    decoded = base64.b64decode(text + "=" * (-len(text) % 4), altchars=b"-_", validate=True)
+                    if decoded.lower().startswith((b"http://", b"https://", b"//")):
+                        return "base64_encoded_url"
+                except ValueError:
+                    pass
+        return "custom_scheme" if parsed.scheme else "opaque"
+    except ValueError:
+        return "malformed"
+
+
+def player_output_contract(player, selected_identifier, detail_call_id, play_call_id):
+    url = player.get("url")
+    url_type = ("missing" if "url" not in player else "null" if url is None else
+                "string" if isinstance(url, str) else "boolean" if isinstance(url, bool) else
+                "number" if isinstance(url, (int, float)) else "object" if isinstance(url, dict) else
+                "array" if isinstance(url, list) else "other")
+    direct = (all(type(player.get(key, 0)) in {int, str} and str(player.get(key, 0)) == "0"
+                  for key in ("parse", "jx")) and player.get("playUrl", "") == "")
+    value = {
+        "detailCallId": detail_call_id, "playCallId": play_call_id,
+        "selectedIdentifierShape": player_url_shape(selected_identifier),
+        "returnedUrlShape": player_url_shape(url), "returnedUrlType": url_type,
+        "returnedUrlBytes": len(url.encode()) if isinstance(url, str) else 0,
+        "returnedUrlMatchesIdentifier": isinstance(url, str) and url == selected_identifier,
+        "parseMode": "direct" if direct else "parse_required",
+        "hasWhitespace": isinstance(url, str) and any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url),
+        "hasFragment": False, "hasUserInfo": False, "hasHostname": False,
+    }
+    if isinstance(url, str):
+        try:
+            parsed = urlsplit(url)
+            value.update(hasFragment=bool(parsed.fragment), hasUserInfo=parsed.username is not None,
+                         hasHostname=bool(parsed.hostname))
+        except ValueError:
+            pass
+    return value
+
+
 def player_contract(player):
     url = player.get("url")
     value = {"playerRouteKind": "absent", "offlineResolverRequired": False,
@@ -815,6 +879,8 @@ class Loader:
             try:
                 player = document((yield from self.invoke("play", {"flag": selection[0], "play": selection[1]})))
                 contract = player_contract(player)
+                contract["playerContract"] = player_output_contract(player, selection[1], detail_call_id,
+                                                                     self.calls[-1]["id"])
                 self.summary["playerUrlKind"] = (
                     contract["playerRouteKind"] if contract["playerRouteKind"] in {"http", "https", "absent"}
                     else "other")
@@ -839,8 +905,7 @@ class Loader:
                     require(isinstance(headers, dict) and all(isinstance(k, str) and isinstance(v, str)
                                                              for k, v in headers.items()), "PLAYER_HEADERS_INVALID")
                     player["header"] = headers
-                    direct = (all(type(player.get(key, 0)) in {int, str} and str(player.get(key, 0)) == "0"
-                                  for key in ("parse", "jx")) and player.get("playUrl", "") == "")
+                    direct = contract["playerContract"]["parseMode"] == "direct"
                     if not direct and self.resource_evidence is None:
                         self.resource_evidence = collect_resource_evidence(
                             self.broker, self.source_sha, target_node="R01",

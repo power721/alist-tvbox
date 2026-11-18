@@ -8,7 +8,7 @@ from unittest.mock import patch
 import at_source_projection as projection
 from managed_loader import (Loader, Invalid, decode_image, source_identity, validate_source_identity,
                             collect_resource_evidence, resource_links, resource_excerpts, MAX_RESOURCE_TEXT)
-from managed_loader import json_structure, digest
+from managed_loader import json_structure, digest, player_url_shape
 
 SOURCE = b"class Spider: pass\n"
 RUNTIME = "a" * 64
@@ -76,6 +76,57 @@ def drive(transform=lambda c, v: v, *, ready=True, profile=None, jsonl=False, so
 
 
 class LoaderTest(unittest.TestCase):
+    def test_player_url_shapes_recognize_transport_forms_without_exposing_values(self):
+        import base64
+        cases = [
+            (None, "not_string"), ({"url": "PRIVATE"}, "not_string"), (" ", "empty"),
+            ("https://media.example/PRIVATE", "absolute_http"), ("http:/PRIVATE", "malformed"),
+            ("//media.example/PRIVATE", "protocol_relative"), ("/PRIVATE", "relative_path"),
+            ("../PRIVATE", "relative_path"), ('{"url":"PRIVATE"}', "json_like"),
+            ("<html>PRIVATE</html>", "html_like"), ("https%3A%2F%2Fmedia.example%2FPRIVATE", "percent_encoded_url"),
+            (base64.b64encode(b"https://media.example/PRIVATE").decode(), "base64_encoded_url"),
+            (base64.urlsafe_b64encode(b"https://media.example/PRIVATE").decode().rstrip("="), "base64_encoded_url"),
+            ("magnet:?xt=urn:btih:PRIVATE", "magnet"), ("custom:PRIVATE", "custom_scheme"),
+            ("PRIVATE", "opaque"), ("https://[PRIVATE", "malformed"), ("a" * 9000, "opaque"),
+        ]
+        for value, expected in cases:
+            with self.subTest(shape=expected):
+                self.assertEqual(expected, player_url_shape(value))
+
+    def test_invalid_player_output_retains_bound_redacted_shapes_without_changing_verdict(self):
+        profile = {"schemaVersion": 1, "requiredNodes": ["S06", "C10", "R01"]}
+        for url in ("opaque$tail", "//media.example/PRIVATE", "/PRIVATE", None, {}, "https://[PRIVATE"):
+            with self.subTest(url_type=type(url).__name__):
+                def player(call, value):
+                    return {"parse": 0, "url": url, "header": {"Cookie": "PRIVATE"}} if call["method"] == "play" else value
+                loader, nodes = drive(player, profile=profile)
+                observed = nodes["R01"]["playerContract"]
+                self.assertEqual("blocked", nodes["R01"]["status"])
+                self.assertEqual("pass", nodes["C10"]["status"])
+                self.assertEqual("opaque", observed["selectedIdentifierShape"])
+                self.assertEqual(url == "opaque$tail", observed["returnedUrlMatchesIdentifier"])
+                self.assertEqual(player_url_shape(url), observed["returnedUrlShape"])
+                self.assertEqual("play", loader.calls[observed["playCallId"] - 1]["method"])
+                self.assertEqual("detail", loader.calls[observed["detailCallId"] - 1]["method"])
+                self.assertLess(observed["detailCallId"], observed["playCallId"])
+                self.assertNotIn("PRIVATE", json.dumps(observed))
+                self.assertEqual(1, sum(call["method"] == "play" for call in loader.calls))
+
+    def test_player_output_diagnostics_do_not_decode_or_normalize_urls_into_success(self):
+        import base64
+        profile = {"schemaVersion": 1, "requiredNodes": ["S06", "R01"]}
+        for url, shape in ((base64.b64encode(b"https://media.example/PRIVATE").decode(), "base64_encoded_url"),
+                           ("https%3A%2F%2Fmedia.example%2FPRIVATE", "percent_encoded_url")):
+            loader, nodes = drive(lambda call, value: {"url": url} if call["method"] == "play" else value,
+                                  profile=profile)
+            self.assertEqual("PLAYER_URL_INVALID", nodes["R01"]["reason"])
+            self.assertEqual(shape, nodes["R01"]["playerContract"]["returnedUrlShape"])
+            self.assertEqual("not_requested", loader.summary["mediaStatus"])
+        _, nodes = drive(profile=profile)
+        self.assertEqual("pass", nodes["R01"]["status"])
+        self.assertEqual("absolute_http", nodes["R01"]["playerContract"]["returnedUrlShape"])
+        self.assertEqual("direct", nodes["R01"]["playerContract"]["parseMode"])
+
     def test_nested_json_string_structure_is_bounded_one_level_and_redacted(self):
         embedded = json.dumps({"url": "https://media.example/PRIVATE", "name": "PRIVATE",
                                "cookie": "PRIVATE", "nested": json.dumps({"password": "PRIVATE"})})
@@ -827,7 +878,7 @@ class LoaderTest(unittest.TestCase):
         loader, _ = drive(record)
         self.assertEqual([{"flag": "flag", "play": "opaque$tail"}], captured)
         serialized = json.dumps(loader.receipt())
-        for text in ("opaque", "private.m3u8", "media.example.com"):
+        for text in ("opaque$tail", "private.m3u8", "media.example.com"):
             self.assertNotIn(text, serialized)
 
     def test_external_parser_page_is_diagnostic_and_not_a_direct_media_pass(self):

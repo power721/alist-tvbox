@@ -16,6 +16,51 @@ class ManagedLoaderReceiptTest {
     private final String source = "a".repeat(64), worker = "b".repeat(64);
 
     @Test
+    void projectsPlayerOutputShapesOnlyWhenBoundToSuccessfulDetailAndPlayCalls() throws Exception {
+        var profile = profile();
+        profile.withArray("requiredNodes").add("R01");
+        var input = receipt();
+        input.put("inputProfileSha256", Hashes.sha256(profile.toString()));
+        input.withArray("requiredNodes").add("R01");
+        var node = input.withArray("nodes").addObject().put("id", "R01").put("status", "blocked")
+                .put("reason", "PLAYER_URL_INVALID");
+        var contract = node.putObject("playerContract").put("detailCallId", 2).put("playCallId", 3)
+                .put("selectedIdentifierShape", "opaque").put("returnedUrlShape", "opaque")
+                .put("returnedUrlType", "string").put("returnedUrlBytes", 55)
+                .put("returnedUrlMatchesIdentifier", true).put("parseMode", "direct")
+                .put("hasWhitespace", false).put("hasFragment", false).put("hasUserInfo", false)
+                .put("hasHostname", false).put("rawUrl", "PRIVATE");
+        var calls = input.withArray("calls");
+        for (String method : List.of("detail", "play")) {
+            int callId = calls.size() + 1;
+            calls.addObject().put("id", callId).put("method", method).put("ok", true)
+                    .put("inputSha256", "d".repeat(64)).put("outputSha256", "e".repeat(64)).put("elapsedMillis", 1);
+        }
+        input.put("callsSha256", Hashes.sha256(mapper.writer().with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+                .writeValueAsString(mapper.convertValue(calls, Object.class))));
+        var projected = receipts.project(input, profile, source, source, worker).path("nodes").get(4);
+        assertEquals("blocked", projected.path("status").asText());
+        assertEquals("opaque", projected.path("playerContract").path("returnedUrlShape").asText());
+        assertEquals(12, projected.path("playerContract").size());
+        assertFalse(projected.toString().contains("PRIVATE"));
+        assertEquals(projected.path("playerContract"), ManagedLoaderReceipt.contractObservations(mapper, projected).path("playerContract"));
+        for (String defect : List.of("wrongDetail", "wrongPlay", "badShape", "badType", "missingFlag", "negativeSize")) {
+            var changed = input.deepCopy();
+            var invalid = (ObjectNode) changed.path("nodes").get(4).path("playerContract");
+            switch (defect) {
+                case "wrongDetail" -> invalid.put("detailCallId", 1);
+                case "wrongPlay" -> invalid.put("playCallId", 2);
+                case "badShape" -> invalid.put("returnedUrlShape", "PRIVATE");
+                case "badType" -> invalid.put("returnedUrlType", "PRIVATE");
+                case "missingFlag" -> invalid.remove("hasHostname");
+                default -> invalid.put("returnedUrlBytes", -1);
+            }
+            assertThrows(IOException.class, () -> receipts.project(changed, profile, source, source, worker), defect);
+        }
+        contract.remove("rawUrl");
+    }
+
+    @Test
     void projectsEpisodeFailureDetailsOnlyFromTheObservedDetailCallWithoutOpaqueValues() throws Exception {
         var profile = profile();
         profile.withArray("requiredNodes").add("C10");

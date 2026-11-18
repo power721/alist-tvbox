@@ -25,7 +25,9 @@ interface Diagnostic {
     regression?: { field: string; before: number; after: number }
     accessClassification?: string; accessAssociation?: string; requestDiagnostic?: { reason: string; headerName: string }
     contractObservations?: { identityEvidence?: Record<string, boolean>; firstItems?: number; secondItems?: number
-      pagesObserved?: number; playerRouteKind?: string; offlineResolverRequired?: boolean } }[]
+      pagesObserved?: number; playerRouteKind?: string; offlineResolverRequired?: boolean
+      playerContract?: { detailCallId?: number; playCallId?: number; returnedUrlShape?: string
+        returnedUrlMatchesIdentifier?: boolean; parseMode?: string; hasWhitespace?: boolean; hasFragment?: boolean } } }[]
   accessPage?: { classification: string; targetNode: string; observedNode?: string
     observedDuringCall?: { id: number; method: string }; responseStatus?: number }
   routes: string[]; missingMaterials: string[]; resourceEvidenceAvailable: boolean
@@ -147,6 +149,19 @@ function contractLabel(finding: Diagnostic['findings'][number]) {
   if (typeof observed.pagesObserved === 'number') parts.push(`已观察 ${observed.pagesObserved} 页`)
   if (observed.playerRouteKind === 'magnet') parts.push('磁力交接')
   if (observed.offlineResolverRequired === true) parts.push('需要 AT 离线解析')
+  const player = observed.playerContract
+  if (player) {
+    const shapes: Record<string, string> = { not_string: '非字符串', empty: '空地址', absolute_http: '完整 HTTP 地址',
+      magnet: '磁力链接', protocol_relative: '缺少协议的地址', relative_path: '相对路径', json_like: 'JSON 形态',
+      html_like: 'HTML 形态', percent_encoded_url: '百分号编码地址', base64_encoded_url: 'Base64 编码地址',
+      custom_scheme: '自定义协议', opaque: '不透明标识', malformed: '地址格式异常' }
+    if (player.playCallId) parts.push(`取链调用 #${player.playCallId}`)
+    if (player.returnedUrlShape && shapes[player.returnedUrlShape]) parts.push(`返回值：${shapes[player.returnedUrlShape]}`)
+    if (player.returnedUrlMatchesIdentifier === true) parts.push('原样返回选集标识')
+    if (player.parseMode === 'parse_required') parts.push('要求外部解析')
+    if (player.hasWhitespace === true) parts.push('含空白或控制字符')
+    if (player.hasFragment === true) parts.push('含地址片段')
+  }
   return parts.join('；')
 }
 function accessPageLabel(page: NonNullable<Diagnostic['accessPage']>) {

@@ -450,6 +450,26 @@ class RepairDiagnosticsTest {
     }
 
     @Test
+    void playerDiagnosticsReachRepairContextWithoutCopyingRawUrlsOrChangingAcceptance() {
+        var evidence = evidence(sha, "R01", "PLAYER_URL_INVALID");
+        ((ObjectNode) evidence.path("loaderValidation").path("nodes").get(0)).putObject("playerContract")
+                .put("playCallId", 7).put("detailCallId", 5).put("returnedUrlBytes", 55)
+                .put("returnedUrlType", "string").put("selectedIdentifierShape", "opaque")
+                .put("returnedUrlShape", "protocol_relative").put("returnedUrlMatchesIdentifier", true)
+                .put("parseMode", "direct").put("hasWhitespace", false).put("hasFragment", true)
+                .put("hasUserInfo", false).put("hasHostname", true).put("url", "SECRET");
+        String before = evidence.toString();
+        var result = diagnostics.forRepair(repair(evidence), List.of());
+        var contract = result.path("findings").get(0).path("contractObservations").path("playerContract");
+        assertEquals("protocol_relative", contract.path("returnedUrlShape").asText());
+        assertTrue(contract.path("returnedUrlMatchesIdentifier").asBoolean());
+        assertEquals(7, contract.path("playCallId").asInt());
+        assertFalse(result.toString().contains("SECRET"));
+        assertFalse(result.path("acceptanceChanged").asBoolean());
+        assertEquals(before, evidence.toString());
+    }
+
+    @Test
     void initializationUsesSafeTypeAndNeverCopiesExceptionText() {
         var evidence = evidence(sha, "S06", "LOADER_INIT_FAILED");
         ((ObjectNode) evidence.path("loaderValidation").path("nodes").get(0))
