@@ -16,6 +16,8 @@
 
 最新上游已拥有 V59 Java 迁移。内置平台不再占用宿主 `flyway_schema_history` 的版本号：先完成宿主迁移，再将 `db/maintenance/h2` 迁移到独立 `maintenance_schema_history`，仍使用同一 H2 数据库，备份保留两套历史。
 
+上游 4.1.2 classic starter 的 gRPC 自动配置引用未安装的 `GrpcServiceDiscoverer`，在启用 CSRF 的管理安全链真实启动时失败。内置 profile 只排除未使用的 `spring-boot-grpc-server`，保留宿主默认依赖、ADMIN 权限和 CSRF 校验，不通过降级版本或关闭安全校验规避。
+
 旧私有 RC 的 V59-V74 曾写入宿主历史，不能直接用新版本覆盖启动。遇到该历史明确报 `MAINTENANCE_LEGACY_SCHEMA_REQUIRES_EXPORT`，不执行 repair、删除或伪造迁移记录。先保留冷备份，再向新的测试实例移交来源与候选。旧实例与当前 NAS RC9.1 不因本次源码整理被升级。MySQL、PostgreSQL 和 Native Image 尚未验收。
 
 ## 真实业务进度
