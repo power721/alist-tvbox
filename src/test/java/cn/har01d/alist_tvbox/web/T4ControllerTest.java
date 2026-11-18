@@ -408,6 +408,8 @@ class T4ControllerTest {
         when(pluginRepository.findByExternalId("plugin-9")).thenReturn(java.util.Optional.empty());
         when(pluginRepository.findById(9)).thenReturn(java.util.Optional.of(plugin));
         when(pluginWorkerService.isAvailable()).thenReturn(true);
+        when(subscriptionService.buildT4PluginExtend(plugin, TOKEN, appProperties.getT4ProxyMode()))
+                .thenReturn("fixture-extend");
         when(pluginWorkerService.call(eq("plugin-9"), org.mockito.ArgumentMatchers.anyString(),
                 eq("home"), org.mockito.ArgumentMatchers.anyMap()))
                 .thenReturn(new ObjectMapper().readTree("{\"class\":[]}"));

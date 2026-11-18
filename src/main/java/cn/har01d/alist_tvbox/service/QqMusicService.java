@@ -66,6 +66,7 @@ public class QqMusicService {
 
     private final ObjectMapper objectMapper;
     private final PluginRepository pluginRepository;
+    private final PluginMutationGuard mutationGuard;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)
             .connectTimeout(Duration.ofSeconds(10))
@@ -73,9 +74,10 @@ public class QqMusicService {
     private final Random random = new Random();
     private final Map<String, QrSession> sessions = new ConcurrentHashMap<>();
 
-    public QqMusicService(ObjectMapper objectMapper, PluginRepository pluginRepository) {
+    public QqMusicService(ObjectMapper objectMapper, PluginRepository pluginRepository, PluginMutationGuard mutationGuard) {
         this.objectMapper = objectMapper;
         this.pluginRepository = pluginRepository;
+        this.mutationGuard = mutationGuard;
     }
 
     // ptlogin 的 ptqrtoken / g_tk 算法：与 py/QQ音乐.py 的 hash33 保持一致
@@ -461,6 +463,7 @@ public class QqMusicService {
     }
 
     boolean refreshPlugin(Plugin plugin) throws IOException {
+        if (mutationGuard.managed(plugin.getId())) return false;
         String extend = plugin.getExtend();
         if (StringUtils.isBlank(extend)) {
             return false;
@@ -478,8 +481,7 @@ public class QqMusicService {
             log.warn("QQ音乐插件凭据刷新失败: {}", plugin.getName());
             return false;
         }
-        plugin.setExtend(next);
-        pluginRepository.save(plugin);
+        if (!mutationGuard.updateExtend(plugin.getId(), extend, next)) return false;
         log.info("QQ音乐插件凭据刷新成功: {}", plugin.getName());
         return true;
     }

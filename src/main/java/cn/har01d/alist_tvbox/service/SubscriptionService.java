@@ -2047,6 +2047,21 @@ public class SubscriptionService {
         return map;
     }
 
+    public String buildT4PluginExtend(Plugin plugin, String token, String proxyMode) throws IOException {
+        Map<String, Object> payload = buildPluginExtPayload(plugin, readHostAddress(""),
+                token, token, "", false, null);
+        payload.remove("local_proxy_config");
+        payload.remove("preheatUrl");
+        payload.put("t4_play_type", "direct".equals(proxyMode) ? "t4-direct" : "t4");
+        List<Map<String, Object>> filters = buildPluginFilters(
+                plugin, pluginFilterRepository.findByEnabledTrueOrderBySortOrderAscIdAsc());
+        if (!filters.isEmpty()) {
+            payload.put("filters", filters);
+        }
+        return java.util.Base64.getEncoder().encodeToString(
+                objectMapper.writeValueAsString(payload).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     private Map<String, Object> buildPluginSite(Plugin plugin, String token, String secret,
                                                 String playbackToken, String configUrl,
                                                 List<PluginFilter> enabledFilters) throws JsonProcessingException {
@@ -2556,7 +2571,7 @@ public class SubscriptionService {
     }
 
     /** 插件显示名允许重命名；订阅站点 key 必须使用跨设备稳定的 manifest id。 */
-    static String pluginSiteKey(Plugin plugin) {
+    public static String pluginSiteKey(Plugin plugin) {
         // 自定义网页源:站点目录 key 与下发的 csp_WebHome 站点 key 保持一致(配置编辑器归类为受管源)
         if (PluginService.isWebPagePlugin(plugin)) {
             return PluginService.webPageSiteKey(plugin);
