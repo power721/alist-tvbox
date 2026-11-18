@@ -60,7 +60,9 @@ class PluginServiceTest {
         lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(new SimpleTransactionStatus());
         lenient().when(subscriptionSourceService.nextSortOrder()).thenReturn(1);
         lenient().when(gitHubProxyService.readProxyListFromFile()).thenReturn(List.of());
-        pluginService = new PluginService(pluginRepository, settingRepository, builder, objectMapper, new TransactionTemplate(transactionManager), subscriptionSourceService, gitHubProxyService);
+        pluginService = new PluginService(pluginRepository, settingRepository, builder, objectMapper,
+                new TransactionTemplate(transactionManager), subscriptionSourceService, gitHubProxyService,
+                PluginMutationGuardTestSupport.unmanaged(pluginRepository));
     }
 
     @Test
@@ -291,6 +293,8 @@ class PluginServiceTest {
         second.setId(2);
 
         when(pluginRepository.findAllById(List.of(1, 2))).thenReturn(List.of(first, second));
+        when(pluginRepository.findById(1)).thenReturn(Optional.of(first));
+        when(pluginRepository.findById(2)).thenReturn(Optional.of(second));
 
         int deleted = pluginService.deleteBatch(List.of(1, 2));
 
@@ -312,6 +316,8 @@ class PluginServiceTest {
         remainingSecond.setSortOrder(6);
 
         when(pluginRepository.findAllById(List.of(1, 2))).thenReturn(List.of(first, second));
+        when(pluginRepository.findById(1)).thenReturn(Optional.of(first));
+        when(pluginRepository.findById(2)).thenReturn(Optional.of(second));
         int deleted = pluginService.deleteBatch(List.of(1, 2));
 
         assertThat(deleted).isEqualTo(2);
@@ -329,8 +335,6 @@ class PluginServiceTest {
 
         when(pluginRepository.findById(2)).thenReturn(Optional.of(second));
         when(pluginRepository.findById(1)).thenReturn(Optional.of(first));
-        when(pluginRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
-
         pluginService.reorder(List.of(2, 1));
 
         assertThat(second.getSortOrder()).isEqualTo(1);
@@ -741,6 +745,7 @@ class PluginServiceTest {
         existing.setUrl("/static/webhome/pages/emby.html");
         existing.setName("emby");
         when(pluginRepository.findByUrl("/static/webhome/pages/emby.html")).thenReturn(Optional.of(existing));
+        when(pluginRepository.findById(5)).thenReturn(Optional.of(existing));
         when(pluginRepository.save(existing)).thenReturn(existing);
 
         pluginService.upsertWebPage("/static/webhome/pages/emby.html", "emby");

@@ -45,7 +45,7 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
-                new ObjectMapper()
+                new ObjectMapper(), PluginMutationGuardTestSupport.unmanaged(pluginRepository)
         );
 
         assertThat(service.findAll())
@@ -108,15 +108,14 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
-                new ObjectMapper()
+                new ObjectMapper(), PluginMutationGuardTestSupport.unmanaged(pluginRepository)
         );
 
         service.migrateWebPagesToFrontOnce();
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Plugin>> captor = ArgumentCaptor.forClass((Class) List.class);
-        verify(pluginRepository).saveAll(captor.capture());
-        List<Plugin> saved = captor.getValue();
+        ArgumentCaptor<Plugin> captor = ArgumentCaptor.forClass(Plugin.class);
+        verify(pluginRepository, org.mockito.Mockito.times(3)).save(captor.capture());
+        List<Plugin> saved = captor.getAllValues();
         assertThat(saved).extracting(Plugin::getId).containsExactly(2, 3, 1);
         verify(settingRepository).save(org.mockito.ArgumentMatchers.argThat(
                 arg -> arg != null && "web_pages_front_migrated".equals(arg.getName())));
@@ -157,15 +156,14 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
-                new ObjectMapper()
+                new ObjectMapper(), PluginMutationGuardTestSupport.unmanaged(pluginRepository)
         );
 
         service.moveToFrontOfPlugins("plugin-2");
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Plugin>> captor = ArgumentCaptor.forClass((Class) List.class);
-        verify(pluginRepository).saveAll(captor.capture());
-        List<Plugin> saved = captor.getValue();
+        ArgumentCaptor<Plugin> captor = ArgumentCaptor.forClass(Plugin.class);
+        verify(pluginRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        List<Plugin> saved = captor.getAllValues();
         assertThat(saved).extracting(Plugin::getId).containsExactly(2, 1);
         assertThat(saved.get(0).getSortOrder()).isEqualTo(saved.get(1).getSortOrder() - 1);
     }
@@ -200,7 +198,7 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
-                new ObjectMapper()
+                new ObjectMapper(), PluginMutationGuardTestSupport.unmanaged(pluginRepository)
         );
 
         assertThat(service.findAll())
@@ -253,7 +251,7 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
-                objectMapper
+                objectMapper, PluginMutationGuardTestSupport.unmanaged(pluginRepository)
         );
 
         assertThat(service.t4HiddenSiteKeys()).isEmpty();

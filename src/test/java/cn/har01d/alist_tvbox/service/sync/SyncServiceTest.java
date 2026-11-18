@@ -68,6 +68,10 @@ class SyncServiceTest {
             var field = SyncService.class.getDeclaredField("objectMapper");
             field.setAccessible(true);
             field.set(syncService, objectMapper);
+            org.springframework.test.util.ReflectionTestUtils.setField(syncService, "mutationGuard",
+                    cn.har01d.alist_tvbox.service.PluginMutationGuardTestSupport.unmanaged(pluginRepository));
+            org.springframework.test.util.ReflectionTestUtils.setField(syncService, "transaction",
+                    cn.har01d.alist_tvbox.service.PluginMutationGuardTestSupport.transaction());
         } catch (Exception e) {
             fail("Failed to inject objectMapper: " + e.getMessage());
         }

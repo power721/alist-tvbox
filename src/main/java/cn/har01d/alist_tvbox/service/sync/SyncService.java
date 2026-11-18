@@ -3,12 +3,14 @@ package cn.har01d.alist_tvbox.service.sync;
 import cn.har01d.alist_tvbox.dto.sync.*;
 import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.VersionMismatchException;
+import cn.har01d.alist_tvbox.service.PluginMutationGuard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.*;
 
@@ -33,6 +35,8 @@ public class SyncService {
     private final ObjectMapper objectMapper;
     private final cn.har01d.alist_tvbox.service.UserService userService;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final PluginMutationGuard mutationGuard;
+    private final TransactionTemplate transaction;
 
     // Setting 白名单
     private static final Set<String> SETTING_WHITELIST = Set.of(
@@ -65,7 +69,8 @@ public class SyncService {
                       RemoteClient remoteClient,
                       ObjectMapper objectMapper,
                       cn.har01d.alist_tvbox.service.UserService userService,
-                      org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
+                      org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
+                      PluginMutationGuard mutationGuard, TransactionTemplate transaction) {
         this.settingRepository = settingRepository;
         this.siteRepository = siteRepository;
         this.shareRepository = shareRepository;
@@ -82,6 +87,8 @@ public class SyncService {
         this.objectMapper = objectMapper;
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
+        this.mutationGuard = mutationGuard;
+        this.transaction = transaction;
     }
 
     public SyncData exportData(List<String> modules) {
@@ -604,10 +611,16 @@ public class SyncService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SyncResult importPlugins(List<Plugin> plugins, MergeStrategy strategy) {
+        // importData calls this on the same instance, so the template is also required.
+        return transaction.execute(status -> importPluginsInTransaction(plugins, strategy));
+    }
+
+    private SyncResult importPluginsInTransaction(List<Plugin> plugins, MergeStrategy strategy) {
         SyncResult result = new SyncResult();
 
         try {
             if (strategy == MergeStrategy.OVERWRITE) {
+                mutationGuard.requireAllWritable();
                 pluginRepository.deleteAll();
             }
 
@@ -626,6 +639,7 @@ public class SyncService {
                     }
 
                     if (existing != null) {
+                        existing = mutationGuard.writable(existing.getId());
                         existing.setName(remote.getName());
                         existing.setExternalId(remote.getExternalId());
                         existing.setUrl(remote.getUrl());

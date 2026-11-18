@@ -32,13 +32,16 @@ class QqMusicServiceTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private QqMusicService newService() {
-        return new QqMusicService(objectMapper, pluginRepository);
+        return new QqMusicService(objectMapper, pluginRepository, PluginMutationGuardTestSupport.unmanaged(pluginRepository));
     }
 
     private Plugin plugin(String name, String extend) {
         Plugin plugin = new Plugin();
+        plugin.setId(name.hashCode());
         plugin.setName(name);
         plugin.setExtend(extend);
+        org.mockito.Mockito.lenient().when(pluginRepository.findById(plugin.getId()))
+                .thenReturn(java.util.Optional.of(plugin));
         return plugin;
     }
 

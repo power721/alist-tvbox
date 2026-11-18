@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -42,6 +43,7 @@ public class SubscriptionSourceService {
     private final FeiniuRepository feiniuRepository;
     private final JellyfinRepository jellyfinRepository;
     private final ObjectMapper objectMapper;
+    private final PluginMutationGuard mutationGuard;
 
     public SubscriptionSourceService(AppProperties appProperties,
                                      PluginRepository pluginRepository,
@@ -50,7 +52,8 @@ public class SubscriptionSourceService {
                                      EmbyRepository embyRepository,
                                      FeiniuRepository feiniuRepository,
                                      JellyfinRepository jellyfinRepository,
-                                     ObjectMapper objectMapper) {
+                                     ObjectMapper objectMapper,
+                                     PluginMutationGuard mutationGuard) {
         this.appProperties = appProperties;
         this.pluginRepository = pluginRepository;
         this.settingRepository = settingRepository;
@@ -59,6 +62,7 @@ public class SubscriptionSourceService {
         this.feiniuRepository = feiniuRepository;
         this.jellyfinRepository = jellyfinRepository;
         this.objectMapper = objectMapper;
+        this.mutationGuard = mutationGuard;
     }
 
     public record ManagedSource(
@@ -108,9 +112,8 @@ public class SubscriptionSourceService {
         if (!plugins.isEmpty()) {
             int order = offset + 1;
             for (Plugin plugin : plugins) {
-                plugin.setSortOrder(order++);
+                mutationGuard.reorder(plugin.getId(), order++);
             }
-            pluginRepository.saveAll(plugins);
         }
         settingRepository.save(new Setting(SORT_ORDER_MIGRATED_KEY, "true"));
     }
@@ -154,6 +157,7 @@ public class SubscriptionSourceService {
         return keys;
     }
 
+    @Transactional
     public ManagedSource update(String id, ManagedSourceUpdate update) {
         if (id.startsWith("builtin-")) {
             String siteKey = id.substring("builtin-".length());
@@ -177,7 +181,7 @@ public class SubscriptionSourceService {
         }
 
         Integer pluginId = parsePluginId(id);
-        Plugin plugin = pluginRepository.findById(pluginId).orElseThrow(NotFoundException::new);
+        Plugin plugin = mutationGuard.writable(pluginId);
         plugin.setName(StringUtils.defaultIfBlank(StringUtils.trimToNull(update.name()), plugin.getSourceName()));
         plugin.setEnabled(update.enabled());
         if (update.t4Visible() != null) {
@@ -198,7 +202,6 @@ public class SubscriptionSourceService {
 
     public void reorder(List<String> ids) {
         Map<String, BuiltinSubscriptionSourceState> settings = readBuiltinSettings();
-        List<Plugin> plugins = new ArrayList<>();
         int order = 1;
         for (String id : ids) {
             if (id.startsWith("builtin-")) {
@@ -209,13 +212,8 @@ public class SubscriptionSourceService {
                     state.setEnabled(true);
                 }
             } else {
-                Plugin plugin = pluginRepository.findById(parsePluginId(id)).orElseThrow(NotFoundException::new);
-                plugin.setSortOrder(order++);
-                plugins.add(plugin);
+                mutationGuard.reorder(parsePluginId(id), order++);
             }
-        }
-        if (!plugins.isEmpty()) {
-            pluginRepository.saveAll(plugins);
         }
         saveBuiltinSettings(settings);
     }

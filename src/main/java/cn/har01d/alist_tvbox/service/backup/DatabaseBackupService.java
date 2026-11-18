@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.dto.backup.BackupRestoreResult;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.service.UserService;
+import cn.har01d.alist_tvbox.service.PluginMutationGuard;
 import cn.har01d.alist_tvbox.service.backup.BackupModuleHandler.IdStrategy;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.StreamReadConstraints;
@@ -61,6 +62,7 @@ public class DatabaseBackupService {
     private final SettingRepository settingRepository;
     private final JdbcTemplate jdbcTemplate;
     private final UserService userService;
+    private final PluginMutationGuard mutationGuard;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -86,11 +88,13 @@ public class DatabaseBackupService {
     public DatabaseBackupService(BackupModuleRegistry registry,
                                  SettingRepository settingRepository,
                                  JdbcTemplate jdbcTemplate,
-                                 UserService userService) {
+                                 UserService userService,
+                                 PluginMutationGuard mutationGuard) {
         this.registry = registry;
         this.settingRepository = settingRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.userService = userService;
+        this.mutationGuard = mutationGuard;
     }
 
     public File exportBackupZip() throws Exception {
@@ -131,6 +135,9 @@ public class DatabaseBackupService {
             BackupManifestDto manifest = readManifest(zip);
             if (manifest.getFormatVersion() > SUPPORTED_FORMAT_VERSION) {
                 throw new IllegalArgumentException("Unsupported backup formatVersion: " + manifest.getFormatVersion());
+            }
+            if (manifest.getModules().containsKey("plugins") || zip.getEntry(MODULES_DIR + "plugins.json") != null) {
+                mutationGuard.requireAllWritable();
             }
 
             BackupRestoreResponse response = new BackupRestoreResponse();
