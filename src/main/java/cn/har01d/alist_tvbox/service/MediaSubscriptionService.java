@@ -244,9 +244,19 @@ public class MediaSubscriptionService {
                 ? request.getManualTotalEpisodes() : null);
         subscription.setSeasonStartEpisode(request.getSeasonStartEpisode() != null && request.getSeasonStartEpisode() > 1
                 ? request.getSeasonStartEpisode() : null);
-        subscription.setMode(StringUtils.isBlank(request.getMode()) ? MediaSubscription.MODE_FOLLOW : request.getMode());
+        // 模式解析(#1094):显式指定优先;缺省时回落全局默认(msub_default_mode)——默认转存
+        // 还要求全局默认转存网盘(msub_default_account_ids)对创建者有可用目标,否则回落挂载
+        List<String> defaultTransferIds = null;
+        String mode = request.getMode();
+        if (StringUtils.isBlank(mode)) {
+            defaultTransferIds = transferService == null ? List.of() : transferService.defaultTransferIds(uid);
+            mode = defaultTransferIds.isEmpty() ? MediaSubscription.MODE_FOLLOW : MediaSubscription.MODE_TRANSFER;
+        }
+        subscription.setMode(mode);
         subscription.setAccountId(request.getAccountId());
-        subscription.setAccountIds(serializeAccountIds(request.getAccountIds(), request.getAccountId()));
+        subscription.setAccountIds(defaultTransferIds != null
+                ? serializeAccountIds(defaultTransferIds, null)
+                : serializeAccountIds(request.getAccountIds(), request.getAccountId()));
         subscription.setCrossDrive(request.getCrossDrive() != null && request.getCrossDrive());
         // 磁力兜底仅转存模式可用:离线产物落全局离线配置账号,挂载模式无资源沉淀语义
         subscription.setMagnetOffline(MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
@@ -334,7 +344,12 @@ public class MediaSubscriptionService {
                     ? request.getManualTotalEpisodes() : null);
         }
         if (request.getMode() != null) {
-            subscription.setMode(request.getMode());
+            // 模式实际变更才算用户显式选择:同值提交(编辑对话框整表单回传)不清降级标记 ——
+            // 降级订阅改别的字段保存,已转存集继续走自有盘副本不受影响(#1094)
+            if (!request.getMode().equals(subscription.getMode())) {
+                subscription.setMode(request.getMode());
+                subscription.setTransferDegraded(false);
+            }
             // 磁力兜底仅转存模式:切出 TRANSFER 时同步关闭,防孤儿开关(magnetOffline 未随请求携带时)
             if (!MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
                 subscription.setMagnetOffline(false);
@@ -1050,7 +1065,7 @@ public class MediaSubscriptionService {
         Map<String, TreeMap<Integer, String>> driveLines = new LinkedHashMap<>();
         Map<Integer, Long> sizeByEpisode = new TreeMap<>();
         cn.har01d.alist_tvbox.entity.Site site = siteRepository.findById(1).orElseThrow();
-        if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
+        if (transferCopiesUsable(subscription)) {
             try {
                 for (var target : transferService.transferredTargets(subscription.getUid(), id)) {
                     for (var entry : checkService.episodeFilesAt(target.path(), subscription).entrySet()) {
@@ -1843,7 +1858,7 @@ public class MediaSubscriptionService {
         boolean getSub = wantsSubtitles(subscription);
         // 候选清单:转存各账号盘(实时列目录,自有盘无集源行) → 集源行索引(VERIFIED 优先、资源分序)
         List<MediaSubscriptionCheckService.EpisodeFile> transferFiles = new ArrayList<>();
-        if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
+        if (transferCopiesUsable(subscription)) {
             for (var target : transferService.transferredTargets(uid, subscriptionId)) {
                 var file = checkService.episodeFilesAt(target.path(), subscription).get(episode);
                 if (file != null) {
@@ -1981,8 +1996,7 @@ public class MediaSubscriptionService {
             return; // 主源列表解析失败不动原始输出
         }
         List<MediaSubscriptionResource> gaps = checkService.auxMounts(subscription);
-        boolean transferMode = MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
-                && !parseAccountIds(subscription).isEmpty();
+        boolean transferMode = transferCopiesUsable(subscription);
         boolean tvboxRequest = StringUtils.isBlank(ac);
         if (!tvboxRequest && gaps.isEmpty() && !transferMode) {
             return;
@@ -2354,7 +2368,7 @@ public class MediaSubscriptionService {
         Map<Integer, String> sources = new TreeMap<>();
         Map<Integer, List<Map<String, Object>>> matrix = new TreeMap<>();
         // 1) 转存副本(自有盘):来源摘要 + 矩阵伪行
-        if (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !parseAccountIds(subscription).isEmpty()) {
+        if (transferCopiesUsable(subscription)) {
             for (var target : transferService.transferredTargets(uid, id)) {
                 Set<Integer> covered = checkService.walkEpisodesAt(target.path(), subscription.getSeason(),
                         checkService.episodeSizePolicy(subscription));
@@ -2929,6 +2943,13 @@ public class MediaSubscriptionService {
         }
     }
 
+    /** 转存副本可用谓词(#1094):转存模式,或转存自动降级挂载(transferDegraded)——降级后
+     *  已转存的集继续走自有盘副本优先供播,直到 sweep 恢复转存模式或用户显式切换模式。 */
+    boolean transferCopiesUsable(MediaSubscription subscription) {
+        return !parseAccountIds(subscription).isEmpty()
+                && (MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) || subscription.isTransferDegraded());
+    }
+
     /** 转存目标账号列表("pan:{id}"/"ali:{id}"):优先 account_ids(JSON),兼容旧整数(默认 pan)与旧 accountId 单值。 */
     List<String> parseAccountIds(MediaSubscription subscription) {
         if (StringUtils.isNotBlank(subscription.getAccountIds())) {
@@ -3337,6 +3358,7 @@ public class MediaSubscriptionService {
         String cover = coverOf(subscription, ctx);
         dto.setCover(Constants.ALIST_PIC.equals(cover) ? null : proxiedCover(cover));
         dto.setMode(subscription.getMode());
+        dto.setTransferDegraded(subscription.isTransferDegraded());
         dto.setAccountId(subscription.getAccountId());
         dto.setAccountIds(parseAccountIds(subscription));
         dto.setMountPath(subscription.getMountPath());

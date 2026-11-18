@@ -187,6 +187,11 @@ public class MediaSubscription {
     @Column(name = "self_share")
     private boolean selfShare;
 
+    /** 转存降级标记(#1094):TRANSFER 全部目标失败自动降级挂载后置位 —— 已转存的集继续走
+     *  自有盘副本优先供播,每小时 sweep 静默重试恢复;恢复成功/手动切换模式/完结归档时清零。 */
+    @Column(name = "transfer_degraded")
+    private boolean transferDegraded;
+
     @Column(nullable = false, length = 16)
     private String status = STATUS_ACTIVE;
 

@@ -113,8 +113,8 @@
           </el-table-column>
           <el-table-column prop="mode" label="模式" width="80">
             <template #default="scope">
-              <el-tag size="small" :type="scope.row.mode === 'TRANSFER' ? 'success' : 'info'">
-                {{ scope.row.mode === 'TRANSFER' ? '转存' : '挂载' }}
+              <el-tag size="small" :type="scope.row.mode === 'TRANSFER' ? 'success' : (scope.row.transferDegraded ? 'warning' : 'info')">
+                {{ scope.row.mode === 'TRANSFER' ? '转存' : (scope.row.transferDegraded ? '挂载*' : '挂载') }}
               </el-tag>
             </template>
           </el-table-column>
@@ -135,7 +135,9 @@
               <el-button link type="primary" size="small" @click="togglePause(scope.row)">
                 {{ scope.row.status === 'PAUSED' ? '恢复' : '暂停' }}
               </el-button>
-              <el-button v-if="scope.row.mode === 'TRANSFER'" link type="success" size="small" @click="transferNow(scope.row)">转存</el-button>
+              <el-button v-if="scope.row.mode === 'TRANSFER' || scope.row.transferDegraded" link type="success" size="small" @click="transferNow(scope.row)">
+                {{ scope.row.transferDegraded && scope.row.mode !== 'TRANSFER' ? '恢复转存' : '转存' }}
+              </el-button>
               <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
               <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
             </template>
@@ -220,6 +222,9 @@
             <el-radio value="FOLLOW">挂载追更(免账号)</el-radio>
             <el-radio value="TRANSFER">自动转存到我的网盘</el-radio>
           </el-radio-group>
+          <span v-if="form.transferDegraded && form.mode !== 'TRANSFER'" class="sub-text" style="display:block;width:100%">
+            当前处于转存降级状态(挂载*):已转存的集仍优先走自有网盘副本;保持挂载保存不丢此状态,切换到转存并保存可立即恢复
+          </span>
         </el-form-item>
         <el-form-item v-if="form.mode === 'TRANSFER'" label="转存网盘">
           <el-select v-model="form.accountIds" multiple placeholder="可多选,同时转存到多个网盘" style="width: 100%">
@@ -759,6 +764,23 @@
               </el-select>
               <span class="sub-text">主网盘以外允许进候选池的网盘;不配置则候选/补缺/分盘线路只有主网盘的源(主网盘也未配置时才不限盘)</span>
             </el-form-item>
+            <el-form-item v-if="store.admin" label="默认模式">
+              <el-radio-group v-model="notifyForm.defaultMode">
+                <el-radio value="FOLLOW">挂载</el-radio>
+                <el-radio value="TRANSFER">转存</el-radio>
+              </el-radio-group>
+              <span class="sub-text">新建订阅未指定模式时的默认;选转存须配默认转存网盘,且仅当默认网盘对创建者可用时才按转存创建(网页新建对话框会预填,可改)</span>
+            </el-form-item>
+            <el-form-item v-if="store.admin && notifyForm.defaultMode === 'TRANSFER'" label="默认转存网盘">
+              <el-select v-model="notifyForm.defaultAccountIds" multiple placeholder="可多选,新建转存订阅的默认目标" style="width: 100%">
+                <el-option v-for="account in defaultTransferAccounts" :key="'pan:' + account.id"
+                           :label="account.name + '(' + account.type + ')'" :value="'pan:' + account.id"/>
+                <el-option v-for="account in aliAccounts" :key="'ali:' + account.id"
+                           :label="(account.nickname || '阿里#' + account.id) + '(ali)'" :value="'ali:' + account.id"
+                           :disabled="!aliSelectable(account)"/>
+              </el-select>
+              <span class="sub-text">新建订阅(含 TG/API)未指定模式且默认模式=转存时,按此清单落转存目标;仅中转能力(TV/开放平台)的账号不可选</span>
+            </el-form-item>
             <el-form-item v-if="store.admin" label="115自有分享">
               <el-switch v-model="notifyForm.selfShareEnabled"/>
               <span class="sub-text">总闸(默认关):开启后订阅级打了开关的追剧把可看集转存到自有 115 盘建永久分享快照后删源释放空间;需 cookie 版 115 账号,单批转存瞬时占盘,空间大的用户才适合</span>
@@ -1240,6 +1262,7 @@ interface SubscriptionDto {
   nextAirTime: number | null
   cover: string | null
   mode: string
+  transferDegraded: boolean
   status: string
   accountId: number | null
   accountIds: string[] | null
@@ -1520,6 +1543,9 @@ const relayOnlyTypes = new Set(['QUARK_TV', 'UC_TV', 'OPEN115'])
 const transferAccounts = computed(() =>
     (accounts.value || []).filter((account: any) =>
         !relayOnlyTypes.has(account.type) || (form.value.accountIds || []).includes('pan:' + account.id)))
+/** 全局默认转存网盘可选项:仅中转目标无条件剔除(订阅表单保留历史已选,全局默认无历史包袱) */
+const defaultTransferAccounts = computed(() =>
+    (accounts.value || []).filter((account: any) => !relayOnlyTypes.has(account.type)))
 const previewVisible = ref(false)
 const previewing = ref(false)
 const previewItems = ref<any[]>([])
@@ -1861,6 +1887,8 @@ const notifyForm = ref({
   selfShareMaxEpisodes: 200,
   mainDrives: [] as number[],
   extendedDrives: [] as number[],
+  defaultMode: 'FOLLOW',
+  defaultAccountIds: [] as string[],
   poolMinQuality: '',
   poolIncludeKeywords: [] as string[],
   poolExcludeKeywords: [] as string[],
@@ -2020,9 +2048,34 @@ const loadAll = () => {
   })
 }
 
+/** 全局默认模式缓存(#1094):新建对话框预填(管理员配置);保存设置后失效重拉 */
+const defaultModePrefill = ref<{ mode: string; accountIds: string[] } | null>(null)
+let defaultModeLoaded = false
+const loadDefaultModePrefill = () => {
+  if (!store.admin) return Promise.resolve()
+  if (defaultModeLoaded) return Promise.resolve()
+  return axios.get('/api/settings').then(response => {
+    const settings = response.data || {}
+    defaultModePrefill.value = {
+      mode: settings['msub_default_mode'] === 'TRANSFER' ? 'TRANSFER' : 'FOLLOW',
+      accountIds: (settings['msub_default_account_ids'] || '')
+          .split(',').map((v: string) => v.trim()).filter(Boolean),
+    }
+    defaultModeLoaded = true
+  }).catch(() => {
+  })
+}
+
 const handleAdd = () => {
   originalSeason.value = null
   loadOfflineAccountLabel()
+  // 全局默认模式预填(#1094):管理员配置的 msub_default_mode/默认转存网盘,仅预填仍可改
+  loadDefaultModePrefill().then(() => {
+    if (defaultModePrefill.value?.mode === 'TRANSFER') {
+      form.value.mode = 'TRANSFER'
+      form.value.accountIds = [...defaultModePrefill.value.accountIds]
+    }
+  })
   form.value = {
     name: '',
     keyword: '',
@@ -2075,6 +2128,7 @@ const handleEdit = (row: SubscriptionDto) => {
     expectedEpisodes: row.expectedEpisodes,
     manualTotalEpisodes: row.manualTotalEpisodes,
     mode: row.mode,
+    transferDegraded: !!row.transferDegraded,
     accountId: null,
     accountIds: row.accountIds?.length ? row.accountIds : (row.accountId ? ['pan:' + row.accountId] : []),
     crossDrive: !!row.crossDrive,
@@ -2306,7 +2360,7 @@ const subscribeNextSeason = (row: SubscriptionDto) => {
           season: season,
           metaProvider: row.metaProvider,
           metaId: row.metaId,
-          mode: 'FOLLOW',
+          // 模式不指定:回落全局默认(默认转存时新季同样转存,#1094)
           filter: row.filter,
         }))
         .then(() => {
@@ -2862,6 +2916,9 @@ const openNotify = () => {
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0).slice(0, 2)
     notifyForm.value.extendedDrives = (settings['msub_extended_drives'] || '')
         .split(',').map((v: string) => parseInt(v.trim())).filter((v: number) => v > 0)
+    notifyForm.value.defaultMode = settings['msub_default_mode'] === 'TRANSFER' ? 'TRANSFER' : 'FOLLOW'
+    notifyForm.value.defaultAccountIds = (settings['msub_default_account_ids'] || '')
+        .split(',').map((v: string) => v.trim()).filter(Boolean)
     const poolFilter = parsePoolFilter(settings['msub_pool_filter'])
     notifyForm.value.poolMinQuality = poolFilter.minQuality
     notifyForm.value.poolIncludeKeywords = poolFilter.includeKeywords
@@ -2956,6 +3013,11 @@ const saveNotify = () => {
       name: 'msub_extended_drives',
       value: [...new Set(notifyForm.value.extendedDrives)].join(','),
     }),
+    axios.post('/api/settings', {name: 'msub_default_mode', value: notifyForm.value.defaultMode}),
+    axios.post('/api/settings', {
+      name: 'msub_default_account_ids',
+      value: [...new Set(notifyForm.value.defaultAccountIds)].join(','),
+    }),
     axios.post('/api/settings', {
       name: 'msub_pool_filter',
       value: poolFilterValue,
@@ -3022,6 +3084,7 @@ const saveNotify = () => {
       ElMessage.success('已保存(下轮巡检生效)')
       notifyVisible.value = false
       loadGlobalPoolFilter() // 全局单集下限变了,新建订阅表单「跟随全局」的展示值同步刷新
+      defaultModeLoaded = false // 默认模式可能已改,下次开新建对话框重拉预填
     }
   }).finally(() => {
     notifySaving.value = false

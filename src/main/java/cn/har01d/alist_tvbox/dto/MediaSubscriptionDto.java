@@ -24,6 +24,8 @@ public class MediaSubscriptionDto {
     private Long nextAirTime;
     private String cover;
     private String mode;
+    /** 转存降级标记:曾自动降级挂载,已转存集仍走自有盘副本,sweep 持续尝试恢复(#1094) */
+    private boolean transferDegraded;
     private Integer accountId;
     private List<String> accountIds;
     private String mountPath;

@@ -294,6 +294,29 @@ class MediaSubscriptionFastDetailTest {
         assertEquals("E02.mp4(900 MB)$1@101", groups[2]);
     }
 
+    // 转存自动降级挂载(#1094):transferDegraded 置位后转存副本照常并入线路(已转存的集仍走自有盘)
+    @Test
+    void degradedSubscriptionStillMergesTransferTargets() {
+        subscription.setMode(MediaSubscription.MODE_FOLLOW);
+        subscription.setTransferDegraded(true);
+        subscription.setAccountIds("[1]");
+        String transferPath = "/pan/1/追剧/测试剧";
+        Mockito.when(transferService.transferredTargets(1, 7)).thenReturn(List.of(
+                new MediaSubscriptionTransferService.TransferredTarget("pan:1", transferPath, "quark")));
+        TreeMap<Integer, MediaSubscriptionCheckService.EpisodeFile> files = new TreeMap<>();
+        files.put(2, new MediaSubscriptionCheckService.EpisodeFile(2, transferPath, "E02.mp4", 900 * MB, 0));
+        Mockito.when(checkService.episodeFilesAt(transferPath, subscription)).thenReturn(files);
+        Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(7)).thenReturn(List.of());
+        Mockito.when(episodeSourceRepository.findNumberAndSource(7)).thenReturn(rows());
+
+        MovieList result = service.contentDetail(1, 7, null, null);
+
+        String[] groups = result.getList().getFirst().getVod_play_url().split("\\$\\$\\$");
+        // 资源行为空(仅降级转存副本)也要出转存盘线路,逻辑线路含第 2 集
+        assertEquals("02. 第2集(900 MB)$msubep-7-2", groups[0]);
+        assertEquals("E02.mp4(900 MB)$1@101", groups[1]);
+    }
+
     @Test
     void sameDriveDuplicateEpisodeKeepsFirstResource() {
         Mockito.when(resourceRepository.findBySubscriptionIdOrderByScoreDesc(7)).thenReturn(List.of(

@@ -98,7 +98,8 @@ public class MediaSubscriptionTransferService {
         executor.shutdownNow();
     }
 
-    /** 转存自愈扫描:每小时 :40(避开 :20 巡检),TRANSFER 且未完结/完结均可补齐。 */
+    /** 转存自愈扫描:每小时 :40(避开 :20 巡检),TRANSFER 且未完结/完结均可补齐;
+     *  降级挂载(transferDegraded)的订阅在此持续尝试恢复转存模式(#1094)。 */
     @Scheduled(cron = "0 40 * * * *")
     public void sweep() {
         if (!appProperties.getSubscription().isEnabled()) {
@@ -109,7 +110,8 @@ public class MediaSubscriptionTransferService {
 
     private void sweepDue() {
         for (MediaSubscription subscription : subscriptionRepository.findAll()) {
-            if (!MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+            // 降级订阅(TRANSFER 自动降级挂载)也纳入:transfer() 内部走恢复尝试路径
+            if ((!MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !subscription.isTransferDegraded())
                     || MediaSubscription.STATUS_PAUSED.equals(subscription.getStatus())) {
                 continue;
             }
@@ -154,7 +156,11 @@ public class MediaSubscriptionTransferService {
             return;
         }
         subscription = current;
-        if (!MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
+        // 恢复尝试(#1094):转存曾全部失败自动降级挂载(transferDegraded)的订阅, sweep/手动按钮
+        // 再进来时按原转存配置重试;失败保持降级静默(不重复刷事件),任一目标成功即恢复 TRANSFER
+        boolean recovery = !MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                && subscription.isTransferDegraded();
+        if (!recovery && !MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())) {
             return;
         }
         if (quotaLeft() <= 0) {
@@ -163,6 +169,11 @@ public class MediaSubscriptionTransferService {
         }
         List<TransferTarget> targets = resolveTargets(subscription);
         if (targets.isEmpty()) {
+            if (recovery) {
+                // 降级订阅目标仍不可解析(如账号被删):保持降级静默重试,用户改配后自动恢复
+                log.debug("recovery of subscription {} skipped: no resolvable targets", subscription.getId());
+                return;
+            }
             checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_ERROR, "转存失败:未配置网盘账号");
             downgradeToFOLLOW(subscription, "账号不存在");
             return;
@@ -181,7 +192,7 @@ public class MediaSubscriptionTransferService {
                 return;
             }
             try {
-                Integer transferred = transferToAccount(subscription, target);
+                Integer transferred = transferToAccount(subscription, target, recovery);
                 if (transferred != null) {
                     anySuccess = true;
                 } else {
@@ -191,6 +202,13 @@ public class MediaSubscriptionTransferService {
                 log.warn("transfer subscription {} to {} failed: {}", subscription.getId(), target.name(), e.getMessage());
                 anyFailure = true;
             }
+        }
+        if (recovery) {
+            if (anySuccess) {
+                restoreTransferMode(subscription);
+            }
+            // 恢复失败:保持降级,下轮 sweep 再试;失败事件已在 transferToAccount 内按 recovery 抑制
+            return;
         }
         // 全部目标都失败才降级(多目标时单盘失败不影响其余,追更不断);
         // 无需转存(0)是成功,不能因为"另一盘失败"而误降级
@@ -263,7 +281,7 @@ public class MediaSubscriptionTransferService {
                 .map(s -> s.getValue()).orElse("false"));
     }
 
-    private Integer transferToAccount(MediaSubscription subscription, TransferTarget target) {
+    private Integer transferToAccount(MediaSubscription subscription, TransferTarget target, boolean recovery) {
         Site site = siteRepository.findById(1).orElseThrow();
         String rootDir = target.mountPath() + "/" + transferRoot();
         String targetDir = targetDir(subscription, target);
@@ -368,8 +386,11 @@ public class MediaSubscriptionTransferService {
             }
             int failed = missing.size() - transferred;
             taskService.failTask(task.getId(), "转存 " + transferred + "/" + missing.size() + " 集");
-            checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_TRANSFER_FAILED,
-                    "转存不完整(" + target.name() + "):成功 " + transferred + " / " + missing.size() + "(可能配额/空间不足)");
+            if (!recovery) {
+                // 恢复尝试期的失败不刷订阅事件(每小时重试会刷屏),只在任务与日志里留痕
+                checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_TRANSFER_FAILED,
+                        "转存不完整(" + target.name() + "):成功 " + transferred + " / " + missing.size() + "(可能配额/空间不足)");
+            }
             if (done && transferred < missing.size()) {
                 // 任务已结束仍缺失 = 源里列得出、实际取不了(如夸克分享单集被和谐):
                 // 登记为该源损坏集,下轮集数统计/转存取源跳过,自动从其他分享补(7 天过期重试)
@@ -388,8 +409,10 @@ public class MediaSubscriptionTransferService {
             return transferred == 0 ? null : transferred;
         } catch (Exception e) {
             taskService.failTask(task.getId(), e.getMessage());
-            checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_TRANSFER_FAILED,
-                    "转存失败(" + target.name() + "):" + e.getMessage());
+            if (!recovery) {
+                checkService.addEvent(subscription.getId(), MediaSubscriptionEvent.TYPE_TRANSFER_FAILED,
+                        "转存失败(" + target.name() + "):" + e.getMessage());
+            }
             return null;
         }
     }
@@ -406,15 +429,20 @@ public class MediaSubscriptionTransferService {
     }
 
     private List<TransferTarget> resolveTargets(MediaSubscription subscription) {
+        return resolveTargets(subscription.getUid(), accountIds(subscription));
+    }
+
+    /** 按目标 id 清单解析可用转存目标(归属门禁与订阅路径同规则),供订阅路径与全局默认配置共用。 */
+    private List<TransferTarget> resolveTargets(int uid, List<String> ids) {
         List<TransferTarget> result = new ArrayList<>();
         long aliCount = aliAccountRepository.count();
-        for (String id : accountIds(subscription)) {
+        for (String id : ids) {
             try {
                 if (id.startsWith("ali:")) {
                     Account account = aliAccountRepository.findById(Integer.parseInt(id.substring(4))).orElse(null);
                     // 与 AccountService.enableMyAli 同规则:未挂载"我的阿里云盘"的账号不可作为转存目标
                     // 归属门禁:转存目标必须是订阅人本人账号(uid=0 全局账号仅 admin 订阅可用,shared 全局账号对 USER 只读不转存)
-                    if (account == null || !canTransfer(account.getOwnerUid(), subscription.getUid())
+                    if (account == null || !canTransfer(account.getOwnerUid(), uid)
                             || !(account.isShowMyAli() || account.isMaster() || aliCount == 1)) {
                         continue;
                     }
@@ -422,7 +450,7 @@ public class MediaSubscriptionTransferService {
                     result.add(new TransferTarget("ali:" + account.getId(), name, aliMountPath(account), 0, false));
                 } else {
                     DriverAccount account = accountRepository.findById(Integer.parseInt(id.startsWith("pan:") ? id.substring(4) : id)).orElse(null);
-                    if (account != null && canTransfer(account.getOwnerUid(), subscription.getUid())) {
+                    if (account != null && canTransfer(account.getOwnerUid(), uid)) {
                         DriverType type = account.getType();
                         // 仅字节中转的目标:TV 账号无服务端转存;115 开放平台无分享接收接口,仅 cookie 版账号可转存
                         boolean relayOnly = type == DriverType.QUARK_TV || type == DriverType.UC_TV
@@ -439,6 +467,33 @@ public class MediaSubscriptionTransferService {
             }
         }
         return result;
+    }
+
+    /**
+     * 全局默认转存配置(#1094,Setting msub_default_mode / msub_default_account_ids,逗号分隔
+     * "pan:{id}"/"ali:{id}"):默认模式=转存且默认目标对创建者本人可用(归属门禁同订阅路径)时,
+     * 返回可用的目标 key 供新建订阅落 accountIds;否则空(回落挂载模式)。逐个过滤而非整组判定:
+     * 全局配置里的账号对某些用户不可见时不阻断其可用部分。
+     */
+    public List<String> defaultTransferIds(int uid) {
+        String mode = settingRepository.findById("msub_default_mode")
+                .map(Setting::getValue).orElse("");
+        if (!MediaSubscription.MODE_TRANSFER.equals(mode)) {
+            return List.of();
+        }
+        String raw = settingRepository.findById("msub_default_account_ids")
+                .map(Setting::getValue).orElse("");
+        List<String> ids = new ArrayList<>();
+        for (String token : raw.split(",")) {
+            String value = token.trim();
+            if (!value.isEmpty()) {
+                ids.add(value);
+            }
+        }
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return resolveTargets(uid, ids).stream().map(TransferTarget::key).toList();
     }
 
     /** 转存目标 id:"pan:{id}"(网盘账号)/"ali:{id}"(阿里独立账号表);兼容旧整数 JSON(默认 pan)与单值 accountId。 */
@@ -515,7 +570,8 @@ public class MediaSubscriptionTransferService {
         }
     }
 
-    /** 转存不可用时自动降级挂载模式,追更不中断(§10.6 空间水位同理)。 */
+    /** 转存不可用时自动降级挂载模式,追更不中断(§10.6 空间水位同理)。
+     * 置 transferDegraded:已转存的集继续走自有盘副本优先供播,sweep 每小时尝试恢复(#1094)。 */
     private void downgradeToFOLLOW(MediaSubscription subscription, String reason) {
         // 调用前可能已历数分钟转存:重取最新行再改,已删即跳过(detached save 复活整行),也避免覆盖巡检刚写的字段
         MediaSubscription current = subscriptionRepository.findById(subscription.getId()).orElse(null);
@@ -523,9 +579,24 @@ public class MediaSubscriptionTransferService {
             return;
         }
         current.setMode(MediaSubscription.MODE_FOLLOW);
+        current.setTransferDegraded(true);
         current.setUpdatedTime(System.currentTimeMillis());
         subscriptionRepository.save(current);
-        checkService.addEvent(current.getId(), MediaSubscriptionEvent.TYPE_ERROR, "已降级为挂载模式(" + reason + "),追更不中断");
+        checkService.addEvent(current.getId(), MediaSubscriptionEvent.TYPE_ERROR, "已降级为挂载模式(" + reason + "),已转存剧集继续可用,追更不中断");
+    }
+
+    /** 降级订阅转存重试成功后恢复原转存模式(#1094):清降级标记,新集恢复自动转存。 */
+    private void restoreTransferMode(MediaSubscription subscription) {
+        MediaSubscription current = subscriptionRepository.findById(subscription.getId()).orElse(null);
+        if (current == null) {
+            return;
+        }
+        current.setMode(MediaSubscription.MODE_TRANSFER);
+        current.setTransferDegraded(false);
+        current.setUpdatedTime(System.currentTimeMillis());
+        subscriptionRepository.save(current);
+        checkService.addEvent(current.getId(), MediaSubscriptionEvent.TYPE_TRANSFER_DONE, "转存恢复:已切回转存模式");
+        log.info("subscription {} restored to TRANSFER mode", subscription.getId());
     }
 
     /** 逐级确保目标目录存在(已存在时 listFiles 成功即跳过)。 */
@@ -648,7 +719,7 @@ public class MediaSubscriptionTransferService {
         long threshold = System.currentTimeMillis() - days * 24L * 3600_000;
         for (MediaSubscription subscription : subscriptionRepository.findAll()) {
             if (!MediaSubscription.STATUS_ENDED.equals(subscription.getStatus())
-                    || !MediaSubscription.MODE_TRANSFER.equals(subscription.getMode())
+                    || (!MediaSubscription.MODE_TRANSFER.equals(subscription.getMode()) && !subscription.isTransferDegraded())
                     || subscription.getUpdatedTime() == null || subscription.getUpdatedTime() > threshold) {
                 continue;
             }
@@ -664,6 +735,7 @@ public class MediaSubscriptionTransferService {
                     continue;
                 }
                 current.setMode(MediaSubscription.MODE_FOLLOW);
+                current.setTransferDegraded(false);
                 current.setUpdatedTime(System.currentTimeMillis());
                 subscriptionRepository.save(current);
                 checkService.addEvent(current.getId(), MediaSubscriptionEvent.TYPE_ARCHIVED,
