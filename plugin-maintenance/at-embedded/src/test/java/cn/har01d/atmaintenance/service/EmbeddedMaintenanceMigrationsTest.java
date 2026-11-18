@@ -1,7 +1,6 @@
 package cn.har01d.atmaintenance.service;
 
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.MigrationVersion;
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.Test;

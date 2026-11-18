@@ -10,8 +10,9 @@ public final class EmbeddedMaintenanceMigrations implements FlywayMigrationStrat
     @Override
     public void migrate(Flyway host) {
         var dataSource = host.getConfiguration().getDataSource();
-        try (var connection = dataSource.getConnection()) {
-            if (connection.getMetaData().getTables(null, null, "flyway_schema_history", null).next()) {
+        try (var connection = dataSource.getConnection();
+             var tables = connection.getMetaData().getTables(null, null, "flyway_schema_history", null)) {
+            if (tables.next()) {
                 try (var statement = connection.createStatement();
                      var rows = statement.executeQuery("SELECT \"script\" FROM \"flyway_schema_history\"")) {
                     while (rows.next()) {

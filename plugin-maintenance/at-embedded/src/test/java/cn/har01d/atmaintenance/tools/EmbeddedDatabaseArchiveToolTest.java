@@ -125,7 +125,10 @@ class EmbeddedDatabaseArchiveToolTest {
             try {
                 assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
                 assertEquals(1, process.exitValue());
-                var output = new ObjectMapper().readTree(process.getInputStream().readAllBytes());
+                String errorOutput = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+                String json = errorOutput.lines().filter(line -> !line.startsWith("Picked up JAVA_TOOL_OPTIONS:"))
+                        .collect(java.util.stream.Collectors.joining("\n"));
+                var output = new ObjectMapper().readTree(json);
                 assertEquals("DATABASE_IN_USE", output.path("code").asText());
             } finally {
                 if (process.isAlive()) {
