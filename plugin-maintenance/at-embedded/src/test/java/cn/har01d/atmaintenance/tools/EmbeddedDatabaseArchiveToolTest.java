@@ -121,7 +121,7 @@ class EmbeddedDatabaseArchiveToolTest {
             var process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                     "-cp", System.getProperty("java.class.path"), EmbeddedDatabaseArchiveTool.class.getName(),
                     "backup", "--database", database.toString(), "--output", archive.toString())
-                    .redirectErrorStream(true).start();
+                    .start();
             try {
                 assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
                 assertEquals(1, process.exitValue());

@@ -18,13 +18,7 @@ class EmbeddedMaintenanceMigrationsTest {
         var host = Flyway.configure().dataSource(url, "sa", "")
                 .locations("classpath:db/migration/h2", "classpath:db/migration/common",
                         "classpath:db/migration/current")
-                .javaMigrations(new BaseJavaMigration() {
-                    @Override public MigrationVersion getVersion() { return MigrationVersion.fromVersion("59.1"); }
-                    @Override public String getDescription() { return "host namespace fixture"; }
-                    @Override public void migrate(Context context) throws Exception {
-                        context.getConnection().createStatement().execute("CREATE TABLE HOST_NAMESPACE_FIXTURE(ID INT)");
-                    }
-                }).load();
+                .javaMigrations(new V59_1__HostNamespaceFixture()).load();
         var strategy = new EmbeddedMaintenanceMigrations();
         strategy.migrate(host);
         strategy.migrate(host);
@@ -37,6 +31,14 @@ class EmbeddedMaintenanceMigrationsTest {
             assertEquals(1, rows.getInt(1));
             assertTrue(connection.getMetaData().getTables(null, null, "MAINTENANCE_SOURCE", null).next());
             assertTrue(connection.getMetaData().getTables(null, null, "HOST_NAMESPACE_FIXTURE", null).next());
+        }
+    }
+
+    static class V59_1__HostNamespaceFixture extends BaseJavaMigration {
+        @Override public void migrate(Context context) throws Exception {
+            try (var statement = context.getConnection().createStatement()) {
+                statement.execute("CREATE TABLE HOST_NAMESPACE_FIXTURE(ID INT)");
+            }
         }
     }
 
