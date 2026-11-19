@@ -4,6 +4,7 @@ import sys
 import json
 import io
 import hashlib
+import base64
 import html
 import os
 import re
@@ -43,6 +44,105 @@ class FakeBroker:
 
 
 class BrokerConcurrencyTest(unittest.TestCase):
+    def script_request(self, page='https://fixture.example.com/play/123'):
+        return {'taskId': 'task', 'repairId': 'repair', 'runId': 'run', 'artifactSha256': 'a' * 64,
+                'pageUrl': page, 'observedPageUrlSha256': hashlib.sha256(page.encode()).hexdigest(),
+                'consumerFields': ['resData']}
+
+    def script_transport(self, resources):
+        transport = unittest.mock.Mock()
+
+        def fetch(value):
+            body, status, mime, complete = resources[value['url']]
+            return {'response': {'status': status, 'body': base64.b64encode(body).decode(),
+                                 'headers': {'content-type': mime}},
+                    'observation': {'responseComplete': complete}}
+
+        transport.fetch.side_effect = fetch
+        return transport
+
+    def test_script_inspection_follows_declared_consumer_and_module_not_arbitrary_urls(self):
+        request = self.script_request()
+        page = request['pageUrl']
+        target = 'https://assets.example.com/play.js?v=2'
+        request['scriptTargets'] = [hashlib.sha256(target.encode()).hexdigest()]
+        code = b'import {convert} from "./convert.mjs"; const rows = JSON.parse(data.resData); convert(rows[0].url);'
+        transport = self.script_transport({
+            page: (b'<script src="/library.js"></script><script src="' + target.encode() + b'"></script>', 200, 'text/html', True),
+            target: (code, 200, 'application/javascript', True),
+            'https://fixture.example.com/library.js': (b'const arbitrary = "https://evil.example.com/not-imported.js";', 200, 'text/javascript', True),
+            'https://assets.example.com/convert.mjs': (b'export const convert = value => atob(value);', 200, 'text/javascript', True)})
+        result = module.script_inspection(request, transport)
+        self.assertEqual('script_resource_inspection', result['operation'])
+        self.assertEqual('host_public_scripts_observed', result['authority'])
+        self.assertTrue(result['scripts'][0]['targetMatched'])
+        self.assertEqual(code.decode(), result['scripts'][0]['excerpt']['text'])
+        self.assertTrue(result['scripts'][0]['excerpt']['complete'])
+        self.assertEqual(4, transport.fetch.call_count)
+        self.assertEqual(page, transport.fetch.call_args_list[1].args[0]['headers']['Referer'])
+        self.assertFalse(result['sourceCodeExecuted'])
+        self.assertFalse(result['transformationVerified'])
+        self.assertFalse(result['consumerExecutionVerified'])
+
+    def test_script_challenge_html_and_incomplete_bodies_are_not_retained_as_code(self):
+        request = self.script_request()
+        page = request['pageUrl']
+        transport = self.script_transport({
+            page: (b'<script src="/play.js"></script><script src="/common.js"></script><script src="/short.js"></script>', 200, 'text/html', True),
+            'https://fixture.example.com/play.js': (b'<html>_cf_chl_opt = {}; /cdn-cgi/challenge-platform/</html>', 403, 'text/html', True),
+            'https://fixture.example.com/common.js': (b'<html>login</html>', 200, 'text/html', True),
+            'https://fixture.example.com/short.js': (b'const resData =', 200, 'text/javascript', False)})
+        result = module.script_inspection(request, transport)
+        self.assertEqual([], result['scripts'])
+        self.assertEqual(['observed', 'challenge', 'script_returned_html', 'incomplete'],
+                         [row['contentStatus'] for row in result['requests']])
+        self.assertNotIn('_cf_chl_opt', json.dumps(result))
+
+    def test_script_inspection_requires_exact_observed_page_and_does_not_forward_sensitive_queries(self):
+        request = self.script_request()
+        request['observedPageUrlSha256'] = 'a' * 64
+        transport = unittest.mock.Mock()
+        with self.assertRaisesRegex(ValueError, 'REVERSE_PAGE_NOT_BOUND_TO_SOURCE'):
+            module.script_inspection(request, transport)
+        transport.fetch.assert_not_called()
+        request = self.script_request('https://fixture.example.com/play?token=private-value')
+        report = module.script_inspection(request, transport)
+        transport.fetch.assert_not_called()
+        self.assertNotIn('private-value', json.dumps(report))
+
+    def test_script_inspection_keeps_fetch_and_text_budgets_and_targeted_offset(self):
+        request = self.script_request()
+        page = request['pageUrl']
+        resources = {page: (''.join('<script src="/play%d.js"></script>' % i for i in range(20)).encode(), 200, 'text/html', True)}
+        script = b' ' * 7000 + b'function play(data){return JSON.parse(data.resData)[0].url;}' + b' ' * 7000
+        resources.update({'https://fixture.example.com/play%d.js' % i: (script, 200, 'text/javascript', True) for i in range(20)})
+        transport = self.script_transport(resources)
+        report = module.script_inspection(request, transport)
+        self.assertEqual(8, transport.fetch.call_count)
+        self.assertEqual(18000, report['textBytes'])
+        self.assertTrue(report['truncated'])
+        self.assertFalse(report['scripts'][0]['excerpt']['complete'])
+        self.assertIn('resData', report['scripts'][0]['excerpt']['text'])
+        self.assertGreater(report['scripts'][0]['excerpt']['offset'], 0)
+
+    def test_prior_exact_script_can_be_observed_when_page_is_challenged_without_guessing(self):
+        request = self.script_request()
+        page, script = request['pageUrl'], 'https://fixture.example.com/play.js?v=2'
+        request['observedScriptUrls'] = [script]
+        request['scriptTargets'] = [hashlib.sha256(script.encode()).hexdigest()]
+        transport = self.script_transport({
+            page: (b'<html>_cf_chl_opt = {}; /cdn-cgi/challenge-platform/</html>', 403, 'text/html', True),
+            script: (b'function consume(data){return JSON.parse(data.resData)[0].url;}', 200, 'text/javascript', True)})
+        report = module.script_inspection(request, transport)
+        self.assertEqual('challenge', report['requests'][0]['contentStatus'])
+        self.assertEqual('prior_host_observed_script', report['scripts'][0]['discoveryBasis'])
+        self.assertIn('JSON.parse', report['scripts'][0]['excerpt']['text'])
+        request['observedScriptUrls'] = [script + '&guess=1']
+        transport.fetch.reset_mock()
+        with self.assertRaisesRegex(ValueError, 'REVERSE_PAGE_NOT_BOUND_TO_SOURCE'):
+            module.script_inspection(request, transport)
+        transport.fetch.assert_not_called()
+
     def test_lightweight_origin_entry_reuses_existing_pool_without_executing_source_or_starting_browser(self):
         source = "HOST='https://fixture.example.com'\nraise RuntimeError('MUST_NOT_EXECUTE')"
         value = {'taskId': 'task', 'repairId': 'repair', 'runId': 'run', 'artifactSha256': 'a' * 64,

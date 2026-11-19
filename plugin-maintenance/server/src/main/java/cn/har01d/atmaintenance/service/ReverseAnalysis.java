@@ -68,6 +68,7 @@ public class ReverseAnalysis {
                     && Files.isRegularFile(Path.of(tunnelScript))
                     && Files.isRegularFile(Path.of(directory, "remote_broker.py")));
         return mapper.createObjectNode().put("configured", configured).put("ready", installed)
+                .put("scriptInspectionReady", lightweightOrigins())
                 .put("mode", "reverse_analysis_v1").put("sourceCodeExecuted", false)
                 .put("credentialsImported", false).put("productionChanged", false)
                 .put("networkLocation", tunnelsFile.isBlank() ? "controller_host" : "source_runner_host");
@@ -82,7 +83,15 @@ public class ReverseAnalysis {
     }
 
     public void prepare(RepairSummary repair) {
-        if (!readiness().path("ready").asBoolean() || !eligible(repair)) return;
+        if (!eligible(repair)) return;
+        if (!readiness().path("ready").asBoolean()) {
+            if (!lightweightOrigins()) return;
+            var candidates = repairs.candidates(repair.id());
+            var request = automaticRequest(repair, candidates,
+                    sources.artifact(repair.sourceId(), repair.baselineArtifactSha256()).getBody());
+            if (!requestedPageSha(repair, candidates, request.pageUrl()).isEmpty()) inspectScripts(repair.id(), request);
+            return;
+        }
         JsonNode previous = repair.frozen().path("reverseAnalysis");
         if ("source_origin_inspection".equals(previous.path("operation").asText()) && previous.has("originPool")) {
             if (requiresPublishedOriginFollowup(previous))
@@ -291,7 +300,62 @@ public class ReverseAnalysis {
     }
 
     public synchronized ObjectNode capture(String id, ReverseAnalysisRequest input) {
+        if (input != null && input.recoverScripts() && (input.requestPattern() == null || input.requestPattern().isBlank())
+                && !readiness().path("ready").asBoolean() && lightweightOrigins()) return inspectScripts(id, input);
         return capture(id, input, false);
+    }
+
+    public synchronized ObjectNode inspectScripts(String id, ReverseAnalysisRequest input) {
+        return inspectScripts(id, input, List.of());
+    }
+
+    public synchronized ObjectNode inspectScripts(String id, ReverseAnalysisRequest input, List<String> scriptUrls) {
+        RepairSummary repair = repairs.get(id);
+        if (input == null || !repair.faultSha256().equals(input.expectedFaultSha256())) throw error("REPAIR_FAULT_CHANGED");
+        requireCurrent(repair);
+        if (!lightweightOrigins())
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "REVERSE_SCRIPT_INSPECTION_NOT_READY");
+        var candidates = repairs.candidates(id);
+        String source = sources.artifact(repair.sourceId(), repair.baselineArtifactSha256()).getBody();
+        String page = input.pageUrl() == null || input.pageUrl().isBlank()
+                ? automaticRequest(repair, candidates, source).pageUrl() : input.pageUrl().trim();
+        String observed = requestedPageSha(repair, candidates, page);
+        if (observed.isEmpty()) throw error("REVERSE_OBSERVED_PAGE_REQUIRED");
+        var payload = mapper.createObjectNode().put("repairId", id).put("runId", repair.baselineRunId())
+                .put("artifactSha256", repair.baselineArtifactSha256()).put("pageUrl", page)
+                .put("observedPageUrlSha256", observed).put("scriptInspectionOnly", true);
+        var targets = payload.putArray("scriptTargets");
+        var fields = new LinkedHashSet<String>();
+        var hashes = new LinkedHashSet<String>();
+        for (JsonNode evidence : replayEvidence(repair, candidates))
+            for (JsonNode resource : evidence.path("resourceEvidence").path("resources")) {
+                if ("script".equals(resource.path("kind").asText())
+                        && observed.equals(resource.path("parentUrlSha256").asText())
+                        && resource.path("urlSha256").asText().matches("[a-f0-9]{64}"))
+                    hashes.add(resource.path("urlSha256").asText());
+                for (JsonNode path : resource.path("jsonStructure").findValues("path"))
+                    for (JsonNode field : path) if (field.isTextual()
+                            && field.asText().matches("[A-Za-z_][A-Za-z0-9_]{2,47}")) fields.add(field.asText());
+            }
+        hashes.stream().limit(8).forEach(targets::add);
+        if (scriptUrls == null || scriptUrls.size() > 7 || new LinkedHashSet<>(scriptUrls).size() != scriptUrls.size())
+            throw error("REVERSE_INPUT_INVALID");
+        var declared = payload.putArray("observedScriptUrls");
+        for (String url : scriptUrls) {
+            if (!publicUrl(url) || !hashes.contains(Hashes.sha256(url))) throw error("REVERSE_OBSERVED_SCRIPT_REQUIRED");
+            declared.add(url);
+        }
+        var consumerFields = payload.putArray("consumerFields");
+        fields.stream().limit(16).forEach(consumerFields::add);
+        String worker;
+        try { worker = originWorkerSha(); }
+        catch (IOException failure) { throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "REVERSE_SCRIPT_INSPECTION_NOT_READY"); }
+        String requestSha = Hashes.sha256(payload.toString() + worker);
+        ObjectNode cached = cachedReport(repair.frozen().path("reverseAnalysis"), requestSha, false, worker);
+        if (cached != null) return cached;
+        ObjectNode report = observe(payload).put("analysisRequestSha256", requestSha).put("workerSha256", worker)
+                .put("pageReplay", "independent_guest_http").put("failureCauseEstablished", false);
+        return repairs.attachReverseAnalysis(id, repair.faultSha256(), report);
     }
 
     public synchronized ObjectNode captureRun(ProbeSummary run, PageDiagnosticsRequest input) {
@@ -433,7 +497,8 @@ public class ReverseAnalysis {
     }
 
     ObjectNode observe(ObjectNode payload) {
-        boolean directOrigin = payload.path("originInspectionOnly").asBoolean() && lightweightOrigins();
+        boolean scripts = payload.path("scriptInspectionOnly").asBoolean();
+        boolean directOrigin = (payload.path("originInspectionOnly").asBoolean() || scripts) && lightweightOrigins();
         if (!directOrigin && !readiness().path("ready").asBoolean())
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "REVERSE_ENGINE_NOT_READY");
         Path temporary = null;
@@ -451,7 +516,8 @@ public class ReverseAnalysis {
             if (directOrigin) {
                 Path broker = temporary.resolve("broker.py");
                 Files.write(broker, new ClassPathResource("worker/broker.py").getContentAsByteArray());
-                command = List.of(python, "-I", "-X", "utf8", broker.toString(), egress.toString(), "--inspect-origin");
+                command = List.of(python, "-I", "-X", "utf8", broker.toString(), egress.toString(),
+                        scripts ? "--inspect-scripts" : "--inspect-origin");
             } else command = List.of(node, "--max-old-space-size=384", Path.of(directory, "runner.mjs").toAbsolutePath().toString());
             byte[] bytes = PythonProcess.runCommand(command, temporary,
                     mapper.writeValueAsBytes(payload), 80, tunnelsFile.isBlank() ? Map.of()
@@ -459,7 +525,8 @@ public class ReverseAnalysis {
                                 System::getenv));
             JsonNode value = mapper.readTree(bytes);
             requireSuccessfulWorker(value);
-            requireOperation(value, payload.path("originInspectionOnly").asBoolean());
+            if (scripts) requireScriptOperation(value);
+            else requireOperation(value, payload.path("originInspectionOnly").asBoolean());
             if (!(value instanceof ObjectNode report) || !taskId.equals(value.path("taskId").asText())
                     || !payload.path("repairId").equals(value.path("repairId"))
                     || !payload.path("runId").equals(value.path("runId"))
@@ -514,6 +581,17 @@ public class ReverseAnalysis {
                     || !report.path("browserStarted").isBoolean() || report.path("browserStarted").asBoolean()
                     || report.path("originPool").path("selectionApplied").asBoolean()
                     || report.path("originPool").path("businessChainVerified").asBoolean()))
+            throw new IOException("REVERSE_RECEIPT_INVALID");
+    }
+
+    static void requireScriptOperation(JsonNode report) throws IOException {
+        if (report == null || !"host_public_scripts_observed".equals(report.path("authority").asText())
+                || !"script_resource_inspection".equals(report.path("operation").asText())
+                || !report.path("browserStarted").isBoolean() || report.path("browserStarted").asBoolean()
+                || report.path("sourceCodeExecuted").asBoolean()
+                || report.path("consumerExecutionVerified").asBoolean()
+                || report.path("transformationVerified").asBoolean()
+                || !report.path("scripts").isArray() || !report.path("requests").isArray())
             throw new IOException("REVERSE_RECEIPT_INVALID");
     }
 

@@ -22,6 +22,90 @@ class ReverseAnalysisTest {
 
     @Test
     @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "MAINTENANCE_PYTHON", matches = ".+")
+    void scriptWorkerRunsWithoutBrowserAndDoesNotForwardSensitivePageQuery() throws Exception {
+        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class),
+                "", "node-must-not-run", "", System.getenv("MAINTENANCE_PYTHON"), "", "");
+        String page = "https://fixture.example.com/play?token=private-value";
+        var payload = mapper.createObjectNode().put("scriptInspectionOnly", true)
+                .put("repairId", "repair").put("runId", "run").put("artifactSha256", "a".repeat(64))
+                .put("pageUrl", page).put("observedPageUrlSha256", Hashes.sha256(page));
+        var report = service.observe(payload);
+        ReverseAnalysis.requireScriptOperation(report);
+        assertEquals("REVERSE_SENSITIVE_QUERY_NOT_FORWARDED", report.at("/failures/0/code").asText());
+        assertTrue(report.path("requests").isEmpty());
+        assertFalse(report.toString().contains("private-value"));
+        assertTrue(report.path("cleanupConfirmed").asBoolean());
+    }
+
+    @Test void scriptReadinessDoesNotRequireBrowserAndCannotClaimExecutedConversion() throws Exception {
+        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class),
+                "", "node-must-not-run", "", "python", "", "");
+        assertTrue(service.readiness().path("scriptInspectionReady").asBoolean());
+        assertFalse(service.readiness().path("ready").asBoolean());
+        var report = mapper.createObjectNode().put("authority", "host_public_scripts_observed")
+                .put("operation", "script_resource_inspection").put("browserStarted", false)
+                .put("sourceCodeExecuted", false).put("consumerExecutionVerified", false).put("transformationVerified", false);
+        report.putArray("scripts");
+        report.putArray("requests");
+        ReverseAnalysis.requireScriptOperation(report);
+        assertThrows(java.io.IOException.class, () -> ReverseAnalysis.requireOperation(report, false));
+        report.put("transformationVerified", true);
+        assertThrows(java.io.IOException.class, () -> ReverseAnalysis.requireScriptOperation(report));
+    }
+
+    @Test void scriptInspectionRejectsUnobservedPageBeforeNetworkOrStorage() {
+        var store = mock(RepairStore.class);
+        var sources = mock(SourceService.class);
+        var frozen = mapper.createObjectNode();
+        var repair = new RepairSummary("repair", "source", "run", "a".repeat(64), "b".repeat(64),
+                "STOPPED", "ROUND_LIMIT", 4, 4, null, Instant.now(), frozen, "current", List.of());
+        when(store.get("repair")).thenReturn(repair);
+        when(store.candidates("repair")).thenReturn(List.of());
+        var artifact = new cn.har01d.atmaintenance.entity.MaintenanceArtifact();
+        artifact.setBody("HOST='https://fixture.example.com'");
+        when(sources.artifact("source", "a".repeat(64))).thenReturn(artifact);
+        var service = spy(new ReverseAnalysis(mapper, store, sources, "", "node", "", "python", "", ""));
+        var failure = assertThrows(ResponseStatusException.class, () -> service.inspectScripts("repair",
+                new ReverseAnalysisRequest("b".repeat(64), "https://fixture.example.com/play/guess", "", true)));
+        assertEquals("REVERSE_OBSERVED_PAGE_REQUIRED", failure.getReason());
+        verify(service, never()).observe(any());
+        verify(store, never()).attachReverseAnalysis(anyString(), anyString(), any());
+    }
+
+    @Test void suppliedScriptMustMatchThisObservedPagesRecordedScriptHash() {
+        String page = "https://fixture.example.com/play/123", script = "https://fixture.example.com/play.js?v=2";
+        var store = mock(RepairStore.class);
+        var sources = mock(SourceService.class);
+        var frozen = mapper.createObjectNode();
+        var baseline = frozen.putObject("baseline").putObject("result").putObject("managedSourceEvidence")
+                .put("authority", "managed_source_host_observed").put("jobId", "run").put("inputSourceSha256", "a".repeat(64));
+        var resources = baseline.putObject("resourceEvidence").put("artifactSha256", "a".repeat(64)).putArray("resources");
+        resources.addObject().put("kind", "page").put("urlSha256", Hashes.sha256(page));
+        resources.addObject().put("kind", "script").put("urlSha256", Hashes.sha256(script))
+                .put("parentUrlSha256", Hashes.sha256(page));
+        baseline.putArray("httpObservations").addObject().put("method", "GET").put("requestUrlSha256", Hashes.sha256(page))
+                .put("responseStatus", 200).put("responseComplete", true);
+        var repair = new RepairSummary("repair", "source", "run", "a".repeat(64), "b".repeat(64),
+                "STOPPED", "ROUND_LIMIT", 4, 4, null, Instant.now(), frozen, "current", List.of());
+        when(store.get("repair")).thenReturn(repair);
+        when(store.candidates("repair")).thenReturn(List.of());
+        var artifact = new cn.har01d.atmaintenance.entity.MaintenanceArtifact();
+        artifact.setBody("HOST='https://fixture.example.com'");
+        when(sources.artifact("source", "a".repeat(64))).thenReturn(artifact);
+        var service = spy(new ReverseAnalysis(mapper, store, sources, "", "node", "", "python", "", ""));
+        var input = new ReverseAnalysisRequest("b".repeat(64), page, "", true);
+        var error = assertThrows(ResponseStatusException.class,
+                () -> service.inspectScripts("repair", input, List.of(script + "&guess=1")));
+        assertEquals("REVERSE_OBSERVED_SCRIPT_REQUIRED", error.getReason());
+        doReturn(mapper.createObjectNode()).when(service).observe(any());
+        when(store.attachReverseAnalysis(anyString(), anyString(), any())).thenAnswer(invocation -> invocation.getArgument(2));
+        service.inspectScripts("repair", input, List.of(script));
+        verify(service).observe(argThat(payload -> payload.path("observedScriptUrls").get(0).asText().equals(script)));
+        assertEquals(4, repair.usedRounds());
+    }
+
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "MAINTENANCE_PYTHON", matches = ".+")
     void originInspectionRunsFromBundledPythonWithoutNodeOrBrowser() throws Exception {
         var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class),
                 "", "node-must-not-run", "", System.getenv("MAINTENANCE_PYTHON"), "", "");

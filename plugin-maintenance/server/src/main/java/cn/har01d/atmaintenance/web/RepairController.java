@@ -47,6 +47,13 @@ public class RepairController {
         return reverse.capture(id, input);
     }
 
+    @PostMapping("/repairs/{id}/script-inspection")
+    public ObjectNode inspectScripts(@PathVariable String id, @RequestBody ScriptInspectionRequest input) {
+        if (input == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "REVERSE_INPUT_INVALID");
+        return reverse.inspectScripts(id, new ReverseAnalysisRequest(input.expectedFaultSha256(), input.pageUrl(), "", true),
+                input.scriptUrls() == null ? List.of() : input.scriptUrls());
+    }
+
     @PostMapping("/repairs/{id}/origin-inspection")
     public ObjectNode inspectOrigins(@PathVariable String id, @RequestBody OriginInspectionRequest input) {
         return reverse.inspectOrigins(id, input);

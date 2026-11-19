@@ -599,8 +599,162 @@ def serve(transport, lines, output):
 def main():
     if sys.argv[2:] == ['--inspect-origin']:
         print(json.dumps(origin_inspection(json.load(sys.stdin)), ensure_ascii=True))
+    elif sys.argv[2:] == ['--inspect-scripts']:
+        print(json.dumps(script_inspection(json.load(sys.stdin)), ensure_ascii=True))
     else:
         serve(BrowserTransport(), sys.stdin, sys.stdout)
+
+
+class ScriptDocument(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.scripts, self.inline, self.current = [], [], None
+
+    def handle_starttag(self, tag, attrs):
+        if tag != 'script':
+            return
+        attrs = dict(attrs)
+        if attrs.get('src'):
+            self.scripts.append(attrs['src'])
+        elif attrs.get('type', '').lower() in {'', 'module', 'text/javascript', 'application/javascript'}:
+            self.current = []
+
+    def handle_data(self, data):
+        if self.current is not None:
+            self.current.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == 'script' and self.current is not None:
+            self.inline.append(''.join(self.current))
+            self.current = None
+
+
+def script_inspection(value, transport=None):
+    """Observe declared public scripts without executing a page, Spider or decoder."""
+    page = value['pageUrl']
+    page_sha = hashlib.sha256(page.encode()).hexdigest()
+    egress.http_authority(page, 'EGRESS_URL_DENIED')
+    if page_sha != value.get('observedPageUrlSha256'):
+        raise ValueError('REVERSE_PAGE_NOT_BOUND_TO_SOURCE')
+    transport = transport or BrowserTransport()
+    report = {'schemaVersion': 1, 'mode': 'reverse_analysis_v1',
+              'authority': 'host_public_scripts_observed', 'operation': 'script_resource_inspection',
+              'taskId': value['taskId'], 'repairId': value['repairId'], 'runId': value['runId'],
+              'artifactSha256': value['artifactSha256'], 'pageUrlSha256': page_sha,
+              'pageSourceBinding': 'same_run_observed_page', 'transport': 'maintenance_pinned_public_http',
+              'networkLocation': 'controller_host', 'browserStarted': False, 'sourceCodeExecuted': False,
+              'credentialsImported': False, 'businessChainVerified': False, 'publishEligible': False,
+              'cleanupConfirmed': True, 'requests': [], 'scripts': [], 'failures': [],
+              'fetchLimit': 8, 'textByteLimit': 18000, 'textBytes': 0,
+              'consumerExecutionVerified': False, 'transformationVerified': False}
+    targets = set(value.get('scriptTargets', [])[:8])
+    fields = [field for field in value.get('consumerFields', [])[:16]
+              if isinstance(field, str) and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{2,47}', field)]
+    markers = [re.escape(field.encode()) for field in fields if field not in {'url', 'data', 'list'}]
+    markers += [rb'resData', rb'getRes\w*', rb'decrypt', rb'JSON\.parse', rb'atob\s*\(']
+    visited = set()
+
+    def get(url, parent=None):
+        if url in visited or len(visited) >= report['fetchLimit']:
+            return None
+        parsed, _, _ = egress.http_authority(url, 'EGRESS_URL_DENIED')
+        if any(re.search(r'token|auth|secret|session|signature|credential|password|api.?key|^sig$', key, re.I)
+               for key, _ in parse_qsl(parsed.query, keep_blank_values=True)):
+            report['failures'].append({'urlSha256': hashlib.sha256(url.encode()).hexdigest(),
+                                       'code': 'REVERSE_SENSITIVE_QUERY_NOT_FORWARDED'})
+            return None
+        visited.add(url)
+        headers = {'Accept': 'text/html' if parent is None else 'application/javascript, text/javascript, */*;q=0.1'}
+        if parent:
+            headers['Referer'] = parent
+        try:
+            reply = transport.fetch({'method': 'GET', 'url': url, 'headers': headers, 'body': ''})
+            response, observed = reply['response'], reply['observation']
+            body = base64.b64decode(response['body'], validate=True)
+            response_headers = {key.lower(): val for key, val in response.get('headers', {}).items()}
+            text = body[:8192].decode('utf-8', errors='replace').lower()
+            challenge = (response_headers.get('cf-mitigated', '').lower() == 'challenge'
+                         or '_cf_chl_opt' in text and '/cdn-cgi/challenge-platform/' in text)
+            row = {'urlSha256': hashlib.sha256(url.encode()).hexdigest(), 'origin': http_origin(url),
+                   'parentUrlSha256': hashlib.sha256(parent.encode()).hexdigest() if parent else None,
+                   'status': response['status'], 'responseComplete': observed.get('responseComplete') is True,
+                   'responseSha256': hashlib.sha256(body).hexdigest(), 'responseBytes': len(body),
+                   'challengePage': challenge, 'targetMatched': hashlib.sha256(url.encode()).hexdigest() in targets}
+            report['requests'].append(row)
+            if response['status'] != 200 or not row['responseComplete'] or challenge:
+                row['contentStatus'] = 'challenge' if challenge else 'incomplete' if not row['responseComplete'] else 'http_error'
+                return None
+            if parent and (body.lstrip().lower().startswith((b'<!doctype', b'<html'))
+                           or 'text/html' in response_headers.get('content-type', '').lower()):
+                row['contentStatus'] = 'script_returned_html'
+                return None
+            row['contentStatus'] = 'observed'
+            return body
+        except Exception as error:
+            code = error.code if isinstance(error, egress.Denied) else 'REVERSE_RESOURCE_UNAVAILABLE'
+            report['failures'].append({'urlSha256': hashlib.sha256(url.encode()).hexdigest(), 'code': code})
+            return None
+
+    def retain(body, url, basis):
+        remaining = report['textByteLimit'] - report['textBytes']
+        if not body.strip() or remaining <= 0:
+            return
+        limit = min(6000, remaining)
+        found = next((match for marker in markers if (match := re.search(marker, body, re.I))), None)
+        offset = max(0, found.start() - 1200) if found and len(body) > limit else 0
+        text = body[offset:offset + limit].decode('utf-8', errors='replace')
+        while len(text.encode()) > limit:
+            text = text[:-1]
+        if not text:
+            return
+        encoded = text.encode()
+        report['scripts'].append({'urlSha256': hashlib.sha256(url.encode()).hexdigest(),
+            'sourceSha256': hashlib.sha256(body).hexdigest(), 'sourceBytes': len(body),
+            'discoveryBasis': basis, 'targetMatched': hashlib.sha256(url.encode()).hexdigest() in targets,
+            'excerpt': {'offset': offset, 'text': text, 'textSha256': hashlib.sha256(encoded).hexdigest(),
+                        'complete': offset == 0 and encoded == body},
+            'consumerExecutionVerified': False})
+        report['textBytes'] += len(encoded)
+
+    seeds = value.get('observedScriptUrls', [])
+    if (not isinstance(seeds, list) or len(seeds) > 7 or len(set(seeds)) != len(seeds)
+            or any(not isinstance(url, str) or hashlib.sha256(url.encode()).hexdigest() not in targets for url in seeds)):
+        raise ValueError('REVERSE_PAGE_NOT_BOUND_TO_SOURCE')
+    queue = [(url, page, 0) for url in seeds]
+    inline_scripts = []
+    body = get(page)
+    if body is not None:
+        document = ScriptDocument()
+        document.feed(body.decode('utf-8-sig', errors='replace'))
+        inline_scripts = document.inline[:8]
+        queue.extend((urljoin(page, address), page, 0) for address in document.scripts[:64])
+        queue.sort(key=lambda row: (hashlib.sha256(row[0].encode()).hexdigest() not in targets,
+                                   not bool(re.search(r'play|video|media|config|common', row[0], re.I))))
+    while queue and len(visited) < report['fetchLimit']:
+        url, parent, depth = queue.pop(0)
+        if url in visited:
+            continue
+        try:
+            script = get(url, parent)
+        except (ValueError, egress.Denied):
+            continue
+        if script is None:
+            continue
+        basis = ('prior_host_observed_script' if url in seeds else 'observed_page_script') if depth == 0 else 'observed_script_module'
+        retain(script, url, basis)
+        if depth < 1:
+            # Follow only literal module imports, never arbitrary string constants or source maps.
+            imports = re.findall(rb'''(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["']([^"'\r\n]{1,512})["']''', script)
+            for address in imports[:16]:
+                target = urljoin(url, address.decode('utf-8', errors='replace'))
+                if urlsplit(target).path.lower().endswith(('.js', '.mjs')):
+                    queue.append((target, url, depth + 1))
+    for index, inline in enumerate(inline_scripts):
+        if any(re.search(marker, inline.encode(), re.I) for marker in markers):
+            retain(inline.encode(), page + '#inline-' + str(index), 'observed_page_inline_script')
+    report['collectionStatus'] = 'observed' if report['scripts'] else 'unavailable'
+    report['truncated'] = bool(report['textBytes'] >= report['textByteLimit'] or len(visited) >= report['fetchLimit'])
+    return report
 
 
 def origin_inspection(value, transport=None):
