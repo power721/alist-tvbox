@@ -142,7 +142,7 @@ class EmbeddedDatabaseArchiveToolTest {
 
     private Path database(String filename) {
         Path database = directory.resolve(filename);
-        new EmbeddedMaintenanceMigrations().migrate(Flyway.configure().dataSource(url(database), "sa", "")
+        new EmbeddedMaintenanceMigrations(Flyway::migrate).migrate(Flyway.configure().dataSource(url(database), "sa", "")
                 .locations("classpath:db/migration/h2", "classpath:db/migration/common",
                         "classpath:db/migration/current").load());
         return database;

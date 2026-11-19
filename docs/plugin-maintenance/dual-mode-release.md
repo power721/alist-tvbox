@@ -1,6 +1,6 @@
-# 双模式容器交付：0.106.0-RC10 源码候选
+# 双模式容器交付：0.106.0-RC12 源码候选
 
-本版提供独立服务容器及完整AT内置容器的封装源码。两种模式复用相同维护服务和管理页，不复制第二套业务实现。RC10 内置候选基于 AT 1.133.0 上游整理，不等于已部署到 NAS 或公开稳定版；NAS 已验收运行实例仍为 RC9.1。
+本版提供独立服务容器及完整AT内置容器的封装源码。两种模式复用相同维护服务和管理页，不复制第二套业务实现。内置候选基于 AT 1.133.0 上游整理；NAS 内置测试实例已升级到 RC12，独立实例仍为 RC9.1。两种 RC12 JAR 均构建成功，不等于已公开稳定发行。
 
 ## 两种入口
 
@@ -33,7 +33,7 @@ mvn -Pmaintenance-embedded -Dmaintenance.at-ui-directory='<交付目录>/at-web'
 
 使用 `plugin-maintenance/scripts/build_service_context.py` 分别指定 `--mode standalone|embedded`、`--jar`、固定摘要的 `--runtime-image` 和 `--output` 导出镜像上下文。运行底座必须具备Java21+、Python3；内置模式还须提供AT使用的 `/opt/alist/alist`、`/alist.json`。RC复用已经安装的AT运行底座，不宣称最小镜像。
 
-解包后必须通过 `maintenance_image.py build` 构建，角色与模式一致，版本0.106.0-RC10，revision使用 `service-context.json` 的 `contextSha256`，传入 `--build-arg RUNTIME_IMAGE=<固定摘要>`。保存完整镜像ID和构建回执，不使用latest充当版本。
+解包后必须通过 `maintenance_image.py build` 构建，角色与模式一致，版本0.106.0-RC12，revision使用 `service-context.json` 的 `contextSha256`，传入 `--build-arg RUNTIME_IMAGE=<固定摘要>`。保存完整镜像ID和构建回执，不使用latest充当版本。
 
 `plugin-maintenance/deployment/compose.yaml` 提供部署模板。填入两种已接受的镜像身份、独立管理员密码，选择 `--profile standalone` 或 `--profile embedded`。默认仅本机监听；管理员明确选择监听地址后才对局域网开放。没有生产目录或Docker socket挂载。两种实例不能共用数据库；内置AT的 `/data`、`/opt/alist/data`、`/www` 分别持久化。SQLite运行需要可执行的临时目录，模板已包含。
 

@@ -64,6 +64,53 @@ class RepairEvidenceMaterialTest {
                 "REJECTED", "RUNTIME_TARGET_UNRESOLVED", Instant.now(), Instant.now(), null, result, "call", null, null);
     }
 
+    static ObjectNode playerContract(ObjectMapper mapper) {
+        return mapper.createObjectNode().put("detailCallId", 2).put("playCallId", 3)
+                .put("selectedIdentifierShape", "opaque").put("returnedUrlShape", "opaque")
+                .put("returnedUrlType", "string").put("returnedUrlBytes", 30)
+                .put("returnedUrlMatchesIdentifier", true).put("parseMode", "direct")
+                .put("hasWhitespace", false).put("hasFragment", false).put("hasUserInfo", false).put("hasHostname", false);
+    }
+
+    @Test void boundDownstreamPlayerFailureCanOfferEvidenceAfterEarlierTargetRecovered() throws Exception {
+        var repair = repair();
+        ((ObjectNode) repair.frozen().path("policy")).putArray("targetNodes").add("C10");
+        var result = result(mapper, repair, "d".repeat(64));
+        result.put("repairSuccessful", false).putObject("runtimeAcceptance").put("status", "required_incomplete");
+        var runtime = result.withObject("runtimeEvidence");
+        runtime.remove("resourceEvidence");
+        var loader = runtime.withObject("loaderValidation");
+        loader.putArray("calls").addObject().put("id", 2).put("method", "detail").put("ok", true);
+        loader.withArray("calls").addObject().put("id", 3).put("method", "play").put("ok", true);
+        var node = (ObjectNode) loader.path("nodes").get(0);
+        node.set("playerContract", playerContract(mapper));
+        var progressed = new RepairCandidateSummary("candidate", repair.id(), 3, "d".repeat(64), "e".repeat(64),
+                "RUNTIME_OBSERVED", null, Instant.now(), Instant.now(), null, result, "call", null, null);
+        var material = RepairEvidenceMaterial.current(mapper, repair, List.of(progressed));
+        assertTrue(material.path("available").asBoolean(), material::toString);
+        assertEquals("observed_player_output_contract", material.path("materialKind").asText());
+        assertEquals("R01", material.path("targetNode").asText());
+        assertEquals("C10", repair.frozen().path("policy").path("targetNodes").get(0).asText());
+        ((ObjectNode) node.path("playerContract")).put("playCallId", 7);
+        assertFalse(RepairEvidenceMaterial.current(mapper, repair, List.of(progressed)).path("available").asBoolean());
+    }
+
+    @Test void playerSemanticsIgnoreRotatingIdsAndSizesButNoticeChangedShape() {
+        var node = mapper.createObjectNode().put("id", "R01");
+        var contract = playerContract(mapper);
+        node.set("playerContract", contract);
+        var nodes = mapper.createArrayNode().add(node);
+        var before = RepairEvidenceMaterial.playerSignatures(mapper, nodes);
+        assertEquals(1, before.size());
+        contract.put("detailCallId", 8).put("playCallId", 9).put("returnedUrlBytes", 900);
+        assertEquals(before, RepairEvidenceMaterial.playerSignatures(mapper, nodes));
+        contract.put("returnedUrlShape", "relative_path");
+        assertNotEquals(before, RepairEvidenceMaterial.playerSignatures(mapper, nodes));
+        node.set("contractObservations", mapper.createObjectNode().set("playerContract", contract));
+        assertEquals(RepairEvidenceMaterial.playerSignatures(mapper, nodes),
+                RepairEvidenceMaterial.playerSignatures(mapper, mapper.createArrayNode().add(node)));
+    }
+
     static ObjectNode originReceipt(ObjectMapper mapper, RepairSummary repair) {
         var report = mapper.createObjectNode().put("mode", "reverse_analysis_v1")
                 .put("authority", "host_source_origin_observed").put("operation", "source_origin_inspection")

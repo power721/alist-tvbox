@@ -22,8 +22,10 @@ final class RepairEvidenceMaterial {
                 || !"managed_loader_candidate".equals(repair.frozen().path("policy").path("scope").asText())) return result;
         var candidate = history.getLast();
         if (!repair.id().equals(candidate.repairId()) || candidate.result() == null
-                || !"REJECTED".equals(candidate.status())
-                || !"RUNTIME_TARGET_UNRESOLVED".equals(candidate.errorCode())) return result;
+                || !("REJECTED".equals(candidate.status()) && "RUNTIME_TARGET_UNRESOLVED".equals(candidate.errorCode())
+                    || "RUNTIME_OBSERVED".equals(candidate.status())
+                        && "required_incomplete".equals(candidate.result().path("runtimeAcceptance").path("status").asText())
+                        && !candidate.result().path("repairSuccessful").asBoolean())) return result;
         JsonNode runtime = candidate.result().path("runtimeEvidence");
         String profile = repair.frozen().path("baseline").path("profileSha256").asText();
         String bundle = RepairReport.runtimeInputs(repair.frozen()).path("runtimeSha256").asText();
@@ -36,6 +38,28 @@ final class RepairEvidenceMaterial {
                 || !runtime.path("cleanup").path("containerAbsent").asBoolean()
                 || RepairReport.networkUnavailable(runtime) || RepairReport.httpAccessDenied(runtime)
                 || RepairReport.egressUnresolved(runtime)) return result;
+        for (JsonNode node : runtime.path("loaderValidation").path("nodes")) {
+            if (!"R01".equals(node.path("id").asText()) || !RepairReport.repairableLoaderNode(node)
+                    || !repair.frozen().path("baseline").path("profile").path("requiredNodes").valueStream()
+                        .anyMatch(value -> "R01".equals(value.asText()))) continue;
+            JsonNode contract = ManagedLoaderReceipt.contractObservations(mapper, node).path("playerContract");
+            if (contract.size() != 12 || contract.path("detailCallId").asInt() <= 0
+                    || contract.path("playCallId").asInt() <= contract.path("detailCallId").asInt()
+                    || !runtime.path("loaderValidation").path("calls").valueStream().anyMatch(call ->
+                        call.path("id").equals(contract.path("detailCallId"))
+                            && "detail".equals(call.path("method").asText()) && call.path("ok").asBoolean())
+                    || !runtime.path("loaderValidation").path("calls").valueStream().anyMatch(call ->
+                        call.path("id").equals(contract.path("playCallId"))
+                            && "play".equals(call.path("method").asText()) && call.path("ok").asBoolean())) continue;
+            Set<String> signatures = playerSignatures(mapper, mapper.createArrayNode().add(node));
+            if (signatures.isEmpty()) continue;
+            result.put("available", true).put("candidateId", candidate.id()).put("candidateSha256", candidate.sha256())
+                    .put("targetNode", "R01").put("materialKind", "observed_player_output_contract")
+                    .put("evidenceSha256", Hashes.sha256(String.join("\n", signatures)));
+            result.set("structureSignatures", mapper.valueToTree(signatures));
+            result.set("playerContract", contract);
+            return result;
+        }
         JsonNode route = originRoute(mapper, repair, repair.frozen().path("reverseAnalysis"));
         if (!route.isMissingNode()) {
             String target = repair.frozen().path("policy").path("targetNodes").valueStream()
@@ -140,6 +164,23 @@ final class RepairEvidenceMaterial {
                     + "\n" + semantic));
         }
         return result;
+    }
+
+    static Set<String> playerSignatures(ObjectMapper mapper, JsonNode nodes) {
+        var signatures = new TreeSet<String>();
+        for (JsonNode node : nodes) {
+            if (!"R01".equals(node.path("id").asText()) && !"R01".equals(node.path("nodeId").asText())) continue;
+            JsonNode raw = node.has("contractObservations") ? node.path("contractObservations") : node;
+            JsonNode contract = raw.path("playerContract");
+            var normalized = mapper.createObjectNode().put("id", "R01");
+            normalized.set("playerContract", contract);
+            JsonNode safe = ManagedLoaderReceipt.contractObservations(mapper, normalized).path("playerContract");
+            if (safe.size() != 12) continue;
+            var semantic = (ObjectNode) safe.deepCopy();
+            semantic.remove(List.of("detailCallId", "playCallId", "returnedUrlBytes"));
+            signatures.add(Hashes.sha256("observed_player_output_contract\n" + semantic));
+        }
+        return signatures;
     }
 
     private static String semanticStructure(ObjectMapper mapper, JsonNode structure, boolean embedded) {

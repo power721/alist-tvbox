@@ -646,6 +646,10 @@ public class ModelClient {
                         + (!continuation.isMissingNode() ? """
                             evidenceContinuation grants one follow-up on new verified evidence. Preserve the baseline,
                             prior fixes, all failure history and the unchanged validation targets.
+                            When its materialKind is observed_player_output_contract, targetNode is a newly observed
+                            unresolved requirement of the same frozen profile, even if an earlier target has recovered.
+                            Repair that downstream node too; keep proposal targetNodes equal to validationTargets,
+                            preserve earlier fixes, and require the platform to revalidate every frozen requirement.
                             """ : "")
                         + (enhancedDiagnostics ? ENHANCED_INSTRUCTION : ""));
         var user = messages.addObject().put("role", "user");

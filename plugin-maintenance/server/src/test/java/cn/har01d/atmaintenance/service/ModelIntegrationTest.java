@@ -1224,6 +1224,50 @@ class ModelIntegrationTest {
         assertEquals(before, models.budget());
     }
 
+    @Test
+    void explicitPlayerEvidenceAddsOnlyOneRoundAndPreservesOriginalHistory() throws Exception {
+        var repair = stoppedJsonRepair(false);
+        var candidate = repairs.candidates(repair.id()).getLast();
+        var candidateRow = candidateRows.findById(candidate.id()).orElseThrow();
+        var result = (com.fasterxml.jackson.databind.node.ObjectNode) candidate.result().deepCopy();
+        var runtime = result.withObject("runtimeEvidence");
+        runtime.remove("resourceEvidence");
+        var loader = runtime.withObject("loaderValidation");
+        loader.putArray("calls").addObject().put("id", 2).put("method", "detail").put("ok", true);
+        loader.withArray("calls").addObject().put("id", 3).put("method", "play").put("ok", true);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) loader.path("nodes").get(0))
+                .set("playerContract", RepairEvidenceMaterialTest.playerContract(mapper));
+        result.put("repairSuccessful", false).putObject("runtimeAcceptance").put("status", "required_incomplete")
+                .putArray("nodes").addObject().put("id", "R01").put("status", "blocked").put("reason", "PLAYER_URL_EMPTY");
+        candidateRow.setStatus("RUNTIME_OBSERVED"); candidateRow.setErrorCode(null); candidateRow.setResultJson(result.toString());
+        candidateRows.saveAndFlush(candidateRow);
+        var before = models.list(repair.id());
+        var budget = models.budget();
+        String frozen = repairRows.findById(repair.id()).orElseThrow().getFrozenJson();
+        var offer = repairs.evidenceContinuation(repair.id());
+        assertTrue(offer.path("available").asBoolean(), offer::toString);
+        assertEquals("observed_player_output_contract", offer.path("materialKind").asText());
+        var input = new ContinueMaintenanceEvidenceRequest(repair.baselineArtifactSha256(),
+                client.connection().configurationSha256(), repair.faultSha256(), candidate.sha256(),
+                offer.path("evidenceSha256").asText(), "player_evidence_grant_001");
+        var continued = repairs.continueWithEvidence(repair.id(), input);
+        assertEquals(3, continued.usedRounds()); assertEquals(4, continued.maxRounds());
+        assertEquals(continued, repairs.continueWithEvidence(repair.id(), input));
+        assertEquals(before, models.list(repair.id())); assertEquals(budget, models.budget());
+        assertEquals(frozen, repairRows.findById(repair.id()).orElseThrow().getFrozenJson());
+        var request = new StartModelCallRequest(repair.faultSha256(), input.expectedConfigurationSha256(),
+                "player_evidence_call_001", true, true);
+        var call = models.reserve(repair.id(), request);
+        var data = RepairEvidenceMaterial.requestData(mapper, call.getRequestJson());
+        assertEquals("R01", data.path("evidenceContinuation").path("targetNode").asText());
+        assertEquals("opaque", data.path("evidenceContinuation").path("playerContract").path("returnedUrlShape").asText());
+        assertTrue(models.start(call.getId())); models.finish(call.getId(), null, "MODEL_HTTP_ERROR");
+        assertCode("MODEL_FAULT_CALL_LIMIT", () -> models.reserve(repair.id(), new StartModelCallRequest(
+                repair.faultSha256(), request.expectedConfigurationSha256(), "player_evidence_call_002", true, true)));
+        assertEquals(before, models.list(repair.id()).subList(0, 3));
+        assertEquals(budget.usedCalls() + 1, models.budget().usedCalls());
+    }
+
     private RepairSummary stoppedJsonRepair(boolean alreadySeen) throws Exception {
         var base = begin();
         var frozen = (com.fasterxml.jackson.databind.node.ObjectNode) base.frozen().deepCopy();

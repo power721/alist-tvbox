@@ -675,8 +675,11 @@ public class RepairStore {
             if (data.isMissingNode()) return material.put("available", false).put("reason", "MODEL_REQUEST_EVIDENCE_UNAVAILABLE");
             seen.addAll(RepairEvidenceMaterial.signatures(mapper, data.path("resourceEvidence")));
             seen.addAll(RepairEvidenceMaterial.originSignatures(mapper, repair, data.path("reverseAnalysis")));
-            for (JsonNode previous : data.path("previousCandidates"))
+            seen.addAll(RepairEvidenceMaterial.playerSignatures(mapper, data.path("loaderFailures")));
+            for (JsonNode previous : data.path("previousCandidates")) {
                 seen.addAll(RepairEvidenceMaterial.signatures(mapper, previous.path("resourceEvidence")));
+                seen.addAll(RepairEvidenceMaterial.playerSignatures(mapper, previous.path("unresolvedNodes")));
+            }
         }
         boolean novel = material.path("structureSignatures").valueStream().anyMatch(value -> !seen.contains(value.asText()));
         boolean granted = repair.frozen().path("evidenceContinuations").valueStream().anyMatch(grant ->
@@ -708,6 +711,10 @@ public class RepairStore {
                 .put("candidateSha256", input.expectedCandidateSha256()).put("evidenceSha256", input.expectedEvidenceSha256())
                 .put("afterUsedRounds", row.getUsedRounds()).put("additionalRounds", 1).put("grantedAt", Instant.now().toString());
         grant.set("structureSignatures", offer.path("structureSignatures"));
+        if ("observed_player_output_contract".equals(offer.path("materialKind").asText())) {
+            grant.put("materialKind", "observed_player_output_contract").put("targetNode", offer.path("targetNode").asText());
+            grant.set("playerContract", offer.path("playerContract"));
+        }
         row.setEvidenceContinuationsJson(grants.toString());
         row.setStatus("AWAITING_PROPOSAL");
         row.setStopCode(null);

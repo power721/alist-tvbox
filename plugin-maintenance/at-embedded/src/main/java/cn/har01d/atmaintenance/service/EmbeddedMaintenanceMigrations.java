@@ -7,6 +7,12 @@ import java.sql.SQLException;
 
 /** Keep optional maintenance migrations outside the host's version namespace. */
 public final class EmbeddedMaintenanceMigrations implements FlywayMigrationStrategy {
+    private final FlywayMigrationStrategy hostMigrations;
+
+    public EmbeddedMaintenanceMigrations(FlywayMigrationStrategy hostMigrations) {
+        this.hostMigrations = hostMigrations;
+    }
+
     @Override
     public void migrate(Flyway host) {
         var dataSource = host.getConfiguration().getDataSource();
@@ -25,7 +31,7 @@ public final class EmbeddedMaintenanceMigrations implements FlywayMigrationStrat
         } catch (SQLException error) {
             throw new IllegalStateException("MAINTENANCE_SCHEMA_INSPECTION_FAILED", error);
         }
-        host.migrate();
+        hostMigrations.migrate(host);
         Flyway.configure().dataSource(dataSource)
                 .locations("classpath:db/maintenance/h2")
                 .table("maintenance_schema_history")

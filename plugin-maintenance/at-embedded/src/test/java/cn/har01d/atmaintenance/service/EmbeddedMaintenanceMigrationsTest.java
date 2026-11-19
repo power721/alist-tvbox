@@ -18,9 +18,14 @@ class EmbeddedMaintenanceMigrationsTest {
                 .locations("classpath:db/migration/h2", "classpath:db/migration/common",
                         "classpath:db/migration/current")
                 .javaMigrations(new V59_1__HostNamespaceFixture()).load();
-        var strategy = new EmbeddedMaintenanceMigrations();
+        var hostCalls = new java.util.concurrent.atomic.AtomicInteger();
+        var strategy = new EmbeddedMaintenanceMigrations(flyway -> {
+            hostCalls.incrementAndGet();
+            flyway.migrate();
+        });
         strategy.migrate(host);
         strategy.migrate(host);
+        assertEquals(2, hostCalls.get());
         assertEquals("59.1", host.info().current().getVersion().toString());
         try (var connection = DriverManager.getConnection(url, "sa", "");
              var statement = connection.createStatement()) {
@@ -50,7 +55,7 @@ class EmbeddedMaintenanceMigrationsTest {
             statement.execute("CREATE TABLE \"flyway_schema_history\"(\"script\" VARCHAR(200))");
             statement.execute("INSERT INTO \"flyway_schema_history\" VALUES('V59__PluginMaintenance.sql')");
             assertEquals("MAINTENANCE_LEGACY_SCHEMA_REQUIRES_EXPORT", assertThrows(IllegalStateException.class,
-                    () -> new EmbeddedMaintenanceMigrations().migrate(host)).getMessage());
+                    () -> new EmbeddedMaintenanceMigrations(Flyway::migrate).migrate(host)).getMessage());
             var rows = statement.executeQuery("SELECT COUNT(*) FROM \"flyway_schema_history\"");
             assertTrue(rows.next());
             assertEquals(1, rows.getInt(1));

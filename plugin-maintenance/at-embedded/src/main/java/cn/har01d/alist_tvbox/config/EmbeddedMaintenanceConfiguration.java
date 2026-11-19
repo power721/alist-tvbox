@@ -12,6 +12,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.FullyQualifiedAnnotationBeanNameGenerator;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Import;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.http.HttpStatus;
@@ -26,6 +29,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration(proxyBeanMethods = false)
 @PropertySource("classpath:maintenance-embedded.properties")
+@Import(FlywayRepairConfig.class)
 @ComponentScan(basePackages = "cn.har01d.atmaintenance",
         nameGenerator = FullyQualifiedAnnotationBeanNameGenerator.class,
         excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
@@ -34,8 +38,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @EnableJpaRepositories(basePackages = {"cn.har01d.alist_tvbox.entity", "cn.har01d.atmaintenance.repository"})
 public class EmbeddedMaintenanceConfiguration implements WebMvcConfigurer {
     @Bean
-    FlywayMigrationStrategy maintenanceMigrations() {
-        return new EmbeddedMaintenanceMigrations();
+    @Primary
+    FlywayMigrationStrategy maintenanceMigrations(
+            @Qualifier("repairedMigrationStrategy") FlywayMigrationStrategy hostMigrations) {
+        return new EmbeddedMaintenanceMigrations(hostMigrations);
     }
 
     @Bean
