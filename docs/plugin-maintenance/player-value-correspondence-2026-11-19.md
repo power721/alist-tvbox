@@ -22,8 +22,24 @@ Java 校验成功调用、调用顺序、动作和输入摘要、完整 HTTP 响
 - 前端：`node --test tests/maintenance/enhancedDiagnostics.test.mjs`，17 项通过；`node_modules/.bin/vue-tsc --noEmit` 通过。
 - `git diff --check` 通过。
 
-## 未完成边界
+## 初次本地实现边界
 
-本轮没有联网执行来源、调用模型、部署 NAS 或发布插件。爱看仍保持原 8/9、R01 `PLAYER_URL_INVALID`、维修 `STOPPED/REPEATED_CANDIDATE`、累计 4/4，不能视为已修复或复用第四轮授权。
+初次本地实现阶段没有联网执行来源、调用模型、部署 NAS 或发布插件。爱看当时保持原 8/9、R01 `PLAYER_URL_INVALID`、维修 `STOPPED/REPEATED_CANDIDATE`、累计 4/4，不能视为已修复或复用第四轮授权。
 
 下一步应在测试实例部署当前模块和配套运行器后，由平台复验原候选，取得新的字段对应证据；旧回执不能事后补出原值比较。该能力可缩小实际提取或透传的位置，但不会凭空恢复未观测的私有协议和站点解析逻辑。若仍缺实际解析脚本或接口证据，继续补该证据，不手改来源、不盲增模型轮次。
+
+## RC13 真实测试验收
+
+2026-11-19 已一次构建当前内置 Web、JAR 和配套执行器，并部署到 NAS 内置测试实例 `18992`，模块版本 `0.106.0-RC13`。JAR SHA256 为 `0c0da8e9bb737b478fb4166e243089a18ddb73107fd9b61690ab64cd88965e66`，运行器清单 SHA256 为 `06409aae58c93de190f5c9d7a8e4626576e1c0f7c9593e804e5d98fe38de44f0`；实际运行文件一致，5 个内置 Web 文件通过 HTTP 逐字节回读，原独立页面路径返回 404。
+
+原测试数据库停机冷复制到全新目录，原库哈希及全部来源、维修、候选、模型账本保持。当前内置镜像 `sha256:85e7328df03bc0bf2129824dfabfe2d32bbf34988ad3ebf0be2c75f9ffa50e1b`；RC12 镜像及原库保留回滚。精确退役更旧的内置 RC9.1 容器与镜像各 1 个，未删除数据、未全局清理、未动独立测试端或生产。
+
+平台对第四轮候选 `3db13a53-4ae0-4d16-9d13-baef0cf89c84` 执行一次运行时复验。其源码 SHA256 仍为 `9472d9e0cc73ddfdbe1a4cf0a373121d634ceca7bfbbfd80c6a05dcda81ca50b`，与第三轮原候选完全相同；运行任务为 `687ecfa3-02b7-444f-8d1e-e6901aeffbe9`。未创建候选、未追加模型调用或轮次，仍为累计 4/4，任务容器清理确认。
+
+真实回执中 `detailCallId=5`、`playCallId=7` 成功绑定。详情 API 的 `data.list[0].resData` 内嵌 JSON 字段 `[0].url` 与本次播放器返回值为 `exact` 原值相等。返回值为 55 字节不透明字符串、无主机、声明直连，R01 仍 `PLAYER_URL_INVALID`，必需项仍 8/9，`repairSuccessful=false`。部分结构被既有预算截断，诊断保留 `truncated=true`，不据此宣称已穷尽响应。
+
+新证据定位到了对应字段，但仍未证明转换算法、协议、因果关系或可播性；也不能把其他请求的 403 直接认定为取链根因。平台续轮入口返回 `RESPONSE_STRUCTURE_ALREADY_USED`，未绕过既有证据与轮次规则。
+
+本轮真实执行 1 次、模型调用新增 0、生产发布 0；独立 `18991` 和本机 `18990` 保持。内置测试实例在本次诊断期间停用自动巡检、自动递交和自动生产发布，避免扩大执行范围。上游 PR 未更新，本次仍是模块本地迭代，不是稳定发行。
+
+私有验收回执保存在项目外层 `recovery/player_values_rc13_20261119/` 的 `delivery.json`、`diagnostics.json`、`revalidation-final.json` 和 `retirement.json`。各部署与复验阶段已终态，禁止重放。下一步应通过平台补取实际消费该字段的解析脚本或接口证据，不重复同结构模型修复，也不人工改源冒充自动修复。
