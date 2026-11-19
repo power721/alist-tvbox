@@ -1,15 +1,12 @@
 package cn.har01d.alist_tvbox.config;
 
 import cn.har01d.alist_tvbox.auth.TokenFilter;
-import cn.har01d.atmaintenance.MaintenanceApplication;
-import cn.har01d.atmaintenance.config.SecurityConfiguration;
 import cn.har01d.atmaintenance.service.EmbeddedMaintenanceMigrations;
 import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.FullyQualifiedAnnotationBeanNameGenerator;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.context.annotation.Primary;
@@ -23,20 +20,15 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
-import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration(proxyBeanMethods = false)
 @PropertySource("classpath:maintenance-embedded.properties")
 @Import(FlywayRepairConfig.class)
 @ComponentScan(basePackages = "cn.har01d.atmaintenance",
-        nameGenerator = FullyQualifiedAnnotationBeanNameGenerator.class,
-        excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
-                classes = {MaintenanceApplication.class, SecurityConfiguration.class}))
+        nameGenerator = FullyQualifiedAnnotationBeanNameGenerator.class)
 @EntityScan(basePackages = {"cn.har01d.alist_tvbox.entity", "cn.har01d.atmaintenance.entity"})
 @EnableJpaRepositories(basePackages = {"cn.har01d.alist_tvbox.entity", "cn.har01d.atmaintenance.repository"})
-public class EmbeddedMaintenanceConfiguration implements WebMvcConfigurer {
+public class EmbeddedMaintenanceConfiguration {
     @Bean
     @Primary
     FlywayMigrationStrategy maintenanceMigrations(
@@ -56,24 +48,4 @@ public class EmbeddedMaintenanceConfiguration implements WebMvcConfigurer {
                 .build();
     }
 
-    @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/plugin-maintenance/**")
-                .addResourceLocations("classpath:/maintenance-ui/");
-    }
-
-    @Bean
-    @Order(2)
-    SecurityFilterChain maintenancePageSecurityFilterChain(HttpSecurity http) throws Exception {
-        return http.securityMatcher("/plugin-maintenance/**")
-                .authorizeHttpRequests(requests -> requests.anyRequest().permitAll())
-                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
-                .build();
-    }
-
-    @Override
-    public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addRedirectViewController("/plugin-maintenance", "/plugin-maintenance/");
-        registry.addViewController("/plugin-maintenance/").setViewName("forward:/plugin-maintenance/index.html");
-    }
 }

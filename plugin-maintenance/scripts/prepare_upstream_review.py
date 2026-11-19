@@ -37,7 +37,7 @@ RUNTIME_EXAMPLES = (
     "managed-runner-routes.json", "managed-runner-tunnels.json", "managed-broker-service.json",
 )
 CONTROL_SCRIPTS = (
-    "start_local.ps1", "database_archive.ps1", "use_project_storage.ps1", "instance_archive.py",
+    "database_archive.ps1", "use_project_storage.ps1", "instance_archive.py",
     "test_instance_archive.py", "deployment_archive.py", "test_deployment_archive.py", "build_knowledge.py",
     "smoke_test.py", "repair_smoke_test.py", "container_smoke_test.py",
     "release_preparation_smoke_test.py", "source_import_smoke_test.py",
@@ -48,8 +48,7 @@ CONTROL_SCRIPTS = (
     "model_named_budget_smoke_test.py", "model_usage_costs_smoke_test.py",
     "model_cost_budget_smoke_test.py", "at_source_projection.py",
     "freeze_at_profile.py", "verify_at_binding.py", "at_readonly_sample.py",
-    "nas_directory_scan.py", "verify_directory_workbench.py",
-    "verify_nas_directory_workbench.py",
+    "nas_directory_scan.py",
 )
 REVERSE_ENGINE_FILES = (
     "analysis.mjs", "runner.mjs", "broker.py", "remote_broker.py",
@@ -60,7 +59,7 @@ REVERSE_ENGINE_FILES = (
 GROUPS = (
     ("01-isolated-runtime", "Isolated execution and frozen worker resources"),
     ("02-maintenance-control", "Maintenance API, storage, model and release workflow"),
-    ("03-maintenance-web", "Independent maintenance Web UI"),
+    ("03-maintenance-web", "AT maintenance route and workbench components"),
     ("04-at-embedded", "Opt-in AT host integration and review tooling"),
     ("05-at-native-runtime", "Native AT loader identity and opt-in controlled switching"),
 )
@@ -107,6 +106,7 @@ NATIVE_FILES = (
 )
 DOCS = (
     "docs/plugin-maintenance/github-review-2026-11-19.md",
+    "docs/plugin-maintenance/merge-guide.md",
     "docs/plugin-maintenance/embedded-integration.md",
     "docs/plugin-maintenance/build-and-acceptance.md",
     "docs/plugin-maintenance/getting-started.md",
@@ -166,7 +166,7 @@ def subtree(root, prefix):
                   and path.suffix in SOURCE_SUFFIXES)
 
 
-def select_sources(root, *, standalone=False):
+def select_sources(root):
     scripts = MODULE + "scripts/"
     runtime = set(subtree(root, MODULE + "server/src/main/resources/worker"))
     for directory in ("managed-source", "fixtures", "container", "http-acceptance"):
@@ -188,7 +188,9 @@ def select_sources(root, *, standalone=False):
     control.update(MODULE + "reverse-engine/" + name for name in REVERSE_ENGINE_FILES)
     control.update(scripts + name for name in
                    ("test_build_knowledge.py", "test_verify_at_binding.py", "test_nas_directory_scan.py"))
-    web = set(subtree(root, MODULE + "web-ui"))
+    web = set(subtree(root, "web-ui/src/maintenance"))
+    web.update(subtree(root, "web-ui/tests/maintenance"))
+    web.add("web-ui/package.json")
     embedded = set(subtree(root, MODULE + "at-embedded/src"))
     embedded.update((".gitignore", "pom.xml", MODULE + "README.md",
                      "web-ui/src/App.vue", "web-ui/src/router/index.ts", "web-ui/src/views/MaintenanceView.vue",
@@ -198,8 +200,6 @@ def select_sources(root, *, standalone=False):
     native = set(NATIVE_FILES)
     embedded.difference_update(native)
     selected = [runtime, control, web, embedded, native]
-    if standalone:
-        selected = selected[:3]
     seen = set()
     for files in selected:
         if seen.intersection(files):
@@ -341,10 +341,10 @@ def build(root, baseline=BASELINE):
         "Apply patches in `series` order to a clean checkout of that baseline using "
         "`git apply --index <patch>`. Each patch depends on the preceding patch; "
         "these are not independently buildable products.\n\n"
-        "Review scopes: isolated executor, maintenance control plane, independent Web UI, "
+        "Review scopes: isolated executor, maintenance control plane, AT workbench components, "
         "then opt-in AT host wiring, native loader observation and controlled switching. "
         "The last unit includes the explicitly listed native host source changes. "
-        "Build the Web UI before packaging either Java mode. Follow the included "
+        "Build the AT Web UI before packaging with maintenance-embedded. Follow the included "
         "`docs/plugin-maintenance/upstream-review.md` for commands and limits.\n\n"
         "Only patch application and exact source bytes were checked in this preparation. "
         "Existing runtime receipts remain bound to their original JARs and owners. "

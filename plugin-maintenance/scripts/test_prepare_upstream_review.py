@@ -100,7 +100,7 @@ class UpstreamReviewTests(unittest.TestCase):
         groups = R.select_sources(R.ROOT)
         helper = "plugin-maintenance/scripts/use_project_storage.ps1"
         self.assertIn(helper, groups[1])
-        for name in ("start_local.ps1", "database_archive.ps1"):
+        for name in ("database_archive.ps1",):
             body = groups[1]["plugin-maintenance/scripts/" + name].decode("utf-8")
             self.assertIn("'use_project_storage.ps1'", body)
             self.assertIn('"-Djava.io.tmpdir=$env:TEMP"', body)
@@ -244,23 +244,26 @@ class UpstreamReviewTests(unittest.TestCase):
         self.assertFalse(any("/server/data/" in name or name.startswith("recovery/") for name in selected))
         self.assertFalse(any("runner-tunnels.json" in name and "/examples/" not in name for name in selected))
 
-    def test_launcher_python_entrypoints_are_included_in_the_review(self):
+    def test_review_only_delivers_the_at_workbench(self):
         groups = R.select_sources(R.ROOT)
         selected = {name for group in groups for name in group}
-        prefix = "plugin-maintenance/scripts/"
-        launcher = (R.ROOT / (prefix + "start_local.ps1")).read_text(encoding="utf-8")
-        helpers = set(re.findall(r"Join-Path \$PSScriptRoot '([^']+\.py)'", launcher))
-        self.assertIn("managed_source_setup.py", helpers)
-        self.assertIn("managed_runner_tunnel.py", helpers)
-        for helper in helpers:
-            self.assertIn(prefix + helper, selected, "start_local.ps1 invokes " + helper)
+        self.assertIn("web-ui/src/maintenance/MaintenanceWorkbench.vue", groups[2])
+        self.assertIn("web-ui/tests/maintenance/embeddedApi.test.mjs", groups[2])
+        self.assertNotIn("plugin-maintenance/scripts/start_local.ps1", selected)
+        self.assertIn("docs/plugin-maintenance/merge-guide.md", selected)
+        self.assertFalse(any(name.startswith("plugin-maintenance/web-ui/") for name in selected))
+        self.assertFalse(any("Dockerfile.standalone" in name for name in selected))
+        self.assertNotIn("plugin-maintenance/server/src/main/java/cn/har01d/atmaintenance/MaintenanceApplication.java",
+                         selected)
+        self.assertIn("plugin-maintenance/server/src/test/java/cn/har01d/atmaintenance/MaintenanceApplication.java",
+                      selected)
 
     def test_private_and_generated_paths_are_not_selected(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            prefix = "plugin-maintenance/web-ui/"
+            prefix = "web-ui/"
             fixtures = {
-                prefix + "src/App.vue": b"<template/>",
+                prefix + "src/maintenance/MaintenanceWorkbench.vue": b"<template/>",
                 prefix + "package-lock.json": b"{}",
                 prefix + "dist/index.html": b"private",
                 prefix + "node_modules/private.js": b"private",
@@ -268,7 +271,7 @@ class UpstreamReviewTests(unittest.TestCase):
                 prefix + "build.log": b"private",
             }
             R.put_files(root, fixtures)
-            self.assertEqual([prefix + "package-lock.json", prefix + "src/App.vue"],
+            self.assertEqual([prefix + "package-lock.json", prefix + "src/maintenance/MaintenanceWorkbench.vue"],
                              R.subtree(root, prefix))
             with self.assertRaisesRegex(ValueError, "REVIEW_PRIVATE_PATH"):
                 R.read_source(root, prefix + "data/connections.json")

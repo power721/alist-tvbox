@@ -1,4 +1,4 @@
-"""Export a pinned, secret-free full-service image context for either deployment mode."""
+"""Export a pinned, secret-free AT-embedded image context."""
 import argparse
 import hashlib
 import json
@@ -12,13 +12,13 @@ MODULE = Path(__file__).resolve().parents[1]
 
 
 def build(mode, jar, runtime_image, output):
-    if mode not in {"standalone", "embedded"} or not re.fullmatch(r"[A-Za-z0-9/._:-]+@sha256:[a-f0-9]{64}", runtime_image):
+    if mode != "embedded" or not re.fullmatch(r"[A-Za-z0-9/._:-]+@sha256:[a-f0-9]{64}", runtime_image):
         raise ValueError("SERVICE_CONTEXT_IDENTITY_INVALID")
     with zipfile.ZipFile(jar) as archive:
-        required = "BOOT-INF/classes/" + ("maintenance-ui/index.html" if mode == "embedded" else "static/index.html")
-        archive.getinfo(required)
-        if mode == "embedded":
-            archive.getinfo("BOOT-INF/classes/db/maintenance/h2/V73__MaintenanceAutomation.sql")
+        archive.getinfo("BOOT-INF/classes/static/index.html")
+        archive.getinfo("BOOT-INF/classes/db/maintenance/h2/V73__MaintenanceAutomation.sql")
+        if any(name.startswith("BOOT-INF/classes/maintenance-ui/") for name in archive.namelist()):
+            raise ValueError("SERVICE_CONTEXT_INDEPENDENT_UI_NOT_ALLOWED")
     files = {"Dockerfile": (MODULE / ("deployment/Dockerfile." + mode)).read_bytes(),
              "service_entry.py": (MODULE / "deployment/service_entry.py").read_bytes(),
              "application.jar": jar.read_bytes()}
@@ -34,7 +34,7 @@ def build(mode, jar, runtime_image, output):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("standalone", "embedded"), required=True)
+    parser.add_argument("--mode", choices=("embedded",), default="embedded")
     for name in ("jar", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--runtime-image", required=True)

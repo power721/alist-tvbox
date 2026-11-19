@@ -174,7 +174,7 @@ class EmbeddedMaintenanceIntegrationTest {
     }
 
     @Test
-    void embeddedWorkflowUsesAtDatabasePermissionsAndIndependentWeb() throws Exception {
+    void embeddedWorkflowUsesAtDatabasePermissionsAndHostWeb() throws Exception {
         String id;
         String admin;
         String source = "raise RuntimeError('must not execute on host')\nclass Spider: pass\n";
@@ -217,20 +217,21 @@ class EmbeddedMaintenanceIntegrationTest {
             assertEquals(200, get(client, origin + path + "/sources/overview", admin).statusCode());
             assertEquals(401, get(client, origin + path + "/sources?X-ACCESS-TOKEN=" + admin, null).statusCode());
 
-            var page = get(client, origin + "/plugin-maintenance/", null);
+            var page = get(client, origin + "/", null);
             assertEquals(200, page.statusCode());
-            assertEquals("SAMEORIGIN", page.headers().firstValue("x-frame-options").orElse(""));
+            assertEquals(404, get(client, origin + "/plugin-maintenance/", null).statusCode());
+            assertEquals(404, get(client, origin + "/plugin-maintenance/index.html", null).statusCode());
+            assertFalse(context.getResource("classpath:/maintenance-ui/index.html").exists());
             assertEquals(mapper.createArrayNode(), mapper.readTree(get(client, origin + path + "/automation/tasks", admin).body()));
             String html = new String(page.body(), StandardCharsets.UTF_8);
-            var assets = Pattern.compile("(?:src|href)=\"(\\./assets/[^\"]+)\"").matcher(html);
+            var assets = Pattern.compile("(?:src|href)=\"(/assets/[^\"]+)\"").matcher(html);
             int found = 0;
             while (assets.find()) {
                 found++;
-                assertEquals(200, get(client, origin + "/plugin-maintenance/" + assets.group(1).substring(2), null)
+                assertEquals(200, get(client, origin + assets.group(1), null)
                         .statusCode());
             }
-            assertTrue(found >= 2, "Built JS and CSS must be served below the independent page");
-            assertFalse(html.contains("src=\"/assets/"));
+            assertTrue(found >= 2, "AT must serve the shared JS and CSS without an independent page");
 
             String body = mapper.writeValueAsString(Map.of("name", "Embedded MVP", "filename", "source.py",
                     "content", source));
@@ -255,7 +256,9 @@ class EmbeddedMaintenanceIntegrationTest {
             var jdbc = context.getBean(JdbcTemplate.class);
             assertEquals(1, jdbc.queryForObject("select count(*) from maintenance_source", Integer.class));
             assertEquals(2, jdbc.queryForObject("select count(*) from session", Integer.class));
-            assertEquals("74", context.getBean(Flyway.class).info().current().getVersion().getVersion());
+            assertEquals("59", context.getBean(Flyway.class).info().current().getVersion().getVersion());
+            assertEquals("74", jdbc.queryForObject("select \"version\" from \"maintenance_schema_history\" "
+                    + "where \"success\"=true order by \"installed_rank\" desc limit 1", String.class));
             assertEquals("YES", jdbc.queryForObject("select is_nullable from information_schema.columns "
                     + "where table_name = 'MAINTENANCE_AT_PUBLICATION' and column_name = 'ORIGINAL_PLUGIN_ID'", String.class));
             assertFalse(context.containsBean("securityFilterChain"), "Standalone authentication must not be loaded");
@@ -316,7 +319,9 @@ class EmbeddedMaintenanceIntegrationTest {
             for (String table : java.util.List.of("maintenance_probe_run", "maintenance_repair_candidate",
                     "maintenance_model_call", "maintenance_at_binding", "maintenance_probe_schedule", "plugin"))
                 assertEquals(0, jdbc.queryForObject("select count(*) from " + table, Integer.class), table);
-            assertEquals("73", context.getBean(Flyway.class).info().current().getVersion().getVersion());
+            assertEquals("59", context.getBean(Flyway.class).info().current().getVersion().getVersion());
+            assertEquals("74", jdbc.queryForObject("select \"version\" from \"maintenance_schema_history\" "
+                    + "where \"success\"=true order by \"installed_rank\" desc limit 1", String.class));
             assertEquals(1, context.getBeansOfType(javax.sql.DataSource.class).size());
             assertFalse(context.containsBean("securityFilterChain"));
         }

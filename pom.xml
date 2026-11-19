@@ -296,7 +296,10 @@
                 <resources>
                     <resource>
                         <directory>src/main/resources</directory>
-                        <excludes><exclude>static/**</exclude></excludes>
+                        <excludes>
+                            <exclude>static/index.html</exclude>
+                            <exclude>static/assets/**</exclude>
+                        </excludes>
                     </resource>
                     <resource>
                         <directory>${maintenance.at-ui-directory}</directory>
@@ -322,10 +325,6 @@
                         <targetPath>worker</targetPath>
                     </resource>
                     <resource>
-                        <directory>plugin-maintenance/web-ui/dist</directory>
-                        <targetPath>maintenance-ui</targetPath>
-                    </resource>
-                    <resource>
                         <directory>plugin-maintenance/at-embedded/src/main/resources</directory>
                         <excludes><exclude>db/**</exclude></excludes>
                     </resource>
@@ -346,11 +345,10 @@
                                 <goals><goal>run</goal></goals>
                                 <configuration>
                                     <target>
-                                        <fail message="Build both AT and maintenance Web UIs before packaging.">
-                                            <condition><not><and>
+                                        <fail message="Build the AT Web UI with VITE_MAINTENANCE_EMBEDDED=true before packaging.">
+                                            <condition><not>
                                                 <available file="${maintenance.at-ui-directory}/index.html"/>
-                                                <available file="${project.basedir}/plugin-maintenance/web-ui/dist/index.html"/>
-                                            </and></not></condition>
+                                            </not></condition>
                                         </fail>
                                         <delete dir="${project.build.outputDirectory}/static"/>
                                         <delete dir="${project.build.outputDirectory}/maintenance-ui"/>
