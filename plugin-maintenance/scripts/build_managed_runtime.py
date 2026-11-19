@@ -20,6 +20,7 @@ FILES = (
     "scripts/managed_egress_protocol.py",
     "scripts/managed_loader.py",
     "scripts/source_egress.py",
+    "scripts/evidence_gateway.py",
     "managed-source/egress_entry.py",
     "managed-source/egress_payload.py",
     "managed-source/egress_bridge.py",

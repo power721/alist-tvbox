@@ -52,6 +52,7 @@ public class ManagedSourceRuntime {
     private final String runtimeSha;
     private final ObjectNode snapshot;
     private final String policySha;
+    private ConnectionSettingsStore connections;
     private volatile Map<String, ManagedSourceRuntime> sourceRuntimes = Map.of();
     private volatile Map<String, String> sourceRouteLabels = Map.of();
 
@@ -101,6 +102,12 @@ public class ManagedSourceRuntime {
     public boolean sampling() { return !egressPolicySha.isEmpty(); }
 
     @Autowired
+    synchronized void configureGateway(ConnectionSettingsStore connections) {
+        this.connections = connections;
+        sourceRuntimes.values().forEach(runtime -> runtime.connections = connections);
+    }
+
+    @Autowired
     synchronized void configureRoutes(FixtureRuntime fixture,
                          @Value("${maintenance.managed-source.routes-file:}") String path) throws IOException {
         if (path.isBlank()) return;
@@ -129,6 +136,7 @@ public class ManagedSourceRuntime {
                     definition.path("socket").asText(), definition.path("instanceId").asText(),
                     definition.path("imageId").asText(), definition.path("egressPolicySha256").asText(),
                     definition.path("httpImageId").asText());
+            selected.connections = connections;
             // Validate the installed channel even when execution is temporarily disabled.
             var validation = enabled ? selected : new ManagedSourceRuntime(mapper, fixture, true,
                     selected.endpoint, selected.instanceId, selected.imageId, selected.egressPolicySha,
@@ -216,6 +224,10 @@ public class ManagedSourceRuntime {
         request.put("sourceBase64", Base64.getEncoder().encodeToString(source));
         if (sampling()) request.put("loaderProfileJson", profile.toString());
         if (hostCredentials != null) request.set("hostCredentials", hostCredentials);
+        if (sampling() && connections != null) {
+            var gateway = connections.evidenceGateway();
+            if (gateway.enabled()) request.put("evidenceGatewayJson", mapper.writeValueAsString(gateway));
+        }
         JsonNode diagnostic = null;
         boolean completed = false;
         try {
@@ -235,6 +247,10 @@ public class ManagedSourceRuntime {
                 row = control(request("status", jobId, policySha));
             }
             diagnostic = projectDiagnostic(row.path("diagnostics"));
+            if (request.has("evidenceGatewayJson"))
+                require(row.path("evidenceGatewaySettingsSha256").asText().equals(
+                        Hashes.sha256(request.path("evidenceGatewayJson").asText())),
+                        "MANAGED_RECEIPT_MISMATCH");
             require(cleaned(row), "MANAGED_CLEANUP_UNCONFIRMED");
             if (!row.path("status").asText().equals("COMPLETED"))
                 throw new IOException(terminalErrorCode(row, diagnostic));
@@ -602,6 +618,33 @@ public class ManagedSourceRuntime {
                 && value.bigIntegerValue().toString().length() <= digits;
     }
 
+    private void projectGatewayExecution(ObjectNode safe, JsonNode input) throws IOException {
+        if (!input.has("gatewayExecution")) return;
+        JsonNode execution = input.path("gatewayExecution"), tier = execution.path("tier"), cached = execution.path("sessionCached");
+        require(execution.isObject() && (tier.isNull() || boundedInteger(tier, 4) && tier.asInt() > 0)
+                && (cached.isNull() || cached.isBoolean()), "MANAGED_RECEIPT_MISMATCH");
+        safe.putObject("gatewayExecution").set("tier", tier.deepCopy());
+        ((ObjectNode) safe.path("gatewayExecution")).set("sessionCached", cached.deepCopy());
+    }
+
+    private void projectGatewayRecovery(ObjectNode safe, JsonNode input) throws IOException {
+        if (!input.has("gatewayRecovery")) return;
+        JsonNode recovery = input.path("gatewayRecovery"), wait = recovery.path("remainingWaitMilliseconds"),
+                budget = recovery.path("taskBudgetRemainingMilliseconds"), fits = recovery.path("fitsTaskBudget");
+        String action = recovery.path("action").asText();
+        require(recovery.isObject() && Set.of("response", "connect", "read", "decode", "cleanup", "create", "navigate")
+                .contains(recovery.path("phase").asText())
+                && Set.of("stopped", "retry_ready", "reset_after_cooldown", "cooldown").contains(action)
+                && (wait.isNull() || nonnegativeNumber(wait, 131)) && nonnegativeNumber(budget, 9)
+                && (wait.isNull() ? action.equals("stopped") && fits.isNull() : fits.isBoolean()
+                    && !action.equals("stopped") && (action.equals("retry_ready") == (wait.bigIntegerValue().signum() == 0))
+                    && fits.booleanValue() == (wait.bigIntegerValue().compareTo(budget.bigIntegerValue()) < 0)),
+                "MANAGED_RECEIPT_MISMATCH");
+        var projected = safe.putObject("gatewayRecovery");
+        for (String key : List.of("phase", "action", "remainingWaitMilliseconds", "taskBudgetRemainingMilliseconds", "fitsTaskBudget"))
+            projected.set(key, recovery.path(key).deepCopy());
+    }
+
     private JsonNode projectDnsObservation(JsonNode row) {
         if (!(row.path("dnsStatus").isNull() || boundedInteger(row.path("dnsStatus"), 65535))
                 || !boundedInteger(row.path("answerCount"), 65535)
@@ -913,6 +956,57 @@ public class ManagedSourceRuntime {
                 require(validContentType(event.path("responseContentType")), "MANAGED_RECEIPT_MISMATCH");
                 safe.set("responseContentType", event.path("responseContentType").deepCopy());
             }
+            if (event.has("transport")) {
+                require(event.path("transport").asText().equals("external_evidence_gateway")
+                        && event.path("representation").asText().equals("gateway_rendered_document")
+                        && event.path("cookiesExported").isBoolean()
+                        && !event.path("cookiesExported").booleanValue()
+                        && event.path("gatewaySessionReused").isBoolean()
+                        && !event.has("connectedAddressIndex"), "MANAGED_RECEIPT_MISMATCH");
+                for (String key : List.of("transport", "representation", "cookiesExported", "gatewaySessionReused"))
+                    safe.set(key, event.path(key).deepCopy());
+                projectGatewayExecution(safe, event);
+                if (event.has("hostCookieState")) {
+                    require(Set.of("not_requested", "cookies_missing", "user_agent_missing", "available",
+                            "cookie_scope_unusable").contains(event.path("hostCookieState").asText()),
+                            "MANAGED_RECEIPT_MISMATCH");
+                    safe.set("hostCookieState", event.path("hostCookieState").deepCopy());
+                }
+            }
+            if (event.has("challengePage")) {
+                require(event.path("challengePage").isBoolean() && event.path("challengePage").booleanValue(),
+                        "MANAGED_RECEIPT_MISMATCH");
+                safe.put("challengePage", true);
+            }
+            if (event.has("lightweightCookieReuse")) {
+                require(Set.of("http_accepted", "rejected").contains(event.path("lightweightCookieReuse").asText())
+                        && event.has("connectedAddressIndex") && !event.has("transport"),
+                        "MANAGED_RECEIPT_MISMATCH");
+                safe.set("lightweightCookieReuse", event.path("lightweightCookieReuse").deepCopy());
+            }
+            if (event.has("lightweightCookieSkip")) {
+                require(Set.of("request_not_reproducible", "scope_or_expiry", "observed_cookie_collision")
+                        .contains(event.path("lightweightCookieSkip").asText())
+                        && event.has("connectedAddressIndex") && !event.has("transport"),
+                        "MANAGED_RECEIPT_MISMATCH");
+                safe.set("lightweightCookieSkip", event.path("lightweightCookieSkip").deepCopy());
+            }
+            if (event.has("gatewayOutcome")) {
+                String outcome = event.path("gatewayOutcome").asText();
+                require(Set.of("request_not_reproducible", "response_returned", "target_rate_limited", "EVIDENCE_GATEWAY_BUSY",
+                        "EVIDENCE_GATEWAY_UNAVAILABLE", "EVIDENCE_GATEWAY_DEADLINE", "EVIDENCE_GATEWAY_TIMEOUT",
+                        "EVIDENCE_GATEWAY_TARGET_DNS_FAILED", "EVIDENCE_GATEWAY_HTTP_FAILED",
+                        "EVIDENCE_GATEWAY_CHALLENGE_BLOCKED", "EVIDENCE_GATEWAY_SESSION_INVALID",
+                        "EVIDENCE_GATEWAY_RESPONSE_INVALID", "EVIDENCE_GATEWAY_RESPONSE_TOO_LARGE",
+                        "EVIDENCE_GATEWAY_BUDGET", "EVIDENCE_GATEWAY_EMPTY_OR_INVALID_RESPONSE",
+                        "EVIDENCE_GATEWAY_FINAL_URL_CHANGED", "EVIDENCE_GATEWAY_FINAL_URL_DENIED",
+                        "EVIDENCE_GATEWAY_REPRESENTATION_INVALID", "EVIDENCE_GATEWAY_SESSION_LOST",
+                        "EVIDENCE_GATEWAY_CONNECTION_FAILED", "EVIDENCE_GATEWAY_CONNECT_TIMEOUT",
+                        "EVIDENCE_GATEWAY_READ_TIMEOUT", "EVIDENCE_GATEWAY_CLEANUP_UNCONFIRMED")
+                        .contains(outcome), "MANAGED_RECEIPT_MISMATCH");
+                safe.put("gatewayOutcome", outcome);
+                projectGatewayRecovery(safe, event);
+            }
             if (event.has("connectedAddressIndex")) {
                 require(boundedInteger(event.path("connectedAddressIndex"), 15), "MANAGED_RECEIPT_MISMATCH");
                 safe.set("connectedAddressIndex", event.path("connectedAddressIndex").deepCopy());
@@ -957,6 +1051,51 @@ public class ManagedSourceRuntime {
             }
         }
         JsonNode denied = result.path("deniedCodes");
+        if (result.has("runtimeGateway")) {
+            JsonNode gateway = result.path("runtimeGateway");
+            require(Set.of("trawl", "flaresolverr", "flaresolverr-rs-alt").contains(gateway.path("adapter").asText())
+                    && gateway.path("sessionScope").asText().equals("task_and_origin")
+                    && gateway.path("targetAddressPolicy").asText()
+                        .equals("controller_public_preflight_gateway_managed_network")
+                    && gateway.path("cookiesExported").isBoolean() && !gateway.path("cookiesExported").asBoolean()
+                    && gateway.path("cleanupConfirmed").isBoolean() && gateway.path("cleanupConfirmed").asBoolean(),
+                    "MANAGED_RECEIPT_MISMATCH");
+            ObjectNode safe = evidence.putObject("runtimeGateway");
+            for (String key : List.of("sessionCount", "requestCount", "responseCount", "sessionReuseCount")) {
+                require(boundedInteger(gateway.path(key), 64), "MANAGED_RECEIPT_MISMATCH");
+                safe.set(key, gateway.path(key).deepCopy());
+            }
+            for (String key : List.of("adapter", "sessionScope", "targetAddressPolicy", "cookiesExported", "cleanupConfirmed"))
+                safe.set(key, gateway.path(key).deepCopy());
+            if (gateway.has("lightweightCounts")) {
+                ObjectNode lightweight = safe.putObject("lightweightCounts");
+                for (String key : List.of("attempts", "httpAccepted", "rejected")) {
+                    JsonNode count = gateway.path("lightweightCounts").path(key);
+                    require(boundedInteger(count, 64), "MANAGED_RECEIPT_MISMATCH");
+                    lightweight.set(key, count.deepCopy());
+                }
+                require(lightweight.path("attempts").asInt() == lightweight.path("httpAccepted").asInt()
+                        + lightweight.path("rejected").asInt(), "MANAGED_RECEIPT_MISMATCH");
+            }
+            for (String key : List.of("sessionRecoveryCount", "recoveryAttemptCount")) {
+                if (!gateway.has(key)) continue;
+                require(boundedInteger(gateway.path(key), 64), "MANAGED_RECEIPT_MISMATCH");
+                safe.set(key, gateway.path(key).deepCopy());
+            }
+            if (gateway.has("executionCounts")) {
+                var countsByTier = safe.putObject("executionCounts");
+                int responsesByTier = 0;
+                for (String key : List.of("tier1", "tier2", "tier3", "tier4", "unknown", "cachedSession", "unknownCache")) {
+                    JsonNode count = gateway.path("executionCounts").path(key);
+                    require(boundedInteger(count, gateway.path("responseCount").asInt()), "MANAGED_RECEIPT_MISMATCH");
+                    countsByTier.set(key, count.deepCopy());
+                    if (!Set.of("cachedSession", "unknownCache").contains(key)) responsesByTier += count.asInt();
+                }
+                require(responsesByTier == gateway.path("responseCount").asInt()
+                        && countsByTier.path("cachedSession").asInt() + countsByTier.path("unknownCache").asInt()
+                            <= responsesByTier, "MANAGED_RECEIPT_MISMATCH");
+            }
+        }
         require(denied.isArray() && denied.size() <= 64, "MANAGED_RECEIPT_MISMATCH");
         var safeDenied = evidence.putArray("deniedCodes");
         Set<String> allowed = Set.of("EGRESS_URL_DENIED", "EGRESS_METHOD_DENIED", "EGRESS_HEADERS_DENIED",
@@ -1106,6 +1245,7 @@ public class ManagedSourceRuntime {
                 "T4_HTTP_DISABLED", "T4_HTTP_ALREADY_STARTED", "T4_HTTP_DRIVER_FAILED", "T4_HTTP_RECEIPT_MISMATCH",
                 "LOADER_PROFILE_INVALID", "LOADER_RECEIPT_INVALID", "MANAGED_RESOURCE_EVIDENCE_INVALID",
                 "SOURCE_CREDENTIALS_INVALID", "SOURCE_CREDENTIALS_CHANGED",
+                "EVIDENCE_GATEWAY_CONFIGURATION_INVALID", "EVIDENCE_GATEWAY_CLEANUP_UNCONFIRMED",
                 "SOURCE_CREDENTIALS_REQUIRED", "SOURCE_AUTHENTICATION_REJECTED",
                 "MANAGED_LOADER_IDENTITY_MISMATCH", "MANAGED_LOADER_RECEIPT_INVALID",
                 "JOB_ALREADY_EXISTS").contains(code) ? code : "MANAGED_EXECUTION_ERROR";

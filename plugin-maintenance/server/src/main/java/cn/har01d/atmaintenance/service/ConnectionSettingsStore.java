@@ -2,6 +2,7 @@ package cn.har01d.atmaintenance.service;
 
 import cn.har01d.atmaintenance.config.ModelSettings;
 import cn.har01d.atmaintenance.dto.AtConnectionSettings;
+import cn.har01d.atmaintenance.dto.EvidenceGatewaySettings;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.BeanUtils;
@@ -66,6 +67,7 @@ public class ConnectionSettingsStore {
     public synchronized void saveModel(ModelSettings settings) throws IOException {
         var updated = saved.deepCopy();
         ObjectNode value = mapper.createObjectNode().put("enabled", settings.isEnabled())
+                .put("autoSubmitEnabled", settings.isAutoSubmitEnabled())
                 .put("endpoint", settings.getEndpoint()).put("baseUrl", settings.getBaseUrl())
                 .put("model", settings.getModel()).put("apiKey", settings.getApiKey())
                 .put("keyEnv", settings.getKeyEnv()).put("timeoutMillis", settings.getTimeoutMillis())
@@ -75,6 +77,18 @@ public class ConnectionSettingsStore {
                         settings.isIncludeStoreParameter());
         updated.set("model", value);
         updated.set("modelLimits", mapper.valueToTree(cn.har01d.atmaintenance.dto.ModelLimits.from(settings)));
+        save(updated);
+    }
+
+    public synchronized EvidenceGatewaySettings evidenceGateway() {
+        return saved.has("evidenceGateway")
+                ? mapper.convertValue(saved.get("evidenceGateway"), EvidenceGatewaySettings.class)
+                : EvidenceGatewaySettings.disabled();
+    }
+
+    public synchronized void saveEvidenceGateway(EvidenceGatewaySettings settings) throws IOException {
+        var updated = saved.deepCopy();
+        updated.set("evidenceGateway", mapper.valueToTree(settings));
         save(updated);
     }
 

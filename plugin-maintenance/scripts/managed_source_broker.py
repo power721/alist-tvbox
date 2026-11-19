@@ -20,6 +20,7 @@ import build_managed_runtime as B
 import managed_egress_protocol as G
 import source_egress as H
 import managed_http_acceptance as HTTP
+import evidence_gateway as EG
 from managed_loader import digest as rpc_digest
 from managed_loader import SessionChannel, source_identity
 
@@ -53,6 +54,7 @@ EGRESS_POLICY_INVALID EGRESS_CONTAINER_CONFIG_MISMATCH EGRESS_READY_MISMATCH EGR
 EGRESS_PROTOCOL_INVALID EGRESS_SOURCE_SEND_FAILED EGRESS_IMAGE_BUNDLE_MISMATCH
 LOADER_PROFILE_INVALID LOADER_RECEIPT_INVALID
 SOURCE_CREDENTIALS_INVALID
+EVIDENCE_GATEWAY_CONFIGURATION_INVALID EVIDENCE_GATEWAY_CLEANUP_UNCONFIRMED
 LOADER_COLD_IDENTITY_MISMATCH LOADER_FAULT_HTTP_REQUIRED LOADER_LIFECYCLE_NOT_OBSERVED
 T4_RPC_CALL_INVALID T4_RPC_INCOMPLETE T4_RPC_RECEIPT_INVALID T4_RPC_RESULT_LIMIT T4_RPC_RESULT_UNAVAILABLE
 T4_HTTP_DISABLED T4_HTTP_ALREADY_STARTED T4_HTTP_DRIVER_FAILED T4_HTTP_RECEIPT_MISMATCH
@@ -173,6 +175,7 @@ class Broker:
         self.pending_rpc = None
         self.sessions = {}
         self.job_credentials = {}
+        self.job_gateways = {}
         # One host-owned continuation; URLs never enter RPC replies or the durable journal.
         self.trusted_routes = self.staged_routes = self.active_route_identity = None
         self.egress_next_request = 0
@@ -272,6 +275,9 @@ class Broker:
             credentials = self.job_credentials.get(request["jobId"])
             if credentials is not None:
                 mediator.bind_credentials(credentials)
+            gateway_settings = self.job_gateways.get(request["jobId"])
+            gateway = EG.RuntimeGateway(S.decode(gateway_settings.encode()), H) if gateway_settings else None
+            mediator.runtime_gateway = gateway
             route_identity = self.active_route_identity
             if route_identity is not None and self.trusted_routes is not None:
                 S.require(self.trusted_routes[0] == route_identity, "MANAGED_RUNNER_IDENTITY_MISMATCH")
@@ -289,8 +295,12 @@ class Broker:
                 result = G.run(engine, request, source, self.bundle["egressFiles"], mediator,
                                cancelled=cancelled, t4_call=t4_call, **options)
         finally:
+            gateway_cleaned = gateway.close() if gateway else True
             with self.lock:
                 self.egress_next_request = max(self.egress_next_request, mediator.next_request)
+            S.require(gateway_cleaned, "EVIDENCE_GATEWAY_CLEANUP_UNCONFIRMED")
+        if gateway is not None:
+            result["runtimeGateway"] = gateway.summary()
         if route_identity is not None:
             with self.lock:
                 self.staged_routes = (request["jobId"], route_identity, mediator.snapshot_urls())
@@ -374,6 +384,16 @@ class Broker:
             except H.Denied:
                 raise S.Failure("SOURCE_CREDENTIALS_INVALID") from None
             extra = extra | {"hostCredentials"}
+        if operation in {"start", "start_session"} and "parentJobId" not in value and "evidenceGatewayJson" in value:
+            S.require(self.egress_policy is not None, "MANAGED_REQUEST_INVALID")
+            try:
+                encoded = value["evidenceGatewayJson"]
+                S.require(isinstance(encoded, str) and 0 < len(encoded.encode()) <= 4096,
+                          "EVIDENCE_GATEWAY_CONFIGURATION_INVALID")
+                EG.runtime_settings(S.decode(encoded.encode()))
+            except (EG.GatewayError, ValueError):
+                raise S.Failure("EVIDENCE_GATEWAY_CONFIGURATION_INVALID") from None
+            extra = extra | {"evidenceGatewayJson"}
         S.require(operation in {"start", "start_session", "session_call", "session_take", "session_close",
                                 "start_http", "status", "cancel", "cancel_acceptance", "take"}
                   and set(value) == common | extra
@@ -656,6 +676,7 @@ class Broker:
                           if child.get("parentJobId") == job)}
         for ident in affected:
             self.job_credentials.pop(ident, None)
+            self.job_gateways.pop(ident, None)
             if ident in self.events:
                 self.events[ident].set()
             if ident in self.sessions:
@@ -789,7 +810,11 @@ class Broker:
             row = self.row(value, "RUNNING")
             credentials = (value.get("hostCredentials") if not parent_binding else
                            self.job_credentials.get(parent_binding["parentJobId"]))
+            gateway_settings = (value.get("evidenceGatewayJson") if not parent_binding else
+                                self.job_gateways.get(parent_binding["parentJobId"]))
             row.update(parent_binding)
+            if gateway_settings is not None:
+                row["evidenceGatewaySettingsSha256"] = S.digest(gateway_settings.encode())
             row.update(sourceSha256=request["sourceSha256"], sourceBytes=len(source))
             if profile_sha is not None:
                 row["loaderProfileSha256"] = profile_sha
@@ -801,6 +826,8 @@ class Broker:
             self.save(row, exclusive=True)
             if credentials is not None:
                 self.job_credentials[job] = copy.deepcopy(credentials)
+            if gateway_settings is not None:
+                self.job_gateways[job] = gateway_settings
             self.pending_rpc = None
             self.active_route_identity = self.route_identity(
                 request, t4_call, value["executionPolicySha256"], value.get("parentJobId"))
@@ -820,6 +847,7 @@ class Broker:
                 thread.start()
             except RuntimeError:
                 self.job_credentials.pop(job, None)
+                self.job_gateways.pop(job, None)
                 self.trusted_routes = self.staged_routes = self.active_route_identity = None
                 self.threads.pop(job)
                 session = self.sessions.pop(job, None)
@@ -1059,6 +1087,7 @@ class Broker:
         with self.lock:
             self.closed = True
             self.job_credentials.clear()
+            self.job_gateways.clear()
             self.pending_rpc = None
             for session in self.sessions.values():
                 session.close()

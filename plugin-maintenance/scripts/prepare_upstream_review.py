@@ -26,6 +26,7 @@ RUNTIME_SCRIPTS = (
     "requirements-tunnel.txt", "requirements-host.txt",
     "managed_http_acceptance.py", "managed_source_protocol.py",
     "managed_egress_protocol.py", "managed_loader.py", "source_egress.py", "source_origin_discovery.py",
+    "evidence_gateway.py", "test_evidence_gateway.py",
     "maintenance_image.py", "test_maintenance_image.py",
     "build_container_context.py", "build_source_module_context.py", "build_runtime.py", "prepare_plugin_source.py",
     "read_public_python_source.py", "test_read_public_python_source.py",

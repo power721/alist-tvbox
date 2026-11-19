@@ -1279,6 +1279,7 @@ class Broker:
         self.source_headers = set()
         self.referer_origins = ()
         self.host_credentials = None
+        self.runtime_gateway = None
 
     def bind_credentials(self, value):
         value = validate_host_credentials(value)
@@ -1300,7 +1301,8 @@ class Broker:
 
     def fetch(self, value):
         with self.lock:
-            return self._fetch(value)
+            result = self._fetch(value)
+            return self.runtime_gateway.fetch(self, value, result) if self.runtime_gateway else result
 
     def bind_execution(self, deadline, cancelled):
         self.deadline, self.cancelled = deadline, cancelled
@@ -1365,6 +1367,20 @@ class Broker:
             "phase": phase, "recordedAtEpochMilliseconds": int(time.time() * 1000),
             "remainingWaitMilliseconds": remaining, "taskBudgetRemainingMilliseconds": budget,
             "fitsTaskBudget": None if remaining is None or budget is None else remaining < budget}
+
+    def raise_rate_limit(self, url, header):
+        response_time = time.time()
+        timing = retry_after(header, response_time)
+        seconds = timing["seconds"]
+        if seconds is not None:
+            self.next_request = max(self.next_request, time.monotonic() + seconds)
+        record = {"responseStatus": 429, "retryAfter": timing, "automaticRetry": False,
+                  "requestNumber": self.count, "requestUrlSha256": digest(url.encode()),
+                  "observedAtEpochMilliseconds": int(response_time * 1000)}
+        self.rate_limits.append(record)
+        self.cooldown_state = (time.monotonic(), seconds, record)
+        self.snapshot_cooldown("at_response")
+        raise Denied("EGRESS_RATE_LIMITED", retry_after=timing)
 
     def record_network_failure(self, url, index, phase, error, started):
         if len(self.network_observations) >= 32:
@@ -1479,6 +1495,10 @@ class Broker:
             error.request_diagnostic["cookieState"] = cookie_state(
                 supplied_cookies[0], expected_cookie, self.cookies)
             raise
+        self.lightweight_cookie_skip = None
+        self.private_gateway_cookie_names = set()
+        trusted_headers = (self.runtime_gateway.request_headers(self, value, expected_cookie)
+                           if self.runtime_gateway and not any(supplied_authorization) and not declared_cookie else {})
         require(self.count < self.policy["maxRequests"], "EGRESS_REQUEST_BUDGET")
         if self.total >= self.policy["maxTotalResponseBytes"]:
             raise byte_budget_error(self.policy, self.total, 0, 0, "before_request", "total_response_bytes")
@@ -1520,6 +1540,10 @@ class Broker:
                 headers["Authorization"] = supplied_authorization[0]
             if self.host_credentials and self.host_credentials["authorization"]:
                 headers["Authorization"] = self.host_credentials["authorization"]
+            if trusted_headers:
+                headers = {key: val for key, val in headers.items()
+                           if key.lower() not in {"cookie", "user-agent"}}
+                headers.update(trusted_headers)
             target = parsed.path + ("?" + parsed.query if parsed.query else "")
             phase = "request_send"
             connection.request(value["method"], target, body=body or None, headers=headers)
@@ -1531,18 +1555,7 @@ class Broker:
                 "requestNumber": self.count, "responseStatus": response.status,
                 "responseContentType": content_type}
             if response.status == 429:
-                response_time = time.time()
-                timing = retry_after(response.getheader("Retry-After"), response_time)
-                seconds = timing["seconds"]
-                if seconds is not None:
-                    self.next_request = max(self.next_request, time.monotonic() + seconds)
-                record = {"responseStatus": 429, "retryAfter": timing, "automaticRetry": False,
-                          "requestNumber": self.count, "requestUrlSha256": digest(value["url"].encode()),
-                          "observedAtEpochMilliseconds": int(response_time * 1000)}
-                self.rate_limits.append(record)
-                self.cooldown_state = (time.monotonic(), seconds, record)
-                self.snapshot_cooldown("at_response")
-                raise Denied("EGRESS_RATE_LIMITED", retry_after=timing)
+                self.raise_rate_limit(value["url"], response.getheader("Retry-After"))
             redirected = response.status in {301, 302, 303, 307, 308}
             require(not 300 <= response.status < 400 or redirected, "EGRESS_REDIRECT_DENIED")
             location = response.getheader("Location") if redirected else None
@@ -1599,15 +1612,31 @@ class Broker:
                 resource_complete = start == 0 and end + 1 == total
                 response_complete = True
             selected = {key: val for key, val in response.getheaders()
-                        if key.lower() in {"content-type", "content-length", "content-range", "date"}}
+                        if key.lower() in {"content-type", "content-length", "content-range", "date", "cf-mitigated"}}
             if location is not None:
                 selected["Location"] = location
             cookie_updates = {}
             accepted_cookie_headers = 0
+            observed_names = SimpleCookie()
+            if trusted_headers:
+                observed_names.load(expected_cookie)
+                # Imported names remain private even if an older public cookie had
+                # the same name. Never copy the gateway's rotation into the source jar.
+                for name in self.private_gateway_cookie_names:
+                    observed_names.pop(name, None)
+                self.runtime_gateway.update_cookies(self, value, response.getheaders())
             for key, val in response.getheaders():
                 if (key.lower() != "set-cookie" or len(val) > 4096 or "\r" in val or "\n" in val
                         or accepted_cookie_headers >= 32):
                     continue
+                if trusted_headers:
+                    named = SimpleCookie()
+                    try:
+                        named.load(val)
+                    except CookieError:
+                        continue
+                    if not named or any(name not in observed_names for name in named):
+                        continue
                 cookie_headers = Message()
                 cookie_headers.add_header("Set-Cookie", val)
                 before = {(cookie.domain, cookie.path, cookie.name) for cookie in self.cookies}
@@ -1661,7 +1690,7 @@ class Broker:
                                 "requestUrlSha256": digest(value["url"].encode()),
                                 "requestBodyBytes": len(body), "responseStatus": response.status,
                                 "responseBytes": len(result), "responseSha256": digest(result),
-                                "requestCookiePresent": bool(expected_cookie),
+                                "requestCookiePresent": bool(expected_cookie or trusted_headers),
                                 "receivedSetCookieCount": len(set_cookies),
                                 "responseComplete": response_complete,
                                 "responseContentType": content_type,
@@ -1680,6 +1709,10 @@ class Broker:
                                     match.decode("ascii") for match in re.findall(
                                         rb"window\.([A-Za-z_$][A-Za-z0-9_$]{0,39})\s*=", result)))[:12],
                                 "elapsedMilliseconds": round((time.monotonic() - started) * 1000)})
+            if trusted_headers:
+                self.events[-1]['lightweightCookieReuse'] = 'attempted'
+            elif self.lightweight_cookie_skip:
+                self.events[-1]['lightweightCookieSkip'] = self.lightweight_cookie_skip
             if ranged:
                 prefix = result.lstrip()
                 signature = ("hls" if prefix.startswith(b"#EXTM3U") else
@@ -1712,6 +1745,7 @@ class Routes:
             for route in self.policy["routes"]}
         self.share_session_tokens()
         self.connector = connector
+        self.runtime_gateway = None
         self.deadline, self.cancelled, self.source = None, None, None
         self.pending_failures = {}
         self.events = []
@@ -1988,6 +2022,7 @@ class Routes:
             origin for origin, route in self.routes.items()
             if route.policy.get("requestScope") == "origin")
         value = self.prepare_cookie_state(broker, value)
+        broker.runtime_gateway = self.runtime_gateway
         broker.count, broker.total, broker.next_request = self.count, self.total, self.next_request
         broker.cooldown_state = self.cooldown_state
         before = len(broker.events)

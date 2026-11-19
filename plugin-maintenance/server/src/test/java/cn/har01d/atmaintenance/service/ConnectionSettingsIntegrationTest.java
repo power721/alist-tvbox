@@ -26,7 +26,8 @@ import static org.junit.jupiter.api.Assertions.*;
         "spring.datasource.url=jdbc:h2:mem:connection-settings;DB_CLOSE_DELAY=-1",
         "spring.security.user.password=admin", "maintenance.at.origin=", "maintenance.at.auth-mode=session",
         "maintenance.at.api-key=", "maintenance.at.session-token=", "maintenance.at.instance-id=",
-        "maintenance.model.enabled=false", "maintenance.scheduling.enabled=false"
+        "maintenance.model.enabled=false", "maintenance.model.auto-submit-enabled=false",
+        "maintenance.scheduling.enabled=false"
 })
 class ConnectionSettingsIntegrationTest {
     static final ObjectMapper JSON = new ObjectMapper();
@@ -103,12 +104,26 @@ class ConnectionSettingsIntegrationTest {
             assertEquals(200, savedModel.statusCode(), savedModel.body());
             assertFalse(savedModel.body().contains("model-private"));
             assertTrue(model.connection().enabled());
+            assertFalse(JSON.readTree(savedModel.body()).path("model").path("autoSubmitEnabled").asBoolean(true));
+            assertFalse(model.connection().autoSubmitEnabled());
             assertEquals("MODEL_RESPONSE_CHOICES_INVALID", model.generate("{}").errorCode());
             assertEquals("Bearer model-private", receivedAuth.get());
+            String beforeAutomatic = model.connection().configurationSha256();
+            input.put("apiKey", "").put("autoSubmitEnabled", true);
+            assertEquals(403, send("PUT", "/settings/connections/model", input, false).statusCode());
+            assertFalse(model.connection().autoSubmitEnabled());
+            var automatic = send("PUT", "/settings/connections/model", input, true);
+            assertEquals(200, automatic.statusCode(), automatic.body());
+            assertTrue(JSON.readTree(automatic.body()).path("model").path("autoSubmitEnabled").asBoolean());
+            assertTrue(model.connection().autoSubmitEnabled());
+            assertNotEquals(beforeAutomatic, model.connection().configurationSha256());
+            assertTrue(JSON.readTree(send("GET", "/model/connection", null, false).body())
+                    .path("autoSubmitEnabled").asBoolean());
             var reopened = new ConnectionSettingsStore(JSON, environment, directory.resolve("connections.json").toString());
             assertEquals("at-private", reopened.at().credential());
             assertEquals("model-private", reopened.model(defaults).getApiKey());
             assertEquals("relay-model", reopened.model(defaults).getModel());
+            assertTrue(reopened.model(defaults).isAutoSubmitEnabled());
             var limits = (ObjectNode) JSON.readTree(send("GET", "/settings/connections", null, false).body()).path("limits");
             limits.put("dailyCallLimit", 12).put("sourceDailyCallLimit", 0).put("modelDailyCallLimit", 8);
             assertEquals(403, send("PUT", "/settings/connections/model-limits", limits, false).statusCode());
@@ -120,6 +135,27 @@ class ConnectionSettingsIntegrationTest {
             assertEquals(12, afterLimits.model(defaults).getDailyCallLimit());
             assertEquals(0, afterLimits.model(defaults).getSourceDailyCallLimit());
             assertEquals("model-private", afterLimits.model(defaults).getApiKey());
+            assertTrue(afterLimits.model(defaults).isAutoSubmitEnabled());
+            assertTrue(model.connection().autoSubmitEnabled());
+            assertEquals(ledger, send("GET", "/model/budget", null, false).body());
+            input.remove("autoSubmitEnabled");
+            assertEquals(200, send("PUT", "/settings/connections/model", input, true).statusCode());
+            assertTrue(model.connection().autoSubmitEnabled()); // An older client preserves the saved choice.
+            assertTrue(new ConnectionSettingsStore(JSON, environment, directory.resolve("connections.json").toString())
+                    .model(defaults).isAutoSubmitEnabled());
+            String enabledIdentity = model.connection().configurationSha256();
+            input.put("autoSubmitEnabled", false);
+            var disabled = send("PUT", "/settings/connections/model", input, true);
+            assertEquals(200, disabled.statusCode(), disabled.body());
+            assertFalse(JSON.readTree(disabled.body()).path("model").path("autoSubmitEnabled").asBoolean(true));
+            assertFalse(model.connection().autoSubmitEnabled());
+            assertNotEquals(enabledIdentity, model.connection().configurationSha256());
+            var afterDisabled = new ConnectionSettingsStore(JSON, environment, directory.resolve("connections.json").toString());
+            assertFalse(afterDisabled.model(defaults).isAutoSubmitEnabled());
+            var enabledDefaults = new ModelSettings();
+            enabledDefaults.setAutoSubmitEnabled(true);
+            assertFalse(afterDisabled.model(enabledDefaults).isAutoSubmitEnabled());
+            assertEquals("model-private", afterDisabled.model(defaults).getApiKey());
             assertEquals(ledger, send("GET", "/model/budget", null, false).body());
             limits.put("dailyCallLimit", -1);
             assertEquals(400, send("PUT", "/settings/connections/model-limits", limits, true).statusCode());
@@ -133,6 +169,51 @@ class ConnectionSettingsIntegrationTest {
     }
 
     URI uri(String path) { return URI.create("http://127.0.0.1:" + port + "/api/plugin-maintenance" + path); }
+
+    @Test
+    void oneGatewayConfigurationPersistsAcrossAdaptersAndRequiresAdministratorCsrf() throws Exception {
+        csrf = JSON.readTree(send("GET", "/csrf", null, false).body()).path("token").asText();
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        var requests = new java.util.concurrent.atomic.AtomicInteger();
+        server.createContext("/health", exchange -> {
+            requests.incrementAndGet();
+            assertEquals("GET", exchange.getRequestMethod());
+            assertNull(exchange.getRequestHeaders().getFirst("Authorization"));
+            byte[] body = "{\"status\":\"ok\",\"cookies\":[\"must-not-export\"]}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            try (var out = exchange.getResponseBody()) { out.write(body); }
+        });
+        server.start();
+        try {
+            var gateway = JSON.createObjectNode().put("enabled", true).put("adapter", "trawl")
+                    .put("endpoint", "http://127.0.0.1:" + server.getAddress().getPort() + "/")
+                    .put("timeoutMillis", 30000);
+            assertEquals(403, send("PUT", "/settings/connections/evidence-gateway", gateway, false).statusCode());
+            for (String adapter : new String[]{"trawl", "flaresolverr", "flaresolverr-rs-alt"}) {
+                gateway.put("adapter", adapter);
+                var saved = send("PUT", "/settings/connections/evidence-gateway", gateway, true);
+                assertEquals(200, saved.statusCode(), saved.body());
+                var reopened = new ConnectionSettingsStore(JSON, environment, directory.resolve("connections.json").toString());
+                assertEquals(adapter, reopened.evidenceGateway().adapter());
+                assertFalse(reopened.evidenceGateway().endpoint().endsWith("/"));
+                assertEquals(30000, reopened.evidenceGateway().timeoutMillis());
+            }
+            var health = send("GET", "/settings/connections/evidence-gateway/health", null, false);
+            assertTrue(JSON.readTree(health.body()).path("ready").asBoolean(), health.body());
+            assertFalse(JSON.readTree(health.body()).path("businessContentVerified").asBoolean());
+            assertFalse(health.body().contains("must-not-export"));
+            assertEquals(1, requests.get());
+            gateway.put("adapter", "unknown");
+            assertEquals(400, send("PUT", "/settings/connections/evidence-gateway", gateway, true).statusCode());
+            gateway.put("adapter", "trawl").put("endpoint", "http://user:secret@example.invalid");
+            assertEquals(400, send("PUT", "/settings/connections/evidence-gateway", gateway, true).statusCode());
+            gateway.put("enabled", false).put("endpoint", "");
+            assertEquals(200, send("PUT", "/settings/connections/evidence-gateway", gateway, true).statusCode());
+            assertEquals("EVIDENCE_GATEWAY_DISABLED", JSON.readTree(send("GET",
+                    "/settings/connections/evidence-gateway/health", null, false).body()).path("code").asText());
+            assertEquals(1, requests.get());
+        } finally { server.stop(0); }
+    }
 
     HttpResponse<String> send(String method, String path, ObjectNode body, boolean withCsrf) throws Exception {
         var builder = HttpRequest.newBuilder(uri(path))

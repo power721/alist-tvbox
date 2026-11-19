@@ -8,10 +8,11 @@ import ModelBudgetPanel from './ModelBudgetPanel.vue'
 interface Settings {
   at: { configured: boolean; origin: string; instanceId: string; revision: string; authMode: string
     allowHttp: boolean; credentialConfigured: boolean; embeddedAvailable: boolean; useEmbedded: boolean }
-  model: { enabled: boolean; endpoint: string; baseUrl: string; model: string; keyEnv: string
+  model: { enabled: boolean; autoSubmitEnabled: boolean; endpoint: string; baseUrl: string; model: string; keyEnv: string
     apiKeyConfigured: boolean; timeoutMillis: number; maxCompletionTokens: number
     maxTokenParameter: string; jsonMode: string; includeStoreParameter: boolean }
   limits?: Record<string, number | string | null>
+  evidenceGateway: { enabled: boolean; adapter: string; endpoint: string; timeoutMillis: number }
 }
 interface RunnerConfiguration {
   blockedReason: string
@@ -35,6 +36,7 @@ const runner = ref<RunnerConfiguration>()
 const runnerConnection = ref<RunnerConnection>()
 const limitsBusy = ref(false)
 const limitsRevision = ref(0)
+const gatewayHealth = ref<{ ready: boolean; code: string }>()
 const limitScopes = [
   { title: '全局', calls: 'dailyCallLimit', input: 'dailyInputBytes', output: 'dailyOutputTokens', cost: 'dailyCostUsd' },
   { title: '每个爬虫', calls: 'sourceDailyCallLimit', input: 'sourceDailyInputBytes', output: 'sourceDailyOutputTokens', cost: 'sourceDailyCostUsd' },
@@ -77,12 +79,31 @@ async function checkRunner() {
   catch (reason) { error.value = reason instanceof Error ? reason.message : '执行器连接失败' }
   finally { busy.value = false }
 }
+async function saveGateway() {
+  if (busy.value || !settings.value) return
+  busy.value = true; error.value = ''; gatewayHealth.value = undefined
+  try {
+    const saved = await request<Settings>('/settings/connections/evidence-gateway', settings.value.evidenceGateway, 'PUT')
+    settings.value.evidenceGateway = saved.evidenceGateway
+    emit('changed', 'evidenceGateway')
+    ElMessage.success('取证网关已保存')
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : '网关保存失败' }
+  finally { busy.value = false }
+}
+async function checkGateway() {
+  if (busy.value) return
+  busy.value = true; error.value = ''; gatewayHealth.value = undefined
+  try { gatewayHealth.value = await request('/settings/connections/evidence-gateway/health') }
+  catch (reason) { error.value = reason instanceof Error ? reason.message : '网关检查失败' }
+  finally { busy.value = false }
+}
 async function show(section = 'at') {
   tab.value = section
   visible.value = true
   busy.value = true
   error.value = ''
   settings.value = undefined
+  gatewayHealth.value = undefined
   forgetSecrets()
   try {
     settings.value = await request<Settings>('/settings/connections')
@@ -171,6 +192,9 @@ defineExpose({ show })
       <el-tab-pane label="模型中转站" name="model">
         <el-form v-if="settings" label-position="top" :disabled="busy">
           <el-form-item label="启用模型"><el-switch v-model="settings.model.enabled" /></el-form-item>
+          <el-form-item label="自动递交修复候选">
+            <el-switch v-model="settings.model.autoSubmitEnabled" aria-label="自动递交修复候选" />
+          </el-form-item>
           <el-form-item label="地址类型">
             <el-radio-group v-model="addressMode">
               <el-radio-button value="base">Base URL</el-radio-button>
@@ -282,6 +306,32 @@ defineExpose({ show })
             <dt>运行包</dt><dd>{{ runner.snapshot.bundleSha256 }}</dd>
           </dl>
         </details>
+        <section v-if="settings" class="evidence-gateway">
+          <h3>取证网关</h3>
+          <el-form label-position="top" :disabled="busy">
+            <el-form-item label="启用取证网关"><el-switch v-model="settings.evidenceGateway.enabled" /></el-form-item>
+            <el-form-item label="兼容类型">
+              <el-select v-model="settings.evidenceGateway.adapter" @change="gatewayHealth = undefined">
+                <el-option label="TRAWL" value="trawl" />
+                <el-option label="FlareSolverr" value="flaresolverr" />
+                <el-option label="flaresolverr-rs-alt" value="flaresolverr-rs-alt" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="网关根地址">
+              <el-input v-model="settings.evidenceGateway.endpoint" placeholder="http://gateway:8191" maxlength="2048" @input="gatewayHealth = undefined" />
+            </el-form-item>
+            <el-form-item label="请求超时（毫秒）">
+              <el-input-number v-model="settings.evidenceGateway.timeoutMillis" :min="1000" :max="60000" :step="1000" />
+            </el-form-item>
+          </el-form>
+          <div class="connection-options">
+            <el-button :icon="Check" :loading="busy" @click="saveGateway">保存网关</el-button>
+            <el-button :icon="Refresh" :disabled="busy" @click="checkGateway">检查已保存连接</el-button>
+            <el-tag v-if="gatewayHealth" :type="gatewayHealth.ready ? 'success' : 'warning'">
+              {{ gatewayHealth.ready ? '服务可达 · 业务待取证' : gatewayHealth.code }}
+            </el-tag>
+          </div>
+        </section>
       </el-tab-pane>
     </el-tabs>
     <template #footer>
@@ -306,5 +356,7 @@ defineExpose({ show })
 .limit-row strong { font-size: 13px; }
 .limit-row .el-input-number { width: 100%; min-width: 0; }
 .model-limits > .el-button { margin-top: 12px; }
+.evidence-gateway { margin-top: 20px; border-top: 1px solid #e8ebed; padding-top: 8px; }
+.evidence-gateway h3 { font-size: 16px; }
 @media (max-width: 540px) { .connection-fields { grid-template-columns: minmax(0, 1fr); } }
 </style>

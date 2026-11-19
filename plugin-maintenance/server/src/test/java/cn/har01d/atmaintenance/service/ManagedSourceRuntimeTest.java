@@ -616,6 +616,103 @@ class ManagedSourceRuntimeTest {
     }
 
     @Test
+    void sharedGatewaySettingsAreFrozenInHostRequestAndRedactedFromRuntimeEvidence() throws Exception {
+        var policy = mapper.createObjectNode().put("maxRequests", 6).put("maxResponseBytes", 2097152)
+                .put("maxTotalResponseBytes", 4194304).put("minIntervalSeconds", 1);
+        var runtime = spy(new ManagedSourceRuntime(mapper, fixture, true, "/run/managed/executor.sock",
+                instance, image, Hashes.sha256(policy.toString()), ""));
+        var connections = mock(ConnectionSettingsStore.class);
+        when(connections.evidenceGateway()).thenReturn(new cn.har01d.atmaintenance.dto.EvidenceGatewaySettings(
+                true, "trawl", "http://private-gateway.invalid:8191", 30000));
+        runtime.configureGateway(connections);
+        var row = businessRow(runtime, policy);
+        var event = (ObjectNode) row.at("/result/httpObservations/0");
+        event.put("transport", "external_evidence_gateway").put("representation", "gateway_rendered_document")
+                .put("cookiesExported", false).put("gatewaySessionReused", true);
+        var execution = event.putObject("gatewayExecution").put("tier", 1).put("sessionCached", true)
+                .put("cookie", "PRIVATE");
+        var gatewaySummary = ((ObjectNode) row.path("result")).putObject("runtimeGateway").put("adapter", "trawl")
+                .put("sessionCount", 1).put("requestCount", 2).put("responseCount", 2).put("sessionReuseCount", 1)
+                .put("sessionRecoveryCount", 1).put("recoveryAttemptCount", 1)
+                .put("cookiesExported", false).put("cleanupConfirmed", true).put("sessionScope", "task_and_origin")
+                .put("targetAddressPolicy", "controller_public_preflight_gateway_managed_network")
+                .put("session", "PRIVATE_SESSION");
+        var executionCounts = gatewaySummary.putObject("executionCounts").put("tier1", 1).put("tier2", 0)
+                .put("tier3", 0).put("tier4", 0).put("unknown", 1).put("cachedSession", 1).put("unknownCache", 1)
+                .put("cookie", "PRIVATE");
+        var lightweight = gatewaySummary.putObject("lightweightCounts").put("attempts", 1)
+                .put("httpAccepted", 1).put("rejected", 0).put("cookie", "PRIVATE");
+        doAnswer(call -> {
+            ObjectNode request = call.getArgument(0);
+            if (request.path("operation").asText().equals("start")) {
+                var gateway = mapper.readTree(request.path("evidenceGatewayJson").asText());
+                assertEquals("trawl", gateway.path("adapter").asText());
+                assertFalse(request.path("loaderProfileJson").asText().contains("private-gateway"));
+                row.put("evidenceGatewaySettingsSha256", Hashes.sha256(request.path("evidenceGatewayJson").asText()));
+            }
+            var result = reply(runtime, request, row);
+            if (request.path("operation").asText().equals("identity"))
+                ((ObjectNode) result).put("egressPolicySha256", Hashes.sha256(policy.toString()));
+            return result;
+        }).when(runtime).control(any());
+        var evidence = runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256());
+        assertEquals("external_evidence_gateway", evidence.at("/httpObservations/0/transport").asText());
+        assertEquals(1, evidence.at("/runtimeGateway/sessionReuseCount").asInt());
+        assertEquals(1, evidence.at("/runtimeGateway/sessionRecoveryCount").asInt());
+        assertEquals(1, evidence.at("/runtimeGateway/executionCounts/unknown").asInt());
+        assertEquals(1, evidence.at("/runtimeGateway/lightweightCounts/httpAccepted").asInt());
+        assertEquals(1, evidence.at("/httpObservations/0/gatewayExecution/tier").asInt());
+        assertTrue(evidence.at("/httpObservations/0/gatewayExecution/sessionCached").asBoolean());
+        assertFalse(evidence.toString().contains("private-gateway"));
+        assertFalse(evidence.toString().contains("PRIVATE"));
+        lightweight.put("attempts", 2);
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+        lightweight.put("attempts", 1);
+        for (String outcome : List.of("EVIDENCE_GATEWAY_SESSION_LOST", "EVIDENCE_GATEWAY_READ_TIMEOUT",
+                "EVIDENCE_GATEWAY_CONNECT_TIMEOUT", "EVIDENCE_GATEWAY_CONNECTION_FAILED",
+                "EVIDENCE_GATEWAY_CLEANUP_UNCONFIRMED", "target_rate_limited")) {
+            event.put("gatewayOutcome", outcome);
+            assertEquals(outcome, runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256())
+                    .at("/httpObservations/0/gatewayOutcome").asText());
+        }
+        var recovery = event.putObject("gatewayRecovery").put("phase", "read").put("action", "reset_after_cooldown")
+                .put("remainingWaitMilliseconds", 2000).put("taskBudgetRemainingMilliseconds", 10000)
+                .put("fitsTaskBudget", true).put("errorMessage", "PRIVATE");
+        evidence = runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256());
+        assertEquals("reset_after_cooldown", evidence.at("/httpObservations/0/gatewayRecovery/action").asText());
+        assertFalse(evidence.toString().contains("PRIVATE"));
+        recovery.put("fitsTaskBudget", false);
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+        event.remove("gatewayRecovery");
+        execution.put("tier", 5);
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+        execution.putNull("tier").putNull("sessionCached");
+        assertTrue(runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256())
+                .at("/httpObservations/0/gatewayExecution/tier").isNull());
+        executionCounts.put("tier1", 2);
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+        executionCounts.put("tier1", 1);
+        event.put("connectedAddressIndex", 0);
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+        event.remove(List.of("transport", "representation", "gatewayExecution", "gatewaySessionReused"));
+        event.put("lightweightCookieReuse", "http_accepted");
+        assertEquals("http_accepted", runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256())
+                .at("/httpObservations/0/lightweightCookieReuse").asText());
+        event.put("lightweightCookieReuse", "PRIVATE");
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+        event.put("lightweightCookieReuse", "rejected");
+        event.remove("lightweightCookieReuse");
+        event.put("lightweightCookieSkip", "scope_or_expiry");
+        assertEquals("scope_or_expiry", runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256())
+                .at("/httpObservations/0/lightweightCookieSkip").asText());
+        event.put("lightweightCookieSkip", "PRIVATE");
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+        event.put("lightweightCookieSkip", "observed_cookie_collision");
+        ((ObjectNode) row.path("result").path("runtimeGateway")).put("cleanupConfirmed", false);
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+    }
+
+    @Test
     void runtimeStageProjectionMatchesCallsAndKeepsOnlyValidBudgetSnapshots() throws Exception {
         var policy = httpEgressPolicy();
         var runtime = httpRuntime(policy);

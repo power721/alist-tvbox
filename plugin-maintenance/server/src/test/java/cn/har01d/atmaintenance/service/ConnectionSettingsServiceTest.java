@@ -24,7 +24,7 @@ class ConnectionSettingsServiceTest {
         var service = new ConnectionSettingsService(settings, new ModelSettings(), mock(AtReadClient.class),
                 client, repository, new ObjectMapper(), mock(Validator.class));
         var input = new UpdateModelConnectionRequest(false, "", "", "", "", false, "",
-                8000, 2048, "max_tokens", "none", false);
+                8000, 2048, "max_tokens", "none", false, true);
         var error = assertThrows(ResponseStatusException.class, () -> service.updateModel(input));
         assertEquals("MODEL_BUSY", error.getReason());
         verifyNoInteractions(settings, client);

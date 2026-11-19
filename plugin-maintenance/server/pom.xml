@@ -10,7 +10,7 @@
     </parent>
     <groupId>cn.har01d</groupId>
     <artifactId>at-plugin-maintenance</artifactId>
-  <version>0.106.0-RC15.1</version>
+  <version>0.106.0-RC16.3</version>
     <properties>
         <java.version>21</java.version>
         <maintenance.artifact-name>at-plugin-maintenance-${project.version}</maintenance.artifact-name>
@@ -71,7 +71,7 @@
             </resource>
             <resource>
                 <directory>../scripts</directory>
-                <includes><include>prepare_plugin_source.py</include><include>read_public_python_source.py</include><include>source_egress.py</include><include>source_origin_discovery.py</include></includes>
+                <includes><include>prepare_plugin_source.py</include><include>read_public_python_source.py</include><include>source_egress.py</include><include>source_origin_discovery.py</include><include>evidence_gateway.py</include></includes>
                 <targetPath>worker</targetPath>
             </resource>
             <resource>

@@ -19,11 +19,16 @@ import static org.mockito.Mockito.*;
 
 class ReverseAnalysisTest {
     private final ObjectMapper mapper = new ObjectMapper();
+    private ConnectionSettingsStore connections() {
+        var store = mock(ConnectionSettingsStore.class);
+        when(store.evidenceGateway()).thenReturn(cn.har01d.atmaintenance.dto.EvidenceGatewaySettings.disabled());
+        return store;
+    }
 
     @Test
     @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "MAINTENANCE_PYTHON", matches = ".+")
     void scriptWorkerRunsWithoutBrowserAndDoesNotForwardSensitivePageQuery() throws Exception {
-        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class),
+        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class), connections(),
                 "", "node-must-not-run", "", System.getenv("MAINTENANCE_PYTHON"), "", "");
         String page = "https://fixture.example.com/play?token=private-value";
         var payload = mapper.createObjectNode().put("scriptInspectionOnly", true)
@@ -38,7 +43,7 @@ class ReverseAnalysisTest {
     }
 
     @Test void scriptReadinessDoesNotRequireBrowserAndCannotClaimExecutedConversion() throws Exception {
-        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class),
+        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class), connections(),
                 "", "node-must-not-run", "", "python", "", "");
         assertTrue(service.readiness().path("scriptInspectionReady").asBoolean());
         assertFalse(service.readiness().path("ready").asBoolean());
@@ -64,7 +69,7 @@ class ReverseAnalysisTest {
         var artifact = new cn.har01d.atmaintenance.entity.MaintenanceArtifact();
         artifact.setBody("HOST='https://fixture.example.com'");
         when(sources.artifact("source", "a".repeat(64))).thenReturn(artifact);
-        var service = spy(new ReverseAnalysis(mapper, store, sources, "", "node", "", "python", "", ""));
+        var service = spy(new ReverseAnalysis(mapper, store, sources, connections(), "", "node", "", "python", "", ""));
         var failure = assertThrows(ResponseStatusException.class, () -> service.inspectScripts("repair",
                 new ReverseAnalysisRequest("b".repeat(64), "https://fixture.example.com/play/guess", "", true)));
         assertEquals("REVERSE_OBSERVED_PAGE_REQUIRED", failure.getReason());
@@ -92,22 +97,32 @@ class ReverseAnalysisTest {
         var artifact = new cn.har01d.atmaintenance.entity.MaintenanceArtifact();
         artifact.setBody("HOST='https://fixture.example.com'");
         when(sources.artifact("source", "a".repeat(64))).thenReturn(artifact);
-        var service = spy(new ReverseAnalysis(mapper, store, sources, "", "node", "", "python", "", ""));
+        var connectionStore = connections();
+        var service = spy(new ReverseAnalysis(mapper, store, sources, connectionStore, "", "node", "", "python", "", ""));
         var input = new ReverseAnalysisRequest("b".repeat(64), page, "", true);
         var error = assertThrows(ResponseStatusException.class,
                 () -> service.inspectScripts("repair", input, List.of(script + "&guess=1")));
         assertEquals("REVERSE_OBSERVED_SCRIPT_REQUIRED", error.getReason());
-        doReturn(mapper.createObjectNode()).when(service).observe(any());
+        doAnswer(call -> mapper.createObjectNode()).when(service).observe(any());
         when(store.attachReverseAnalysis(anyString(), anyString(), any())).thenAnswer(invocation -> invocation.getArgument(2));
-        service.inspectScripts("repair", input, List.of(script));
+        var first = service.inspectScripts("repair", input, List.of(script));
         verify(service).observe(argThat(payload -> payload.path("observedScriptUrls").get(0).asText().equals(script)));
+        frozen.set("reverseAnalysis", first);
+        assertEquals(first, service.inspectScripts("repair", input, List.of(script)));
+        verify(service, times(1)).observe(any());
+        when(connectionStore.evidenceGateway()).thenReturn(new cn.har01d.atmaintenance.dto.EvidenceGatewaySettings(
+                true, "trawl", "http://gateway.invalid:8191", 30000));
+        var changed = service.inspectScripts("repair", input, List.of(script));
+        verify(service, times(2)).observe(any());
+        assertNotEquals(first.path("analysisRequestSha256"), changed.path("analysisRequestSha256"));
+        assertFalse(changed.toString().contains("gateway.invalid"));
         assertEquals(4, repair.usedRounds());
     }
 
     @Test
     @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "MAINTENANCE_PYTHON", matches = ".+")
     void originInspectionRunsFromBundledPythonWithoutNodeOrBrowser() throws Exception {
-        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class),
+        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class), connections(),
                 "", "node-must-not-run", "", System.getenv("MAINTENANCE_PYTHON"), "", "");
         assertFalse(service.readiness().path("ready").asBoolean());
         assertTrue(service.originReady());
@@ -174,7 +189,7 @@ class ReverseAnalysisTest {
     }
 
     @Test void challengedReplaySchedulesDeclaredOriginsInspectionBeforeAnotherBrowserReplay() {
-        var service = spy(new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class),
+        var service = spy(new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class), connections(),
                 "", "node", "", "python", "", ""));
         doReturn(mapper.createObjectNode().put("ready", true)).when(service).readiness();
         doReturn(mapper.createObjectNode()).when(service).inspectOrigins(anyString(), any());
@@ -266,7 +281,7 @@ class ReverseAnalysisTest {
 
     @Test void automaticReplayPreservesExistingEvidenceWhenNoCurrentCandidatePageIsBound() {
         var repairs = mock(RepairStore.class);
-        var service = spy(new ReverseAnalysis(mapper, repairs, mock(SourceService.class),
+        var service = spy(new ReverseAnalysis(mapper, repairs, mock(SourceService.class), connections(),
                 "", "node", "", "python", "", ""));
         doReturn(mapper.createObjectNode().put("ready", true)).when(service).readiness();
         var frozen = mapper.createObjectNode();
@@ -428,7 +443,7 @@ class ReverseAnalysisTest {
         Files.createDirectories(root.resolve("node_modules/webcrack"));
         for (String name : List.of("runner.mjs", "browser", "tunnels.json", "tunnel.py"))
             Files.createFile(root.resolve(name));
-        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class),
+        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), mock(SourceService.class), connections(),
                 root.toString(), "node", root.resolve("browser").toString(), "python",
                 root.resolve("tunnels.json").toString(), root.resolve("tunnel.py").toString());
         assertFalse(service.readiness().path("ready").asBoolean());
@@ -437,10 +452,10 @@ class ReverseAnalysisTest {
         assertTrue(service.readiness().path("ready").asBoolean());
     }
 
-    @Test void nonJavascriptFailuresDoNotLaunchBrowserAndDisabledIsExplicit() {
+    @Test void nonJavascriptFailuresDoNotLaunchBrowserAndUnavailableBrowserIsExplicit() {
         var repairs = mock(RepairStore.class);
         var sources = mock(SourceService.class);
-        var service = new ReverseAnalysis(mapper, repairs, sources, "", "node", "", "python", "", "");
+        var service = new ReverseAnalysis(mapper, repairs, sources, connections(), "", "node", "", "python", "", "");
         var frozen = mapper.createObjectNode();
         frozen.putObject("policy").putArray("targetNodes").add("S06");
         var repair = new RepairSummary("repair", "source", "run", "a".repeat(64), "b".repeat(64),
@@ -450,7 +465,7 @@ class ReverseAnalysisTest {
         assertFalse(service.readiness().path("ready").asBoolean());
         when(repairs.get("repair")).thenReturn(repair);
         var failure = assertThrows(ResponseStatusException.class, () -> service.capture("repair",
-                new ReverseAnalysisRequest("b".repeat(64), "https://example.com/", "", true)));
+                new ReverseAnalysisRequest("b".repeat(64), "https://example.com/", "", false)));
         assertEquals("REVERSE_ENGINE_NOT_READY", failure.getReason());
         assertFalse(ReverseAnalysis.eligible(repair));
         frozen.withObject("policy").withArray("targetNodes").add("R01");

@@ -14,4 +14,5 @@ public record UpdateModelConnectionRequest(
         @Min(128) @Max(16384) int maxCompletionTokens,
         @NotNull String maxTokenParameter,
         @NotNull String jsonMode,
-        boolean includeStoreParameter) {}
+        boolean includeStoreParameter,
+        Boolean autoSubmitEnabled) {}

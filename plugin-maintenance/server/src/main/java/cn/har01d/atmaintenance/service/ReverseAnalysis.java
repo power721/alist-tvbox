@@ -38,9 +38,10 @@ public class ReverseAnalysis {
     private final ObjectMapper mapper;
     private final RepairStore repairs;
     private final SourceService sources;
+    private final ConnectionSettingsStore connections;
     private final String directory, node, browser, python, tunnelsFile, tunnelScript;
 
-    public ReverseAnalysis(ObjectMapper mapper, RepairStore repairs, SourceService sources,
+    public ReverseAnalysis(ObjectMapper mapper, RepairStore repairs, SourceService sources, ConnectionSettingsStore connections,
             @Value("${maintenance.reverse-engine.directory:}") String directory,
             @Value("${maintenance.reverse-engine.node:node}") String node,
             @Value("${maintenance.reverse-engine.browser:}") String browser,
@@ -50,6 +51,7 @@ public class ReverseAnalysis {
         this.mapper = mapper;
         this.repairs = repairs;
         this.sources = sources;
+        this.connections = connections;
         this.directory = directory;
         this.node = node;
         this.browser = browser;
@@ -347,6 +349,7 @@ public class ReverseAnalysis {
         }
         var consumerFields = payload.putArray("consumerFields");
         fields.stream().limit(16).forEach(consumerFields::add);
+        payload.set("evidenceGateway", mapper.valueToTree(connections.evidenceGateway()));
         String worker;
         try { worker = originWorkerSha(); }
         catch (IOException failure) { throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "REVERSE_SCRIPT_INSPECTION_NOT_READY"); }
@@ -508,6 +511,12 @@ public class ReverseAnalysis {
             Files.write(egress, new ClassPathResource("worker/source_egress.py").getContentAsByteArray());
             Files.write(temporary.resolve("source_origin_discovery.py"),
                     new ClassPathResource("worker/source_origin_discovery.py").getContentAsByteArray());
+            Files.write(temporary.resolve("evidence_gateway.py"),
+                    new ClassPathResource("worker/evidence_gateway.py").getContentAsByteArray());
+            if (scripts) {
+                if (!payload.has("evidenceGateway"))
+                    payload.set("evidenceGateway", mapper.valueToTree(connections.evidenceGateway()));
+            }
             String taskId = UUID.randomUUID().toString();
             payload.put("taskId", taskId).put("browserExecutable", browser)
                     .put("python", python).put("egressScript", egress.toString())
@@ -649,7 +658,7 @@ public class ReverseAnalysis {
     private String originWorkerSha() throws IOException {
         if (!lightweightOrigins()) return workerSha();
         var identity = mapper.createObjectNode();
-        for (String name : List.of("broker.py", "source_egress.py", "source_origin_discovery.py"))
+        for (String name : List.of("broker.py", "source_egress.py", "source_origin_discovery.py", "evidence_gateway.py"))
             identity.put(name, Hashes.sha256(new ClassPathResource("worker/" + name).getContentAsByteArray()));
         return Hashes.sha256(identity.toString());
     }

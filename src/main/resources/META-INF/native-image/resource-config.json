@@ -41,6 +41,12 @@
     "pattern": "worker/source_origin_discovery.py"
    },
    {
+    "pattern": "worker/broker.py"
+   },
+   {
+    "pattern": "worker/evidence_gateway.py"
+   },
+   {
     "pattern": "worker/read_public_python_source.py"
    },
    {

@@ -20,14 +20,45 @@ function panel(props = {}) {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText
   return { ...vm.runInNewContext(output
-    + '\n;({show,save,saveLimits,forgetSecrets,settings,credential,apiKey,clearApiKey,visible,busy,error,tab,addressMode,loadRunner,checkRunner,runner,runnerConnection})', context),
+    + '\n;({show,save,saveLimits,saveGateway,checkGateway,gatewayHealth,forgetSecrets,settings,credential,apiKey,clearApiKey,visible,busy,error,tab,addressMode,loadRunner,checkRunner,runner,runnerConnection})', context),
     calls, events }
 }
 const config = () => ({ at: { configured: false, origin: '', instanceId: '', revision: 'unverified',
   authMode: 'session', allowHttp: false, credentialConfigured: false },
-  model: { enabled: false, endpoint: '', baseUrl: '', model: '', keyEnv: '', apiKeyConfigured: false,
+  model: { enabled: false, autoSubmitEnabled: false, endpoint: '', baseUrl: '', model: '', keyEnv: '', apiKeyConfigured: false,
     timeoutMillis: 8000, maxCompletionTokens: 2048, maxTokenParameter: 'max_completion_tokens',
-    jsonMode: 'json_object', includeStoreParameter: true } })
+    jsonMode: 'json_object', includeStoreParameter: true },
+  evidenceGateway: { enabled: false, adapter: 'trawl', endpoint: '', timeoutMillis: 30000 } })
+
+test('all gateway adapters share one settings endpoint and preserve unsaved relay fields', async () => {
+  const view = await ready()
+  view.settings.value.model.model = 'unsaved-model'
+  view.tab.value = 'runner'
+  for (const adapter of ['trawl', 'flaresolverr', 'flaresolverr-rs-alt']) {
+    view.settings.value.evidenceGateway = { enabled: true, adapter, endpoint: 'http://gateway:8191', timeoutMillis: 30000 }
+    const saving = view.saveGateway()
+    const call = view.calls.at(-1)
+    assert.equal(call.path, '/settings/connections/evidence-gateway')
+    assert.equal(call.method, 'PUT')
+    assert.equal(call.body.adapter, adapter)
+    call.resolve({ ...config(), evidenceGateway: { ...call.body } })
+    await saving
+    assert.equal(view.settings.value.model.model, 'unsaved-model')
+    assert.equal(view.settings.value.evidenceGateway.adapter, adapter)
+  }
+  const checking = view.checkGateway()
+  const call = view.calls.at(-1)
+  assert.equal(call.path, '/settings/connections/evidence-gateway/health')
+  assert.equal(call.body, undefined)
+  call.resolve({ ready: true, code: 'EVIDENCE_GATEWAY_HEALTHY' })
+  await checking
+  assert.equal(view.gatewayHealth.value.ready, true)
+  const failed = view.checkGateway()
+  assert.equal(view.gatewayHealth.value, undefined)
+  view.calls.at(-1).reject(new Error('EVIDENCE_GATEWAY_UNREACHABLE'))
+  await failed
+  assert.equal(view.error.value, 'EVIDENCE_GATEWAY_UNREACHABLE')
+})
 
 async function ready(section = 'at') {
   const view = panel()
@@ -87,6 +118,27 @@ test('a failed save leaves settings available and does not report applied config
   assert.equal(view.error.value, 'MODEL_BUSY')
   assert.equal(view.events.length, 0)
   assert.equal(view.busy.value, false)
+})
+
+test('automatic submission is an independent saved setting and never starts a repair or publication', async () => {
+  const view = await ready('model')
+  assert.equal(view.settings.value.model.autoSubmitEnabled, false)
+  for (const enabled of [true, false]) {
+    view.settings.value.model.autoSubmitEnabled = enabled
+    const saving = view.save()
+    const call = view.calls.at(-1)
+    assert.equal(call.path, '/settings/connections/model')
+    assert.equal(call.method, 'PUT')
+    assert.equal(call.body.autoSubmitEnabled, enabled)
+    assert.equal(call.body.enabled, false)
+    assert.equal(call.body.apiKey, '')
+    call.resolve({ ...config(), model: { ...config().model, autoSubmitEnabled: enabled } })
+    await saving
+    assert.equal(view.settings.value.model.autoSubmitEnabled, enabled)
+  }
+  assert.equal(view.calls.length, 3)
+  const { descriptor } = parse(readFileSync(new URL('../../src/maintenance/ConnectionSettingsPanel.vue', import.meta.url), 'utf8'))
+  assert.ok(descriptor.template.content.includes('v-model="settings.model.autoSubmitEnabled"'))
 })
 
 test('closing or reopening settings clears entered secrets', async () => {

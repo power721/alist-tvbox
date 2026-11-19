@@ -61,6 +61,67 @@ class BrokerConcurrencyTest(unittest.TestCase):
         transport.fetch.side_effect = fetch
         return transport
 
+    def test_script_gateway_uses_one_session_and_retains_real_captured_script_with_provenance(self):
+        request = self.script_request()
+        page, script = request['pageUrl'], request['pageUrl'] + '/play.js'
+        request['evidenceGateway'] = {'enabled': True, 'adapter': 'trawl',
+                                     'endpoint': 'http://gateway.invalid:8191', 'timeoutMillis': 30000}
+        direct = self.script_transport({page: (b'<html>_cf_chl_opt=1;/cdn-cgi/challenge-platform/</html>',
+                                              403, 'text/html', True)})
+        direct.deadline = time.monotonic() + 60
+        code, calls = 'const resData = JSON.parse(data)', []
+
+        def command(gateway, path, payload=None, method='POST', cleanup=False):
+            calls.append((path, payload, method))
+            if path == '/sessions':
+                return {'id': payload['id']}
+            if method == 'DELETE':
+                return {'status': 'ok'}
+            return {'url': page, 'html': '<script src="' + script + '"></script>', 'statusCode': 200,
+                    'tier': 2, 'sessionCached': True,
+                    'capturedResponses': [{'url': script, 'body': code, 'status': 200,
+                                            'headers': {'Content-Type': 'application/javascript'}}]}
+
+        with patch.object(module.egress, 'public_dns_addresses', return_value=['93.184.216.34']), \
+                patch('evidence_gateway.EvidenceGateway.command', command):
+            report = module.script_inspection(request, direct)
+        self.assertEqual(code, report['scripts'][0]['excerpt']['text'])
+        self.assertEqual('gateway_captured_text', report['requests'][1]['representation'])
+        self.assertEqual({'tier': 2, 'sessionCached': True}, report['requests'][0]['gatewayExecution'])
+        self.assertEqual({'tier': None, 'sessionCached': None}, report['requests'][1]['gatewayExecution'])
+        self.assertEqual(1, report['evidenceGateway']['executionCounts']['tier2'])
+        self.assertTrue(report['requests'][0]['accessAttempts'][0]['challengePage'])
+        self.assertEqual('controller_host_and_external_gateway', report['networkLocation'])
+        self.assertEqual(1, report['evidenceGateway']['requestCount'])
+        self.assertTrue(report['evidenceGateway']['cleanupConfirmed'])
+        self.assertEqual('DELETE', calls[-1][2])
+        self.assertFalse(report['publishEligible'])
+        self.assertNotIn('gateway.invalid', json.dumps(report))
+
+    def test_script_gateway_still_challenged_is_not_business_or_script_success(self):
+        request = self.script_request()
+        request['evidenceGateway'] = {'enabled': True, 'adapter': 'flaresolverr',
+                                     'endpoint': 'http://gateway.invalid:8191', 'timeoutMillis': 30000}
+        direct = self.script_transport({request['pageUrl']: (b'<html>_cf_chl_opt=1;/cdn-cgi/challenge-platform/</html>',
+                                                           403, 'text/html', True)})
+        direct.deadline = time.monotonic() + 60
+
+        def command(gateway, path, payload=None, **kwargs):
+            if payload['cmd'] == 'sessions.create':
+                return {'status': 'ok', 'session': payload['session']}
+            if payload['cmd'] == 'sessions.destroy':
+                return {'status': 'ok'}
+            return {'status': 'ok', 'solution': {'url': request['pageUrl'], 'status': 200,
+                    'response': '<html>_cf_chl_opt=1;/cdn-cgi/challenge-platform/</html>'}}
+
+        with patch.object(module.egress, 'public_dns_addresses', return_value=['93.184.216.34']), \
+                patch('evidence_gateway.EvidenceGateway.command', command):
+            report = module.script_inspection(request, direct)
+        self.assertEqual('unavailable', report['collectionStatus'])
+        self.assertEqual('challenge', report['requests'][0]['contentStatus'])
+        self.assertEqual([], report['scripts'])
+        self.assertTrue(report['cleanupConfirmed'])
+
     def test_script_inspection_follows_declared_consumer_and_module_not_arbitrary_urls(self):
         request = self.script_request()
         page = request['pageUrl']

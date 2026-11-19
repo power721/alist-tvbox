@@ -482,6 +482,84 @@ class BrokerTest(unittest.TestCase):
                      egress_policy={**policy, "methods": ["GET", "HEAD", "DELETE"]})
         self.assertEqual([], self.engine.calls)
 
+    def test_runtime_gateway_settings_reach_host_only_and_cleanup_runs_on_execution_failure(self):
+        policy = {"schemaVersion": 2, "origin": "https://example.com", "paths": ["/"],
+                  "methods": ["GET", "HEAD"], "maxRequests": 6, "maxResponseBytes": 2097152,
+                  "maxTotalResponseBytes": 4194304, "minIntervalSeconds": 1,
+                  "queryKeys": [], "pinnedIpv4": ["93.184.216.34"]}
+        broker = B.Broker(self.journal, INSTANCE, IMAGE, lambda: self.engine, egress_policy=policy)
+        self.brokers.append(broker)
+        request = self.request(broker)
+        request["egressPolicySha256"] = broker.egress_sha
+        settings = {"enabled": True, "adapter": "trawl", "endpoint": "http://private-gateway.invalid:8191",
+                    "timeoutMillis": 30000}
+        request["evidenceGatewayJson"] = json.dumps(settings)
+        created = []
+        factory = B.EG.RuntimeGateway
+
+        def gateway(*args):
+            instance = factory(*args)
+            instance.close = unittest.mock.Mock(return_value=True)
+            created.append(instance)
+            return instance
+
+        def fail(engine, worker_request, source, hashes, mediator, *, cancelled):
+            self.assertNotIn("evidenceGatewayJson", worker_request)
+            self.assertNotIn("private-gateway", json.dumps(mediator.loader_profile))
+            self.assertEqual(settings, mediator.runtime_gateway.settings)
+            raise B.S.Failure("ENGINE_TIMEOUT")
+
+        with patch.object(B.EG, "RuntimeGateway", side_effect=gateway), patch.object(B.G, "acceptance", side_effect=fail):
+            broker.handle(request)
+            broker.threads[JOB].join(5)
+        row = json.loads((self.journal / (JOB + ".json")).read_bytes())
+        self.assertEqual("FAILED", row["status"])
+        self.assertEqual("ENGINE_TIMEOUT", row["code"])
+        self.assertEqual(B.S.digest(request["evidenceGatewayJson"].encode()), row["evidenceGatewaySettingsSha256"])
+        self.assertNotIn("private-gateway", json.dumps(row))
+        created[0].close.assert_called_once()
+        cancel = self.request(broker, "cancel_acceptance")
+        cancel["egressPolicySha256"] = broker.egress_sha
+        broker.handle(cancel)
+        self.assertEqual({}, broker.job_gateways)
+
+    def test_runtime_gateway_cleanup_failure_never_becomes_a_completed_job(self):
+        policy = {"schemaVersion": 2, "origin": "https://example.com", "paths": ["/"],
+                  "methods": ["GET", "HEAD"], "maxRequests": 6, "maxResponseBytes": 2097152,
+                  "maxTotalResponseBytes": 4194304, "minIntervalSeconds": 1,
+                  "queryKeys": [], "pinnedIpv4": ["93.184.216.34"]}
+        broker = B.Broker(self.journal, INSTANCE, IMAGE, lambda: self.engine, egress_policy=policy)
+        self.brokers.append(broker)
+        request = self.request(broker)
+        request["egressPolicySha256"] = broker.egress_sha
+        request["evidenceGatewayJson"] = json.dumps({"enabled": True, "adapter": "trawl",
+            "endpoint": "http://gateway.invalid:8191", "timeoutMillis": 30000})
+        with patch.object(B.EG.RuntimeGateway, "close", return_value=False), \
+                patch.object(B.G, "acceptance", return_value={"stdoutBytes": 0, "stderrBytes": 0}):
+            broker.handle(request)
+            broker.threads[JOB].join(5)
+        row = json.loads((self.journal / (JOB + ".json")).read_bytes())
+        self.assertEqual("FAILED", row["status"])
+        self.assertEqual("EVIDENCE_GATEWAY_CLEANUP_UNCONFIRMED", row["code"])
+        self.assertNotIn("result", row)
+
+    def test_invalid_runtime_gateway_configuration_never_creates_a_job(self):
+        policy = {"schemaVersion": 2, "origin": "https://example.com", "paths": ["/"],
+                  "methods": ["GET", "HEAD"], "maxRequests": 6, "maxResponseBytes": 2097152,
+                  "maxTotalResponseBytes": 4194304, "minIntervalSeconds": 1,
+                  "queryKeys": [], "pinnedIpv4": ["93.184.216.34"]}
+        broker = B.Broker(self.journal, INSTANCE, IMAGE, lambda: self.engine, egress_policy=policy)
+        self.brokers.append(broker)
+        request = self.request(broker)
+        request["egressPolicySha256"] = broker.egress_sha
+        for settings in ({}, {"enabled": True, "adapter": "trawl", "endpoint": "http://user:private@gateway/",
+                              "timeoutMillis": 30000}):
+            request["evidenceGatewayJson"] = json.dumps(settings)
+            with self.assertRaisesRegex(B.S.Failure, "EVIDENCE_GATEWAY_CONFIGURATION_INVALID"):
+                broker.handle(request)
+        self.assertEqual({}, broker.jobs)
+        self.assertEqual([], self.engine.calls)
+
     def test_invalid_frozen_profile_never_creates_a_job_or_executes_source(self):
         policy = {"schemaVersion": 2, "origin": "https://example.com", "paths": ["/"],
                   "methods": ["GET", "HEAD"], "maxRequests": 6, "maxResponseBytes": 2097152,
@@ -523,7 +601,7 @@ class BrokerTest(unittest.TestCase):
         self.brokers.append(broker)
         self.assertEqual(B.S.digest(B.S.encode(policy)), broker.identity()["egressPolicySha256"])
         with patch.object(B.G, "acceptance", return_value={"stdoutBytes": 0, "stderrBytes": 0}) as run:
-            broker.sample(self.engine, {}, SOURCE, "", "", cancelled=lambda: False)
+            broker.sample(self.engine, {"jobId": JOB}, SOURCE, "", "", cancelled=lambda: False)
         mediator = run.call_args.args[4]
         self.assertIsInstance(mediator, B.H.Routes)
         self.assertEqual(policy, mediator.policy)

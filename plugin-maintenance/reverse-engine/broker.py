@@ -630,13 +630,37 @@ class ScriptDocument(HTMLParser):
 
 
 def script_inspection(value, transport=None):
-    """Observe declared public scripts without executing a page, Spider or decoder."""
+    """One task-owned transport; gateway browser state never leaves the gateway."""
+    from evidence_gateway import GatewayFallback
+    transport = transport or BrowserTransport()
+    gateway = None
+    settings = value.get('evidenceGateway', {})
+    if settings.get('enabled'):
+        transport = GatewayFallback(settings, transport, egress)
+        gateway = transport.gateway
+    report = None
+    try:
+        report = inspect_script_resources(value, transport)
+        return report
+    finally:
+        if gateway is not None:
+            cleaned = gateway.close()
+            if report is not None:
+                report['evidenceGateway'] = gateway.summary()
+                report['cleanupConfirmed'] = cleaned
+                if gateway.requests:
+                    report['transport'] = 'mixed_public_http_and_external_gateway'
+                    report['networkLocation'] = 'controller_host_and_external_gateway'
+
+
+def inspect_script_resources(value, transport):
+    """Observe declared scripts, not Spider code or runtime transformation results."""
+    from evidence_gateway import GatewayError, challenge as challenge_page
     page = value['pageUrl']
     page_sha = hashlib.sha256(page.encode()).hexdigest()
     egress.http_authority(page, 'EGRESS_URL_DENIED')
     if page_sha != value.get('observedPageUrlSha256'):
         raise ValueError('REVERSE_PAGE_NOT_BOUND_TO_SOURCE')
-    transport = transport or BrowserTransport()
     report = {'schemaVersion': 1, 'mode': 'reverse_analysis_v1',
               'authority': 'host_public_scripts_observed', 'operation': 'script_resource_inspection',
               'taskId': value['taskId'], 'repairId': value['repairId'], 'runId': value['runId'],
@@ -653,6 +677,7 @@ def script_inspection(value, transport=None):
     markers = [re.escape(field.encode()) for field in fields if field not in {'url', 'data', 'list'}]
     markers += [rb'resData', rb'getRes\w*', rb'decrypt', rb'JSON\.parse', rb'atob\s*\(']
     visited = set()
+    landings = {}
 
     def get(url, parent=None):
         if url in visited or len(visited) >= report['fetchLimit']:
@@ -672,14 +697,22 @@ def script_inspection(value, transport=None):
             response, observed = reply['response'], reply['observation']
             body = base64.b64decode(response['body'], validate=True)
             response_headers = {key.lower(): val for key, val in response.get('headers', {}).items()}
-            text = body[:8192].decode('utf-8', errors='replace').lower()
-            challenge = (response_headers.get('cf-mitigated', '').lower() == 'challenge'
-                         or '_cf_chl_opt' in text and '/cdn-cgi/challenge-platform/' in text)
+            challenge = challenge_page(response)
+            final = response.get('finalUrl') or url
+            landings[url] = final
             row = {'urlSha256': hashlib.sha256(url.encode()).hexdigest(), 'origin': http_origin(url),
                    'parentUrlSha256': hashlib.sha256(parent.encode()).hexdigest() if parent else None,
                    'status': response['status'], 'responseComplete': observed.get('responseComplete') is True,
                    'responseSha256': hashlib.sha256(body).hexdigest(), 'responseBytes': len(body),
-                   'challengePage': challenge, 'targetMatched': hashlib.sha256(url.encode()).hexdigest() in targets}
+                   'challengePage': challenge, 'targetMatched': hashlib.sha256(url.encode()).hexdigest() in targets,
+                   'transport': reply.get('transport', 'maintenance_pinned_public_http'),
+                   'representation': reply.get('representation', 'http_response_bytes'),
+                   'finalUrlSha256': hashlib.sha256(final.encode()).hexdigest(), 'finalOrigin': http_origin(final)}
+            for field in ('accessAttempts', 'gatewayErrorCode', 'gatewayExecution', 'gatewayRecovery'):
+                if field in reply:
+                    row[field] = reply[field]
+            if reply.get('gatewayErrorCode'):
+                report['failures'].append({'urlSha256': row['urlSha256'], 'code': reply['gatewayErrorCode']})
             report['requests'].append(row)
             if response['status'] != 200 or not row['responseComplete'] or challenge:
                 row['contentStatus'] = 'challenge' if challenge else 'incomplete' if not row['responseComplete'] else 'http_error'
@@ -688,10 +721,13 @@ def script_inspection(value, transport=None):
                            or 'text/html' in response_headers.get('content-type', '').lower()):
                 row['contentStatus'] = 'script_returned_html'
                 return None
+            if parent and reply.get('representation') == 'gateway_rendered_document':
+                row['contentStatus'] = 'script_bytes_not_available'
+                return None
             row['contentStatus'] = 'observed'
             return body
         except Exception as error:
-            code = error.code if isinstance(error, egress.Denied) else 'REVERSE_RESOURCE_UNAVAILABLE'
+            code = error.code if isinstance(error, (egress.Denied, GatewayError)) else 'REVERSE_RESOURCE_UNAVAILABLE'
             report['failures'].append({'urlSha256': hashlib.sha256(url.encode()).hexdigest(), 'code': code})
             return None
 
@@ -727,7 +763,7 @@ def script_inspection(value, transport=None):
         document = ScriptDocument()
         document.feed(body.decode('utf-8-sig', errors='replace'))
         inline_scripts = document.inline[:8]
-        queue.extend((urljoin(page, address), page, 0) for address in document.scripts[:64])
+        queue.extend((urljoin(landings.get(page, page), address), page, 0) for address in document.scripts[:64])
         queue.sort(key=lambda row: (hashlib.sha256(row[0].encode()).hexdigest() not in targets,
                                    not bool(re.search(r'play|video|media|config|common', row[0], re.I))))
     while queue and len(visited) < report['fetchLimit']:
@@ -746,7 +782,7 @@ def script_inspection(value, transport=None):
             # Follow only literal module imports, never arbitrary string constants or source maps.
             imports = re.findall(rb'''(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["']([^"'\r\n]{1,512})["']''', script)
             for address in imports[:16]:
-                target = urljoin(url, address.decode('utf-8', errors='replace'))
+                target = urljoin(landings.get(url, url), address.decode('utf-8', errors='replace'))
                 if urlsplit(target).path.lower().endswith(('.js', '.mjs')):
                     queue.append((target, url, depth + 1))
     for index, inline in enumerate(inline_scripts):

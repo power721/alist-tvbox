@@ -50,7 +50,7 @@ class PageDiagnosticsTest {
         var artifact = new MaintenanceArtifact();
         artifact.setBody(SOURCE);
         when(sources.artifact("source", "a".repeat(64))).thenReturn(artifact);
-        var service = spy(new ReverseAnalysis(mapper, repairs, sources, "", "node", "", "python", "", ""));
+        var service = spy(new ReverseAnalysis(mapper, repairs, sources, mock(ConnectionSettingsStore.class), "", "node", "", "python", "", ""));
         doReturn("b".repeat(64)).when(service).workerSha();
         doAnswer(call -> {
             ObjectNode payload = call.getArgument(0);
@@ -78,7 +78,7 @@ class PageDiagnosticsTest {
 
     @Test void changedSourceOrNonterminalRunCannotTriggerNetwork() {
         var sources = mock(SourceService.class);
-        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), sources, "", "node", "", "python", "", "");
+        var service = new ReverseAnalysis(mapper, mock(RepairStore.class), sources, mock(ConnectionSettingsStore.class), "", "node", "", "python", "", "");
         for (String field : List.of("artifactSha256", "status", "freshness")) {
             var value = runData().put(field, "changed");
             assertEquals("AUXILIARY_EVIDENCE_RUN_MISMATCH", assertThrows(ResponseStatusException.class,
