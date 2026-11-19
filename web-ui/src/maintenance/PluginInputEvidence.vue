@@ -1,11 +1,22 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { View } from '@element-plus/icons-vue'
+import { Download, View } from '@element-plus/icons-vue'
+import { downloadFile } from './api'
 import { inputStages, type PluginInputSummary } from './pluginInput'
 
 const props = defineProps<{ input: PluginInputSummary; currentSha256: string }>()
 const visible = ref(false)
 const rows = computed(() => inputStages(props.input, props.currentSha256))
+const downloading = ref(false)
+const error = ref('')
+async function downloadOriginal() {
+  if (!props.input.id || !props.input.sourceId || downloading.value) return
+  downloading.value = true; error.value = ''
+  try {
+    await downloadFile(`/sources/${props.input.sourceId}/plugin-inputs/${props.input.id}/original`, 'original.txt')
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : '原包下载失败' }
+  finally { downloading.value = false }
+}
 </script>
 
 <template>
@@ -19,6 +30,9 @@ const rows = computed(() => inputStages(props.input, props.currentSha256))
     </el-tooltip>
     <el-drawer v-model="visible" title="插件输入身份" size="min(760px, 100vw)"
                append-to-body class="plugin-input-drawer">
+      <el-button v-if="input.id && input.sourceId" :icon="Download" :loading="downloading"
+                 @click="downloadOriginal">下载导入原件</el-button>
+      <el-alert v-if="error" :title="error" type="error" :closable="false" />
       <el-table :data="rows" row-key="stage">
         <el-table-column prop="stage" label="环节" width="88" />
         <el-table-column prop="status" label="状态" min-width="128" />
@@ -39,6 +53,10 @@ const rows = computed(() => inputStages(props.input, props.currentSha256))
         <dd v-if="input.evidence.runtimeSha256"><code>{{ input.evidence.runtimeSha256 }}</code></dd>
         <dt>证据范围</dt><dd>{{ input.evidence.authority }}</dd>
         <dt>导入时源码执行</dt><dd>{{ input.evidence.sourceExecuted ? '异常：已执行' : '未执行' }}</dd>
+        <template v-if="input.evidence.inputFormat === 'secspider/1'">
+          <dt>原包恢复</dt><dd>保留导入时的完整加密包与签名，不包含后续修复</dd>
+          <dt>修改后加密交付</dt><dd>需要原 AT 信任的签名私钥；当前未提供签名服务</dd>
+        </template>
         <dt>业务与发布</dt><dd>未验证 · 未授权发布</dd>
       </dl>
     </el-drawer>

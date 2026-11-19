@@ -22,7 +22,7 @@ export interface PluginInputEvidence {
     sourceLocatorSha256: string
     sourceSha256: string
     requestMethod: 'GET'
-    authority: 'at_static_source_read' | 'at_public_https_source_read'
+    authority: 'at_static_source_read' | 'at_public_https_source_read' | 'at_embedded_source_read'
     atCredentialsForwarded?: boolean
     productionModified: false
   }

@@ -21,13 +21,22 @@ function panel() {
   const output = ts.transpileModule(code, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText
-  return { ...vm.runInNewContext(output + '\n;({observe, inspect, save, resetSaved, observation, pluginId, authorized, name, filename, preview, pending, saved, error, canSave})', context),
+  return { ...vm.runInNewContext(output + '\n;({observe, inspect, save, resetSaved, observation, plugins, pluginId, authorized, name, filename, preview, pending, saved, error, canSave})', context),
     calls, events, hooks }
 }
 const observed = { sha256: 'a'.repeat(64), plugins: [
   { id: 7, name: 'owned', enabled: true, t4Visible: true, kind: 'python' }] }
 const preview = { sourceId: null, artifactSha256: 'b'.repeat(64), evidenceSha256: 'c'.repeat(64),
   evidence: { atSource: { pluginId: 7, observationSha256: observed.sha256 } } }
+
+test('AT import includes enabled encrypted plugins but excludes unsupported and disabled entries', () => {
+  const view = panel()
+  view.observation.value = { ...observed, plugins: [
+    observed.plugins[0], { ...observed.plugins[0], id: 8, kind: 'secspider' },
+    { ...observed.plugins[0], id: 9, kind: 'webpage' },
+    { ...observed.plugins[0], id: 10, kind: 'secspider', enabled: false }] }
+  assert.deepEqual(Array.from(view.plugins.value, item => item.id), [7, 8])
+})
 
 async function ready() {
   const view = panel()

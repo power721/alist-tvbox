@@ -5,6 +5,7 @@ import cn.har01d.atmaintenance.service.PluginInputService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -40,5 +41,10 @@ public class PluginInputController {
     @GetMapping("/sources/{id}/plugin-inputs")
     public List<PluginInputSummary> list(@PathVariable String id) {
         return inputs.list(id);
+    }
+
+    @GetMapping("/sources/{id}/plugin-inputs/{inputId}/original")
+    public ResponseEntity<byte[]> original(@PathVariable String id, @PathVariable String inputId) {
+        return inputs.original(id, inputId);
     }
 }

@@ -3,18 +3,21 @@ package cn.har01d.atmaintenance.service;
 import cn.har01d.atmaintenance.dto.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class AtHostAccessTest {
-    @Test
-    void emptyConnectionUsesHostWithoutAddressOrCredentialAndExclusionsStillApply() {
+    @ParameterizedTest
+    @ValueSource(strings = {"python", "secspider"})
+    void emptyConnectionUsesHostWithoutAddressOrCredentialAndExclusionsStillApply(String kind) {
         var mapper = new ObjectMapper();
         var client = new AtReadClient(mapper, new AtConnectionSettings("", "", "", "session", "", false, ""));
         var host = mock(AtHostAccess.class);
         var connection = new AtConnection(true, "current-at", "a".repeat(64), "b".repeat(64), "host", "at_embedded_repository");
-        var plugin = new AtPluginSummary(7, "host", null, true, true, 1, "python", "plugin-7", "c".repeat(64), false);
+        var plugin = new AtPluginSummary(7, "host", null, true, true, 1, kind, "plugin-7", "c".repeat(64), false);
         when(host.connection()).thenReturn(connection);
         when(host.plugins()).thenReturn(List.of(plugin));
         byte[] body = "raise RuntimeError('never execute')".getBytes(java.nio.charset.StandardCharsets.UTF_8);

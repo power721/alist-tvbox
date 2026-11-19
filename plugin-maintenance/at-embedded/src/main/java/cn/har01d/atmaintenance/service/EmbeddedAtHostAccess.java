@@ -52,7 +52,9 @@ public class EmbeddedAtHostAccess implements AtHostAccess {
     public byte[] readPythonSource(int pluginId) {
         var plugin = repository.findById(pluginId).orElseThrow(() -> denied("AT_PLUGIN_NOT_FOUND"));
         String url = plugin.getUrl() == null ? "" : plugin.getUrl();
-        if (!plugin.isEnabled() || !plugin.isT4Visible() || !url.toLowerCase(Locale.ROOT).endsWith(".py"))
+        String path = url.split("[?#]", 2)[0].toLowerCase(Locale.ROOT);
+        if (!plugin.isEnabled() || !plugin.isT4Visible() || PluginService.isWebPagePlugin(plugin)
+                || !(path.endsWith(".py") || path.endsWith(".txt")))
             throw denied("AT_SOURCE_NOT_READABLE");
         try {
             byte[] bytes;

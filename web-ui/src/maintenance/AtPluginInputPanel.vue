@@ -30,7 +30,7 @@ const saved = ref<PluginInputSummary>()
 const pending = ref<Pending>()
 const error = ref('')
 const plugins = computed(() => observation.value?.plugins.filter(item =>
-  item.enabled && item.t4Visible && item.kind === 'python') ?? [])
+  item.enabled && item.t4Visible && ['python', 'secspider'].includes(item.kind)) ?? [])
 const excluded = computed(() => observation.value?.excludedPluginIds ?? [])
 const canSave = computed(() => !busy.value && !saved.value && !!preview.value && authorized.value
   && !excluded.value.includes(pluginId.value ?? -1)
@@ -116,11 +116,11 @@ onUnmounted(() => { disposed = true })
       <el-button :icon="Refresh" :disabled="busy || !!pending" @click="observe">读取插件列表</el-button>
       <span v-if="observation">{{ new Date(observation.observedAt).toLocaleString() }}</span>
     </div>
-    <el-select v-model="pluginId" filterable placeholder="选择已启用的 T4 Python 插件"
+    <el-select v-model="pluginId" filterable placeholder="选择已启用的 T4 插件"
                :disabled="busy || !!pending" class="at-input-selector">
       <el-option v-for="plugin in plugins" :key="plugin.id" :value="plugin.id"
                  :disabled="excluded.includes(plugin.id)"
-                 :label="`${plugin.name} · ID ${plugin.id}${excluded.includes(plugin.id) ? ' · 不参与维护' : ''}`" />
+                 :label="`${plugin.name} · ID ${plugin.id}${plugin.kind === 'secspider' ? ' · 加密' : ''}${excluded.includes(plugin.id) ? ' · 不参与维护' : ''}`" />
     </el-select>
     <el-checkbox v-model="authorized" :disabled="busy || !!pending">
       我有权只读获取并在本机维护此插件

@@ -52,6 +52,7 @@ class PluginInputIntegrationTest {
     @Autowired ObjectMapper mapper;
     @Autowired JdbcTemplate jdbc;
     @MockitoBean PluginInputInspector inspector;
+    @MockitoBean AtReadClient at;
     @Value("${maintenance.python}") String python;
     @LocalServerPort int port;
 
@@ -61,8 +62,8 @@ class PluginInputIntegrationTest {
 
     @DynamicPropertySource
     static void python(DynamicPropertyRegistry registry) {
-        registry.add("maintenance.python", () -> Path.of("../../.venv/Scripts/python.exe")
-                .toAbsolutePath().normalize().toString());
+        registry.add("maintenance.python", () -> System.getProperty("maintenance.test.python",
+                Path.of("../../.venv/Scripts/python.exe").toAbsolutePath().normalize().toString()));
     }
 
     @BeforeEach
@@ -115,6 +116,34 @@ class PluginInputIntegrationTest {
     }
 
     @Test
+    void encryptedAtImportPreservesPackageAndPlaintextIdentitiesAndBinding() {
+        var connection = new AtConnection(true, "owned-at", "a".repeat(64), "b".repeat(64), "fixture", "configured");
+        var plugin = new AtPluginSummary(707, "owned encrypted", null, true, true, 1,
+                "secspider", "plugin-707", "c".repeat(64), false);
+        var observation = new AtObservation("d".repeat(64), connection, java.time.Instant.now(),
+                List.of(plugin), "metadata_observed", "fixture", List.of());
+        when(at.connection()).thenReturn(connection);
+        when(at.requireObservation(observation.sha256())).thenReturn(observation);
+        when(at.readPythonSource(observation.sha256(), 707)).thenReturn(packageBytes);
+        when(at.sourceReadAuthority(707)).thenReturn("at_static_source_read");
+        var preview = inputs.previewAt(new PreviewAtPluginInputRequest(observation.sha256(), 707, true));
+        assertTrue(preview.evidence().path("signatureVerified").asBoolean());
+        assertEquals(Hashes.sha256(packageBytes), preview.evidence().path("atSource").path("sourceSha256").asText());
+        assertEquals(Hashes.sha256(SOURCE), preview.artifactSha256());
+        var saved = inputs.confirmAt(new ConfirmAtPluginInputRequest(observation.sha256(), 707, true,
+                preview.evidenceSha256(), key(), "owned encrypted", "owned.py"));
+        assertEquals(SOURCE, sources.artifact(saved.sourceId(), saved.artifactSha256()).getBody());
+        assertEquals("secspider/1", saved.evidence().path("inputFormat").asText());
+        assertArrayEquals(packageBytes, Base64.getDecoder().decode(jdbc.queryForObject(
+                "select input_base64 from maintenance_plugin_input where id = ?", String.class, saved.id())));
+        assertEquals(707, jdbc.queryForObject("select plugin_id from maintenance_at_binding where source_id = ?",
+                Integer.class, saved.sourceId()));
+        when(at.readPythonSource(observation.sha256(), 707)).thenReturn(SOURCE.getBytes(StandardCharsets.UTF_8));
+        assertError(400, "AT_SOURCE_FORMAT_INVALID", () -> inputs.previewAt(
+                new PreviewAtPluginInputRequest(observation.sha256(), 707, true)));
+    }
+
+    @Test
     void encryptedPreviewConfirmAndHistoricalCoverageUseActualCryptoWithoutExecutingSource() throws Exception {
         long[] before = counts();
         var preview = inputs.preview(new PreviewPluginInputRequest(encoded(packageBytes), true));
@@ -144,6 +173,15 @@ class PluginInputIntegrationTest {
         String stored = jdbc.queryForObject("select input_base64 from maintenance_plugin_input where id = ?",
                 String.class, saved.id());
         assertArrayEquals(packageBytes, Base64.getDecoder().decode(stored));
+        var restored = inputs.original(source.id(), saved.id());
+        assertArrayEquals(packageBytes, restored.getBody(), "restoring the original must never package the later edit");
+        assertEquals("no-store", restored.getHeaders().getCacheControl());
+        assertTrue(restored.getHeaders().getContentDisposition().getFilename().endsWith(".txt"));
+        var unrelated = sources.create(new CreateSourceRequest("unrelated", null, "unrelated.py", null, SOURCE));
+        assertError(404, "PLUGIN_INPUT_NOT_FOUND", () -> inputs.original(unrelated.id(), saved.id()));
+        jdbc.update("update maintenance_plugin_input set input_base64 = ? where id = ?", encoded(new byte[]{1}), saved.id());
+        assertEquals("PLUGIN_INPUT_PACKAGE_MISMATCH", assertThrows(IllegalStateException.class,
+                () -> inputs.original(source.id(), saved.id())).getMessage());
         assertEquals(0, jdbc.queryForObject("select count(*) from maintenance_at_binding where source_id = ?",
                 Integer.class, source.id()));
     }
@@ -220,6 +258,15 @@ class PluginInputIntegrationTest {
                 confirm(packageBytes, checked.path("evidenceSha256").asText(), key(), "HTTP-own"));
         assertEquals(201, confirmed.statusCode(), confirmed.body());
         var saved = mapper.readTree(confirmed.body());
+        URI original = uri("/sources/" + saved.path("sourceId").asText() + "/plugin-inputs/"
+                + saved.path("id").asText() + "/original");
+        assertEquals(401, client.send(HttpRequest.newBuilder(original).GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray()).statusCode());
+        var download = client.send(HttpRequest.newBuilder(original).header("Authorization", auth).GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertEquals(200, download.statusCode());
+        assertArrayEquals(packageBytes, download.body());
+        assertEquals("no-store", download.headers().firstValue("Cache-Control").orElseThrow());
         var listed = client.send(HttpRequest.newBuilder(uri("/sources/" + saved.path("sourceId").asText()
                 + "/plugin-inputs")).header("Authorization", auth).GET().build(), HttpResponse.BodyHandlers.ofString());
         assertEquals(200, listed.statusCode());

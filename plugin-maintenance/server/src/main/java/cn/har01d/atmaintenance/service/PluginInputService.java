@@ -7,6 +7,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -113,6 +117,26 @@ public class PluginInputService {
         return inputs.findTop20BySourceIdOrderByCreatedAtDesc(sourceId).stream().map(this::summary).toList();
     }
 
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> original(String sourceId, String inputId) {
+        sources.requireSource(sourceId);
+        var record = inputs.findById(inputId).filter(input -> input.getSourceId().equals(sourceId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PLUGIN_INPUT_NOT_FOUND"));
+        var evidence = summary(record).evidence();
+        byte[] body = Base64.getDecoder().decode(record.getInputBase64());
+        if (!Hashes.sha256(body).equals(record.getInputSha256())
+                || !record.getInputSha256().equals(evidence.path("inputSha256").asText())
+                || body.length != evidence.path("inputBytes").asLong(-1)) {
+            throw new IllegalStateException("PLUGIN_INPUT_PACKAGE_MISMATCH");
+        }
+        String extension = "secspider/1".equals(evidence.path("inputFormat").asText()) ? ".txt" : ".py";
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename("original-" + record.getId() + extension).build().toString())
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header("X-Content-Type-Options", "nosniff").body(body);
+    }
+
     private byte[] decode(String encoded, boolean authorized) {
         requireAuthorization(authorized);
         if (encoded == null || encoded.length() > 1_398_104) {
@@ -140,7 +164,8 @@ public class PluginInputService {
         var observation = at.requireObservation(observationSha);
         var plugin = observation.plugins().stream().filter(item -> item.id() == pluginId).findFirst().orElseThrow();
         var prepared = inspect(body);
-        if (!prepared.evidence().path("inputFormat").asText().equals("python")) {
+        String expectedFormat = "secspider".equals(plugin.kind()) ? "secspider/1" : "python";
+        if (!prepared.evidence().path("inputFormat").asText().equals(expectedFormat)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AT_SOURCE_FORMAT_INVALID");
         }
         ObjectNode evidence = (ObjectNode) prepared.evidence().deepCopy();

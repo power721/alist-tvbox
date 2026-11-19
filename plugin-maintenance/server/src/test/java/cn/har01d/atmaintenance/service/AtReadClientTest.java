@@ -279,7 +279,8 @@ class AtReadClientTest {
     @Test
     void pythonReadUsesOnlyObservedStaticSameOriginAndExactBytes() {
         for (String locator : new String[]{"/static/plugins/source.py", address() + "/static/plugins/source.py",
-                "/static/plugins/[\u4e2d\u6587 \u6d4b\u8bd5].PY"}) {
+                "/static/plugins/[\u4e2d\u6587 \u6d4b\u8bd5].PY", "/static/plugins/source.txt",
+                address() + "/static/plugins/source.TXT"}) {
             if (client != null) client.close();
             body = BODY.replace("https://fixture.invalid/source.py?token=LOCATOR_SECRET", locator);
             client = client(3000, 100_000);
@@ -311,6 +312,23 @@ class AtReadClientTest {
         assertEquals("at_public_https_source_read", client.sourceReadAuthority(7));
         verify(reader).read(URI.create(locator), 100_000);
         assertFalse(observed.toString().contains(locator));
+    }
+
+    @Test
+    void externalEncryptedSourceUsesTheSameAnonymousReader() {
+        String locator = "https://example.com/owned.txt?revision=1";
+        body = BODY.replace("https://fixture.invalid/source.py?token=LOCATOR_SECRET", locator);
+        client = client(3000, 100_000);
+        var reader = mock(PublicPythonSourceReader.class);
+        ReflectionTestUtils.setField(client, "publicSources", reader);
+        byte[] expected = "//@format:secspider/1\npayload.base64:opaque\n".getBytes(StandardCharsets.UTF_8);
+        when(reader.read(URI.create(locator), 100_000)).thenReturn(expected);
+        var observed = client.observe();
+        assertEquals("secspider", observed.plugins().getFirst().kind());
+        int before = requests.get();
+        assertArrayEquals(expected, client.readPythonSource(observed.sha256(), 7));
+        assertEquals(before, requests.get());
+        verify(reader).read(URI.create(locator), 100_000);
     }
 
     @Test

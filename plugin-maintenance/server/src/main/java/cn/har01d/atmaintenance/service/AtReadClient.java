@@ -263,14 +263,14 @@ public class AtReadClient {
         var plugin = observation.plugins().stream().filter(item -> item.id() == pluginId).findFirst()
                 .orElseThrow(() -> error(HttpStatus.CONFLICT, "AT_PLUGIN_NOT_OBSERVED"));
         if (usingEmbedded()) {
-            if (!plugin.enabled() || !plugin.t4Visible() || !"python".equals(plugin.kind()))
+            if (!plugin.enabled() || !plugin.t4Visible() || !Set.of("python", "secspider").contains(plugin.kind()))
                 throw error(HttpStatus.CONFLICT, "AT_SOURCE_NOT_READABLE");
             var current = host.plugins().stream().filter(item -> item.id() == pluginId).findFirst().orElse(null);
             if (!plugin.equals(current)) throw error(HttpStatus.CONFLICT, "AT_OBSERVATION_CHANGED");
             return host.readPythonSource(pluginId);
         }
         URI location = sourceLocations.get(pluginId);
-        if (!plugin.enabled() || !plugin.t4Visible() || !"python".equals(plugin.kind()) || location == null) {
+        if (!plugin.enabled() || !plugin.t4Visible() || !Set.of("python", "secspider").contains(plugin.kind()) || location == null) {
             throw error(HttpStatus.CONFLICT, "AT_SOURCE_NOT_READABLE");
         }
         if (staticPythonLocation(location.toASCIIString()) == null) {
@@ -324,7 +324,7 @@ public class AtReadClient {
             URI value = URI.create(locator.replace(" ", "%20"));
             if (!"https".equals(value.getScheme()) || value.getHost() == null || value.getUserInfo() != null
                     || value.getFragment() != null || value.getPath() == null
-                    || !value.getPath().toLowerCase(Locale.ROOT).endsWith(".py")
+                    || !supportedSourcePath(value.getPath())
                     || value.getPort() == 0 || value.getPort() > 65535
                     || value.toASCIIString().length() > 2048
                     || MediaNetworkPolicy.origin(value).equals(MediaNetworkPolicy.origin(origin))) return null;
@@ -355,7 +355,7 @@ public class AtReadClient {
                     || !origin.getHost().equalsIgnoreCase(Objects.toString(resolved.getHost(), ""))
                     || port != originPort || value.getRawUserInfo() != null
                     || value.getRawQuery() != null || value.getRawFragment() != null
-                    || path == null || !path.startsWith("/static/") || !path.toLowerCase(Locale.ROOT).endsWith(".py")
+                    || path == null || !path.startsWith("/static/") || !supportedSourcePath(path)
                     || path.contains("\\") || path.contains("%") || path.contains("//")
                     || path.codePoints().anyMatch(c -> c < 32 || c == 127)
                     || Arrays.stream(path.split("/")).anyMatch(part -> part.equals(".") || part.equals(".."))
@@ -365,6 +365,11 @@ public class AtReadClient {
         } catch (IllegalArgumentException | java.net.URISyntaxException error) {
             return null;
         }
+    }
+
+    private boolean supportedSourcePath(String path) {
+        String lower = path.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".py") || lower.endsWith(".txt");
     }
 
     /**
