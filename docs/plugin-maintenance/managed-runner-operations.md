@@ -2,13 +2,13 @@
 
 ## 当前范围
 
-本机工作台可以同时启动已安装 NAS broker 的固定隧道，不再依赖 `recovery` 中的实验脚本。
+本 PR 仅提供 AT 内置工作台。同机部署优先复用已安装的 T4 私有 IPC；跨机时由管理员独立管理已安装 NAS broker 的固定隧道，不依赖 `recovery` 实验脚本或独立工作台启动器。
 只绑定 `127.0.0.1`，SSH 使用已有可信主机记录；配置只保存环境变量名和固定运行身份，
 不保存密码或任意远端命令。源脚本仍只进入原隔离 worker，隧道不负责安装、重启或清理 broker。
 NAS broker 的可控停启由下文独立 root 运维入口负责，不通过页面或隧道开放远端命令。
 
 历史双通道示例为黄果 `18991`、央视 `19002`；实际通道数量和身份以当前路由配置及连接观察为准。
-管理页面仍为 `http://127.0.0.1:18990/`。
+管理入口为现有 AT `/#/maintenance`，不新增管理端口。后文历史验收的本机独立实例不属于当前安装路径。
 
 ## 宿主媒体依赖
 
@@ -64,16 +64,18 @@ NAS broker 的可控停启由下文独立 root 运维入口负责，不通过页
 HTTP 驱动身份；对应的 `managed-runner-routes.json` 仍负责来源 UUID 到本地端口的映射。
 端口及身份必须与已安装通道一致，不能用示例占位身份直接执行。
 
-当前电脑的配置放在原工作台数据目录，现有获准 `FN_NAS_*` 环境变量保持不变。
-在 `D:\源主动维护项目\workspace` 中用以下命令启动，无需构建 JAR：
+配置文件保存在实例私有目录，凭据通过配置中指定的既有环境变量传入。跨机隧道由管理员在单独进程或服务中运行，不随 AT 自动安装或退出：
 
 ```powershell
-& 'C:\Users\wab201\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\powershell\pwsh.exe' -NoProfile -File plugin-maintenance/scripts/start_local.ps1 -Port 18990 -DataDirectory 'D:\源主动维护项目\workspace\plugin-maintenance\server\data\mvp-18990' -JarPath 'D:\源主动维护项目\workspace\plugin-maintenance\server\target\at-plugin-maintenance-source-routes-20261113.jar' -ManagedRunnerRoutes 'D:\源主动维护项目\workspace\plugin-maintenance\server\data\mvp-18990\runner-routes.json' -ManagedRunnerTunnels 'D:\源主动维护项目\workspace\plugin-maintenance\server\data\mvp-18990\runner-tunnels.json' -TunnelPythonExecutable 'C:\Users\wab201\AppData\Local\Python\pythoncore-3.14-64\python.exe'
+py -3.14 -X utf8 plugin-maintenance/scripts/managed_runner_tunnel.py run --config 'D:\at-data\maintenance\runner-tunnels.json'
 ```
 
-省略 `-ManagedRunnerTunnels` 仍可使用管理员在别处管理的隧道。
-该参数不改变 Java 业务执行策略、来源映射、模型配置或数据库结构。
-不重复启动已占用端口；旧私有隧道已退出，当前只保留产品管理的进程。
+在现有 AT 启动参数中加入 `--maintenance.managed-source.enabled=true` 和
+`--maintenance.managed-source.routes-file=<私有路由文件绝对路径>`。每个路由使用上述已安装通道的固定本地端口与身份。
+需要自动准备远端来源时，另设 `maintenance.managed-source.setup.enabled`、`setup.python`、`setup.script`
+和 `setup.tunnels-file`；脚本为 `scripts/managed_source_setup.py`，必须先按其合同安装运行依赖。
+同机 T4 改用 `maintenance.managed-source.setup.socket`，示例在 `deployment/compose.t4.yaml`。
+配置不改变模型授权或已有来源账本；不重复启动已占用端口，不用示例身份执行任务。
 
 ## 断线和退出
 
@@ -84,10 +86,9 @@ SSH 断线后的**下一条新请求**建立新连接并核对所选 broker 身�
 NAS 暂时离线或环境变量缺失时，管理页面仍可打开，隔离执行检查显示未连接；
 连接恢复后的新请求可重新建立通道。不要用“隧道进程存在”代替实际连接检查。
 
-正常停止工作台或 Java 进程退出后，启动器回收自己启动的隧道子进程。
-不会停止管理员在别处启动的隧道，也不会停止 NAS broker。
-直接强制结束 PowerShell 启动器、整机断电或 NAS 重启不在此退出保证内；
-尚未安装 Windows 计划任务、系统服务或 NAS 自启项。
+AT 退出不会管理独立隧道服务或 NAS broker。管理员应通过持有的服务管理器或前台中断停止隧道；
+工具正常退出回收自己的本地监听，不停止 NAS broker。强杀、整机断电或 NAS 重启不在正常退出保证内。
+本 PR 不自动安装 Windows 计划任务、系统服务或 NAS 自启项。
 
 NAS broker 非正常退出、遗留 socket 和未完成任务，仍需按原身份处理。
 本工具不会删除 socket、重放任务、修改 journal 或自动修复未知状态。

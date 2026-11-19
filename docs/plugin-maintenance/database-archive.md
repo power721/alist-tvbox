@@ -8,10 +8,10 @@
 
 内置包新增独立入口 `cn.har01d.atmaintenance.tools.EmbeddedDatabaseArchiveTool`，
 复用原有冷归档实现，不启动 Spring、AT、AList、模型或 Spider。
-独立工作台入口、文件类型和原有1GiB限额保持不变；AT模式只从内置JAR提供。
+旧独立库归档类型和原有1GiB限额仅作历史工具兼容；当前发行只提供 AT 内置 JAR，不构建独立服务。
 
 AT模式接受显式选择的任意名称`.mv.db`文件，按实际数据库结构识别内置主库，
-不强迫运行库必须叫`atv.mv.db`。要求AT核心表、维护表和成功的V59维护迁移均存在；
+不强迫运行库必须叫`atv.mv.db`。要求AT核心表、维护表和成功的维护迁移均存在；当前维护历史与宿主历史分开记录。
 备份完整PUBLIC表，包含AT保存的插件正文、维护源码/候选、模型额度与巡检/发布台账。
 单库上限64GiB，按流读取；不会把大AT库套入独立工作台的1GiB限额。
 ZIP类型为`alist-tvbox-at-embedded-h2`，内含规范名称`atv.mv.db`；
@@ -49,6 +49,7 @@ AT原JSON备份仍不包含插件正文，也未在本次改动中改写；本�
 ## 独立工作台历史说明
 
 版本：`0.23.0-SNAPSHOT`。日期：2026-11-09。范围仅为独立维护工作台的 H2 文件，不适用于 AT 业务库。
+以下命令与验证只对应当时的旧 JAR，不是当前发行入口；新 AT 实例使用上文 `-Deployment at-embedded`，不得直接启动旧独立库。
 
 ## 合同与边界
 
@@ -88,14 +89,7 @@ $trustedSha = '<自己保留的备份回执中的64位小写SHA256>'
     -OutputPath 'D:\maintenance-restored' -TrustedSha256 $trustedSha
 ```
 
-成功后新目录包含 `maintenance.mv.db` 和 `recovery-manifest.json`。恢复工具保持数据库条目原字节，不运行 Flyway；应用首次启动仍按正常 Flyway/JPA 流程核验。保留原库，不复制覆盖它。先确认旧实例已停止，再以本机受限启动器检查恢复副本：
-
-```powershell
-& $pwsh -NoProfile -File plugin-maintenance/scripts/start_local.ps1 `
-    -DataDirectory 'D:\maintenance-restored' -Port 8798
-```
-
-启动器只绑定回环，并显式关闭 AT、模型、自动递交、容器、巡检与媒体；清空 AT token/身份路径及 Engine 路径/端点/镜像。不要用普通启动命令继承旧外部配置来代替这一步。
+成功后新目录包含 `maintenance.mv.db` 和 `recovery-manifest.json`。恢复工具保持数据库条目原字节，不运行 Flyway；保留原库，不复制覆盖它。当前 PR 不提供该旧独立库的启动器，不能把恢复结果交给 AT 直接启动。当前内置 H2 的恢复按上文步骤和[合入指南](merge-guide.md)验证，使用新目录并在首次启动前关闭模型、巡检、发布及外部执行，不继承旧的外部操作配置。
 
 ## 恢复后的状态
 

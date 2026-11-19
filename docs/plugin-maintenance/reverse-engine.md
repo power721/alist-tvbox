@@ -34,7 +34,7 @@ npm.cmd --prefix plugin-maintenance/reverse-engine ci --ignore-scripts --no-audi
 验证导航、XHR、307/303、Cookie、同进程/跨进程 Frame 和弹窗，无外部站点请求。
 未提供该变量时该项会跳过，不能以跳过结果宣称已完成真实浏览器验证。
 
-## 独立工作台
+## 运行时诊断
 
 ### 运行时异常定位
 
@@ -44,28 +44,9 @@ npm.cmd --prefix plugin-maintenance/reverse-engine ci --ignore-scripts --no-audi
 保留历史基线 freshness/staleInputs；源码/画像变化仍拒绝，不改变原验收、轮次或发布资格。
 真实播放 POST/HTTP200 已观测，业务内容及媒体仍未验，见[本轮结果](runtime-exception-evidence-2026-11-15.md)。
 
-在现有启动参数上同时提供两个必需参数；Node 不在 PATH 时再指定它的路径：
+## AT 内置配置
 
-```powershell
-& ./plugin-maintenance/scripts/start_local.ps1 `
-  -ReverseEngineDirectory D:/review/plugin-maintenance/reverse-engine `
-  -ReverseBrowserExecutable 'C:/Program Files/Google/Chrome/Application/chrome.exe' `
-  -ReverseNodeExecutable 'C:/Program Files/nodejs/node.exe'
-```
-
-这只是配置示例，不应据此重复启动已有实例。端口、数据目录、JAR 与隔离运行器
-沿用各实例的显式配置。独立 JAR 也支持 `application.yaml` 中的
-`MAINTENANCE_REVERSE_ENGINE_DIR`、`MAINTENANCE_REVERSE_ENGINE_BROWSER`、
-`MAINTENANCE_REVERSE_ENGINE_NODE` 环境变量别名。
-
-配置了 `-ManagedRunnerTunnels` 时，启动器同时传入已有通道文件和
-`managed_runner_tunnel.py`，网络经该来源运行宿主；否则网络位于工作台宿主。
-远端模式仍需已有授权通道及 Python Paramiko 依赖，按[运行器运维](managed-runner-operations.md)
-配置，不在交付包中附带真实连接文件。
-
-## AT 内置模式
-
-内置模式不加载独立服务的 `application.yaml`，使用相同的 Spring 属性键显式配置，
+本 PR 仅 AT 内置，不提供独立工作台启动器或独立服务 `application.yaml`。使用 Spring 属性键显式配置，
 例如在已有 AT 启动参数后追加：
 
 ```text
@@ -77,8 +58,11 @@ npm.cmd --prefix plugin-maintenance/reverse-engine ci --ignore-scripts --no-audi
 
 远端模式另提供 `maintenance.reverse-engine.tunnels-file` 和
 `maintenance.reverse-engine.tunnel-script`；两者均指向实例自有文件。
+前者为已有授权通道配置，后者指向 `plugin-maintenance/scripts/managed_runner_tunnel.py`；
+同时需要 Python Paramiko 依赖，按[运行器运维](managed-runner-operations.md)配置。
+不在交付包中附带真实连接文件；未配置远端通道时网络位于 AT 宿主。
 目录、Node/Python 和浏览器须在 AT 进程所在环境可访问。配置不改变 AT 端口、
-鉴权或数据库，也不授权生产换版。独立服务容器分支尚未交付。
+鉴权或数据库，也不授权生产换版；不要为配置诊断引擎重复启动现有实例。
 
 ## 证据边界
 
