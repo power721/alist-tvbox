@@ -481,6 +481,29 @@ class RepairDiagnosticsTest {
     }
 
     @Test
+    void playerValueCorrespondenceKeepsRelativeEmbeddedPathsAndRequiresTheSampledPlayerCalls() throws Exception {
+        var observed = evidence(sha, "R01", "PLAYER_URL_INVALID");
+        var contract = ((ObjectNode) observed.at("/loaderValidation/nodes/0")).putObject("playerContract")
+                .put("detailCallId", 5).put("playCallId", 7);
+        observed.withObject("loaderValidation").set("calls", ManagedResourceEvidenceTest.playerCalls(mapper));
+        observed.set("httpObservations", ManagedResourceEvidenceTest.jsonEvents(mapper));
+        observed.set("resourceEvidence", ManagedResourceEvidenceTest.playerFixture(mapper, sha));
+        String before = observed.toString();
+        var report = diagnostics.forRepair(repair(observed), List.of());
+        var correspondence = report.at("/findings/0/playerValueEvidence");
+        assertEquals(1, correspondence.path("matches").size());
+        var match = correspondence.path("matches").get(0);
+        assertEquals(mapper.readTree("[\"data\"]"), match.path("path"));
+        assertEquals(mapper.readTree("[\"url\"]"), match.path("embeddedPath"));
+        assertEquals("percent_decode", match.at("/playerValueMatches/returnedUrl").asText());
+        assertFalse(correspondence.path("failureCauseEstablished").asBoolean(true));
+        assertFalse(report.path("acceptanceChanged").asBoolean());
+        assertEquals(before, observed.toString());
+        contract.put("playCallId", 8);
+        assertFalse(diagnostics.forRepair(repair(observed), List.of()).at("/findings/0").has("playerValueEvidence"));
+    }
+
+    @Test
     void missingImportsAreRuntimeDependenciesRatherThanGuessedSourceFailures() {
         var evidence = evidence(sha, "S06", "LOADER_METHOD_FAILED");
         ((ObjectNode) evidence.path("loaderValidation").path("nodes").get(0)).put("failureType", "ModuleNotFoundError");

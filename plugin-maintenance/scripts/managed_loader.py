@@ -39,7 +39,24 @@ JSON_STATUS_VALUES = {"ok", "success", "error", "failed", "failure", "unauthoriz
                       "login_required", "token_expired", "pending"}
 
 
-def json_structure(body, *, embedded=True):
+def player_value_matches(value, targets):
+    if not isinstance(value, str) or not value or len(value) > 8192 or not targets:
+        return {}
+    variants = {"exact": value}
+    if "%" in value:
+        variants["percent_decode"] = unquote(value)
+    if re.fullmatch(r"[A-Za-z0-9_+/-]+={0,2}", value):
+        try:
+            variants["base64_decode"] = base64.b64decode(
+                value + "=" * (-len(value) % 4), altchars=b"-_", validate=True).decode("utf-8")
+        except (ValueError, UnicodeError):
+            pass
+    return {role: next(kind for kind, decoded in variants.items() if decoded == target)
+            for role, target in targets.items() if isinstance(target, str) and target
+            and any(decoded == target for decoded in variants.values())}
+
+
+def json_structure(body, *, embedded=True, player_values=None):
     """Describe the observed wrapper without copying payloads, credentials or message text."""
     try:
         value = json.loads(body)
@@ -84,8 +101,11 @@ def json_structure(body, *, embedded=True):
                              "json_like" if value.lstrip().startswith(("{", "[")) else
                              "hex_like" if len(value) >= 16 and re.fullmatch(r"[a-fA-F0-9]+", value) else
                              "base64_like" if len(value) >= 16 and re.fullmatch(r"[A-Za-z0-9_+/-]+={0,2}", value) else "text")
+            matches = player_value_matches(value, player_values)
+            if matches:
+                node["playerValueMatches"] = matches
             if embedded and embedded_count < 3 and node["shape"] == "json_like" and node["byteLength"] <= 8192:
-                decoded = json_structure(value, embedded=False)
+                decoded = json_structure(value, embedded=False, player_values=player_values)
                 if decoded is not None:
                     node["embeddedJson"] = decoded
                     embedded_count += 1
@@ -176,12 +196,15 @@ def resource_excerpts(body, page=False, *, playback=False):
             or ([(1, 0, body[:6000])] if playback else []))
 
 
-def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C09", player_page=None):
+def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C09", player_page=None,
+                              player_values=None):
     value = {"schemaVersion": 1, "authority": "host_public_resource_observed",
              "artifactSha256": source_sha, "targetNode": target_node, "image": image,
              "resources": [], "failures": [], "textByteLimit": MAX_RESOURCE_TEXT,
              "fetchLimit": MAX_RESOURCE_FETCHES, "sourceCodeExecuted": False,
              "businessVerdictTrusted": False}
+    if player_values is not None:
+        value["playerContext"] = {key: player_values[key] for key in ("detailCallId", "playCallId")}
     entries = getattr(broker, "policy", {}).get("resourceEvidence", {}).get("entryUrls", [])
     fetch = getattr(broker, "fetch_resource", None)
     snapshot = getattr(broker, "snapshot_resources", lambda: [])()
@@ -216,7 +239,13 @@ def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C0
             mime = next((v.split(";", 1)[0].strip().lower() for k, v in response.get("headers", {}).items()
                          if k.lower() == "content-type"), "")
             is_json = mime == "application/json" or mime.endswith("+json") or body.lstrip().startswith((b"{", b"["))
-            structure = json_structure(body) if is_json else None
+            call = response.get("observedDuringCall", {})
+            matched_call = player_values is not None and any(
+                call.get("id") == player_values[key] and call.get("method") == method
+                for key, method in (("detailCallId", "detail"), ("playCallId", "play")))
+            targets = ({key: player_values[key] for key in ("selectedIdentifier", "returnedUrl")}
+                       if matched_call else None)
+            structure = json_structure(body, player_values=targets) if is_json else None
             require(not (is_json or method == "POST") or structure is not None, "RESOURCE_JSON_UNAVAILABLE")
             require(response["status"] != 200 or parent is None
                     or not body.lstrip().lower().startswith((b"<!doctype", b"<html")),
@@ -876,11 +905,14 @@ class Loader:
                             playbackContract=playback_contract)
         if selection and player_requested:
             contract = {}
+            player_values = None
             try:
                 player = document((yield from self.invoke("play", {"flag": selection[0], "play": selection[1]})))
                 contract = player_contract(player)
                 contract["playerContract"] = player_output_contract(player, selection[1], detail_call_id,
                                                                      self.calls[-1]["id"])
+                player_values = {"detailCallId": detail_call_id, "playCallId": self.calls[-1]["id"],
+                                 "selectedIdentifier": selection[1], "returnedUrl": player.get("url")}
                 self.summary["playerUrlKind"] = (
                     contract["playerRouteKind"] if contract["playerRouteKind"] in {"http", "https", "absent"}
                     else "other")
@@ -909,11 +941,14 @@ class Loader:
                     if not direct and self.resource_evidence is None:
                         self.resource_evidence = collect_resource_evidence(
                             self.broker, self.source_sha, target_node="R01",
-                            player_page={"url": url, "headers": headers})
+                            player_page={"url": url, "headers": headers}, player_values=player_values)
                     require(direct, "PLAYER_EXTERNAL_PARSER_REQUIRED")
                     self.summary.update(playerUrlKind=parsed.scheme, playerParse="direct")
                     self.record("R01", "pass", "SELECTED_PLAY_ID_TO_DIRECT_PLAYER_CONTRACT", **contract)
             except (Invalid, ValueError, TypeError) as error:
+                if self.resource_evidence is None and player_values is not None:
+                    self.resource_evidence = collect_resource_evidence(
+                        self.broker, self.source_sha, target_node="R01", player_values=player_values)
                 self.record("R01", "blocked", str(error) if isinstance(error, Invalid) else "PLAYER_OUTPUT_INVALID",
                             **contract)
                 player = None

@@ -76,6 +76,22 @@ test('Cloudflare explicit denial is not presented as a waiting challenge', () =>
   assert.equal(view.requests.length, 0)
 })
 
+test('player value correspondence displays nested field paths and conversions without payloads', () => {
+  const view = panel()
+  const finding = { contractObservations: { playerContract: { playCallId: 7 } },
+    playerValueEvidence: { truncated: true, matches: [{ path: ['data', 'list', 0, 'resData'],
+      embeddedPath: [0, 'url'], observedDuringCall: { id: 5, method: 'detail' },
+      playerValueMatches: { selectedIdentifier: 'exact', returnedUrl: 'percent_decode', rawUrl: 'PRIVATE' } }] } }
+  const before = JSON.stringify(finding)
+  const label = view.contractLabel(finding)
+  assert.match(label, /调用 #5 响应字段 \$\.data\.list\[0\]\.resData → JSON\$\[0\]\.url/)
+  assert.match(label, /选集标识原值相同、返回地址百分号解码后相同（非因果证明）/)
+  assert.match(label, /响应字段采样不完整/)
+  assert.ok(!label.includes('PRIVATE'))
+  assert.equal(JSON.stringify(finding), before)
+  assert.equal(view.requests.length, 0)
+})
+
 test('transport details preserve request and address attempts without inventing action attribution', () => {
   const view = panel()
   assert.equal(view.transportLabel({ requestNumber: 2, addressIndex: 1, stage: 'tls_handshake',

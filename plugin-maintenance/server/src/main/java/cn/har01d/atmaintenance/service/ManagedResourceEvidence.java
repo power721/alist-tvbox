@@ -27,12 +27,12 @@ final class ManagedResourceEvidence {
     }
 
     ObjectNode project(JsonNode input, String sourceSha, JsonNode events, JsonNode calls) throws IOException {
-        require(fields(input, Set.of("schemaVersion", "authority", "artifactSha256", "targetNode", "image",
+        var inputFields = new HashSet<>(Set.of("schemaVersion", "authority", "artifactSha256", "targetNode", "image",
                     "resources", "failures", "textByteLimit", "fetchLimit", "sourceCodeExecuted",
-                    "businessVerdictTrusted", "collectionStatus", "textBytes"))
-                || fields(input, Set.of("schemaVersion", "authority", "artifactSha256", "targetNode", "image",
-                    "resources", "failures", "textByteLimit", "fetchLimit", "sourceCodeExecuted",
-                    "businessVerdictTrusted", "collectionStatus")));
+                    "businessVerdictTrusted", "collectionStatus"));
+        if (input.has("textBytes")) inputFields.add("textBytes");
+        if (input.has("playerContext")) inputFields.add("playerContext");
+        require(fields(input, inputFields));
         require(number(input.path("schemaVersion"), 1, 1)
                 && input.path("authority").asText().equals("host_public_resource_observed")
                 && input.path("artifactSha256").asText().equals(sourceSha)
@@ -45,6 +45,17 @@ final class ManagedResourceEvidence {
                     .contains(input.path("collectionStatus").asText())
                 && input.path("resources").isArray() && input.path("failures").isArray()
                 && input.path("resources").size() + input.path("failures").size() <= 8);
+        JsonNode playerContext = input.path("playerContext");
+        if (input.has("playerContext")) {
+            require(input.path("targetNode").asText().equals("R01")
+                    && fields(playerContext, Set.of("detailCallId", "playCallId"))
+                    && number(playerContext.path("detailCallId"), 1, 32)
+                    && number(playerContext.path("playCallId"), playerContext.path("detailCallId").asInt() + 1, 32));
+            for (String method : Set.of("detail", "play"))
+                require(calls.isArray() && calls.valueStream().anyMatch(call ->
+                        call.path("id").equals(playerContext.path(method + "CallId"))
+                            && method.equals(call.path("method").asText()) && flag(call, "ok", true)));
+        }
         JsonNode image = input.path("image");
         if (!input.path("targetNode").asText().equals("C09")) {
             require(image.isNull());
@@ -84,7 +95,11 @@ final class ManagedResourceEvidence {
                 require(row.has("responseStatus") && row.path("excerpts").isEmpty()
                         && Set.of("GET", "POST").contains(row.path("requestMethod").asText())
                         && !row.has("discoveredFromCall"));
-                validateStructure(row.path("jsonStructure"));
+                JsonNode call = row.path("observedDuringCall");
+                boolean playerValues = Set.of("detail", "play").contains(call.path("method").asText())
+                        && playerContext.has(call.path("method").asText() + "CallId")
+                        && call.path("id").equals(playerContext.path(call.path("method").asText() + "CallId"));
+                validateStructure(row.path("jsonStructure"), true, playerValues);
                 textBytes += compactJson.writeValueAsBytes(row.path("jsonStructure")).length;
                 require(textBytes <= 18000);
             }
@@ -141,11 +156,7 @@ final class ManagedResourceEvidence {
                     : event.path("responseStatus").equals(row.path(status))));
     }
 
-    private void validateStructure(JsonNode structure) throws IOException {
-        validateStructure(structure, true);
-    }
-
-    private void validateStructure(JsonNode structure, boolean embedded) throws IOException {
+    private void validateStructure(JsonNode structure, boolean embedded, boolean playerValues) throws IOException {
         require(fields(structure, Set.of("nodes", "truncated")) && structure.path("truncated").isBoolean()
                 && structure.path("nodes").isArray() && !structure.path("nodes").isEmpty()
                 && structure.path("nodes").size() <= 48 && compactJson.writeValueAsBytes(structure).length <= 2048);
@@ -184,7 +195,17 @@ final class ManagedResourceEvidence {
                     require(embedded && "json_like".equals(node.path("shape").asText())
                             && number(node.path("byteLength"), 0, 8192));
                     names.add("embeddedJson");
-                    validateStructure(node.path("embeddedJson"), false);
+                    validateStructure(node.path("embeddedJson"), false, playerValues);
+                }
+                if (node.has("playerValueMatches")) {
+                    names.add("playerValueMatches");
+                    JsonNode matches = node.path("playerValueMatches");
+                    require(playerValues && number(node.path("byteLength"), 1, 32768)
+                            && matches.isObject() && !matches.isEmpty() && matches.size() <= 2);
+                    for (var match : matches.properties())
+                        require(Set.of("selectedIdentifier", "returnedUrl").contains(match.getKey())
+                                && match.getValue().isTextual()
+                                && Set.of("exact", "percent_decode", "base64_decode").contains(match.getValue().asText()));
                 }
             }
             if (node.has("safeValue")) {

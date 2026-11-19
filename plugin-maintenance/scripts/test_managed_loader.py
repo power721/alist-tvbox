@@ -76,6 +76,68 @@ def drive(transform=lambda c, v: v, *, ready=True, profile=None, jsonl=False, so
 
 
 class LoaderTest(unittest.TestCase):
+    def test_player_values_match_response_fields_and_one_standard_conversion_without_values(self):
+        import base64
+        raw = "https://media.example/PRIVATE?token=PRIVATE"
+        structure = json_structure(json.dumps({
+            "plain": raw, "encoded": "https%3A%2F%2Fmedia.example%2FPRIVATE%3Ftoken%3DPRIVATE",
+            "binary": base64.b64encode(raw.encode()).decode(),
+            "resData": json.dumps([{"url": "opaque_PRIVATE"}]),
+            "cookie": raw, "secret": {"url": raw}, "unrelated": "different_PRIVATE",
+        }), player_values={"selectedIdentifier": "opaque_PRIVATE", "returnedUrl": raw})
+        nodes = {tuple(node["path"]): node for node in structure["nodes"]}
+        self.assertEqual({"returnedUrl": "exact"}, nodes[("plain",)]["playerValueMatches"])
+        self.assertEqual({"returnedUrl": "percent_decode"}, nodes[("encoded",)]["playerValueMatches"])
+        self.assertEqual({"returnedUrl": "base64_decode"}, nodes[("binary",)]["playerValueMatches"])
+        inner = nodes[("resData",)]["embeddedJson"]["nodes"][-1]
+        self.assertEqual([0, "url"], inner["path"])
+        self.assertEqual({"selectedIdentifier": "exact"}, inner["playerValueMatches"])
+        for key in ("cookie", "secret", "unrelated"):
+            self.assertNotIn("playerValueMatches", nodes[(key,)])
+        self.assertNotIn("PRIVATE", json.dumps(structure))
+        self.assertLessEqual(len(json.dumps(structure, separators=(",", ":")).encode()), 2048)
+
+    def test_invalid_player_collects_value_correspondence_only_from_its_detail_and_play_calls(self):
+        import base64
+        broker = Broker()
+        calls = [{"id": 5, "method": "detail", "inputSha256": "b" * 64},
+                 {"id": 7, "method": "play", "inputSha256": "c" * 64},
+                 {"id": 4, "method": "category", "inputSha256": "d" * 64}]
+        broker.snapshot_resources = lambda: [
+            ("https://reader.example/api/" + str(call["id"]), {"status": 200, "requestMethod": "GET",
+             "headers": {"Content-Type": "application/json"},
+             "body": base64.b64encode(b'{"url":"opaque_PRIVATE"}').decode(), "observedDuringCall": call})
+            for call in calls]
+        with patch("test_managed_loader.Broker", return_value=broker):
+            loader, nodes = drive(lambda call, value: {"url": "opaque_PRIVATE"}
+                                  if call["method"] == "play" else value,
+                                  profile={"schemaVersion": 1, "requiredNodes": ["S06", "R01"]})
+        resource = loader.resource_evidence
+        contract = nodes["R01"]["playerContract"]
+        self.assertEqual("PLAYER_URL_INVALID", nodes["R01"]["reason"])
+        self.assertEqual({key: contract[key] for key in ("detailCallId", "playCallId")}, resource["playerContext"])
+        # Use the actual loader call ids, not the fixture's unrelated intervals.
+        matched = collect_resource_evidence(broker, "a" * 64, target_node="R01", player_values={
+            "detailCallId": 5, "playCallId": 7,
+            "selectedIdentifier": "opaque_PRIVATE", "returnedUrl": "opaque_PRIVATE"})
+        for row in matched["resources"]:
+            leaf = row["jsonStructure"]["nodes"][1]
+            if row["observedDuringCall"]["method"] == "category":
+                self.assertNotIn("playerValueMatches", leaf)
+            else:
+                self.assertEqual({"selectedIdentifier": "exact", "returnedUrl": "exact"}, leaf["playerValueMatches"])
+        self.assertNotIn("PRIVATE", json.dumps(matched))
+        import os
+        if os.environ.get("MAINTENANCE_PLAYER_VALUE_REPLAY"):
+            from pathlib import Path
+            events = [{"method": row["requestMethod"], "requestUrlSha256": row["urlSha256"],
+                       "responseSha256": row["responseSha256"], "responseBytes": row["responseBytes"],
+                       "responseStatus": row["responseStatus"], "responseComplete": True}
+                      for row in matched["resources"]]
+            Path(os.environ["MAINTENANCE_PLAYER_VALUE_REPLAY"]).write_text(json.dumps({
+                "resourceEvidence": matched, "httpObservations": events,
+                "calls": [{**call, "ok": True} for call in calls]}), encoding="utf-8")
+
     def test_player_url_shapes_recognize_transport_forms_without_exposing_values(self):
         import base64
         cases = [

@@ -950,6 +950,9 @@ class ModelClientTest {
             after.putObject("playerContract").put("detailCallId", 5).put("playCallId", 7)
                     .put("returnedUrlShape", "base64_encoded_url").put("returnedUrlMatchesIdentifier", true)
                     .put("rawUrl", "PRIVATE");
+            runtime.set("resourceEvidence", ManagedResourceEvidenceTest.playerFixture(mapper, candidate.sha256()));
+            runtime.set("httpObservations", ManagedResourceEvidenceTest.jsonEvents(mapper));
+            runtime.withObject("loaderValidation").set("calls", ManagedResourceEvidenceTest.playerCalls(mapper));
             result.putObject("runtimeAcceptance").putArray("nodes").addObject()
                     .put("id", "R01").put("status", "blocked").put("reason", "PLAYER_URL_INVALID");
             for (boolean enhanced : List.of(false, true)) {
@@ -961,6 +964,9 @@ class ModelClientTest {
                         .path("contractObservations").path("playerContract");
                 assertEquals("base64_encoded_url", observed.path("returnedUrlShape").asText());
                 assertTrue(observed.path("returnedUrlMatchesIdentifier").asBoolean());
+                var diagnostic = data.path(enhanced ? "enhancedDiagnostics" : "repairDiagnostics");
+                assertEquals("percent_decode", diagnostic.at(
+                        "/findings/0/playerValueEvidence/matches/0/playerValueMatches/returnedUrl").asText());
                 assertFalse(request.contains("PRIVATE"));
             }
         } finally { client.close(); }

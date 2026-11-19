@@ -77,6 +77,53 @@ class ManagedResourceEvidenceTest {
         return events;
     }
 
+    static ObjectNode playerFixture(ObjectMapper mapper, String sha) throws Exception {
+        var value = jsonFixture(mapper, sha);
+        value.putObject("playerContext").put("detailCallId", 5).put("playCallId", 7);
+        var structure = value.path("resources").get(0).path("jsonStructure");
+        var leaf = (ObjectNode) structure.path("nodes").get(2);
+        leaf.put("shape", "json_like");
+        var embedded = leaf.putObject("embeddedJson").put("truncated", false).putArray("nodes");
+        embedded.addObject().put("type", "object").put("size", 1).putArray("path");
+        var url = embedded.addObject().put("type", "string").put("byteLength", 55).put("shape", "text");
+        url.putArray("path").add("url");
+        url.putObject("playerValueMatches").put("selectedIdentifier", "exact").put("returnedUrl", "percent_decode");
+        value.put("textBytes", mapper.writeValueAsBytes(structure).length);
+        return value;
+    }
+
+    static com.fasterxml.jackson.databind.node.ArrayNode playerCalls(ObjectMapper mapper) {
+        var calls = mapper.createArrayNode();
+        calls.addObject().put("id", 5).put("method", "detail").put("ok", true).put("inputSha256", "5".repeat(64));
+        calls.add(((ObjectNode) jsonCalls(mapper).get(0)).deepCopy().put("ok", true));
+        return calls;
+    }
+
+    @Test
+    void playerValueMatchesRequireSuccessfulExactCallContextAndRedactedStringFields() throws Exception {
+        var value = playerFixture(mapper, "a".repeat(64));
+        var host = new ManagedResourceEvidence(mapper);
+        assertEquals(value, host.project(value, "a".repeat(64), jsonEvents(mapper), playerCalls(mapper)));
+        for (String defect : List.of("context", "order", "failed", "call", "role", "transform", "private")) {
+            var bad = value.deepCopy();
+            var calls = playerCalls(mapper);
+            var row = (ObjectNode) bad.path("resources").get(0);
+            var field = (ObjectNode) row.at("/jsonStructure/nodes/2/embeddedJson/nodes/1");
+            switch (defect) {
+                case "context" -> bad.remove("playerContext");
+                case "order" -> bad.withObject("playerContext").put("detailCallId", 7);
+                case "failed" -> ((ObjectNode) calls.get(0)).put("ok", false);
+                case "call" -> row.withObject("observedDuringCall").put("id", 5).put("method", "detail")
+                        .put("inputSha256", "7".repeat(64));
+                case "role" -> field.withObject("playerValueMatches").put("rawUrl", "exact");
+                case "transform" -> field.withObject("playerValueMatches").put("returnedUrl", "eval");
+                case "private" -> field.putArray("path").add("accessToken");
+            }
+            bad.put("textBytes", mapper.writeValueAsBytes(row.path("jsonStructure")).length);
+            assertThrows(IOException.class, () -> host.project(bad, "a".repeat(64), jsonEvents(mapper), calls), defect);
+        }
+    }
+
     @Test
     void projectsOnlyHttpAndActionBoundJsonStructureWithoutRawValues() throws Exception {
         var value = jsonFixture(mapper, "a".repeat(64));
@@ -157,6 +204,18 @@ class ManagedResourceEvidenceTest {
         var value = replay.path("resourceEvidence");
         assertEquals(value, new ManagedResourceEvidence(mapper).project(value, "a".repeat(64),
                 replay.path("httpObservations"), replay.path("calls")));
+        assertFalse(value.toString().contains("PRIVATE"));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "maintenance.player-values-replay", matches = ".+")
+    void pythonPlayerValueProducerProjectsThroughTheJavaHostUnchanged() throws Exception {
+        var replay = mapper.readTree(Files.readAllBytes(Path.of(System.getProperty("maintenance.player-values-replay"))));
+        var value = replay.path("resourceEvidence");
+        assertEquals(value, new ManagedResourceEvidence(mapper).project(value, "a".repeat(64),
+                replay.path("httpObservations"), replay.path("calls")));
+        assertTrue(value.has("playerContext"));
+        assertTrue(value.toString().contains("playerValueMatches"));
         assertFalse(value.toString().contains("PRIVATE"));
     }
 

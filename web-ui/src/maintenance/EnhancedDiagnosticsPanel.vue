@@ -23,6 +23,8 @@ interface Diagnostic {
     executionPhase?: string; networkDenials?: { denialIndex: number; method: string; code: string }[]
     httpEvidence?: { calls: { id: number; method: string; statusCounts: Record<string, number> }[] }
     regression?: { field: string; before: number; after: number }
+    playerValueEvidence?: { truncated: boolean; matches: { path: (string | number)[]; embeddedPath?: (string | number)[]
+      observedDuringCall: ObservedCall; playerValueMatches: Record<string, string> }[] }
     accessClassification?: string; accessAssociation?: string; requestDiagnostic?: { reason: string; headerName: string }
     contractObservations?: { identityEvidence?: Record<string, boolean>; firstItems?: number; secondItems?: number
       pagesObserved?: number; playerRouteKind?: string; offlineResolverRequired?: boolean
@@ -58,6 +60,7 @@ const materials: Record<string, string> = {
   bound_resource_evidence: '可关联到本次请求的资源证据',
   public_response_structure: '页面或接口结构证据',
   current_input_receipt: '当前版本的运行报告',
+  player_value_correspondence: '选集或返回地址与接口字段的匹配证据',
   action_http_association: '错误响应与具体动作的关联证据'
 }
 function findingLabel(finding: Diagnostic['findings'][number]) {
@@ -162,6 +165,18 @@ function contractLabel(finding: Diagnostic['findings'][number]) {
     if (player.hasWhitespace === true) parts.push('含空白或控制字符')
     if (player.hasFragment === true) parts.push('含地址片段')
   }
+  const roles: Record<string, string> = { selectedIdentifier: '选集标识', returnedUrl: '返回地址' }
+  const conversions: Record<string, string> = { exact: '原值相同', percent_decode: '百分号解码后相同',
+    base64_decode: 'Base64 解码后相同' }
+  const pathLabel = (path: (string | number)[]) => '$' + path.map(key =>
+    typeof key === 'number' ? `[${key}]` : `.${key}`).join('')
+  for (const match of finding.playerValueEvidence?.matches || []) {
+    const field = pathLabel(match.path) + (match.embeddedPath ? ` → JSON${pathLabel(match.embeddedPath)}` : '')
+    const matches = Object.entries(match.playerValueMatches).filter(([role, conversion]) => roles[role] && conversions[conversion])
+      .map(([role, conversion]) => `${roles[role]}${conversions[conversion]}`).join('、')
+    if (matches) parts.push(`调用 #${match.observedDuringCall.id} 响应字段 ${field}：${matches}（非因果证明）`)
+  }
+  if (finding.playerValueEvidence?.truncated) parts.push('响应字段采样不完整')
   return parts.join('；')
 }
 function accessPageLabel(page: NonNullable<Diagnostic['accessPage']>) {

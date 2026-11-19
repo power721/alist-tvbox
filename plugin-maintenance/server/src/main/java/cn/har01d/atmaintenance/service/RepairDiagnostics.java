@@ -287,6 +287,7 @@ public class RepairDiagnostics {
         result.put("loaderReceiptMatched", verified);
         boolean structure = false;
         JsonNode resources = mapper.createArrayNode();
+        JsonNode playerContext = mapper.missingNode();
         ObjectNode access = null;
         if (verified && evidence.has("resourceEvidence")) {
             try {
@@ -295,6 +296,7 @@ public class RepairDiagnostics {
                         evidence.path("loaderValidation").path("calls"));
                 structure = projected.path("resources").valueStream().anyMatch(row -> !row.path("excerpts").isEmpty());
                 resources = projected.path("resources");
+                playerContext = projected.path("playerContext");
                 structure |= resources.valueStream().anyMatch(row -> row.path("kind").asText().equals("api_json"));
                 access = AccessPageClassifier.classify(mapper, projected);
                 if (access != null) result.set("accessPage", access);
@@ -351,6 +353,13 @@ public class RepairDiagnostics {
                 if (type != null) finding.put("failureType", type);
                 var observations = ManagedLoaderReceipt.contractObservations(mapper, node);
                 if (!observations.isEmpty()) finding.set("contractObservations", observations);
+                if ("R01".equals(id) && !playerContext.isMissingNode()
+                        && playerContext.path("detailCallId").equals(observations.at("/playerContract/detailCallId"))
+                        && playerContext.path("playCallId").equals(observations.at("/playerContract/playCallId"))) {
+                    var values = playerValueEvidence(resources, playerContext);
+                    finding.set("playerValueEvidence", values);
+                    if (values.path("matches").isEmpty()) missing.add("player_value_correspondence");
+                }
                 routes.add(route);
             }
         } else {
@@ -460,6 +469,44 @@ public class RepairDiagnostics {
         for (String route : routes) actions.addObject().put("route", route).put("action", action(route));
         result.put("conclusion", findings.isEmpty() && routes.isEmpty() ? "no_observed_blocker" : "triage_only");
         return result;
+    }
+
+    private ObjectNode playerValueEvidence(JsonNode resources, JsonNode context) {
+        var result = mapper.createObjectNode().put("basis", "observed_response_value_comparison")
+                .put("failureCauseEstablished", false).put("truncated", false);
+        result.set("playerContext", context);
+        var matches = result.putArray("matches");
+        for (JsonNode resource : resources) {
+            JsonNode call = resource.path("observedDuringCall");
+            if (!"api_json".equals(resource.path("kind").asText())
+                    || !Set.of("detail", "play").contains(call.path("method").asText())
+                    || !call.path("id").equals(context.path(call.path("method").asText() + "CallId"))) continue;
+            result.put("truncated", result.path("truncated").asBoolean()
+                    || resource.path("jsonStructure").path("truncated").asBoolean());
+            for (JsonNode node : resource.path("jsonStructure").path("nodes")) {
+                appendPlayerValueMatch(matches, resource, node, null);
+                result.put("truncated", result.path("truncated").asBoolean()
+                        || node.path("embeddedJson").path("truncated").asBoolean());
+                for (JsonNode embedded : node.path("embeddedJson").path("nodes"))
+                    appendPlayerValueMatch(matches, resource, embedded, node.path("path"));
+            }
+        }
+        if (matches.size() > 24) {
+            result.put("truncated", true);
+            while (matches.size() > 24) matches.remove(matches.size() - 1);
+        }
+        return result;
+    }
+
+    private void appendPlayerValueMatch(com.fasterxml.jackson.databind.node.ArrayNode matches,
+                                       JsonNode resource, JsonNode node, JsonNode enclosingPath) {
+        if (!node.has("playerValueMatches")) return;
+        var match = matches.addObject().put("requestMethod", resource.path("requestMethod").asText())
+                .put("responseSha256", resource.path("responseSha256").asText());
+        match.set("observedDuringCall", resource.path("observedDuringCall"));
+        match.set("path", enclosingPath == null ? node.path("path") : enclosingPath);
+        if (enclosingPath != null) match.set("embeddedPath", node.path("path"));
+        match.set("playerValueMatches", node.path("playerValueMatches"));
     }
 
     private void transportDiagnostics(ObjectNode result, JsonNode evidence) {
