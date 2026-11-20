@@ -68,6 +68,7 @@ public class PluginService {
     private final TransactionTemplate transactionTemplate;
     private final SubscriptionSourceService subscriptionSourceService;
     private final GitHubProxyService gitHubProxyService;
+    private final PluginMutationGuard mutationGuard;
 
     @Autowired
     public PluginService(PluginRepository pluginRepository,
@@ -76,7 +77,8 @@ public class PluginService {
                          ObjectMapper objectMapper,
                          TransactionTemplate transactionTemplate,
                          SubscriptionSourceService subscriptionSourceService,
-                         GitHubProxyService gitHubProxyService) {
+                         GitHubProxyService gitHubProxyService,
+                         PluginMutationGuard mutationGuard) {
         this.pluginRepository = pluginRepository;
         this.settingRepository = settingRepository;
         this.restTemplate = builder.build();
@@ -84,6 +86,7 @@ public class PluginService {
         this.transactionTemplate = transactionTemplate;
         this.subscriptionSourceService = subscriptionSourceService;
         this.gitHubProxyService = gitHubProxyService;
+        this.mutationGuard = mutationGuard;
     }
 
     public record ImportResult(
@@ -141,6 +144,7 @@ public class PluginService {
 
         Plugin existing = pluginRepository.findByUrl(url).orElse(null);
         if (existing != null) {
+            existing = mutationGuard.writable(existing.getId());
             applyDownloadedPlugin(existing, downloaded, null, shouldUpdateName(existing));
             existing.setLastCheckedAt(OffsetDateTime.now());
             existing.setLastError("");
@@ -172,6 +176,7 @@ public class PluginService {
     public Plugin upsertWebPage(String url, String fallbackName) {
         Plugin existing = pluginRepository.findByUrl(url).orElse(null);
         if (existing != null) {
+            existing = mutationGuard.writable(existing.getId());
             existing.setLastCheckedAt(OffsetDateTime.now());
             existing.setLastError("");
             return pluginRepository.save(existing);
@@ -213,7 +218,7 @@ public class PluginService {
 
     @Transactional
     public Plugin update(Integer id, Plugin input) {
-        Plugin plugin = pluginRepository.findById(id).orElseThrow(NotFoundException::new);
+        Plugin plugin = mutationGuard.writable(id);
         boolean urlChanged = !StringUtils.equals(plugin.getUrl(), input.getUrl());
         if (urlChanged) {
             validateUrlUniqueness(input.getUrl(), id);
@@ -233,7 +238,7 @@ public class PluginService {
 
     @Transactional
     public Plugin refresh(Integer id) {
-        Plugin plugin = pluginRepository.findById(id).orElseThrow(NotFoundException::new);
+        Plugin plugin = mutationGuard.writable(id);
         // 文件-backed 插件直接从磁盘读取，不发起 HTTP 下载
         if (StringUtils.startsWith(plugin.getUrl(), FILE_PLUGIN_URL_PREFIX)) {
             return refresh(plugin, readFileBackedPlugin(plugin));
@@ -268,7 +273,7 @@ public class PluginService {
             try {
                 Plugin existing = findExistingPlugin(normalizedPluginUrl, entry.externalId());
                 // 用户本地维护的插件(上传的 py / 自定义网页源)即使与仓库条目同 id 也不改写，保持本地版本
-                if (existing != null && isUserManagedPlugin(existing)) {
+                if (existing != null && (isUserManagedPlugin(existing) || mutationGuard.managed(existing.getId()))) {
                     skipped.add(normalizedPluginUrl);
                     continue;
                 }
@@ -292,7 +297,7 @@ public class PluginService {
                 }
                 if (existing != null) {
                     Plugin plugin = transactionTemplate.execute(status -> {
-                        Plugin current = pluginRepository.findById(existing.getId()).orElseThrow(NotFoundException::new);
+                        Plugin current = mutationGuard.writable(existing.getId());
                         current.setUrl(normalizedPluginUrl);
                         return refresh(current, downloadedPlugin, entry.externalId());
                     });
@@ -365,19 +370,15 @@ public class PluginService {
 
     @Transactional
     public void reorder(List<Integer> ids) {
-        List<Plugin> plugins = new ArrayList<>();
         int order = 1;
         for (Integer id : ids) {
-            Plugin plugin = pluginRepository.findById(id).orElseThrow(NotFoundException::new);
-            plugin.setSortOrder(order++);
-            plugins.add(plugin);
+            mutationGuard.reorder(id, order++);
         }
-        pluginRepository.saveAll(plugins);
     }
 
     @Transactional
     public void delete(Integer id) {
-        Plugin plugin = pluginRepository.findById(id).orElseThrow(NotFoundException::new);
+        Plugin plugin = mutationGuard.writable(id);
         pluginRepository.delete(plugin);
         subscriptionSourceService.normalizeSortOrders();
     }
@@ -388,6 +389,8 @@ public class PluginService {
             return 0;
         }
         List<Plugin> plugins = pluginRepository.findAllById(ids);
+        plugins = plugins.stream().sorted(java.util.Comparator.comparing(Plugin::getId))
+                .map(plugin -> mutationGuard.writable(plugin.getId())).toList();
         pluginRepository.deleteAll(plugins);
         subscriptionSourceService.normalizeSortOrders();
         return plugins.size();
@@ -423,7 +426,8 @@ public class PluginService {
     }
 
     private Plugin markRefreshFailure(Integer id, String message) {
-        Plugin plugin = pluginRepository.findById(id).orElseThrow(NotFoundException::new);
+        Plugin plugin = mutationGuard.lock(id);
+        if (mutationGuard.managed(id)) return plugin;
         plugin.setLastError(message);
         plugin.setLastCheckedAt(OffsetDateTime.now());
         return pluginRepository.save(plugin);
@@ -437,7 +441,7 @@ public class PluginService {
             return;
         }
         transactionTemplate.execute(status -> {
-            Plugin plugin = pluginRepository.findById(existing.getId()).orElseThrow(NotFoundException::new);
+            Plugin plugin = mutationGuard.writable(existing.getId());
             if (urlChanged) {
                 plugin.setUrl(url);
             }
@@ -772,7 +776,7 @@ public class PluginService {
         return StringUtils.appendIfMissing(proxy, "/") + url;
     }
 
-    static boolean isPythonPluginUrl(String url) {
+    public static boolean isPythonPluginUrl(String url) {
         String trimmed = StringUtils.trimToEmpty(url);
         try {
             return StringUtils.endsWithIgnoreCase(URI.create(trimmed).getPath(), ".py");

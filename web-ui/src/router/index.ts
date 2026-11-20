@@ -35,6 +35,12 @@ const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
   linkActiveClass: 'is-active',
   routes: [
+    ...(import.meta.env.VITE_MAINTENANCE_EMBEDDED === 'true' ? [{
+      path: '/maintenance',
+      name: 'maintenance',
+      component: () => import('@/views/MaintenanceView.vue'),
+      meta: {auth: true}
+    }] : []),
     {
       path: '/',
       name: 'home',

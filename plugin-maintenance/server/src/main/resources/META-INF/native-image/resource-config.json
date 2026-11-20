@@ -1,0 +1,11 @@
+{
+  "resources": {
+    "includes": [
+      { "pattern": "application\\.yaml" },
+      { "pattern": "db/migration/.*" },
+      { "pattern": "knowledge/.*" },
+      { "pattern": "worker/.*" },
+      { "pattern": "static/.*" }
+    ]
+  }
+}

@@ -19,6 +19,7 @@ const full = ref(localStorage.getItem('full_view') == 'true')
 const mounted = ref(false)
 const showNotification = ref(true)
 const mobileMenuOpen = ref(false)
+const maintenanceEmbedded = import.meta.env.VITE_MAINTENANCE_EMBEDDED === 'true'
 
 const logout = () => {
   accountService.logout()
@@ -89,6 +90,7 @@ onMounted(() => {
           <el-menu-item index="/accounts" v-if="account.authenticated && show">账号</el-menu-item>
           <el-menu-item index="/bilibili" v-if="account.authenticated && full && store.admin">BiliBili</el-menu-item>
           <el-menu-item index="/subscriptions" v-if="account.authenticated">订阅</el-menu-item>
+          <el-menu-item index="/maintenance" v-if="maintenanceEmbedded && account.authenticated && store.admin">源维护</el-menu-item>
           <el-menu-item index="/shares" v-if="account.authenticated && show && full && store.admin">资源</el-menu-item>
           <el-menu-item index="/config" v-if="account.authenticated && store.admin">配置</el-menu-item>
           <el-menu-item index="/acl" v-if="account.authenticated && full && store.admin">ACL</el-menu-item>
@@ -130,6 +132,7 @@ onMounted(() => {
           <el-menu-item index="/accounts" v-if="account.authenticated && show" @click="navigate('/accounts')">账号</el-menu-item>
           <el-menu-item index="/bilibili" v-if="account.authenticated && full && store.admin" @click="navigate('/bilibili')">BiliBili</el-menu-item>
           <el-menu-item index="/subscriptions" v-if="account.authenticated" @click="navigate('/subscriptions')">订阅</el-menu-item>
+          <el-menu-item index="/maintenance" v-if="maintenanceEmbedded && account.authenticated && store.admin" @click="navigate('/maintenance')">源维护</el-menu-item>
           <el-menu-item index="/shares" v-if="account.authenticated && show && full && store.admin" @click="navigate('/shares')">资源</el-menu-item>
           <el-menu-item index="/config" v-if="account.authenticated && store.admin" @click="navigate('/config')">配置</el-menu-item>
           <el-menu-item index="/acl" v-if="account.authenticated && full && store.admin" @click="navigate('/acl')">ACL</el-menu-item>

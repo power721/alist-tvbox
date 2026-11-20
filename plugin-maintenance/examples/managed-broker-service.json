@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "root": "/absolute/installed/broker",
+  "runtimeRoot": "/absolute/installed/module",
+  "instanceId": "00000000-0000-4000-8000-000000000001",
+  "imageId": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "bundleSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "egressPolicyFile": "/absolute/installed/egress-policy.json",
+  "egressPolicySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "httpImageId": null
+}

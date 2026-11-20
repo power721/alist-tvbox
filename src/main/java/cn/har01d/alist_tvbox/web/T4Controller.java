@@ -57,7 +57,7 @@ import java.util.Set;
  *  分类   GET api?ac=detail&t={tid}&pg={页}&ext={base64UrlSafe(JSON筛选值)}
  *  详情   GET api?ac=detail&ids={id}
  *  搜索   GET api?wd={词}&quick={bool}&pg={页}(pg&gt;1 才带)
- *  播放   GET api?play={id}&flag={线路}(flag 忽略,线路由 id 自描述)
+ *  播放   GET api?play={id}&flag={线路}(内置源 id 自描述,插件 flag 透传)
  * 响应为 spider Result JSON(与 type 3 spider 返回同构)。
  *
  * TG/盘搜族详情依赖条目标题兜底(spring.jar 端为爬虫 titleCache):本层以响应旁路捕获
@@ -177,14 +177,15 @@ public class T4Controller {
         subscriptionService.checkToken(token);
         // URL 路径段不带 csp_ 前缀(applyT4 生成口径);带前缀的旧形态兼容
         String siteKey = site.startsWith("csp_") ? site : "csp_" + site;
+        String flag = request.getParameter("flag");
+        Plugin plugin = null;
         if (!SubscriptionService.T4_SITE_KEYS.contains(siteKey)) {
             // 插件源(服务端 Python 运行时,PluginWorkerService);运行时不可用则 404。
             // T4 不可见插件(订阅源管理「T4」开关)同样 404:配置不出现,直连五动作也不可达
-            Plugin plugin = findPluginBySiteKey(site);
+            plugin = findPluginBySiteKey(site);
             if (plugin == null || !plugin.isT4Visible() || !pluginWorkerService.isAvailable()) {
                 throw new NotFoundException();
             }
-            return pluginVod(token, pathToken, plugin, site, t, ids, wd, quick, play, ext, pg);
         }
         // JSON POST 形态(部分壳子):查询/表单参数全缺位时从 JSON body 取参
         if (StringUtils.isAllBlank(t, ids, wd, play, ext) && pg == null) {
@@ -197,9 +198,15 @@ public class T4Controller {
                 quick = body.get("quick");
                 play = body.get("play");
                 ext = body.get("ext");
+                if (StringUtils.isBlank(flag)) {
+                    flag = body.get("flag");
+                }
                 String page = body.get("pg");
                 pg = page == null ? null : parseInt(page);
             }
+        }
+        if (plugin != null) {
+            return pluginVod(token, pathToken, plugin, site, t, ids, wd, quick, play, flag, ext, pg);
         }
         log.info("t4 site: {}  t: {}  ids: {}  wd: {}  play: {}  page: {}", siteKey, t, ids, wd, play, pg);
         boolean quickSearch = Boolean.parseBoolean(quick);
@@ -238,7 +245,7 @@ public class T4Controller {
 
     /** 插件源(服务端 Python 运行时)五动作:extend 服务端自建,worker 返回原样透传。 */
     private Object pluginVod(String token, String pathToken, Plugin plugin, String site,
-                             String t, String ids, String wd, String quick, String play, String ext, Integer pg)
+                             String t, String ids, String wd, String quick, String play, String flag, String ext, Integer pg)
             throws IOException {
         String extend = t4PluginExtend(token, plugin);
         Map<String, Object> params = new HashMap<>();
@@ -246,6 +253,7 @@ public class T4Controller {
         if (StringUtils.isNotBlank(play)) {
             method = "play";
             params.put("play", play);
+            params.put("flag", StringUtils.defaultString(flag));
             // 红果密文流等需服务端解密的场景:worker 把 #hg-cenc= URL 改写为此桥下地址;
             // 自定义 raw 插件自起的 127.0.0.1 流代理(hgtv.py 类)由 worker 改写为 /lp/{port}/ 桥地址
             // (嵌 pathToken:T4 专用 token 形态下桥地址仍是 T4 面,不泄漏 vod token)
@@ -257,6 +265,7 @@ public class T4Controller {
             method = "search";
             params.put("wd", wd);
             params.put("quick", Boolean.parseBoolean(quick));
+            params.put("pg", String.valueOf(pg == null ? 1 : pg));
         } else if (StringUtils.isNotBlank(t)) {
             method = "category";
             params.put("t", t);
@@ -307,18 +316,7 @@ public class T4Controller {
 
     /** 服务端 worker 的插件 extend:复用 buildPluginExtPayload,剔除设备端专属字段。 */
     private String t4PluginExtend(String token, Plugin plugin) throws IOException {
-        String base = subscriptionService.readHostAddress("");
-        Map<String, Object> payload = SubscriptionService.buildPluginExtPayload(plugin, base,
-                token, token, "", false, null);
-        // local_proxy_config 置空:Atvp._play 不带 client-proxy(T4 客户端无本地代理);
-        // preheatUrl 是设备端预热清单,worker 无此缓存目录。
-        // t4_play_type=T4 播放身份:t4(全代理)=直连带 Cookie 的夸克/UC 强制 /p 且 Cookie/multiUrls
-        // 不下发;t4-direct(直连优先策略)=无凭证屏障盘直链直出省带宽(TvBoxService 判定)
-        payload.remove("local_proxy_config");
-        payload.remove("preheatUrl");
-        payload.put("t4_play_type", "direct".equals(appProperties.getT4ProxyMode()) ? "t4-direct" : "t4");
-        return java.util.Base64.getEncoder()
-                .encodeToString(objectMapper.writeValueAsString(payload).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return subscriptionService.buildT4PluginExtend(plugin, token, appProperties.getT4ProxyMode());
     }
 
     /** 配置站点 key → 插件(pluginSiteKey 反查:externalId 优先,回落 plugin-{id})。 */

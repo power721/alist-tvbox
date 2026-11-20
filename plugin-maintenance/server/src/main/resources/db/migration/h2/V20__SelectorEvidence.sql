@@ -1,0 +1,1 @@
+ALTER TABLE maintenance_repair_candidate ADD COLUMN selector_evidence_json TEXT;

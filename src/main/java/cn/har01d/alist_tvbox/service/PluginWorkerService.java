@@ -12,6 +12,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -51,6 +52,9 @@ public class PluginWorkerService {
     private final com.fasterxml.jackson.databind.ObjectWriter compactWriter;
     private final ConcurrentHashMap<String, Worker> workers = new ConcurrentHashMap<>();
     private final AtomicReference<Boolean> available = new AtomicReference<>();
+    private final java.util.Set<String> maintenance = new java.util.HashSet<>();
+    @Autowired(required = false)
+    private List<PluginWorkerAdmission> admissions = List.of();
 
     private volatile Path workerScript;
     private volatile Path atvpScript;
@@ -128,16 +132,143 @@ public class PluginWorkerService {
      * 返回插件的原始 JSON(home/category/detail/search/play 均为 TVBox Result 形态)。
      */
     public JsonNode call(String siteKey, String extend, String method, Map<String, Object> params) {
-        if (!isAvailable()) {
-            throw new BadGatewayException("服务端插件运行时不可用(未安装 python3)");
+        Worker worker;
+        synchronized (workers) {
+            requireAdmission(siteKey);
+            if (!isAvailable()) {
+                throw new BadGatewayException("服务端插件运行时不可用(未安装 python3)");
+            }
+            worker = acquire(siteKey, extend);
+            worker.activeCalls++;
+            if ("play".equals(method)) worker.playIssued = true;
         }
-        Worker worker = acquire(siteKey, extend);
         try {
             return worker.request(method, params, CALL_TIMEOUT);
         } catch (WorkerDeadException e) {
             workers.remove(siteKey, worker);
             worker.close();
             throw new BadGatewayException("插件进程异常退出: " + siteKey);
+        } finally {
+            synchronized (workers) { worker.activeCalls--; }
+        }
+    }
+
+    /** Reads the last completed loader receipt without starting, calling or refreshing a worker. */
+    public JsonNode runtimeStatus(String siteKey, String desiredExtend) {
+        ObjectNode status = objectMapper.createObjectNode();
+        status.put("remoteFreshness", "not_checked");
+        status.put("configurationCompared", desiredExtend != null);
+        boolean maintenanceBlocked = blocked(siteKey);
+        Worker worker = workers.get(siteKey);
+        if (worker == null || !worker.alive()) {
+            return status.put("configurationState", maintenanceBlocked ? "maintenance_blocked" : "not_running");
+        }
+        JsonNode identity = worker.loadedIdentity;
+        if (identity == null) {
+            return status.put("configurationState", maintenanceBlocked ? "maintenance_blocked" : "identity_unverified");
+        }
+        status.set("identity", identity.deepCopy());
+        if (maintenanceBlocked) return status.put("configurationState", "maintenance_blocked");
+        String state = desiredExtend == null ? "loaded"
+                : textSha256(desiredExtend).equals(identity.path("extendSha256").asText())
+                ? "matching" : "pending_restart";
+        return status.put("configurationState", state);
+    }
+
+    private boolean blocked(String siteKey) {
+        synchronized (workers) {
+            return maintenance.contains(siteKey) || admissions.stream().anyMatch(policy -> policy.blocked(siteKey));
+        }
+    }
+
+    private void requireAdmission(String siteKey) {
+        if (blocked(siteKey)) throw new IllegalStateException("AT_WORKER_MAINTENANCE_BLOCKED");
+    }
+
+    /** An explicit window may interrupt issued playback; normal calls cannot enter while it is held. */
+    public MaintenanceWindow openMaintenance(String siteKey, String expectedGeneration, boolean interruptPlayback) {
+        synchronized (workers) {
+            if (maintenance.contains(siteKey)) throw new IllegalStateException("AT_WORKER_MAINTENANCE_BUSY");
+            Worker worker = workers.get(siteKey);
+            boolean alive = worker != null && worker.alive();
+            String generation = alive && worker.loadedIdentity != null
+                    ? worker.loadedIdentity.path("generationId").asText() : null;
+            if (!java.util.Objects.equals(expectedGeneration, generation))
+                throw new IllegalStateException("AT_WORKER_GENERATION_CHANGED");
+            if (alive && worker.activeCalls > 0) throw new IllegalStateException("AT_WORKER_CALL_BUSY");
+            if (alive && (worker.activeForwards > 0 || worker.playIssued) && !interruptPlayback)
+                throw new IllegalStateException("AT_PLAYBACK_INTERRUPTION_CONFIRMATION_REQUIRED");
+            maintenance.add(siteKey);
+            return new MaintenanceWindow(siteKey);
+        }
+    }
+
+    public final class MaintenanceWindow implements AutoCloseable {
+        private final String siteKey;
+        private boolean closed;
+
+        private MaintenanceWindow(String siteKey) { this.siteKey = siteKey; }
+
+        public JsonNode identity() {
+            synchronized (workers) {
+                requireOpen();
+                Worker worker = workers.get(siteKey);
+                return worker == null || !worker.alive() || worker.loadedIdentity == null
+                        ? null : worker.loadedIdentity.deepCopy();
+            }
+        }
+
+        public void stop() {
+            synchronized (workers) {
+                requireOpen();
+                Worker old = workers.get(siteKey);
+                if (old != null && !old.closeAndWait())
+                    throw new IllegalStateException("AT_WORKER_RETIREMENT_UNCONFIRMED");
+                if (old != null) workers.remove(siteKey, old);
+            }
+        }
+
+        public JsonNode load(String extend, String expectedSourceSha256) {
+            synchronized (workers) {
+                requireOpen();
+                if (workers.containsKey(siteKey)) throw new IllegalStateException("AT_WORKER_NOT_RETIRED");
+                if (!isAvailable()) throw new IllegalStateException("AT_WORKER_UNAVAILABLE");
+                Worker replacement = new Worker(siteKey);
+                try {
+                    replacement.init(extend);
+                    if (!expectedSourceSha256.equals(replacement.loadedIdentity.path("sourceTextSha256").asText()))
+                        throw new IllegalStateException("AT_WORKER_SOURCE_IDENTITY_MISMATCH");
+                    workers.put(siteKey, replacement);
+                    return replacement.loadedIdentity.deepCopy();
+                } catch (RuntimeException e) {
+                    if (!replacement.closeAndWait()) {
+                        workers.put(siteKey, replacement);
+                        throw new IllegalStateException("AT_WORKER_CLEANUP_UNCONFIRMED");
+                    }
+                    throw e;
+                }
+            }
+        }
+
+        private void requireOpen() {
+            if (closed || !maintenance.contains(siteKey)) throw new IllegalStateException("AT_MAINTENANCE_WINDOW_CLOSED");
+        }
+
+        @Override
+        public void close() {
+            synchronized (workers) {
+                maintenance.remove(siteKey);
+                closed = true;
+            }
+        }
+    }
+
+    private static String textSha256(String text) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest((text == null ? "" : text).getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
         }
     }
 
@@ -167,10 +298,16 @@ public class PluginWorkerService {
      */
     public void forward(String siteKey, String pathAndQuery,
                         HttpServletRequest request, HttpServletResponse response) throws IOException {
-        Worker worker = workers.get(siteKey);
-        if (worker == null || !worker.alive()) {
-            throw new BadGatewayException("插件代理服务未运行: " + siteKey);
+        Worker worker;
+        synchronized (workers) {
+            requireAdmission(siteKey);
+            worker = workers.get(siteKey);
+            if (worker == null || !worker.alive()) {
+                throw new BadGatewayException("插件代理服务未运行: " + siteKey);
+            }
+            worker.activeForwards++;
         }
+        try {
         int port = worker.localPort();
         if (port <= 0) {
             throw new BadGatewayException("插件代理服务未启动(无 CENC 会话): " + siteKey);
@@ -202,6 +339,9 @@ public class PluginWorkerService {
             }
             log.debug("t4 cenc forward aborted: {}", e.toString());
         }
+        } finally {
+            synchronized (workers) { worker.activeForwards--; }
+        }
     }
 
     @Scheduled(fixedDelay = 300_000)
@@ -209,15 +349,18 @@ public class PluginWorkerService {
         if (workers.isEmpty()) {
             return;
         }
+        synchronized (workers) {
         workers.entrySet().removeIf(entry -> {
             Worker worker = entry.getValue();
-            if (worker.idleFor().compareTo(IDLE_TIMEOUT) > 0) {
+            if (!maintenance.contains(entry.getKey()) && worker.activeCalls == 0 && worker.activeForwards == 0
+                    && worker.idleFor().compareTo(IDLE_TIMEOUT) > 0) {
                 worker.close();
                 log.debug("t4 plugin worker evicted: {}", entry.getKey());
                 return true;
             }
             return false;
         });
+        }
     }
 
     /**
@@ -289,6 +432,10 @@ public class PluginWorkerService {
         private OutputStream stdin;
         private BufferedReader stdout;
         private volatile Instant lastUsed = Instant.now();
+        private volatile JsonNode loadedIdentity;
+        private int activeCalls;
+        private int activeForwards;
+        private boolean playIssued;
 
         Worker(String siteKey) {
             this.siteKey = siteKey;
@@ -310,7 +457,23 @@ public class PluginWorkerService {
             }
             try {
                 // Atvp init 含密文下载+解密+inner 装载,超时单独放宽
-                request("init", Map.of("extend", extend == null ? "" : extend), INIT_TIMEOUT);
+                JsonNode initialized = request("init", Map.of("extend", extend == null ? "" : extend), INIT_TIMEOUT);
+                JsonNode identity = initialized == null ? null : initialized.get("identity");
+                if (identity == null || !identity.path("schemaVersion").isIntegralNumber()
+                        || !identity.path("schemaVersion").canConvertToInt()
+                        || identity.path("schemaVersion").asInt() != 1
+                        || !"worker_loader_observed".equals(identity.path("authority").asText())
+                        || !textSha256(extend).equals(identity.path("extendSha256").asText())
+                        || !identity.path("generationId").asText().matches("[0-9a-f]{32}")) {
+                    throw new BadGatewayException("插件装载身份回执无效");
+                }
+                for (String field : List.of("packageTextSha256", "sourceTextSha256", "workerSha256", "atvpSha256")) {
+                    if (!identity.path(field).isTextual()
+                            || !identity.path(field).asText().matches("[0-9a-f]{64}")) {
+                        throw new BadGatewayException("插件装载身份回执缺少哈希");
+                    }
+                }
+                loadedIdentity = identity.deepCopy();
                 log.info("t4 plugin worker started: {}", siteKey);
             } catch (RuntimeException e) {
                 int exitValue = process.isAlive() ? -1 : process.exitValue();
@@ -422,6 +585,16 @@ public class PluginWorkerService {
             Process current = process;
             if (current != null) {
                 current.destroyForcibly();
+            }
+        }
+
+        boolean closeAndWait() {
+            close();
+            if (process == null) return true;
+            try { return process.waitFor(5, TimeUnit.SECONDS); }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
             }
         }
     }

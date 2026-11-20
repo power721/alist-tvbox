@@ -1,0 +1,7 @@
+ARG SOURCE_IMAGE
+FROM ${SOURCE_IMAGE}
+USER 0
+COPY requirements.txt /opt/at-maintenance/requirements.txt
+COPY wheels/ /opt/at-maintenance/dependency-wheels/
+RUN python -m pip install --disable-pip-version-check --no-cache-dir --no-index --no-deps --find-links=/opt/at-maintenance/dependency-wheels -r /opt/at-maintenance/requirements.txt
+USER 65532:65532

@@ -17,6 +17,7 @@ Python 3.10+(Alpine 3.21 自带 3.12)。
 """
 import ast
 import contextlib
+import hashlib
 import json
 import os
 import secrets
@@ -50,6 +51,83 @@ sys.modules["base.spider"] = _base_spider
 
 _spider = None
 _category_filter_json = False
+_loaded_identity = None
+_observed_package_sha256 = None
+_observed_source_sha256 = None
+_observed_filter_instances = {}
+_atvp_compile_sha256 = None
+_generation_id = secrets.token_hex(16)
+with open(__file__, "rb") as _worker_file:
+    _worker_startup_sha256 = hashlib.sha256(_worker_file.read()).hexdigest()
+
+
+def _text_sha256(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _json_sha256(value):
+    return _text_sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+
+
+def _install_identity_probe(spider_cls):
+    # Observe the existing loader, without downloading or executing a second time.
+    original_package = spider_cls._load_source
+    original_inner = spider_cls._load_inner_spider_class
+    original_filter_source = spider_cls._load_filter_source
+    original_filter_instance = spider_cls._load_filter_instance
+
+    def package(instance, source):
+        global _observed_package_sha256
+        text = original_package(instance, source)
+        _observed_package_sha256 = _text_sha256(text)
+        return text
+
+    def inner(instance, source_text):
+        global _observed_source_sha256
+        result = original_inner(instance, source_text)
+        _observed_source_sha256 = _text_sha256(source_text)
+        return result
+
+    def filter_source(instance, source):
+        text = original_filter_source(instance, source)
+        instance._worker_filter_source_sha256 = _text_sha256(text)
+        return text
+
+    def filter_instance(instance, source, index):
+        instance._worker_filter_source_sha256 = None
+        result = original_filter_instance(instance, source, index)
+        _observed_filter_instances[id(result)] = (index, instance._worker_filter_source_sha256)
+        return result
+
+    spider_cls._load_source = package
+    spider_cls._load_inner_spider_class = inner
+    spider_cls._load_filter_source = filter_source
+    spider_cls._load_filter_instance = filter_instance
+
+
+def _build_loaded_identity(extend):
+    payload = _spider._decode_ext_payload(extend)
+    configured = payload.get("filters") if isinstance(payload, dict) else None
+    valid = configured is None or isinstance(configured, list)
+    loaded = {}
+    for item in _spider._filters:
+        index, source_sha = _observed_filter_instances[id(item["instance"])]
+        loaded[index] = source_sha
+    filters = [
+        {"index": index, "configurationSha256": _json_sha256(entry),
+         "state": "loaded" if index in loaded else "not_loaded", "sourceSha256": loaded.get(index)}
+        for index, entry in enumerate(configured if isinstance(configured, list) else [], start=1)
+    ]
+    return {
+        "schemaVersion": 1, "authority": "worker_loader_observed",
+        "generationId": _generation_id, "extendSha256": _text_sha256(extend),
+        "packageTextSha256": _observed_package_sha256,
+        "sourceTextSha256": _observed_source_sha256,
+        "workerSha256": _worker_startup_sha256, "atvpSha256": _atvp_compile_sha256,
+        "filtersConfigSha256": _json_sha256(configured), "filterConfigurationValid": valid,
+        "filters": filters,
+        "allConfiguredFiltersLoaded": valid and all(item["state"] == "loaded" for item in filters),
+    }
 
 # ---- worker 本地 HTTP 服务:CENC 解密代理(/cenc)+ 爬虫自起服务反代(/lp),Java 侧 /t4cenc 桥转发 ----
 _CENC_CHUNK = 256 * 1024
@@ -324,16 +402,18 @@ def _quiet_stdout():
 
 
 def _load_atvp():
-    global _spider
+    global _spider, _atvp_compile_sha256
     module = types.ModuleType("t4_atvp")
     module.__file__ = ATVP_PATH
     with open(ATVP_PATH, "rb") as handle:
         code = handle.read()
+    _atvp_compile_sha256 = hashlib.sha256(code).hexdigest()
     exec(compile(code, ATVP_PATH, "exec"), module.__dict__)
     spider_cls = getattr(module, "Spider", None)
     if spider_cls is None:
         raise RuntimeError("Atvp.py does not export Spider")
     _install_filter_probe(spider_cls)
+    _install_identity_probe(spider_cls)
     _spider = spider_cls()
     fallback = getattr(module, "_FallbackSpider", None)
     if fallback is not None:
@@ -425,6 +505,7 @@ def _normalize_result(method, result):
 
 
 def handle(method, params):
+    global _loaded_identity
     if method == "ping":
         return {"status": "ready"}
     if method == "port":
@@ -440,11 +521,32 @@ def handle(method, params):
         with _quiet_stdout():
             result = _invoke("init", extend)
             name = _invoke("getName")
-        return {"result": result, "name": name}
+        _loaded_identity = _build_loaded_identity(extend)
+        return {"result": result, "name": name, "identity": _loaded_identity}
 
     if method == "home":
         with _quiet_stdout():
-            return _invoke("homeContent", bool(params.get("filter", True)))
+            def home_object(value, callback):
+                if isinstance(value, str):
+                    value = json.loads(value)
+                    if _spider._category_mode_enabled():
+                        value = _spider._normalize_category_content(value)
+                if value is not None and not isinstance(value, dict):
+                    raise ValueError(callback + " must return an object or null")
+                if value is not None and value.get("list") is not None and not isinstance(value["list"], list):
+                    raise ValueError(callback + " list must be an array or null")
+                return value
+
+            home = home_object(_invoke("homeContent", bool(params.get("filter", True))), "homeContent")
+            result = dict(home) if home is not None else {}
+            inner = _spider._require_inner()
+            if getattr(inner, "homeVideoContent", None) is not None:
+                video = home_object(_invoke("homeVideoContent"), "homeVideoContent")
+                if video is not None and video.get("list") is not None:
+                    result["list"] = video["list"]
+            if result.get("list") is None:
+                result["list"] = []
+            return result
     if method == "category":
         with _quiet_stdout():
             return _invoke("categoryContent", str(params.get("t") or ""), str(params.get("pg") or "1"),

@@ -1,0 +1,6 @@
+ARG SOURCE_IMAGE
+FROM ${SOURCE_IMAGE}
+USER 0
+COPY modules/ /opt/at-maintenance/source-modules/
+RUN python -I -c "import pathlib,shutil,sysconfig; root=pathlib.Path('/opt/at-maintenance/source-modules'); target=pathlib.Path(sysconfig.get_path('purelib')); [shutil.copyfile(module,target/module.name) for module in root.glob('*.py')]"
+USER 65532:65532
