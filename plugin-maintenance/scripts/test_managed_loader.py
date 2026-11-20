@@ -8,7 +8,7 @@ from unittest.mock import patch
 import at_source_projection as projection
 from managed_loader import (Loader, Invalid, decode_image, source_identity, validate_source_identity,
                             collect_resource_evidence, resource_links, resource_excerpts, MAX_RESOURCE_TEXT)
-from managed_loader import json_structure, digest, player_url_shape
+from managed_loader import json_structure, digest, player_url_shape, playlist_observation
 
 SOURCE = b"class Spider: pass\n"
 RUNTIME = "a" * 64
@@ -76,6 +76,204 @@ def drive(transform=lambda c, v: v, *, ready=True, profile=None, jsonl=False, so
 
 
 class LoaderTest(unittest.TestCase):
+    def test_complete_indexed_playlists_match_all_groups_without_recommendation_links(self):
+        page = (b'<div id="playlist1"><div><a href="/play/1?a=1&amp;b=2">one</a></div>'
+                b'<a href="/play/2">two</a><script>var x="<div>";</script></div>'
+                b'<!-- <div id="playlist3"><a href="/fake">fake</a></div> -->'
+                b'<div id="playlist2"><a href="/play/3">three</a></div>'
+                b'<section><a href="/recommendation">not an episode</a></section>')
+        raw = {"list": [{**card(), "vod_play_from": "a$$$b",
+                         "vod_play_url": "one$/play/1?a=1&b=2#two$https://example.com/play/2$$$three$/play/3"}]}
+        observed = playlist_observation(page, "https://example.com/detail/1", raw)
+        self.assertTrue(observed["complete"])
+        self.assertTrue(observed["outputMatchesPage"])
+        self.assertEqual([2, 1], observed["groupEpisodeCounts"])
+        self.assertEqual(2, observed["maxEpisodes"])
+        self.assertEqual({"pageUniqueLinks": 3, "outputUniqueLinks": 3, "missingPageLinks": 0,
+                          "extraOutputLinks": 0}, observed["linkCoverage"])
+        self.assertNotIn("/play/", json.dumps(observed))
+        for changed in ("one$/play/1?a=1&b=2$$$three$/play/3",
+                        "one$/play/1?a=1&b=2#two$/play/2",
+                        "one$/play/1?a=1&b=2#two$/play/2#extra$/recommendation$$$three$/play/3"):
+            raw["list"][0]["vod_play_url"] = changed
+            self.assertFalse(playlist_observation(page, "https://example.com/detail/1", raw)["outputMatchesPage"])
+
+    def test_partial_nested_duplicate_or_invalid_indexed_playlists_cannot_prove_coverage(self):
+        raw = {"list": [{**card(), "vod_play_url": "one$/play/1"}]}
+        for page in (b'<div id="playlist1"><a href="/play/1">one</a>',
+                     b'<div id="playlist1"><div id="playlist2"><a href="/play/1">one</a></div></div>',
+                     b'<div id="playlist1"><a href="/play/1">one</a></div><div id="playlist1"></div>',
+                     b'<div id="playlist1"><a href="">one</a></div>',
+                     b'<div id="playlist1"><a href="javascript:play()">one</a></div>'):
+            with self.subTest(page=page):
+                observed = playlist_observation(page, "https://example.com/", raw)
+                self.assertFalse(observed["complete"])
+                self.assertFalse(observed["outputMatchesPage"])
+
+    def test_identical_responsive_links_do_not_hide_a_missing_real_playback_link(self):
+        page = (b'<div id="playlist1"><a href="/play/1">one</a></div>'
+                b'<div id="playlist11"><a href="/play/1">one</a></div>'
+                b'<div id="playlist2"><a href="/play/2">two</a></div>')
+        raw = {"list": [{**card(), "vod_play_url": "one$/play/1$$$two$/play/2"}]}
+        observed = playlist_observation(page, "https://example.com/", raw)
+        self.assertFalse(observed["outputMatchesPage"])
+        self.assertEqual(0, observed["linkCoverage"]["missingPageLinks"])
+        self.assertEqual(2, observed["linkCoverage"]["pageUniqueLinks"])
+        raw["list"][0]["vod_play_url"] = "one$/play/1"
+        self.assertEqual(1, playlist_observation(page, "https://example.com/", raw)
+                         ["linkCoverage"]["missingPageLinks"])
+        raw["list"][0]["vod_play_url"] = "one$opaque-packed-id"
+        self.assertNotIn("linkCoverage", playlist_observation(page, "https://example.com/", raw))
+
+    def test_detail_resources_survive_later_actions_without_additional_requests(self):
+        import base64
+
+        def set_call(broker, call):
+            if call is not None:
+                broker.current = call
+
+        def snapshot(broker):
+            call = broker.current
+            if call["method"] != "detail":
+                return []
+            body = (b"<html>" + b"header " * 2000 + b'<div id="playlist1"><a href="/play/1">one</a></div>'
+                    + b"footer " * 2000 + b"</html>")
+            return [("https://example.com/detail/" + str(call["id"]), {
+                "status": 200, "headers": {"Content-Type": "text/html"},
+                "body": base64.b64encode(body).decode(), "observedDuringCall": call})]
+
+        with patch.object(Broker, "set_source_call", set_call, create=True), \
+                patch.object(Broker, "snapshot_resources", snapshot, create=True), \
+                patch.object(Broker, "fetch_resource", side_effect=AssertionError("unexpected fetch"), create=True):
+            loader, nodes = drive(profile={"schemaVersion": 1, "requiredNodes": ["S06", "C07", "R01"]})
+        self.assertEqual("pass", nodes["R01"]["status"])
+        evidence = loader.content_resource_evidence
+        self.assertEqual("C10", evidence["targetNode"])
+        self.assertTrue(evidence["resources"])
+        for row in evidence["resources"]:
+            self.assertEqual("detail", row["observedDuringCall"]["method"])
+            self.assertIn('id="playlist1"', row["excerpts"][0]["text"])
+            call = loader.calls[row["observedDuringCall"]["id"] - 1]
+            self.assertEqual(call["inputSha256"], row["observedDuringCall"]["inputSha256"])
+        self.assertLessEqual(evidence["textBytes"], 8 * 2048)
+        self.assertEqual(evidence["textBytes"], sum(len(excerpt["text"].encode())
+                         for row in evidence["resources"] for excerpt in row["excerpts"])
+                         + sum(len(json.dumps(row["playlistObservation"], separators=(",", ":")).encode())
+                               for row in evidence["resources"] if "playlistObservation" in row))
+
+    def test_cached_action_resource_selection_does_not_fetch_unrelated_entries(self):
+        import base64
+        broker = Broker()
+        broker.policy = {"resourceEvidence": {"entryUrls": ["https://example.com/"]}}
+        rows = []
+        for ident, method in ((8, "detail"), (9, "category"), (17, "play")):
+            rows.append(("https://example.com/" + str(ident), {
+                "status": 200, "headers": {}, "body": base64.b64encode(b"<html>observed</html>").decode(),
+                "observedDuringCall": {"id": ident, "method": method, "inputSha256": "a" * 64}}))
+        broker.snapshot_resources = lambda: rows
+        broker.fetch_resource = lambda *args: self.fail("cache capture must never perform HTTP")
+        value = collect_resource_evidence(broker, "b" * 64, target_node="C10", cached_calls={8}, text_budget=2048)
+        self.assertEqual([8], [row["observedDuringCall"]["id"] for row in value["resources"]])
+        self.assertFalse(value["failures"])
+
+    def test_partial_progress_keeps_completed_content_but_never_claims_acceptance(self):
+        loader, _ = drive(profile={"schemaVersion": 1, "requiredNodes": ["S06", "C09"]})
+        progress = loader.partial_progress()
+        self.assertFalse(progress["fullAcceptance"])
+        self.assertEqual(digest({"schemaVersion": 1, "requiredNodes": ["S06", "C09"]}), progress["profileSha256"])
+        self.assertEqual(loader.receipt()["contentSnapshot"], progress["contentSnapshot"])
+        self.assertEqual(len(loader.calls), len(progress["completedCalls"]))
+        self.assertTrue(all(set(call) == {"id", "method", "ok", "inputSha256", "outputSha256"}
+                            for call in progress["completedCalls"]))
+        self.assertNotIn("image.example.com", json.dumps(progress))
+        loader.content_sampled = False
+        self.assertNotIn("contentSnapshot", loader.partial_progress())
+        loader.calls[-1].update(ok=False, failureType="ValueError", failureContext={"sourceLine": 27}, message="PRIVATE")
+        call = loader.partial_progress()["completedCalls"][-1]
+        self.assertEqual("ValueError", call["failureType"])
+        self.assertEqual({"sourceLine": 27}, call["failureContext"])
+        self.assertNotIn("PRIVATE", json.dumps(call))
+
+    def test_content_snapshot_samples_all_categories_and_actual_episodes_not_card_badges(self):
+        def transform(call, value):
+            if call["method"] == "home":
+                return {"class": [{"type_id": name, "type_name": name} for name in ("a", "b", "c")]}
+            if call["method"] == "category":
+                ident = call["params"]["t"]
+                size = {"a": 20, "b": 1, "c": 0}[ident]
+                return {"page": 1, "pagecount": 1, "list": [
+                    {**card(ident + str(index)), "vod_remarks": "1集"} for index in range(size)]}
+            if call["method"] == "detail" and call["params"]["ids"]:
+                return {"list": [{**card(call["params"]["ids"]), "vod_play_from": "line1$$$line2",
+                    "vod_play_url": "$$$".join(["#".join("ep%d$id%d" % (n, n) for n in range(12))] * 2)}]}
+            return value
+        loader, _ = drive(transform, profile={"schemaVersion": 1, "paginationMode": "page-window",
+                                              "requiredNodes": ["S06", "C09"]})
+        snapshot = loader.receipt()["contentSnapshot"]
+        self.assertTrue(snapshot["allCategoriesSampled"])
+        rows = {row["categoryIdSha256"]: row for row in snapshot["categories"]}
+        self.assertEqual([20, 1, 0], [rows[digest(name)]["firstItems"] for name in ("a", "b", "c")])
+        for name in ("a", "b"):
+            self.assertEqual(12, rows[digest(name)]["detail"]["episodes"])
+            self.assertEqual(2, rows[digest(name)]["detail"]["groups"])
+            self.assertEqual(1, rows[digest(name)]["detail"]["listedEpisodes"])
+        self.assertNotIn("detail", rows[digest("c")])
+        self.assertEqual("empty", rows[digest("c")]["status"])
+        self.assertEqual(3, sum(call["method"] == "category" for call in loader.calls))
+        self.assertNotIn("image.example.com", json.dumps(snapshot))
+
+    def test_content_snapshot_cached_parse_failure_keeps_original_call_reference(self):
+        for method in ("category", "detail"):
+            with self.subTest(method=method):
+                loader = Loader(SOURCE, RUNTIME, Broker(),
+                                {"schemaVersion": 1, "requiredNodes": ["C07"]})
+                call_id = 1 if method == "category" else 2
+                loader.calls = [{"id": 1, "method": "category"}]
+                if method == "detail":
+                    loader.calls.append({"id": 2, "method": "detail"})
+                loader.calls.append({"id": call_id + 1, "method": "search"})
+                loader.content_pages["cat"] = ({"list": [card()]}, 1)
+                if method == "category":
+                    loader.content_pages["cat"] = ({"list": None}, 1)
+                else:
+                    loader.content_details["item-1"] = ({"list": [{**card(), "vod_play_from": "flag",
+                                                                   "vod_play_url": "episode$"}]}, call_id)
+                self.assertEqual([], list(loader.sample_content(answer({"method": "home", "params": {}}))))
+                row = loader.content_snapshot["categories"][0]
+                observed = row if method == "category" else row["detail"]
+                self.assertEqual("error", observed["status"])
+                self.assertEqual(call_id, observed[method + "CallId"])
+                self.assertEqual(method, loader.calls[observed[method + "CallId"] - 1]["method"])
+
+    def test_content_snapshot_new_call_failure_references_failed_call(self):
+        for method in ("category", "detail"):
+            with self.subTest(method=method):
+                loader = Loader(SOURCE, RUNTIME, Broker(),
+                                {"schemaVersion": 1, "requiredNodes": ["C07"]})
+                loader.calls = [{"id": 1, "method": "search" if method == "category" else "category"}]
+                if method == "detail":
+                    loader.content_pages["cat"] = ({"list": [card()]}, 1)
+                loader.iterator = loader.sample_content(answer({"method": "home", "params": {}}))
+                command = loader.next()
+                self.assertEqual(method, command["method"])
+                self.assertEqual({"kind": "finish"}, loader.accept({
+                    "kind": "call_result", "id": command["id"], "ok": False, "code": "ValueError"}))
+                row = loader.content_snapshot["categories"][0]
+                observed = row if method == "category" else row["detail"]
+                self.assertEqual("error", observed["status"])
+                self.assertEqual(command["id"], observed[method + "CallId"])
+                self.assertFalse(loader.calls[observed[method + "CallId"] - 1]["ok"])
+
+    def test_content_snapshot_is_bounded_and_reports_incomplete_category_coverage(self):
+        loader, _ = drive(lambda call, value: {"class": [
+            {"type_id": str(index), "type_name": str(index)} for index in range(30)]}
+            if call["method"] == "home" else value,
+            profile={"schemaVersion": 1, "requiredNodes": ["S06", "C01"]})
+        snapshot = loader.receipt()["contentSnapshot"]
+        self.assertEqual(30, snapshot["declaredCategories"])
+        self.assertEqual(12, len(snapshot["categories"]))
+        self.assertFalse(snapshot["allCategoriesSampled"])
+
     def test_player_values_match_response_fields_and_one_standard_conversion_without_values(self):
         import base64
         raw = "https://media.example/PRIVATE?token=PRIVATE"
@@ -439,6 +637,68 @@ class LoaderTest(unittest.TestCase):
                 else:
                     self.assertNotIn("failureType", node)
                     self.assertNotIn("PRIVATE_SECRET", json.dumps(loader.receipt()))
+
+    def test_unusable_init_result_keeps_bounded_shape_and_does_not_advance(self):
+        loader = Loader(SOURCE, RUNTIME, Broker())
+        command = loader.next()
+        finish = loader.accept({"kind": "call_result", "id": command["id"], "ok": True,
+                                "result": "<html><title>Just a moment...</title></html>"})
+        self.assertEqual("finish", finish["kind"])
+        node = loader.receipt()["nodes"][0]
+        self.assertEqual("LOADER_INIT_FAILED", node["reason"])
+        self.assertEqual({"stage": "init_identity", "resultShape": "html", "namePresent": False},
+                         node["initObservation"])
+        self.assertEqual(["init"], [call["method"] for call in loader.calls])
+
+    def test_optional_name_does_not_replace_the_preexecution_source_identity(self):
+        for name in (None, "", "  ", "fixture"):
+            with self.subTest(name=name):
+                loader, nodes = drive(lambda call, value: {"name": name, "result": None}
+                                      if call["method"] == "init" else value,
+                                      profile={"schemaVersion": 1, "requiredNodes": ["S06", "C01"]})
+                self.assertEqual("pass", nodes["S06"]["status"])
+                self.assertEqual("pass", nodes["C01"]["status"])
+                self.assertEqual(bool(name and name.strip()), nodes["S06"]["initObservation"]["namePresent"])
+                self.assertIn("home", [call["method"] for call in loader.calls])
+        _, nodes = drive(ready=False)
+        self.assertEqual("blocked", nodes["S06"]["status"])
+        for value in ({"name": "fixture"}, {"result": None}, {"name": 3, "result": None}):
+            _, nodes = drive(lambda call, answer: value if call["method"] == "init" else answer)
+            self.assertEqual("blocked", nodes["S06"]["status"])
+
+    def test_failure_context_accepts_only_the_fixed_host_stage(self):
+        from managed_loader import failure_context
+        self.assertEqual({"hostStage": "atvp_backend_endpoint"},
+                         failure_context({"hostStage": "atvp_backend_endpoint"}))
+        for context in ({"hostStage": "PRIVATE"}, {"hostStage": True}, {"hostStage": None}):
+            with self.subTest(context=context), self.assertRaises(Invalid):
+                failure_context(context)
+
+    def test_magnet_profile_is_explicit_and_excludes_playback_nodes(self):
+        profile = {"schemaVersion": 1, "sourcePurpose": "magnet",
+                   "requiredNodes": ["S06", "C07", "R01"]}
+        Loader(SOURCE, RUNTIME, Broker(), profile)
+        for nodes in (["S06"], ["S06", "M01"], ["S06", "P01"]):
+            with self.subTest(nodes=nodes), self.assertRaisesRegex(Invalid, "LOADER_PROFILE_INVALID"):
+                Loader(SOURCE, RUNTIME, Broker(), {**profile, "requiredNodes": nodes})
+
+    def test_failed_call_keeps_only_bounded_numeric_context(self):
+        context = {"sourceLine": 27, "errno": 38}
+        loader = Loader(SOURCE, RUNTIME, Broker())
+        command = loader.next()
+        loader.accept({"kind": "call_result", "id": command["id"], "ok": False,
+                       "code": "OSError", "failureContext": context})
+        self.assertEqual(context, loader.receipt()["nodes"][0]["failureContext"])
+        self.assertEqual(context, loader.calls[0]["failureContext"])
+        context["sourceLine"] = 99
+        self.assertEqual(27, loader.calls[0]["failureContext"]["sourceLine"])
+        for invalid in ({}, {"message": "PRIVATE"}, {"sourceLine": True}, {"sourceLine": 0},
+                        {"sourceLine": 1000001}, {"errno": 4096}, {"errno": "38"}):
+            loader = Loader(SOURCE, RUNTIME, Broker())
+            command = loader.next()
+            with self.subTest(context=invalid), self.assertRaisesRegex(Invalid, "LOADER_FAILURE_CONTEXT_INVALID"):
+                loader.accept({"kind": "call_result", "id": command["id"], "ok": False,
+                               "code": "OSError", "failureContext": invalid})
 
     def test_http_playback_selection_is_a_bounded_frozen_group_not_source_config(self):
         profile = {"schemaVersion": 1, "requiredNodes": ["S06"], "httpPlaybackGroup": 1}
@@ -1205,6 +1465,31 @@ class LoaderTest(unittest.TestCase):
         self.assertEqual(loader.calls[-1]["inputSha256"], node["proxyObservation"]["paramsSha256"])
         self.assertEqual(loader.calls[-1]["outputSha256"], node["proxyObservation"]["resultSha256"])
         self.assertIsNone(loader.resource_evidence)
+
+    def test_direct_cover_retries_through_source_callback_only_after_real_bytes_fail(self):
+        import base64
+        encrypted = b"VHCE" + b"x" * 64
+        body = b"\xff\xd8\xff" + b"x" * 160000 + b"\xff\xd9"
+        broker = Broker()
+        broker.fetch = lambda request: {
+            "status": 200, "headers": {"Content-Type": "image/jpeg"},
+            "body": base64.b64encode(encrypted).decode()
+        }
+        broker.verify_image = lambda value: ({"sha256": "0" * 64, "width": 0, "height": 0}
+                                              if value.startswith(b"VHCE") else
+                                              {"sha256": hashlib.sha256(value).hexdigest(), "width": 2, "height": 2})
+        loader = Loader(SOURCE, RUNTIME, broker, {"schemaVersion": 1, "requiredNodes": ["S06", "C09"]})
+        loader.iterator = loader.sample_image({"vod_pic": "https://image.example.com/encrypted.jpg"})
+        command = loader.next()
+        self.assertEqual("proxy", command["method"])
+        self.assertTrue(command["params"]["target"].startswith("/local?url="))
+        result = {"status": 200, "mime": "image/jpeg", "headers": {}, "bytes": len(body),
+                  "body": base64.b64encode(body).decode(), "sha256": hashlib.sha256(body).hexdigest()}
+        finish = loader.accept({"kind": "call_result", "id": command["id"], "ok": True, "result": result})
+        self.assertEqual("finish", finish["kind"])
+        self.assertEqual("pass", loader.nodes[-1]["status"])
+        self.assertEqual("proxy", loader.calls[-1]["method"])
+        self.assertIn("proxyObservation", loader.nodes[-1])
 
     def test_invalid_callback_body_cannot_be_marked_decoded(self):
         import base64

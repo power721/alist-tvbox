@@ -507,7 +507,10 @@ class BrokerTest(unittest.TestCase):
             self.assertNotIn("evidenceGatewayJson", worker_request)
             self.assertNotIn("private-gateway", json.dumps(mediator.loader_profile))
             self.assertEqual(settings, mediator.runtime_gateway.settings)
-            raise B.S.Failure("ENGINE_TIMEOUT")
+            error = B.S.Failure("ENGINE_TIMEOUT")
+            error.exchange_context = {"phase": "fetch", "lastHttpId": 1, "loaderCallCount": 0,
+                                      "policyDenied": False, "peerExitCode": None}
+            raise error
 
         with patch.object(B.EG, "RuntimeGateway", side_effect=gateway), patch.object(B.G, "acceptance", side_effect=fail):
             broker.handle(request)
@@ -517,6 +520,10 @@ class BrokerTest(unittest.TestCase):
         self.assertEqual("ENGINE_TIMEOUT", row["code"])
         self.assertEqual(B.S.digest(request["evidenceGatewayJson"].encode()), row["evidenceGatewaySettingsSha256"])
         self.assertNotIn("private-gateway", json.dumps(row))
+        summary = row["diagnostics"]["exchangeContext"]["runtimeGateway"]
+        self.assertEqual("trawl", summary["adapter"])
+        self.assertEqual(0, summary["requestCount"])
+        self.assertTrue(summary["cleanupConfirmed"])
         created[0].close.assert_called_once()
         cancel = self.request(broker, "cancel_acceptance")
         cancel["egressPolicySha256"] = broker.egress_sha

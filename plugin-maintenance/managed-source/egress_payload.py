@@ -108,6 +108,7 @@ def main():
         install_loader_observer(worker, commands)
         install_home_merge(worker)
         install_session_proxy(worker)
+        install_failure_observer(worker)
         emit({"kind": "loader_available"})
         # Run the pinned JSONL main, including its ID/error/stdout handling.
         # The bridge retains the binary stream for synchronous broker replies.
@@ -151,12 +152,6 @@ def emit(frame):
     os.write(1, raw + b"\n")
 
 
-def managed_proxy_url(instance, local=True):
-    if local is not True:
-        raise ValueError("MANAGED_PROXY_REMOTE_UNAVAILABLE")
-    return "http://127.0.0.1:9978/proxy?do=py"
-
-
 def rewrite_proxy_url(value):
     url = urlsplit(value)
     if (url.scheme != "http" or url.hostname not in {"127.0.0.1", "localhost"}
@@ -173,13 +168,37 @@ def rewrite_proxy_url(value):
         [(key, val) for key, val in query if key not in {"do", "site", "siteKey"}])
 
 
+def install_failure_observer(worker):
+    original = worker["_protocol_write"]
+
+    def write(frame):
+        error = sys.exc_info()[1]
+        if frame.get("ok") is False and isinstance(error, Exception):
+            context = {}
+            trace = error.__traceback__
+            while trace is not None:
+                if trace.tb_frame.f_code.co_filename == "<atvp-inner>" and 1 <= trace.tb_lineno <= 1000000:
+                    context["sourceLine"] = trace.tb_lineno
+                if (trace.tb_frame.f_code.co_filename == str(ROOT / "runtime/Atvp.py")
+                        and trace.tb_frame.f_code.co_name == "_build_backend_endpoint"
+                        and isinstance(error, ValueError)
+                        and not getattr(trace.tb_frame.f_locals.get("self"), "_backend_api", None)):
+                    context["hostStage"] = "atvp_backend_endpoint"
+                trace = trace.tb_next
+            if isinstance(error, OSError) and type(error.errno) is int and 1 <= error.errno <= 4095:
+                context["errno"] = error.errno
+            if context:
+                frame = {**frame, "error": {**frame["error"], "context": context}}
+        original(frame)
+
+    worker["_protocol_write"] = write
+
+
 def install_loader_observer(worker, stream):
     load = worker["_load_atvp"]
 
     def observed_load():
         load()
-        # The base API creates an address only; callbacks still use the session allowlist.
-        worker["_base_spider"].Spider.getProxyUrl = managed_proxy_url
         cls = type(worker["_spider"])
         inner = cls._load_inner_spider_class
 
@@ -189,10 +208,7 @@ def install_loader_observer(worker, stream):
                   "sourceTextSha256": hashlib.sha256(source_text.encode("utf-8")).hexdigest()})
             if stream.readline(128) != b'{"kind":"loader_ack"}\n':
                 raise ValueError("LOADER_SOURCE_ACK_REQUIRED")
-            spider_class = inner(instance, source_text)
-            if not hasattr(spider_class, "getProxyUrl"):
-                spider_class.getProxyUrl = managed_proxy_url
-            return spider_class
+            return inner(instance, source_text)
         cls._load_inner_spider_class = observed_inner
     worker["_load_atvp"] = observed_load
 

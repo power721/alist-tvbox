@@ -628,6 +628,61 @@ class RuntimeGatewayTest(unittest.TestCase):
             with self.assertRaisesRegex(E.Denied, 'EGRESS_RATE_LIMITED'):
                 broker.fetch(request())
 
+    def test_browser_navigation_headers_reach_gateway_without_becoming_api_headers(self):
+        broker, clients = self.broker(), []
+        broker.runtime_gateway = RuntimeGateway(settings(), E)
+        broker.source_headers.add('accept-encoding')
+        headers = {'Accept': 'text/html', 'Accept-Language': 'zh-CN', 'User-Agent': 'Fixture/1.0',
+                   'Accept-Encoding': 'gzip, deflate, br', 'Connection': 'keep-alive',
+                   'Upgrade-Insecure-Requests': '1', 'DNT': '1', 'Priority': 'u=0, i',
+                   'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate',
+                   'Sec-Fetch-Site': 'none', 'Sec-Fetch-User': '?1',
+                   'Sec-Fetch-Storage-Access': 'none', 'Sec-CH-UA': '"Fixture";v="1"',
+                   'Sec-CH-UA-Mobile': '?0', 'Sec-CH-UA-Platform': '"Windows"'}
+        value = {**request(), 'headers': headers}
+        with patch.object(broker, 'connect', return_value=(self.direct(), 0)), \
+                patch('evidence_gateway.EvidenceGateway', side_effect=self.factory(clients)):
+            result = broker.fetch(value)
+        self.assertFalse(challenge(result))
+        self.assertEqual('response_returned', broker.events[0]['gatewayOutcome'])
+        self.assertNotIn('gatewaySkipReason', broker.events[0])
+        self.assertEqual(1, broker.runtime_gateway.summary()['requestCount'])
+        payload = clients[0].test_calls[1][1]
+        self.assertEqual({'Accept': 'text/html', 'Accept-Language': 'zh-CN'}, payload['headers'])
+        self.assertNotIn('userAgent', payload)
+        self.assertEqual(headers, value['headers'])
+        self.assertTrue(broker.runtime_gateway.close())
+
+    def test_gateway_skip_reasons_are_specific_and_do_not_disclose_request_values(self):
+        credential = {'origin': 'https://fixture.example.com', 'cookie': 'account=PRIVATE', 'authorization': ''}
+        for changes, bound, expected in [
+                ({'method': 'POST'}, None, 'request_method'),
+                ({'body': 'PRIVATE'}, None, 'request_body'),
+                ({}, credential, 'host_credentials'),
+                ({'headers': {'Cookie': ''}}, None, 'request_headers'),
+                ({'headers': {'X-Sign': 'PRIVATE'}}, None, 'request_headers'),
+                ({'headers': {'Range': 'bytes=0-63'}}, None, 'request_headers')]:
+            with self.subTest(expected=expected, changes=changes):
+                broker = self.broker()
+                gateway = RuntimeGateway(settings(), E)
+                broker.runtime_gateway = gateway
+                if bound:
+                    broker.bind_credentials(bound)
+                broker.events.append({'responseContentType': 'text/html'})
+                direct = response()['response']
+                with patch('evidence_gateway.EvidenceGateway', side_effect=AssertionError('must stay idle')):
+                    self.assertIs(direct, gateway.fetch(broker, {**request(), **changes}, direct))
+                self.assertEqual(expected, broker.events[-1]['gatewaySkipReason'])
+                self.assertEqual('request_not_reproducible', broker.events[-1]['gatewayOutcome'])
+                self.assertNotIn('PRIVATE', json.dumps(broker.events))
+                self.assertEqual(0, gateway.summary()['requestCount'])
+        broker = self.broker()
+        broker.events.append({'responseContentType': 'application/json'})
+        gateway = RuntimeGateway(settings(), E)
+        direct = response()['response']
+        self.assertIs(direct, gateway.fetch(broker, request(), direct))
+        self.assertEqual('response_content_type', broker.events[-1]['gatewaySkipReason'])
+
     def test_failed_gateway_keeps_original_challenge_and_is_not_retried(self):
         broker, clients = self.broker(), []
         broker.runtime_gateway = RuntimeGateway(settings(), E)

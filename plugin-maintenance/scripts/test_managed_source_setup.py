@@ -179,6 +179,33 @@ requests.get("https://direct.example.com")
                    + repr(base64.b64encode(large.encode()).decode()) + ")\n")
         self.assertEqual(["https://outer.example.com"], S.source_origins(content))
 
+    def test_urllib_session_pool_follows_constructor_literals_and_bound_request_headers(self):
+        content = '''
+import urllib.request as ur
+class API:
+    def __init__(self):
+        self.api_bases = ["https://first.example.com/api", "https://second.example.com/api"]
+        self.token = None
+    def login(self):
+        for base in self.api_bases:
+            req = ur.Request(base + "/guest", data=b"{}", method="POST")
+            response = ur.urlopen(req)
+            self.token = response.read()
+    def fetch(self, url):
+        for base in self.api_bases:
+            full_url = base + url if url.startswith("/") else url
+            req = ur.Request(full_url)
+            req.add_header("Authorization", "Bearer " + self.token)
+            return ur.urlopen(req)
+'''
+        self.assertEqual([["https://first.example.com", "https://second.example.com"]],
+                         S.source_session_token_groups(content))
+        for changed in (content.replace('req.add_header("Authorization"', 'other.add_header("Authorization"'),
+                        content.replace('return ur.urlopen(req)', 'return ur.urlopen(other)'),
+                        content.replace('self.api_bases = ["https://first.example.com/api", "https://second.example.com/api"]',
+                                        'self.api_bases = discover()')):
+            self.assertEqual([], S.source_session_token_groups(changed))
+
     def test_token_group_follows_literal_guest_issuer_and_authorization_consumer(self):
         content = '''
 class API:
@@ -624,6 +651,8 @@ class API:
         self.assertEqual("public_http_https", ast.literal_eval(fields["responseRedirects"]))
         self.assertEqual("public_http_https", ast.literal_eval(fields["responseApiOrigins"]))
         self.assertEqual("public_http_https", ast.literal_eval(fields["playerResources"]))
+        self.assertEqual(2 * 1024 * 1024, ast.literal_eval(fields["maxResponseBytes"]))
+        self.assertEqual(32 * 1024 * 1024, ast.literal_eval(fields["maxTotalResponseBytes"]))
 
     def test_remote_dns_failure_is_classified_without_building_policy_or_starting_a_broker(self):
         program = ast.parse(S.REMOTE)

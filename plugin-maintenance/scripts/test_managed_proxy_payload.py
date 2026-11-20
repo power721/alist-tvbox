@@ -129,7 +129,7 @@ class ProxyPayloadTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.worker["handle"]("proxy", {"target": "/local?type=image", "range": "", "head": False})
 
-    def test_base_proxy_factory_is_available_after_load_before_source_compilation(self):
+    def test_base_proxy_factory_keeps_target_runtime_failure(self):
         class Base:
             def getProxyUrl(self, local=True):
                 raise NotImplementedError("Proxy runtime is not available in local tests")
@@ -137,7 +137,6 @@ class ProxyPayloadTest(unittest.TestCase):
             pass
         class Wrapper:
             def _load_inner_spider_class(self, source_text):
-                self.observed_url = Base().getProxyUrl()
                 return Source
         wrapper = Wrapper()
         stream = SimpleNamespace(readline=lambda _: b'{"kind":"loader_ack"}\n')
@@ -148,12 +147,10 @@ class ProxyPayloadTest(unittest.TestCase):
         self.payload.install_loader_observer(worker, stream)
         worker["_load_atvp"]()
         self.assertIs(Source, wrapper._load_inner_spider_class("trusted source bytes"))
-        self.assertEqual("http://127.0.0.1:9978/proxy?do=py", wrapper.observed_url)
+        with self.assertRaises(NotImplementedError):
+            Source().getProxyUrl()
         self.assertEqual("loader_source", emitted[0]["kind"])
         self.assertEqual([], self.calls)
-        for unsupported in (False, "true", 1, None):
-            with self.subTest(local=unsupported), self.assertRaises(ValueError):
-                Base().getProxyUrl(unsupported)
 
     def test_source_defined_proxy_factory_is_preserved(self):
         class Base:
@@ -172,13 +169,34 @@ class ProxyPayloadTest(unittest.TestCase):
         self.assertIs(Source, worker["_spider"]._load_inner_spider_class("trusted fixture"))
         self.assertIs(original, Source.getProxyUrl)
 
-    def test_base_factory_uses_the_existing_play_rewrite_and_local_callback(self):
-        self.player["url"] = self.payload.managed_proxy_url(object()) + "&type=video&id=a%2Bb"
+    def test_plain_source_missing_proxy_factory_is_not_silently_repaired(self):
+        class Base:
+            pass
+        class Source:
+            def categoryContent(self):
+                try:
+                    return {"list": [{"vod_pic": self.getProxyUrl()}]}
+                except AttributeError:
+                    return {"list": []}
+        wrapper_type = type("Wrapper", (), {"_load_inner_spider_class": lambda *_: Source})
+        worker = {"_load_atvp": lambda: None, "_spider": wrapper_type(),
+                  "_base_spider": SimpleNamespace(Spider=Base)}
+        self.payload.emit = lambda _: None
+        self.payload.install_loader_observer(
+            worker, SimpleNamespace(readline=lambda _: b'{"kind":"loader_ack"}\n'))
+        worker["_load_atvp"]()
+        loaded = worker["_spider"]._load_inner_spider_class("trusted missing-method fixture")
+        self.assertIs(Source, loaded)
+        self.assertFalse(hasattr(loaded, "getProxyUrl"))
+        self.assertEqual({"list": []}, loaded().categoryContent())
+
+    def test_source_factory_uses_the_existing_play_rewrite_and_local_callback(self):
+        self.player["url"] = "http://127.0.0.1:9978/proxy?do=py&type=video&id=a%2Bb"
         result = self.worker["handle"]("play", {"proxy_base": "http://managed.invalid"})
         self.assertEqual("http://managed.invalid/local?type=video&id=a%2Bb", result["url"])
         self.assertEqual(self.body, base64.b64decode(self.proxy()["body"], validate=True))
 
-    def test_fixed_worker_inherited_and_plain_spider_init_play_local_and_destroy(self):
+    def test_fixed_worker_inherited_and_source_owned_factory_play_local_and_destroy(self):
         module = Path(__file__).resolve().parents[1]
         program = r'''
 import base64,contextlib,hashlib,importlib.util,io,json,pathlib,runpy,sys
@@ -208,8 +226,16 @@ source=("from base.spider import Spider as Base\nclass Spider(Base):\n"
   return [206,"video/mp2t",bytes([71])+bytes(187),{"Content-Range":"bytes 0-187/188"}]
  def destroy(self):self.counter=-1
 """
+if kind=="source_owned":
+ source+='\n def getProxyUrl(self,local=True):return "http://127.0.0.1:9978/proxy?do=py"\n'
 wrapper=worker["_spider"]
 inner=wrapper._load_inner_spider_class(source)()
+if kind=="inherited":
+ try:inner.init()
+ except NotImplementedError:pass
+ else:raise AssertionError("TARGET_BASE_FACTORY_WAS_REPLACED")
+ print(json.dumps({"targetBaseFactoryUnsupported":True}))
+ sys.exit(0)
 with contextlib.redirect_stdout(io.StringIO()):
  inner.init()
 wrapper._inner=inner
@@ -229,14 +255,49 @@ print(json.dumps({"fixedWorker":True,"playCalls":2,"proxyCalls":2,"destroyed":Tr
 '''
         environment = {key: value for key, value in os.environ.items()
                        if key.upper() in {"SYSTEMROOT", "WINDIR", "PATH", "TEMP", "TMP"}}
-        for kind in ("inherited", "plain"):
+        for kind in ("inherited", "source_owned"):
             with self.subTest(kind=kind):
                 child = subprocess.run([sys.executable, "-I", "-c", program, str(module), kind],
                                        capture_output=True, timeout=15, env=environment)
                 self.assertEqual(0, child.returncode, child.stderr.decode("utf-8", errors="replace"))
+                if kind == "inherited":
+                    self.assertEqual({"targetBaseFactoryUnsupported": True}, json.loads(child.stdout))
+                    continue
                 self.assertEqual({"fixedWorker": True, "playCalls": 2, "proxyCalls": 2,
                                   "destroyed": True, "sourceFixtureOnly": True, "networkRequested": False},
                                  json.loads(child.stdout))
+
+    def test_failure_observer_identifies_the_real_atvp_backend_without_bypassing_detail(self):
+        module = Path(__file__).resolve().parents[1]
+        program = r'''
+import contextlib,importlib.util,io,json,pathlib,runpy,sys
+module=pathlib.Path(sys.argv[1]);runtime=module/"server/src/main/resources/worker/runtime"
+sys.path.insert(0,str(runtime));sys.argv=[str(runtime/"t4worker.py"),str(runtime/"Atvp.py")]
+worker=runpy.run_path(sys.argv[0],run_name="trusted_backend_fixture")["main"].__globals__
+spec=importlib.util.spec_from_file_location("trusted_payload",module/"managed-source/egress_payload.py")
+adapter=importlib.util.module_from_spec(spec);spec.loader.exec_module(adapter);adapter.ROOT=runtime.parent
+frames=[];worker["_protocol_write"]=frames.append;adapter.install_failure_observer(worker)
+worker["_load_atvp"]();wrapper=worker["_spider"]
+class Inner:
+ def detailContent(self,ids):raise AssertionError("WRAPPER_WAS_BYPASSED")
+wrapper._inner=Inner()
+try:
+ with contextlib.redirect_stdout(io.StringIO()):worker["handle"]("detail",{"ids":"https://example.invalid/title/1"})
+except ValueError as error:
+ worker["_protocol_write"]({"ok":False,"error":{"code":type(error).__name__,"message":"PRIVATE"}})
+else:raise AssertionError("UNCONFIGURED_BACKEND_PASSED")
+assert frames[0]["error"]["context"]=={"hostStage":"atvp_backend_endpoint"}
+try:raise ValueError("PRIVATE_SOURCE_EXCEPTION")
+except ValueError:
+ worker["_protocol_write"]({"ok":False,"error":{"code":"ValueError","message":"PRIVATE"}})
+assert "context" not in frames[1]["error"]
+print(json.dumps({"stage":frames[0]["error"]["context"],"wrapperPreserved":True,"networkRequested":False}))
+'''
+        child = subprocess.run([sys.executable, "-I", "-c", program, str(module)],
+                               capture_output=True, timeout=15)
+        self.assertEqual(0, child.returncode, child.stderr.decode("utf-8", errors="replace"))
+        self.assertEqual({"stage": {"hostStage": "atvp_backend_endpoint"}, "wrapperPreserved": True,
+                          "networkRequested": False}, json.loads(child.stdout))
 
     def test_external_fragment_duplicate_or_oversize_targets_never_call_local(self):
         for target in ("https://example.invalid/local?x=1", "/else?x=1", "/local?x=1#fragment",

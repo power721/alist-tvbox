@@ -12,7 +12,7 @@ import threading
 import time
 
 import managed_source_protocol as M
-from managed_loader import Loader, T4Call, T4Session, Invalid
+from managed_loader import Loader, T4Call, T4Session, Invalid, failure_context
 from source_egress import Denied, MAX_REQUESTS
 
 S = M.S
@@ -253,13 +253,19 @@ def exchange(command, request, source, hashes, broker, *, timeout=POLICY["runtim
                               "EGRESS_PROTOCOL_INVALID")
                     if not value["ok"]:
                         error = value["error"]
-                        S.require(isinstance(error, dict) and set(error) == {"code", "message"}
+                        S.require(isinstance(error, dict)
+                                  and set(error) in ({"code", "message"}, {"code", "message", "context"})
                                   and isinstance(error["code"], str) and len(error["code"]) <= 100
                                   and isinstance(error["message"], str), "EGRESS_PROTOCOL_INVALID")
                     value = {"kind": "call_result", "id": loader.awaiting["id"], "ok": value["ok"],
                              **({"result": value["result"]} if value["ok"] else {
                                  "code": error["code"] if error["code"] in Loader.FAILURE_TYPES
                                  else "LOADER_METHOD_FAILED"})}
+                    if not value["ok"] and "context" in error and error["code"] in Loader.FAILURE_TYPES:
+                        try:
+                            value["failureContext"] = failure_context(error["context"])
+                        except Invalid:
+                            raise S.Failure("LOADER_RECEIPT_INVALID") from None
                     loader.jsonl_observed = True
                 if value.get("kind") in {"loader_available", "loader_source", "call_result"}:
                     phase = "loader"
@@ -359,6 +365,8 @@ def exchange(command, request, source, hashes, broker, *, timeout=POLICY["runtim
                 receipt["loaderValidation"] = loader.receipt()
                 if loader.resource_evidence is not None:
                     receipt["resourceEvidence"] = loader.resource_evidence
+                if loader.content_resource_evidence is not None:
+                    receipt["contentResourceEvidence"] = loader.content_resource_evidence
             return receipt
         except S.Failure as error:
             error.exchange_context = {
@@ -391,13 +399,18 @@ def exchange(command, request, source, hashes, broker, *, timeout=POLICY["runtim
                 observed = getattr(broker, attribute, None)
                 if observed is not None:
                     error.exchange_context[field] = copy.deepcopy(observed)
-            error.exchange_context["completedHttpCount"] = len(broker.events)
+            broker_events = getattr(broker, "events", ())
+            error.exchange_context["completedHttpCount"] = len(broker_events)
+            progress = getattr(loader, "partial_progress", None)
+            if callable(progress):
+                error.exchange_context["loaderProgress"] = progress()
             error.exchange_context["completedHttpObservations"] = [
                 {key: event[key] for key in (
                     "method", "requestUrlSha256", "responseStatus", "responseBytes", "responseSha256",
                     "responseComplete", "responseContentType", "requestCookiePresent",
-                    "receivedSetCookieCount") if key in event}
-                for event in broker.events[-MAX_REQUESTS:]]
+                    "receivedSetCookieCount", "transport", "representation", "gatewaySessionReused",
+                    "cookiesExported", "challengePage", "gatewayOutcome", "gatewaySkipReason") if key in event}
+                for event in broker_events[-MAX_REQUESTS:]]
             raise
         except subprocess.TimeoutExpired:
             raise S.Failure("ENGINE_TIMEOUT") from None

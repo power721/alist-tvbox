@@ -237,7 +237,7 @@ if not policy_path.exists():
   "responseRedirects":"public_http_https","responseApiOrigins":"public_http_https",
   "playerResources":"public_http_https",
   "maxRequests":64,"maxResponseBytes":2097152,
-  "maxTotalResponseBytes":4194304,"minIntervalSeconds":1})
+  "maxTotalResponseBytes":33554432,"minIntervalSeconds":1})
  put(policy_path,json.dumps(policy,ensure_ascii=True,separators=(",",":")).encode())
 policy_body=policy_path.read_bytes()
 policy=E.policy_from(json.loads(policy_body))

@@ -1733,6 +1733,132 @@ class RoutesTest(unittest.TestCase):
                 ("https://reader.example.com/private\n", "url_control")):
             self.assertEqual(reason, E.url_denial_diagnostic(url, "GET")["reason"])
 
+    def test_response_resources_grant_exact_returned_urls_with_public_pins_and_no_tokens(self):
+        configured = self.policy()
+        for route in configured["routes"]:
+            route["requestScope"] = "origin"
+        configured["responseApiOrigins"] = "public_https"
+        configured["maxRequests"] = 6
+        exact = "https://images.example.com/cover.png?sign=PRIVATE"
+        broker = E.Routes(configured)
+        source = FakeConnection()
+        source.response.read = io.BytesIO(json.dumps({"data": [{"cover": exact}]}).encode()).read
+        target = FakeConnection()
+        with patch.object(E.http.client, "HTTPSConnection", side_effect=[source, target]), \
+                patch.object(E, "public_dns_addresses", return_value=["8.8.8.8"]) as dns, \
+                patch.object(E.time, "sleep"):
+            broker.fetch(self.request())
+            dns.assert_not_called()
+            broker.fetch(self.request(exact))
+            dns.assert_called_once_with("images.example.com", port=443, observations=unittest.mock.ANY)
+        route = broker.routes["https://images.example.com"]
+        self.assertNotIn("requestScope", route.policy)
+        self.assertNotIn("sessionToken", route.policy)
+        self.assertIn("resourceUrlObservation", broker.events[-1])
+        self.assertNotIn("PRIVATE", json.dumps(broker.events))
+        for url in (exact + "&extra=1", exact.replace("cover", "other")):
+            with self.assertRaises(E.Denied):
+                broker.fetch(self.request(url))
+        with self.assertRaisesRegex(E.Denied, "EGRESS_METHOD_DENIED|EGRESS_SESSION_TOKEN_DENIED"):
+            broker.fetch({**self.request(exact), "headers": {"Authorization": "imported"}})
+        with self.assertRaisesRegex(E.Denied, "EGRESS_METHOD_DENIED"):
+            broker.fetch({**self.request(exact), "method": "POST"})
+
+    def test_response_resources_ignore_secret_fields_invalid_targets_and_unobserved_requests(self):
+        self.assertEqual(["https://images.example.com/cover"], E.response_resource_urls(
+            b'{"cover":"https://images.example.com/cover",'
+            b'"token":"https://secret.example.com/x",'
+            b'"bad":"https://user:PRIVATE@images.example.com/x",'
+            b'"fragment":"https://images.example.com/x#private"}', "application/json"))
+        self.assertEqual([], E.response_resource_urls(b'not a url https://unseen.example.com', "text/plain"))
+        configured = self.policy()
+        for route in configured["routes"]:
+            route["requestScope"] = "origin"
+        configured["responseApiOrigins"] = "public_https"
+        broker = E.Routes(configured)
+        broker.resource_urls["https://private.example.com/x"] = (next(iter(broker.routes.values())), "1" * 64)
+        with patch.object(E, "public_dns_addresses", side_effect=E.Denied("EGRESS_NONPUBLIC_TARGET_DENIED")), \
+                self.assertRaisesRegex(E.Denied, "EGRESS_NONPUBLIC_TARGET_DENIED"):
+            broker.fetch(self.request("https://private.example.com/x"))
+        with self.assertRaisesRegex(E.Denied, "EGRESS_URL_DENIED"):
+            broker.fetch({**self.request("https://private.example.com/x"), "method": "POST"})
+
+    def test_response_resource_accepts_full_referer_from_registered_origin_only(self):
+        configured = self.policy()
+        for route in configured["routes"]:
+            route["requestScope"] = "origin"
+        configured["responseApiOrigins"] = "public_https"
+        configured["maxRequests"] = 6
+        broker = E.Routes(configured)
+        issuer = next(iter(broker.routes.values()))
+        exact = "https://images.example.com/cover.png?sign=PRIVATE"
+        broker.resource_urls[exact] = (issuer, "a" * 64)
+        referer = issuer.policy["origin"] + "/details/123?view=poster"
+        with patch.object(E.http.client, "HTTPSConnection", return_value=FakeConnection()), \
+                patch.object(E, "public_dns_addresses", return_value=["8.8.8.8"]), \
+                patch.object(E.time, "sleep"):
+            broker.fetch({**self.request(exact), "headers": {"Referer": referer}})
+        self.assertEqual([referer], broker.routes["https://images.example.com"].policy["exactReferers"])
+        self.assertNotIn("PRIVATE", json.dumps(broker.events))
+        for invalid in ("https://unregistered.example.com/private", referer + "#fragment"):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(E.Denied, "EGRESS_HEADER_ORIGIN_DENIED"):
+                broker.fetch({**self.request(exact), "headers": {"Referer": invalid}})
+
+    def test_literal_response_decoder_observes_bridge_origin_without_executing_source(self):
+        from Crypto.Cipher import AES
+        from Crypto.Util.Padding import pad
+        source = (b"from Crypto.Cipher import AES as Cipher\nimport base64\n"
+                  b"KEY = b'0123456789abcdef'\nIV = b'fedcba9876543210'\n"
+                  b"raise RuntimeError('MUST_NOT_EXECUTE')\n"
+                  b"def decode(data):\n return Cipher.new(KEY, Cipher.MODE_CBC, IV).decrypt(base64.b64decode(data))\n")
+        decoders = E.source_response_decoders(source)
+        self.assertEqual([(b"0123456789abcdef", b"fedcba9876543210")], decoders)
+        conditional = source.replace(b"from Crypto.Cipher import AES as Cipher\n",
+            b"try:\n from Crypto.Cipher import AES as Cipher\nexcept ImportError:\n"
+            b" from Cryptodome.Cipher import AES as Cipher\n")
+        self.assertEqual(decoders, E.source_response_decoders(conditional))
+        document = b'{"method":"POST","url":"https://next.example.com/api?nonce=PRIVATE","body":{}}'
+        encrypted = base64.b64encode(AES.new(decoders[0][0], AES.MODE_CBC, decoders[0][1])
+                                     .encrypt(pad(document, 16))).decode()
+        envelope = json.dumps({"data": encrypted}).encode()
+        self.assertEqual(document, E.decoded_response_json(envelope, decoders))
+        self.assertEqual(["https://next.example.com"], E.response_api_origins(document, "application/json"))
+        for invalid in (b'{}', b'{"data":"not base64"}', b'{"data":"AAAA"}',
+                        json.dumps({"data": encrypted, "extra": True}).encode()):
+            self.assertIsNone(E.decoded_response_json(invalid, decoders))
+        for method in ([], {}, 1, None, "DELETE"):
+            body = json.dumps({"method": method, "url": "https://next.example.com/api?nonce=PRIVATE"}).encode()
+            self.assertEqual([], E.response_api_origins(body, "application/json"))
+        self.assertEqual([], E.source_response_decoders(source.replace(
+            b"KEY = b'0123456789abcdef'", b"KEY = '0123456789abcdef'.encode()")))
+
+    def test_encrypted_post_response_registers_next_bridge_with_existing_budget(self):
+        from Crypto.Cipher import AES
+        from Crypto.Util.Padding import pad
+        configured = self.policy()
+        configured["methods"] = ["GET", "HEAD", "POST"]
+        for route in configured["routes"]:
+            route["requestScope"] = "origin"
+        configured["responseApiOrigins"] = "public_https"
+        broker = E.Routes(configured)
+        broker.bind_source(b"from Crypto.Cipher import AES\nimport base64\nKEY=b'0123456789abcdef'\n"
+                           b"IV=b'fedcba9876543210'\ndef decode(x):\n"
+                           b" return AES.new(KEY,AES.MODE_CBC,IV).decrypt(base64.b64decode(x))\n")
+        target = "https://next.example.com/api?nonce=PRIVATE"
+        raw = json.dumps({"method": "POST", "url": target}).encode()
+        encrypted = AES.new(b"0123456789abcdef", AES.MODE_CBC, b"fedcba9876543210").encrypt(pad(raw, 16))
+        first = FakeConnection()
+        first.response.read = io.BytesIO(json.dumps({"data": base64.b64encode(encrypted).decode()}).encode()).read
+        with patch.object(E.http.client, "HTTPSConnection", side_effect=[first, FakeConnection()]), \
+                patch.object(E, "public_dns_addresses", return_value=["8.8.8.8"]), \
+                patch.object(E.time, "sleep"):
+            broker.fetch({**self.request(), "method": "POST"})
+            broker.fetch({**self.request(target), "method": "POST"})
+        self.assertEqual(2, broker.count)
+        self.assertEqual("origin", broker.routes["https://next.example.com"].policy["requestScope"])
+        self.assertIn("apiOriginObservation", broker.events[-1])
+        self.assertNotIn("PRIVATE", json.dumps(broker.events))
+
     def test_api_origins_are_read_from_json_and_nuxt_data_without_running_javascript(self):
         expected = ["https://api.example.com"]
         self.assertEqual(expected, E.response_api_origins(
@@ -2349,6 +2475,20 @@ const expression='["https://expression.example.com"] + execute()';
 
 
 class ExchangeTest(unittest.TestCase):
+    def test_jsonl_failure_context_reaches_loader_without_the_private_message(self):
+        class Broker:
+            events = []
+        tail = (
+            "print(json.dumps({'kind':'loader_available'}),flush=True)\n"
+            "call=json.loads(sys.stdin.buffer.readline())\n"
+            "print(json.dumps({'id':str(call['id']),'ok':False,'error':"
+            "{'code':'OSError','message':'PRIVATE_TOKEN','context':{'sourceLine':27,'errno':38}}}),flush=True)\n"
+            "assert json.loads(sys.stdin.buffer.readline())=={'kind':'finish'}\n"
+            "print(json.dumps({'kind':'result','summary':{'status':'source_exception'}}),flush=True)\n")
+        receipt = self.call(self.child("\n" + tail), Broker())["loaderValidation"]
+        self.assertEqual({"sourceLine": 27, "errno": 38}, receipt["nodes"][0]["failureContext"])
+        self.assertNotIn("PRIVATE_TOKEN", json.dumps(receipt))
+
     def test_jsonl_failure_retains_exception_type_but_discards_the_message(self):
         class Broker:
             events = []
@@ -2411,6 +2551,8 @@ class ExchangeTest(unittest.TestCase):
                 "responseBytes": 12, "responseSha256": "b" * 64, "responseComplete": True,
                 "responseContentType": "application/json", "headers": "PRIVATE",
                 "body": "PRIVATE", "url": "https://PRIVATE.example.com",
+                "transport": "external_evidence_gateway", "representation": "gateway_rendered_document",
+                "gatewaySessionReused": True, "cookiesExported": False,
             }]
 
             def fetch(self, value):
@@ -2807,6 +2949,82 @@ class BridgeTest(unittest.TestCase):
         bridge = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(bridge)
         return bridge
+
+    def test_http_client_uses_broker_for_http_https_and_preserves_response_contract(self):
+        for secure in (False, True):
+            bridge, frames, replies = self.bridge(), [], {}
+
+            def send_frame(fd, raw):
+                frame = json.loads(raw)
+                frames.append(frame)
+                replies["next"] = json.dumps({"id": frame["id"], "ok": True, "response": {
+                    "status": 206, "headers": {"Content-Type": "application/octet-stream"},
+                    "body": base64.b64encode(b"media-prefix").decode(),
+                    "setCookies": ["a=1; Path=/", "b=2; Path=/"]}}).encode() + b"\n"
+                return len(raw)
+
+            bridge.INPUT = type("Input", (), {"readline": lambda self, limit: replies.pop("next")})()
+            cls = bridge.BrokerHTTPSConnection if secure else bridge.BrokerHTTPConnection
+            options = {"context": ssl._create_unverified_context()} if secure else {}
+            connection = cls("media.example.com", **options)
+            with self.subTest(secure=secure), patch.object(bridge.os, "write", side_effect=send_frame), \
+                    patch.object(socket, "create_connection", side_effect=AssertionError("SOCKET_NOT_ALLOWED")):
+                connection.connect()
+                connection.request("POST", "/media?id=1", body=b"query", headers={
+                    "Host": "media.example.com", "Range": "bytes=0-11", "Accept-Encoding": "gzip"})
+                with self.assertRaises(http.client.CannotSendRequest):
+                    connection.request("GET", "/second")
+                with connection.getresponse() as response:
+                    self.assertEqual(206, response.status)
+                    self.assertEqual("application/octet-stream", response.getheader("content-type"))
+                    self.assertEqual(["a=1; Path=/", "b=2; Path=/"], response.headers.get_all("Set-Cookie"))
+                    self.assertEqual(2, len([row for row in response.getheaders() if row[0] == "Set-Cookie"]))
+                    self.assertEqual(b"media", response.read(5))
+                    self.assertEqual(b"-prefix", response.read())
+                self.assertTrue(response.isclosed())
+                with self.assertRaises(http.client.ResponseNotReady):
+                    connection.getresponse()
+                connection.close()
+            sent = frames[0]["request"]
+            self.assertEqual(("https" if secure else "http") + "://media.example.com/media?id=1", sent["url"])
+            self.assertEqual(b"query", base64.b64decode(sent["body"]))
+            self.assertEqual({"Range": "bytes=0-11"}, sent["headers"])
+
+    def test_http_client_rejects_transport_overrides_and_preserves_broker_refusals(self):
+        bridge = self.bridge()
+        for target, headers in (("https://other.example.com/", {}), ("//other.example.com/", {}),
+                                ("/", {"Host": "other.example.com"}),
+                                ("/", {"Host": "media.example.com", "host": "media.example.com"})):
+            with self.subTest(target=target, headers=headers), patch.object(bridge, "send") as send:
+                with self.assertRaises(http.client.HTTPException):
+                    bridge.BrokerHTTPConnection("media.example.com").request("GET", target, headers=headers)
+                send.assert_not_called()
+        with patch.object(bridge, "send") as send:
+            with self.assertRaises(http.client.HTTPException):
+                bridge.BrokerHTTPConnection("media.example.com").set_tunnel("other.example.com")
+            with self.assertRaises(http.client.HTTPException):
+                bridge.BrokerHTTPConnection("media.example.com", source_address=("127.0.0.1", 0)).connect()
+            send.assert_not_called()
+        denied = bridge.PolicyDenied("EGRESS_DENIED", retry_after=30)
+        with patch.object(bridge, "send", side_effect=denied), self.assertRaises(bridge.PolicyDenied) as caught:
+            bridge.BrokerHTTPConnection("media.example.com").request("GET", "/")
+        self.assertIs(denied, caught.exception)
+        self.assertEqual(30, caught.exception.retry_after)
+
+    def test_http_client_install_is_source_side_and_keeps_existing_adapters(self):
+        bridge = self.bridge()
+        import requests
+        import urllib.request
+        with patch.object(http.client, "HTTPConnection"), patch.object(http.client, "HTTPSConnection"), \
+                patch.object(requests.adapters.HTTPAdapter, "send"), \
+                patch.object(urllib.request.HTTPHandler, "http_open"), \
+                patch.object(urllib.request.HTTPSHandler, "https_open"):
+            bridge.install(io.BytesIO())
+            self.assertIs(bridge.BrokerHTTPConnection, http.client.HTTPConnection)
+            self.assertIs(bridge.BrokerHTTPSConnection, http.client.HTTPSConnection)
+            self.assertIs(bridge.send, requests.adapters.HTTPAdapter.send)
+            self.assertIs(bridge._http_open, urllib.request.HTTPHandler.http_open)
+            self.assertIs(bridge._https_open, urllib.request.HTTPSHandler.https_open)
 
     def test_source_cookie_seed_is_origin_bound_and_server_updates_and_deletions_win(self):
         configured = {**policy(), "maxRequests": 4, "maxTotalResponseBytes": 2048}
@@ -3352,6 +3570,21 @@ class PlayerSampleTest(unittest.TestCase):
         self.addCleanup(self.modules.stop)
         self.detail = {"vod_play_from": "first$$$other",
                        "vod_play_url": "one$opaque$tail#two$next$$$other$last"}
+
+    def test_failure_observer_keeps_source_line_errno_and_no_traceback_or_message(self):
+        frames, namespace = [], {}
+        worker = {"_protocol_write": frames.append}
+        self.payload.install_failure_observer(worker)
+        exec(compile("def fail():\n    raise OSError(38, 'PRIVATE_TOKEN')\n", "<atvp-inner>", "exec"), namespace)
+        try:
+            namespace["fail"]()
+        except OSError:
+            worker["_protocol_write"]({"ok": False, "error": {"code": "OSError", "message": "existing"}})
+        self.assertEqual({"sourceLine": 2, "errno": 38}, frames[0]["error"]["context"])
+        self.assertNotIn("PRIVATE_TOKEN", json.dumps(frames))
+        self.assertNotIn("atvp-inner", json.dumps(frames))
+        worker["_protocol_write"]({"ok": True, "result": {}})
+        self.assertEqual({"ok": True, "result": {}}, frames[1])
 
     def test_real_worker_play_contract_uses_first_group_and_retains_opaque_id(self):
         import requests

@@ -282,6 +282,7 @@ class Broker:
             if route_identity is not None and self.trusted_routes is not None:
                 S.require(self.trusted_routes[0] == route_identity, "MANAGED_RUNNER_IDENTITY_MISMATCH")
                 mediator.restore_urls(self.trusted_routes[1])
+        failure = None
         try:
             options = ({"exchange_timeout": G.session_timeout(self.egress_policy)}
                        if self.egress_policy["maxRequests"] > 24 else {})
@@ -294,8 +295,13 @@ class Broker:
             else:
                 result = G.run(engine, request, source, self.bundle["egressFiles"], mediator,
                                cancelled=cancelled, t4_call=t4_call, **options)
+        except S.Failure as error:
+            failure = error
+            raise
         finally:
             gateway_cleaned = gateway.close() if gateway else True
+            if gateway and failure is not None and isinstance(getattr(failure, "exchange_context", None), dict):
+                failure.exchange_context["runtimeGateway"] = gateway.summary()
             with self.lock:
                 self.egress_next_request = max(self.egress_next_request, mediator.next_request)
             S.require(gateway_cleaned, "EVIDENCE_GATEWAY_CLEANUP_UNCONFIRMED")

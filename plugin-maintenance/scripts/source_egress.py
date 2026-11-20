@@ -892,7 +892,9 @@ def response_api_origins(body, mime, base_url=None):
             item = pending.pop()
             if isinstance(item, dict):
                 for key, target in item.items():
-                    if key.lower().replace("_", "") in {
+                    bridge_request = (key == "url" and isinstance(item.get("method"), str)
+                                      and item["method"] in {"GET", "HEAD", "POST"})
+                    if bridge_request or key.lower().replace("_", "") in {
                             "apibaseurl", "apibase", "apiurl", "observedresourceurl"}:
                         api_target = target
                         if type(target) is int and isinstance(document, list) and 0 <= target < len(document):
@@ -903,7 +905,7 @@ def response_api_origins(body, mime, base_url=None):
                                 parsed, _, _ = http_authority(api_target, "EGRESS_URL_DENIED")
                             except (Denied, ValueError):
                                 continue
-                            if key == "observedResourceURL" or not parsed.query and not parsed.fragment:
+                            if bridge_request or key == "observedResourceURL" or not parsed.query and not parsed.fragment:
                                 origin = parsed.scheme + "://" + parsed.netloc
                                 if origin not in result:
                                     result.append(origin)
@@ -914,6 +916,35 @@ def response_api_origins(body, mime, base_url=None):
             elif isinstance(item, list):
                 pending.extend(entry for entry in item if isinstance(entry, (dict, list)))
     return result[:MAX_ROUTES]
+
+
+def response_resource_urls(body, mime):
+    """Read exact addresses from returned JSON or a single public address wrapper."""
+    try:
+        text = body.decode("utf-8")
+        if mime == "application/json" or mime.endswith("+json") or text.lstrip().startswith(("{", "[")):
+            pending = [json.loads(text)]
+        else:
+            pending = [text.strip()]
+    except (ValueError, UnicodeError, RecursionError):
+        return []
+    result = []
+    while pending and len(result) < 128:
+        item = pending.pop()
+        if isinstance(item, dict):
+            pending.extend(value for key, value in item.items()
+                           if not re.search(r"token|cookie|authorization|password|secret|credential", key, re.I))
+        elif isinstance(item, list):
+            pending.extend(reversed(item))
+        elif isinstance(item, str) and item.startswith(("https://", "http://")):
+            if len(item) <= 2048 and item.isascii() and not re.search(r"[\x00-\x20\x7f\\]", item):
+                try:
+                    parsed, _, _ = http_authority(item, "EGRESS_URL_DENIED")
+                except (Denied, ValueError):
+                    continue
+                if not parsed.fragment and item not in result:
+                    result.append(item)
+    return result
 
 
 def source_trees(source):
@@ -971,10 +1002,201 @@ def source_trees(source):
     return trees
 
 
+def source_response_decoders(source):
+    """Recognize literal AES-CBC JSON response decoders without importing source code."""
+    decoders = []
+    for tree in source_trees(source):
+        module_nodes, pending = [], list(tree.body)
+        while pending:
+            node = pending.pop()
+            module_nodes.append(node)
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                pending.extend(ast.iter_child_nodes(node))
+        aliases = {name.asname or name.name for node in module_nodes
+                   if isinstance(node, ast.ImportFrom) and node.module in {"Crypto.Cipher", "Cryptodome.Cipher"}
+                   for name in node.names if name.name == "AES"}
+        values = {node.targets[0].id: node.value.value for node in module_nodes
+                  if isinstance(node, ast.Assign) and len(node.targets) == 1
+                  and isinstance(node.targets[0], ast.Name) and isinstance(node.value, ast.Constant)
+                  and isinstance(node.value.value, bytes)}
+        for method in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
+            calls = [node for node in ast.walk(method) if isinstance(node, ast.Call)]
+            if not any(isinstance(node.func, ast.Attribute) and node.func.attr == "b64decode" for node in calls):
+                continue
+            for node in calls:
+                if not (isinstance(node.func, ast.Attribute) and node.func.attr == "decrypt"
+                        and isinstance(node.func.value, ast.Call)):
+                    continue
+                cipher = node.func.value
+                if not (isinstance(cipher.func, ast.Attribute) and cipher.func.attr == "new"
+                        and isinstance(cipher.func.value, ast.Name) and cipher.func.value.id in aliases
+                        and len(cipher.args) == 3 and not cipher.keywords
+                        and isinstance(cipher.args[0], ast.Name) and isinstance(cipher.args[2], ast.Name)
+                        and isinstance(cipher.args[1], ast.Attribute) and cipher.args[1].attr == "MODE_CBC"
+                        and isinstance(cipher.args[1].value, ast.Name) and cipher.args[1].value.id == cipher.func.value.id):
+                    continue
+                key, iv = values.get(cipher.args[0].id), values.get(cipher.args[2].id)
+                if isinstance(key, bytes) and len(key) in {16, 24, 32} and isinstance(iv, bytes) and len(iv) == 16:
+                    pair = (key, iv)
+                    if pair not in decoders and len(decoders) < 4:
+                        decoders.append(pair)
+    return decoders
+
+
+def decoded_response_json(body, decoders):
+    if not decoders:
+        return None
+    try:
+        envelope = json.loads(body)
+        if isinstance(envelope, dict) and len(envelope) == 1:
+            envelope = next(iter(envelope.values()))
+        if not isinstance(envelope, str) or len(envelope) > 2796204:
+            return None
+        raw = base64.b64decode(envelope, validate=True)
+        if not raw or len(raw) % 16:
+            return None
+        from Crypto.Cipher import AES
+        for key, iv in decoders:
+            plain = AES.new(key, AES.MODE_CBC, iv).decrypt(raw)
+            padding = plain[-1]
+            if not 1 <= padding <= 16 or plain[-padding:] != bytes([padding]) * padding:
+                continue
+            try:
+                document = json.loads(plain[:-padding])
+            except (ValueError, UnicodeError, RecursionError):
+                continue
+            if isinstance(document, (dict, list)):
+                return json.dumps(document, separators=(",", ":")).encode()
+    except (ImportError, ValueError, UnicodeError, RecursionError):
+        pass
+    return None
+
+
+def urllib_session_token_groups(tree):
+    """Infer urllib guest sessions from literal API pools and bound Request objects."""
+    groups = []
+    for cls in (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)):
+        methods = [node for node in cls.body if isinstance(node, ast.FunctionDef)]
+        values = {}
+        for node in [*cls.body, *(item for method in methods if method.name == "__init__"
+                                for item in ast.walk(method))]:
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                field = (target.id if isinstance(target, ast.Name) else target.attr
+                         if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                         and target.value.id == "self" else None)
+                if field is not None:
+                    try:
+                        values[field] = ast.literal_eval(node.value)
+                    except (ValueError, TypeError):
+                        pass
+        sessions = {}
+        for method in methods:
+            assignments, loops = {}, {}
+            for node in ast.walk(method):
+                if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name)):
+                    assignments.setdefault(node.targets[0].id, []).append(node.value)
+                elif isinstance(node, ast.For) and isinstance(node.target, ast.Name):
+                    loops.setdefault(node.target.id, []).append(node.iter)
+
+            def literals(node, seen=frozenset()):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    return [node.value]
+                if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "self":
+                    value = values.get(node.attr)
+                    return [value] if isinstance(value, str) else list(value) if isinstance(value, (list, tuple)) else []
+                if isinstance(node, ast.Name) and node.id not in seen:
+                    definitions = assignments.get(node.id, []) + loops.get(node.id, [])
+                    if len(definitions) == 1:
+                        return literals(definitions[0], seen | {node.id})
+                if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+                    lefts, rights = literals(node.left, seen), literals(node.right, seen)
+                    # Only origins are inferred; an unknown path cannot grant another host.
+                    if not rights:
+                        return [left for left in lefts if isinstance(left, str)
+                                and left.startswith(("http://", "https://"))]
+                    return [left + right for left in lefts[:8]
+                            for right in rights[:8]
+                            if isinstance(left, str) and isinstance(right, str) and len(left + right) <= 2048][:8]
+                if isinstance(node, ast.IfExp):
+                    return (literals(node.body, seen) + literals(node.orelse, seen))[:8]
+                return []
+
+            fields = set()
+            for node in ast.walk(method):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "add_header" and len(node.args) == 2
+                        and isinstance(node.args[0], ast.Constant)
+                        and str(node.args[0].value).lower() == "authorization"):
+                    fields.update(item.attr for item in ast.walk(node.args[1])
+                                  if isinstance(item, ast.Attribute) and isinstance(item.value, ast.Name)
+                                  and item.value.id == "self")
+            for field in fields:
+                sessions.setdefault(field, {"issuers": set(), "audiences": set()})
+
+        for field, session in sessions.items():
+            for method in methods:
+                writes = any(isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Store)
+                             and isinstance(node.value, ast.Name) and node.value.id == "self"
+                             and node.attr == field for node in ast.walk(method))
+                # Rebuild the method-local expressions used by its Request constructor.
+                assignments, loops = {}, {}
+                for node in ast.walk(method):
+                    if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                        assignments.setdefault(node.targets[0].id, []).append(node.value)
+                    elif isinstance(node, ast.For) and isinstance(node.target, ast.Name):
+                        loops.setdefault(node.target.id, []).append(node.iter)
+                for name, definitions in assignments.items():
+                    if len(definitions) != 1:
+                        continue
+                    request = definitions[0]
+                    if (not isinstance(request, ast.Call) or not request.args
+                            or not isinstance(request.func, (ast.Attribute, ast.Name))
+                            or (request.func.attr if isinstance(request.func, ast.Attribute) else request.func.id) != "Request"):
+                        continue
+                    opened, authorized = False, False
+                    for call in (node for node in ast.walk(method) if isinstance(node, ast.Call)):
+                        if (isinstance(call.func, ast.Attribute) and call.func.attr == "urlopen" and call.args
+                                and isinstance(call.args[0], ast.Name) and call.args[0].id == name):
+                            opened = True
+                        if (isinstance(call.func, ast.Attribute) and call.func.attr == "add_header"
+                                and isinstance(call.func.value, ast.Name) and call.func.value.id == name
+                                and len(call.args) == 2 and isinstance(call.args[0], ast.Constant)
+                                and str(call.args[0].value).lower() == "authorization"):
+                            authorized |= any(isinstance(item, ast.Attribute) and item.attr == field
+                                and isinstance(item.value, ast.Name) and item.value.id == "self"
+                                for item in ast.walk(call.args[1]))
+                    if not opened:
+                        continue
+                    for url in literals(request.args[0]):
+                        if not isinstance(url, str):
+                            continue
+                        try:
+                            parsed, _, _ = http_authority(url)
+                        except (Denied, ValueError):
+                            continue
+                        origin = parsed.scheme + "://" + parsed.netloc
+                        if writes:
+                            session["issuers"].add(origin)
+                        if authorized:
+                            session["audiences"].add(origin)
+            group = session["issuers"] | session["audiences"]
+            if session["issuers"] and session["audiences"] and 2 <= len(group) <= 8:
+                groups.append(sorted(group))
+    return groups
+
+
 def source_session_token_groups(source):
     """Bind declared guest issuers and consumers, independently for each token field."""
     groups, used = [], set()
     for tree in source_trees(source):
+        for group in urllib_session_token_groups(tree):
+            if not used.intersection(group) and len(groups) < 4:
+                groups.append(group)
+                used.update(group)
         constants, source_bases, ambiguous = {}, {}, set()
         for node in tree.body:
             targets = node.targets if isinstance(node, ast.Assign) else (
@@ -1761,10 +1983,12 @@ class Routes:
         self.player_resources = {}
         self.resource_responses = {}
         self.source_call = None
+        self.response_decoders = []
         self.last_redirect = None
         self.last_http_observation = None
         self.last_dns_observation = None
         self.api_origins = {}
+        self.resource_urls = {}
         self.host_credentials = None
         self.server_cookies = {}
 
@@ -1908,6 +2132,7 @@ class Routes:
 
     def bind_source(self, source):
         self.source = source
+        self.response_decoders = source_response_decoders(source)
         declarations = None
         for broker in self.routes.values():
             broker.bind_source(source)
@@ -2005,8 +2230,19 @@ class Routes:
                 broker.bind_credentials(self.host_credentials)
             self.routes[origin] = broker
             self.share_session_tokens(added=origin)
+        resource_grant = None
+        if (origin not in self.api_origins and value.get("method") in {"GET", "HEAD"}
+                and value["url"] in self.resource_urls):
+            issuer, response_sha = self.resource_urls[value["url"]]
+            if broker is None:
+                self.register_public_origin(origin, issuer, exact_url=value["url"])
+                broker = self.routes[origin]
+            elif broker.policy.get("requestScope") != "origin":
+                self.register_url(value["url"], origin)
+            resource_grant = {"issuerOriginSha256": digest(issuer.policy["origin"].encode()),
+                              "responseSha256": response_sha, "targetUrlSha256": digest(value["url"].encode())}
         api_grant = None
-        if broker is None and origin in self.api_origins:
+        if (broker is None or broker.policy.get("requestScope") != "origin") and origin in self.api_origins:
             issuer, response_sha = self.api_origins[origin]
             self.register_public_origin(origin, issuer)
             broker = self.routes.get(origin)
@@ -2021,6 +2257,16 @@ class Routes:
         broker.referer_origins = tuple(
             origin for origin, route in self.routes.items()
             if route.policy.get("requestScope") == "origin")
+        if resource_grant is not None and broker.policy.get("requestScope") != "origin":
+            for key, referer in value.get("headers", {}).items():
+                if key.lower() != "referer" or not isinstance(referer, str):
+                    continue
+                try:
+                    ref, _, _ = http_authority(referer, "EGRESS_HEADER_ORIGIN_DENIED")
+                except (Denied, ValueError):
+                    continue
+                if ref.scheme + "://" + ref.netloc in broker.referer_origins and not ref.fragment:
+                    broker.policy["exactReferers"] = [referer]
         value = self.prepare_cookie_state(broker, value)
         broker.runtime_gateway = self.runtime_gateway
         broker.count, broker.total, broker.next_request = self.count, self.total, self.next_request
@@ -2057,6 +2303,8 @@ class Routes:
                                                 + broker.network_observations_dropped - dropped_before)
         if api_grant is not None:
             self.events[-1]["apiOriginObservation"] = api_grant
+        if resource_grant is not None:
+            self.events[-1]["resourceUrlObservation"] = resource_grant
         if response["status"] in {301, 302, 303, 307, 308}:
             self.register_redirect(value["url"], response, broker)
         mime = next((v.split(";", 1)[0].strip().lower()
@@ -2079,23 +2327,37 @@ class Routes:
                     self.resource_responses.pop(next(iter(self.resource_responses)))
                 if value["method"] == "GET" and response["status"] == 200:
                     self.resource_documents.add(value["url"])
-        if value["method"] == "GET" and response["status"] == 200 and self.events[-1]["responseComplete"]:
+        if value["method"] in {"GET", "POST"} and response["status"] == 200 and self.events[-1]["responseComplete"]:
             mode = self.policy.get("responseApiOrigins")
             if mode in {"public_https", "public_http_https"}:
+                observed_body = base64.b64decode(response["body"], validate=True)
+                decoded_body = decoded_response_json(observed_body, self.response_decoders)
+                if decoded_body is not None:
+                    observed_body, mime = decoded_body, "application/json"
+                if not broker.last_session_response:
+                    for target in response_resource_urls(observed_body, mime):
+                        if ((target.startswith("https://") or mode == "public_http_https")
+                                and len(self.resource_urls) < 128):
+                            self.resource_urls.setdefault(target, (broker, self.events[-1]["responseSha256"]))
                 for origin in response_api_origins(
-                        base64.b64decode(response["body"], validate=True), mime, value["url"]):
+                        observed_body, mime, value["url"]):
                     if ((origin.startswith("https://") or mode == "public_http_https")
                             and origin not in self.routes and len(self.api_origins) < MAX_ROUTES):
                         self.api_origins.setdefault(origin, (broker, self.events[-1]["responseSha256"]))
-            self.register_response_urls(value["url"], response)
-            for target in response_query_urls(
-                    value["url"], base64.b64decode(response["body"], validate=True),
-                    self.policy.get("responseQueries", [])):
-                self.register_url(target, parsed.scheme + "://" + parsed.netloc)
-            for target, origin in response_json_urls(
-                    value["url"], base64.b64decode(response["body"], validate=True),
-                    self.policy.get("responseQueries", [])):
-                self.register_url(target, origin)
+            # Exact URL grants stay tied to idempotent GET observations. POST
+            # responses may contain session-bound or private links; they can
+            # still contribute a public API origin above, but must not expand
+            # the Spider's exact-address allowlist.
+            if value["method"] == "GET":
+                self.register_response_urls(value["url"], response)
+                for target in response_query_urls(
+                        value["url"], base64.b64decode(response["body"], validate=True),
+                        self.policy.get("responseQueries", [])):
+                    self.register_url(target, parsed.scheme + "://" + parsed.netloc)
+                for target, origin in response_json_urls(
+                        value["url"], base64.b64decode(response["body"], validate=True),
+                        self.policy.get("responseQueries", [])):
+                    self.register_url(target, origin)
         if value["method"] == "GET":
             self.register_playlist_urls(value["url"], response)
         return response
@@ -2124,7 +2386,9 @@ class Routes:
             return
         self.register_public_origin(origin, issuer)
 
-    def register_public_origin(self, origin, issuer):
+    def register_public_origin(self, origin, issuer, *, exact_url=None):
+        if origin in self.routes and exact_url is None:
+            self.routes[origin].policy["requestScope"] = "origin"
         if origin not in self.routes:
             require(len(self.routes) < MAX_ROUTES, "EGRESS_REQUEST_BUDGET")
             _, host, port = http_authority(origin, "EGRESS_URL_DENIED")
@@ -2137,7 +2401,11 @@ class Routes:
             route = {"origin": origin, "exactUrls": [], "requestScope": "origin", **address_pins(addresses),
                      "headerOrigins": list(dict.fromkeys(
                          [issuer.policy["origin"], *issuer.policy.get("headerOrigins", [])]))[:4]}
-            if issuer.policy.get("sessionToken") == {"responseScope": "origin"}:
+            if exact_url is not None:
+                route["exactUrls"] = [exact_url]
+                route.pop("requestScope")
+                route["methods"] = [method for method in self.policy["methods"] if method in {"GET", "HEAD"}]
+            elif issuer.policy.get("sessionToken") == {"responseScope": "origin"}:
                 route["sessionToken"] = {"responseScope": "origin"}
             receiver = Broker(route_policy(self.policy, route), connector=issuer.connector, allow_empty=True)
             receiver.bind_execution(issuer.deadline, issuer.cancelled)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 from collections import deque
+import http.client
 import io
 import json
 import os
@@ -194,10 +195,96 @@ def _https_open(handler, request):
     return _urllib_open(handler, request)
 
 
+class BrokerHTTPResponse(io.BytesIO):
+    def __init__(self, response):
+        super().__init__(response.content)
+        self.status, self.reason = response.status_code, response.reason
+        self.version, self.length, self.chunked, self.will_close = 11, len(response.content), False, True
+        self.headers = Message()
+        for key, value in response.headers.items():
+            if key.lower() != "set-cookie":
+                self.headers.add_header(key, value)
+        for cookie in response.raw._original_response.msg.get_all("Set-Cookie", []):
+            self.headers.add_header("Set-Cookie", cookie)
+        self.msg = self.headers
+
+    def getheader(self, name, default=None):
+        values = self.headers.get_all(name)
+        return ", ".join(values) if values else default
+
+    def getheaders(self):
+        return list(self.headers.items())
+
+    def info(self):
+        return self.headers
+
+    def isclosed(self):
+        return self.closed
+
+
+class BrokerHTTPConnection(http.client.HTTPConnection):
+    _scheme = "http"
+
+    def connect(self):
+        # Sources never acquire a socket; TLS, DNS and cookies remain broker-owned.
+        if self._tunnel_host or self.source_address:
+            raise http.client.HTTPException("EGRESS_CONNECTION_OPTIONS_DENIED")
+
+    def set_tunnel(self, *args, **kwargs):
+        raise http.client.HTTPException("EGRESS_PROXY_DENIED")
+
+    def request(self, method, url, body=None, headers=None, *, encode_chunked=False):
+        if getattr(self, "_broker_response", None) is not None:
+            raise http.client.CannotSendRequest("EGRESS_RESPONSE_PENDING")
+        self.connect()
+        if not isinstance(url, str) or not url.startswith("/") or url.startswith("//"):
+            raise http.client.HTTPException("EGRESS_URL_DENIED")
+        host = "[" + self.host + "]" if ":" in self.host else self.host
+        authority = host + (":" + str(self.port) if self.port != self.default_port else "")
+        headers = dict(headers or {})
+        hosts = [value for key, value in headers.items() if key.lower() == "host"]
+        if (len(hosts) > 1 or any(not isinstance(value, str) or value.lower() not in {
+                authority.lower(), (host + ":" + str(self.port)).lower()} for value in hosts)):
+            raise http.client.HTTPException("EGRESS_HEADERS_DENIED")
+        headers = {key: value for key, value in headers.items() if key.lower() != "host"}
+        if isinstance(body, str):
+            body = body.encode("latin-1")
+        try:
+            response = send(None, SimpleNamespace(method=method, url=self._scheme + "://" + authority + url,
+                                                  headers=headers, body=body))
+        except requests.RequestException as error:
+            raise http.client.HTTPException(str(error)) from error
+        self._broker_response = BrokerHTTPResponse(response)
+
+    def getresponse(self):
+        response = getattr(self, "_broker_response", None)
+        if response is None:
+            raise http.client.ResponseNotReady("EGRESS_RESPONSE_UNAVAILABLE")
+        self._broker_response = None
+        return response
+
+    def close(self):
+        response = getattr(self, "_broker_response", None)
+        if response is not None:
+            response.close()
+            self._broker_response = None
+        super().close()
+
+
+class BrokerHTTPSConnection(BrokerHTTPConnection):
+    default_port = 443
+    _scheme = "https"
+
+    def __init__(self, *args, context=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
 def install(stream):
     global INPUT
     INPUT = BrokerInput(stream)
     requests.adapters.HTTPAdapter.send = send
     urllib.request.HTTPHandler.http_open = _http_open
     urllib.request.HTTPSHandler.https_open = _https_open
+    http.client.HTTPConnection = BrokerHTTPConnection
+    http.client.HTTPSConnection = BrokerHTTPSConnection
     return CommandInput(INPUT)

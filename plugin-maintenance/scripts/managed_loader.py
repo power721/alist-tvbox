@@ -19,6 +19,48 @@ def digest(value):
                                       separators=(",", ":")).encode()).hexdigest()
 
 
+def failure_context(value):
+    limits = {"sourceLine": 1000000, "errno": 4095}
+    require(isinstance(value, dict) and 1 <= len(value) <= 3
+            and set(value) <= set(limits) | {"hostStage"}
+            and all(value[key] == "atvp_backend_endpoint" if key == "hostStage" else
+                    type(value[key]) is int and 1 <= value[key] <= limits[key] for key in value),
+            "LOADER_FAILURE_CONTEXT_INVALID")
+    return dict(value)
+
+
+def init_observation(value):
+    """Keep a small, non-content hint when init returned an unusable value."""
+    if value is None:
+        shape, name_present = "null", False
+    elif isinstance(value, dict):
+        shape = "object"
+        name_present = isinstance(value.get("name"), str) and bool(value["name"].strip())
+    elif isinstance(value, list):
+        shape, name_present = "array", False
+    elif isinstance(value, str):
+        text = value.lstrip().lower()
+        shape = ("empty_text" if not text else "html" if text.startswith("<") or "<html" in text[:512]
+                 else "json_text" if text.startswith(("{", "[")) else "text")
+        name_present = False
+    elif isinstance(value, bool):
+        shape, name_present = "boolean", False
+    elif isinstance(value, (int, float)):
+        shape, name_present = "number", False
+    else:
+        shape, name_present = "other", False
+    return {"stage": "init_identity", "resultShape": shape, "namePresent": name_present}
+
+
+def source_purpose_hint(source):
+    """Recognize a magnet/cloud-resource source as a compatibility hint only."""
+    text = source.lower()
+    if (b"magnet:" in text and (b"vod_play_url" in text or b"share" in text)
+            and any(marker in text for marker in (b"seed_id", b"pan-links", b"cloud", b"\xe7\xbd\x91\xe7\x9b\x98"))):
+        return "magnet_or_cloud_resource"
+    return None
+
+
 STANDARD_METHODS = (
     "init",
     "homeContent",
@@ -148,7 +190,7 @@ def resource_links(body, page=False):
                       text)[:128]
 
 
-def resource_excerpts(body, page=False, *, playback=False):
+def resource_excerpts(body, page=False, *, playback=False, content=False):
     if len(body) <= 6000 and not (playback and len(body) > 2000):
         return [(1, 0, body)]
     if page:
@@ -162,6 +204,8 @@ def resource_excerpts(body, page=False, *, playback=False):
             patterns = (
                 (10, rb"""\b(?:var|let|const)\s+[\w$]*(?:player|video|media|play|config)[\w$]*\s*=|["'](?:url|file|sources|encrypt)["']\s*:|\bplayer_[\w$]+\s*="""),
                 (9, rb"<(?:video|source|iframe)\b|\.m3u8|\.mp4"), *patterns)
+        if content:
+            patterns = ((12, rb"""<(?:div|ul|ol|section)\b[^>]*(?:id|class)\s*=\s*["'][^"']{0,160}(?:playlist|play[-_]list|episode|anthology)"""), *patterns)
         for score, pattern in patterns:
             matches = list(re.finditer(pattern, body, re.IGNORECASE))[:512]
             selected = sorted({round(i * (len(matches) - 1) / 7) for i in range(8)}) if matches else []
@@ -196,8 +240,97 @@ def resource_excerpts(body, page=False, *, playback=False):
             or ([(1, 0, body[:6000])] if playback else []))
 
 
+class IndexedPlaylists(HTMLParser):
+    """Observe complete, explicitly indexed HTML playlists without executing page code."""
+    VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+
+    def __init__(self, base):
+        super().__init__(convert_charrefs=True)
+        self.base, self.stack, self.groups, self.invalid = base, [], [], False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        active = next((group for _, group in reversed(self.stack) if group is not None), None)
+        group = None
+        if re.fullmatch(r"playlist\d{1,4}", attrs.get("id", ""), re.I):
+            if active is not None or len(self.groups) >= 128:
+                self.invalid = True
+            else:
+                group = {"id": attrs["id"].lower(), "links": [], "closed": False}
+                self.groups.append(group)
+        if tag == "a" and active is not None:
+            href = attrs.get("href", "").strip()
+            route = urlsplit(urljoin(self.base, href))
+            if not href or route.scheme not in {"http", "https"} or not route.hostname or len(active["links"]) >= 10000:
+                self.invalid = True
+            else:
+                active["links"].append(urljoin(self.base, href))
+        if tag not in self.VOID:
+            self.stack.append((tag, group))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if tag not in self.VOID:
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag):
+        index = next((i for i in range(len(self.stack) - 1, -1, -1) if self.stack[i][0] == tag), None)
+        if index is None:
+            return
+        for i, (_, group) in enumerate(self.stack[index:], index):
+            if group is not None:
+                group["closed"] = i == index
+                if not group["closed"]:
+                    self.invalid = True
+        del self.stack[index:]
+
+
+def playlist_observation(body, url, output):
+    parser = IndexedPlaylists(url)
+    try:
+        parser.feed(body.decode("utf-8-sig"))
+        parser.close()
+        groups = parser.groups
+        if not groups:
+            return None
+        links = sorted(sorted(group["links"]) for group in groups)
+        complete = (not parser.invalid and all(group["closed"] and group["links"] for group in groups)
+                    and len({group["id"] for group in groups}) == len(groups))
+        matches, coverage = False, None
+        try:
+            _, details = cards(output)
+            if len(details) == 1:
+                extracted, comparable = [], True
+                for group in details[0].get("vod_play_url", "").split("$$$"):
+                    values = []
+                    for episode in group.split("#"):
+                        name, separator, value = episode.partition("$")
+                        require(name.strip() and separator and value, "PLAY_EPISODE_INVALID")
+                        comparable = comparable and (value.startswith(("http://", "https://", "/", "./", "../")))
+                        values.append(urljoin(url, value))
+                    extracted.append(sorted(values))
+                matches = complete and sorted(extracted) == links
+                if complete and comparable:
+                    page_links = {link for group in links for link in group}
+                    output_links = {link for group in extracted for link in group}
+                    coverage = {"pageUniqueLinks": len(page_links), "outputUniqueLinks": len(output_links),
+                                "missingPageLinks": len(page_links - output_links),
+                                "extraOutputLinks": len(output_links - page_links)}
+        except (Invalid, ValueError, TypeError, KeyError, AttributeError):
+            pass
+        counts = [len(group["links"]) for group in groups]
+        result = {"policy": "indexed_playlist_links_v1", "complete": complete, "groups": len(groups),
+                "maxEpisodes": max(counts), "groupEpisodeCounts": counts,
+                "playlistSha256": digest(links), "outputMatchesPage": matches}
+        if coverage is not None:
+            result["linkCoverage"] = coverage
+        return result
+    except (ValueError, UnicodeError):
+        return None
+
+
 def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C09", player_page=None,
-                              player_values=None):
+                              player_values=None, cached_calls=None, text_budget=MAX_RESOURCE_TEXT, detail_output=None):
     value = {"schemaVersion": 1, "authority": "host_public_resource_observed",
              "artifactSha256": source_sha, "targetNode": target_node, "image": image,
              "resources": [], "failures": [], "textByteLimit": MAX_RESOURCE_TEXT,
@@ -208,6 +341,12 @@ def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C0
     entries = getattr(broker, "policy", {}).get("resourceEvidence", {}).get("entryUrls", [])
     fetch = getattr(broker, "fetch_resource", None)
     snapshot = getattr(broker, "snapshot_resources", lambda: [])()
+    if cached_calls is not None:
+        # Capture the completed action before the bounded broker cache evicts its response.
+        snapshot = [(url, response) for url, response in snapshot
+                    if response.get("observedDuringCall", {}).get("id") in cached_calls]
+        snapshot.sort(key=lambda item: (item[1]["status"] != 200, not item[1].get("body")))
+        entries, fetch = [], None
     if not snapshot and (not fetch or not entries) and player_page is None:
         value["collectionStatus"] = "not_configured"
         return value
@@ -220,7 +359,7 @@ def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C0
     queue = [(url, None, 0) for url in dict.fromkeys(preferred + [url for url, _ in observed] + entries)]
     visited, excerpts, discovery_calls = set(), [], {}
     structure_bytes = 0
-    while queue and len(visited) < MAX_RESOURCE_FETCHES:
+    while queue and len(visited) < (1 if cached_calls is not None else MAX_RESOURCE_FETCHES):
         url, parent, depth = queue.pop(0)
         if url in visited:
             continue
@@ -260,6 +399,11 @@ def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C0
                 row["requestMethod"] = method
                 row["jsonStructure"] = structure
                 structure_bytes += len(json.dumps(structure, separators=(",", ":")).encode())
+            elif cached_calls is not None and response["status"] == 200:
+                observation = playlist_observation(body, url, detail_output)
+                if observation is not None:
+                    row["playlistObservation"] = observation
+                    structure_bytes += len(json.dumps(observation, separators=(",", ":")).encode())
             if "observedDuringCall" in response:
                 row["observedDuringCall"] = response["observedDuringCall"]
             if structure is None and parent in discovery_calls:
@@ -273,7 +417,8 @@ def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C0
             excerpts.extend((score, len(value["resources"]) - 1, offset, chunk)
                             for score, offset, chunk in resource_excerpts(
                                 body, parent is None or response["status"] != 200,
-                                playback=target_node == "R01" and response["status"] == 200))
+                                playback=target_node == "R01" and response["status"] == 200,
+                                content=cached_calls is not None))
             if fetch and depth < 2 and response["status"] == 200:
                 links = resource_links(body, parent is None)
                 if target_node == "R01":
@@ -308,7 +453,8 @@ def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C0
                                       "code": code if isinstance(code, str) and re.fullmatch(
                                           r"EGRESS_[A-Z_]{1,64}|RESOURCE_SCRIPT_RETURNED_HTML|RESOURCE_JSON_UNAVAILABLE", code)
                                       else "RESOURCE_FETCH_UNAVAILABLE"})
-    remaining = MAX_RESOURCE_TEXT - structure_bytes
+    text_limit = min(MAX_RESOURCE_TEXT, text_budget)
+    remaining = text_limit - structure_bytes
     ordered = sorted(excerpts, key=lambda item: -item[0])
     retained = {}
 
@@ -359,7 +505,7 @@ def collect_resource_evidence(broker, source_sha, image=None, *, target_node="C0
                 offset < end and offset + len(chunk) > start for start, end in retained.get(index, [])):
             continue
         append_excerpt(item, remaining)
-    value["textBytes"] = MAX_RESOURCE_TEXT - remaining
+    value["textBytes"] = text_limit - remaining
     value["collectionStatus"] = "observed" if value["resources"] else "unavailable"
     return value
 
@@ -595,13 +741,18 @@ class Loader:
                 and profile.get("paginationMode", "exact-total") in {"exact-total", "page-window"},
                 "LOADER_PROFILE_INVALID")
         purpose = profile.get("sourcePurpose", "video")
-        require(isinstance(purpose, str) and purpose in {"video", "metadata-navigation"},
+        require(isinstance(purpose, str) and purpose in {"video", "metadata-navigation", "magnet"},
                 "LOADER_PROFILE_INVALID")
-        if purpose == "metadata-navigation":
+        if purpose in {"metadata-navigation", "magnet"}:
             targets = set(profile["requiredNodes"]) | set(profile.get("optionalNodes", []))
-            require("C07" in profile["requiredNodes"] and {"C03", "C05"}.intersection(profile["requiredNodes"])
-                    and not any(re.fullmatch(r"C1[01]|R0[1-8]|M(?:0[1-9]|10)|P0[1-5]", node)
-                                for node in targets), "LOADER_PROFILE_INVALID")
+            if purpose == "metadata-navigation":
+                require("C07" in profile["requiredNodes"] and {"C03", "C05"}.intersection(profile["requiredNodes"])
+                        and not any(re.fullmatch(r"C1[01]|R0[1-8]|M(?:0[1-9]|10)|P0[1-5]", node)
+                                    for node in targets), "LOADER_PROFILE_INVALID")
+            else:
+                require({"C03", "C05", "C07", "C10", "R01"}.intersection(targets)
+                        and not any(re.fullmatch(r"M(?:0[1-9]|10)|P0[1-5]", node) for node in targets),
+                        "LOADER_PROFILE_INVALID")
         if "searchKeyword" in profile:
             keyword = profile["searchKeyword"]
             require(isinstance(keyword, str) and 0 < len(keyword) <= 200 and keyword.strip()
@@ -649,6 +800,10 @@ class Loader:
         self.awaiting = None
         self.response = None
         self.resource_evidence = None
+        self.content_resource_evidence = None
+        self.content_pages, self.content_details = {}, {}
+        self.content_snapshot = None
+        self.content_sampled = False
         self.summary = {"status": "source_exception", **{key: 0 for key in (
             "homeClasses", "homeItems", "homeCovers", "categoryItems", "categoryCovers",
             "page2Items", "detailItems", "detailCovers", "playGroups", "playEpisodes")},
@@ -683,7 +838,8 @@ class Loader:
         require(call is not None and isinstance(frame, dict)
                 and type(frame.get("id")) is int and frame["id"] == call["id"]
                 and type(frame.get("ok")) is bool and frame.get("kind") == "call_result"
-                and set(frame) == {"kind", "id", "ok", "result" if frame["ok"] else "code"},
+                and set(frame) == ({"kind", "id", "ok", "result"} if frame["ok"] else
+                                   {"kind", "id", "ok", "code"} | ({"failureContext"} if "failureContext" in frame else set())),
                 "LOADER_CALL_RESULT_MISMATCH")
         self.calls.append({"id": call["id"], "method": call["method"], "ok": frame["ok"],
                            "inputSha256": digest(call["params"]),
@@ -691,6 +847,8 @@ class Loader:
                            "elapsedMillis": round((time.monotonic() - self.started) * 1000)})
         if not frame["ok"] and frame["code"] in self.FAILURE_TYPES:
             self.calls[-1]["failureType"] = frame["code"]
+            if "failureContext" in frame:
+                self.calls[-1]["failureContext"] = failure_context(frame["failureContext"])
         self.response = frame
         self.awaiting = None
         getattr(self.broker, "set_source_call", lambda call: None)(None)
@@ -698,16 +856,118 @@ class Loader:
 
     def invoke(self, method, params):
         yield method, params
+        if method == "detail":
+            captured = collect_resource_evidence(self.broker, self.source_sha, target_node="C10",
+                                                cached_calls={len(self.calls)}, text_budget=2048,
+                                                detail_output=self.response.get("result"))
+            if captured["resources"]:
+                if self.content_resource_evidence is None:
+                    self.content_resource_evidence = captured
+                else:
+                    existing = self.content_resource_evidence
+                    seen = {row["urlSha256"] for row in existing["resources"]}
+                    for row in captured["resources"]:
+                        if row["urlSha256"] not in seen and len(existing["resources"]) < MAX_RESOURCE_FETCHES:
+                            existing["resources"].append(row)
+                            existing["textBytes"] += captured["textBytes"]
         require(self.response["ok"], "LOADER_METHOD_FAILED")
-        return self.response["result"]
+        result = self.response["result"]
+        if method == "category" and params.get("pg") == "1":
+            self.content_pages[params["t"]] = (result, len(self.calls))
+        elif method == "detail" and params.get("ids"):
+            self.content_details[params["ids"]] = (result, len(self.calls))
+        return result
+
+    def sample_content(self, home):
+        """Observe every small source's category and one detail per category, without playing it."""
+        classes = home.get("class", []) if home else []
+        if not isinstance(classes, list) or not classes or not all(
+                isinstance(row, dict) and isinstance(row.get("type_id"), str) and row["type_id"]
+                for row in classes) or len({row["type_id"] for row in classes}) != len(classes):
+            return
+        declared = sorted(digest(row["type_id"]) for row in classes)
+        details_sampled = bool(self.targets.intersection({"C07", "C08", "C09", "C10", "C11", "R01", "R06",
+                                                        *("M%02d" % i for i in range(1, 11))}))
+        # Keep large navigation catalogues bounded; disclose exactly which categories were sampled.
+        self.content_snapshot = {"schemaVersion": 1, "declaredCategories": len(classes),
+                                 "declaredCategoryIdsSha256": digest(declared),
+                                 "allCategoriesSampled": len(classes) <= 12,
+                                 "detailsSampled": details_sampled, "categories": []}
+        for category in sorted(classes, key=lambda row: digest(row["type_id"]))[:12]:
+            ident = category["type_id"]
+            row = {"categoryIdSha256": digest(ident), "status": "error", "firstItems": 0,
+                   "categoryCallId": 0}
+            self.content_snapshot["categories"].append(row)
+            try:
+                if ident not in self.content_pages:
+                    yield from self.invoke("category", {"t": ident, "pg": "1", "filter": True, "extend": {}})
+                raw, call_id = self.content_pages[ident]
+                row["categoryCallId"] = call_id
+                _, items = cards(raw, allow_empty=True)
+                row.update(status="returned" if items else "empty", firstItems=len(items))
+                if not items and self.resource_evidence is None:
+                    self.resource_evidence = collect_resource_evidence(
+                        self.broker, self.source_sha, target_node="C03")
+            except (Invalid, ValueError, TypeError, KeyError):
+                if not row["categoryCallId"]:
+                    row["categoryCallId"] = len(self.calls)
+                continue
+            if not items or not details_sampled:
+                continue
+            selected = items[0]
+            detail = row["detail"] = {"itemIdSha256": digest(selected["vod_id"]), "status": "error",
+                                      "detailCallId": 0, "groups": 0, "episodes": 0}
+            # A card's episode badge is advisory, and is not evidence of a playable episode list.
+            badge = re.fullmatch(r"\s*(\d{1,6})\s*集\s*", str(selected.get("vod_remarks", "")))
+            if badge:
+                detail["listedEpisodes"] = int(badge[1])
+            try:
+                if selected["vod_id"] not in self.content_details:
+                    yield from self.invoke("detail", {"ids": selected["vod_id"]})
+                raw, call_id = self.content_details[selected["vod_id"]]
+                detail["detailCallId"] = call_id
+                _, details = cards(raw)
+                require(len(details) == 1 and self.match_detail(selected, details[0])[0], "DETAIL_IDENTITY_MISMATCH")
+                flags = details[0].get("vod_play_from", "")
+                groups = details[0].get("vod_play_url", "")
+                if not flags and not groups:
+                    detail["status"] = "no_playback"
+                    continue
+                flags, groups = flags.split("$$$"), groups.split("$$$")
+                require(len(flags) == len(groups) and all(flags) and all(groups), "PLAY_GROUPS_INVALID")
+                counts = []
+                for group in groups:
+                    episodes = group.split("#")
+                    for episode in episodes:
+                        name, separator, value = episode.partition("$")
+                        require(name.strip() and separator and value, "PLAY_EPISODE_INVALID")
+                    counts.append(len(episodes))
+                detail.update(status="returned", groups=len(groups), episodes=max(counts))
+            except (Invalid, ValueError, TypeError, KeyError, AttributeError):
+                if not detail["detailCallId"]:
+                    detail["detailCallId"] = len(self.calls)
+        self.content_sampled = True
+
+    def partial_progress(self):
+        value = {"schemaVersion": 1, "inputSourceSha256": self.source_sha,
+                 "profileSha256": digest(self.profile) if self.profile is not None else None,
+                 "fullAcceptance": False, "completedCalls": [
+                     {key: row[key] for key in ("id", "method", "ok", "inputSha256", "outputSha256",
+                                               "failureType", "failureContext") if key in row}
+                     for row in self.calls]}
+        if self.content_sampled:
+            value["contentSnapshot"] = self.content_snapshot
+        return json.loads(json.dumps(value))
 
     def record(self, node, status, reason, **values):
         if (reason in {"LOADER_INIT_FAILED", "LOADER_METHOD_FAILED"} and self.calls
                 and not self.calls[-1]["ok"] and "failureType" in self.calls[-1]):
             values["failureType"] = self.calls[-1]["failureType"]
+            if "failureContext" in self.calls[-1]:
+                values["failureContext"] = dict(self.calls[-1]["failureContext"])
         self.nodes.append({"id": node, "status": status, "reason": reason, **values})
         if (self.resource_evidence is None and status in {"fail", "blocked"}
-                and node in {"C01", "C02", "C03", "C07", "C10", "R01"}):
+                and node in {"S06", "C01", "C02", "C03", "C07", "C10", "R01"}):
             self.resource_evidence = collect_resource_evidence(
                 self.broker, self.source_sha, target_node=node)
 
@@ -715,19 +975,24 @@ class Loader:
         home, items, detail, selection, player = None, [], None, None, None
         search_selected, search_detail = None, None
         detail_call_id, search_detail_call_id = 0, 0
+        init_result = None
         try:
             payload = {"source": "/work/managed-source.py", "raw": True}
             if self.source_data:
                 payload["data"] = self.source_data
             ext = base64.b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
-            result = yield from self.invoke("init", {"extend": ext})
-            require(self.loaded and isinstance(result, dict) and isinstance(result.get("name"), str)
-                    and result["name"].strip(), "LOADER_INIT_IDENTITY_UNCONFIRMED")
-            self.record("S06", "pass", "PRE_EXEC_SOURCE_SHA_AND_INIT_RETURNED")
+            init_result = yield from self.invoke("init", {"extend": ext})
+            # Identity comes from the pre-execution hash handshake, not optional getName metadata.
+            require(self.loaded and isinstance(init_result, dict) and set(init_result) == {"name", "result"}
+                    and (init_result["name"] is None or isinstance(init_result["name"], str)),
+                    "LOADER_INIT_IDENTITY_UNCONFIRMED")
+            self.record("S06", "pass", "PRE_EXEC_SOURCE_SHA_AND_INIT_RETURNED",
+                        initObservation=init_observation(init_result))
             self.initialization_contracts()
             self.summary["status"] = "init_returned"
         except (Invalid, ValueError, TypeError):
-            self.record("S06", "blocked", "LOADER_INIT_FAILED")
+            self.record("S06", "blocked", "LOADER_INIT_FAILED",
+                        initObservation=init_observation(init_result))
             return
         try:
             home = document((yield from self.invoke("home", {"filter": True})))
@@ -824,7 +1089,12 @@ class Loader:
                     self.record("C03", "pass", "FIRST_SECOND_LAST_PAGE_CONTRACT",
                                 firstItems=len(items), secondItems=len(page2), lastItems=len(last_items), pages=pages)
             except (Invalid, ValueError, TypeError, KeyError) as error:
-                self.record("C03", "fail", str(error) if isinstance(error, Invalid) else "CATEGORY_OUTPUT_INVALID")
+                values = {}
+                hint = source_purpose_hint(self.source)
+                if str(error) == "CONTENT_LIST_EMPTY_OR_INVALID" and hint:
+                    values["sourcePurposeHint"] = hint
+                self.record("C03", "fail", str(error) if isinstance(error, Invalid) else "CATEGORY_OUTPUT_INVALID",
+                            **values)
                 # Valid first-page cards still support independent detail/player observations.
         if "C05" in self.targets:
             keyword = (self.profile or {}).get("searchKeyword") or (items[0]["vod_name"][:200] if items else "")
@@ -877,6 +1147,7 @@ class Loader:
             except (Invalid, ValueError, TypeError) as error:
                 self.record("C07", "fail", str(error) if isinstance(error, Invalid) else "DETAIL_OUTPUT_INVALID",
                             **({"identityEvidence": identity} if identity else {}))
+        yield from self.sample_content(home)
         if detail and "C09" in self.targets:
             yield from self.sample_image(detail)
         if detail and (player_requested or "C10" in self.targets):
@@ -1035,9 +1306,75 @@ class Loader:
     def sample_image(self, detail):
         url = detail.get("vod_pic")
         parsed = urlsplit(url) if isinstance(url, str) else None
-        if parsed is None or parsed.scheme != "http" or parsed.netloc != "managed.invalid":
-            self.image(detail)
+        if parsed is not None and parsed.scheme == "http" and parsed.netloc == "managed.invalid":
+            yield from self._sample_declared_cover_proxy(detail, parsed)
             return
+        yield from self._sample_direct_cover(detail)
+
+    def _sample_direct_cover(self, detail):
+        """Use a real direct response first, then ask the source-owned callback to decode it."""
+        url = detail.get("vod_pic")
+        direct = None
+        try:
+            direct, body = self.fetch(url, {})
+            mime = next((value.split(";", 1)[0].strip().lower()
+                         for key, value in direct["headers"].items()
+                         if key.lower() == "content-type"), "")
+            plain = (body.startswith(b"\xff\xd8\xff") or body.startswith(b"\x89PNG\r\n\x1a\n")
+                     or body[:4] == b"RIFF" and body[8:12] == b"WEBP"
+                     or body[:6] in {b"GIF87a", b"GIF89a"})
+            verifier = getattr(self.broker, "verify_image", None)
+            if not plain and verifier is not None:
+                try:
+                    decoded = verifier(body)
+                    plain = (isinstance(decoded, dict)
+                             and decoded.get("sha256") == hashlib.sha256(body).hexdigest()
+                             and type(decoded.get("width")) is int and decoded["width"] > 0
+                             and type(decoded.get("height")) is int and decoded["height"] > 0)
+                except Exception:
+                    plain = False
+            if plain and mime.startswith("image/"):
+                self.image(detail, response=direct)
+                return
+        except Exception:
+            direct = None
+        try:
+            target = self._cover_proxy_target(url)
+            params = {"target": target, "range": "", "head": False}
+            result = yield from self.invoke("proxy", params)
+            require(isinstance(result, dict) and set(result) == {
+                "status", "mime", "headers", "bytes", "body", "sha256"}
+                and result["status"] == 200 and isinstance(result["mime"], str)
+                and isinstance(result["body"], str) and len(result["body"]) <= 4 * ((MAX_IMAGE_BYTES + 2) // 3)
+                and type(result["bytes"]) is int, "COVER_PROXY_RESULT_INVALID")
+            body = base64.b64decode(result["body"], validate=True)
+            require(0 < len(body) <= MAX_IMAGE_BYTES and len(body) == result["bytes"]
+                    and hashlib.sha256(body).hexdigest() == result["sha256"],
+                    "COVER_PROXY_RESULT_INVALID")
+            observation = {"workerCallId": self.calls[-1]["id"], "paramsSha256": digest(params),
+                           "resultSha256": digest(result),
+                           "targetSha256": hashlib.sha256(url.encode()).hexdigest()}
+            self.image(detail, response={"status": 200, "body": result["body"],
+                                        "headers": {"Content-Type": result["mime"]}},
+                       proxy_observation=observation)
+        except (Invalid, ValueError, TypeError):
+            if direct is not None:
+                self.image(detail, response=direct)
+            else:
+                self.record("C09", "blocked", "COVER_PROXY_RESULT_INVALID")
+
+    @staticmethod
+    def _cover_proxy_target(url):
+        require(isinstance(url, str) and 0 < len(url) <= 8192, "COVER_PROXY_URL_INVALID")
+        parsed = urlsplit(url)
+        require(parsed.scheme in {"http", "https"} and parsed.hostname and not parsed.username
+                and not parsed.password and not parsed.fragment, "COVER_PROXY_URL_INVALID")
+        from urllib.parse import urlencode
+        target = "/local?" + urlencode({"url": url})
+        require(len(target) <= 8192, "COVER_PROXY_URL_INVALID")
+        return target
+
+    def _sample_declared_cover_proxy(self, detail, parsed):
         try:
             require(parsed.path == "/local" and not parsed.fragment, "COVER_PROXY_RESULT_INVALID")
             params = {"target": parsed.path + ("?" + parsed.query if parsed.query else ""),
@@ -1054,9 +1391,9 @@ class Loader:
                     "COVER_PROXY_RESULT_INVALID")
             observation = {"workerCallId": self.calls[-1]["id"], "paramsSha256": digest(params),
                            "resultSha256": digest(result),
-                           "targetSha256": hashlib.sha256(url.encode()).hexdigest()}
+                           "targetSha256": hashlib.sha256(detail["vod_pic"].encode()).hexdigest()}
             self.image(detail, response={"status": 200, "body": result["body"],
-                                        "headers": {"Content-Type": result["mime"]}},
+                                         "headers": {"Content-Type": result["mime"]}},
                        proxy_observation=observation)
         except (Invalid, ValueError, TypeError):
             self.record("C09", "blocked", "COVER_PROXY_RESULT_INVALID")
@@ -1404,6 +1741,8 @@ class Loader:
         data = (self.profile or {}).get("publicSourceData", {})
         if all(key in data for key in SOURCE_IDENTITY_KEYS):
             value.update(self.source_identity)
+        if self.content_snapshot is not None:
+            value["contentSnapshot"] = self.content_snapshot
         return value
 
     @staticmethod

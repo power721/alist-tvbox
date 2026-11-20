@@ -506,10 +506,25 @@ class RuntimeGateway:
         self.lightweight_counts = dict.fromkeys(('attempts', 'httpAccepted', 'rejected'), 0)
 
     @staticmethod
+    def reproducibility_reason(broker, value):
+        if value['method'] != 'GET':
+            return 'request_method'
+        if value.get('body'):
+            return 'request_body'
+        if broker.host_credentials:
+            return 'host_credentials'
+        # Browser transport and navigation hints are browser-owned, not account/API state.
+        supported = {'accept', 'accept-language', 'referer', 'user-agent', 'cache-control', 'pragma',
+                     'accept-encoding', 'connection', 'upgrade-insecure-requests', 'dnt', 'priority',
+                     'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user',
+                     'sec-fetch-storage-access', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform'}
+        if any(key.lower() not in supported for key in value['headers']):
+            return 'request_headers'
+        return None
+
+    @staticmethod
     def reproducible(broker, value):
-        supported = {'accept', 'accept-language', 'referer', 'user-agent', 'cache-control', 'pragma'}
-        return (value['method'] == 'GET' and not value.get('body') and not broker.host_credentials
-                and not any(key.lower() not in supported for key in value['headers']))
+        return RuntimeGateway.reproducibility_reason(broker, value) is None
 
     def request_headers(self, broker, value, expected_cookie):
         client = self.clients.get(broker.policy['origin'])
@@ -558,8 +573,10 @@ class RuntimeGateway:
         # Browser navigations cannot reproduce account, signed API, POST or byte-range requests.
         headers = value['headers']
         mime = event.get('responseContentType', '')
-        if not self.reproducible(broker, value) or mime not in {'text/html', 'application/xhtml+xml'}:
+        skip_reason = self.reproducibility_reason(broker, value)
+        if skip_reason or mime not in {'text/html', 'application/xhtml+xml'}:
             event['gatewayOutcome'] = 'request_not_reproducible'
+            event['gatewaySkipReason'] = skip_reason or 'response_content_type'
             return direct
         client = self.clients.get(origin)
         blocked = client.blocked_error() if client else None
