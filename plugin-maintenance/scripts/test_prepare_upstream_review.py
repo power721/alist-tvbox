@@ -34,7 +34,7 @@ class UpstreamReviewTests(unittest.TestCase):
         } <= groups[0].keys())
         self.assertIn("plugin-maintenance/server/src/main/java/cn/har01d/atmaintenance/service/ManagedSourceSetup.java",
                       groups[1])
-        self.assertIn("docs/plugin-maintenance/configured-source-origins-2026-11-16.md", groups[3])
+        self.assertIn("docs/plugin-maintenance/managed-runner-operations.md", groups[3])
         self.assertIn(b"sourceConfig", groups[3]["docs/plugin-maintenance/managed-runner-operations.md"])
 
     def parent_fixture(self, directory):
@@ -116,7 +116,7 @@ class UpstreamReviewTests(unittest.TestCase):
         self.assertIn("plugin-maintenance/at-contract-lab/fixtures/t4_home.py", groups[0])
         self.assertIn("plugin-maintenance/managed-source/egress_payload.py", groups[0])
         self.assertIn("src/main/resources/scripts/t4worker.py", groups[4])
-        self.assertIn("docs/plugin-maintenance/t4-home-current-runtime-2026-11-16.md", groups[3])
+        self.assertIn("docs/plugin-maintenance/core-capabilities.md", groups[3])
         self.assertIn("plugin-maintenance/server/src/test/java/cn/har01d/atmaintenance/service/ManagedSourceControlFrameTest.java", groups[1])
 
     def test_image_lifecycle_entrypoint_checks_and_policy_are_delivered(self):

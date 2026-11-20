@@ -11,6 +11,10 @@ import subprocess
 PROJECT = "at-plugin-maintenance"
 LABEL = "org.alist-tvbox.maintenance."
 ID = re.compile(r"sha256:[a-f0-9]{64}\Z")
+CONTAINER_ID = re.compile(r"[a-f0-9]{64}\Z")
+CONTAINER_FORMAT = ('{"Id":{{json .Id}},"Name":{{json .Name}},"Image":{{json .Image}},'
+                    '"State":{{json .State}},"Mounts":{{json .Mounts}},'
+                    '"Config":{"Labels":{{json .Config.Labels}}}}')
 
 
 def identity(role, version, revision, build_id=None, retention="temporary"):
@@ -75,15 +79,68 @@ def retirement_plan(images, role, protected):
     return result
 
 
-def retire(role, keep, apply=False):
+def container_inventory():
+    ids = docker(["container", "ls", "--all", "--quiet", "--no-trunc"]).split()
+    if not ids:
+        return []
+    return [json.loads(line) for line in docker(
+        ["container", "inspect", "--format", CONTAINER_FORMAT, *ids]).splitlines()]
+
+
+def stopped_container_plan(containers, images, role, protected):
+    eligible = {row["imageId"] for row in retirement_plan(images, role, protected)}
+    result = []
+    for container in containers:
+        state = container.get("State") or {}
+        labels = container.get("Config", {}).get("Labels") or {}
+        # Embedded control-plane state must outlive retirement of its disposable process.
+        data = [row["Source"] for row in container.get("Mounts", [])
+                if row.get("Destination") == "/data" and row.get("Type") == "bind"
+                and isinstance(row.get("Source"), str) and row["Source"].startswith("/")]
+        if (role != "embedded" or not CONTAINER_ID.fullmatch(container.get("Id", ""))
+                or container.get("Image") not in eligible
+                or state.get("Status") not in {"exited", "created", "dead"}
+                or state.get("Running") is not False or state.get("Restarting") is not False
+                or labels.get(LABEL + "project") != PROJECT or labels.get(LABEL + "role") != role
+                or len(data) != 1):
+            continue
+        result.append({"containerId": container["Id"], "name": container.get("Name", ""),
+                       "imageId": container["Image"], "preservedDataPath": data[0]})
+    return result
+
+
+def retire(role, keep, apply=False, retire_stopped_containers=False):
     protected = keep_images(keep)
-    container_ids = docker(["container", "ls", "--all", "--quiet", "--no-trunc"]).split()
-    if container_ids:
-        protected.update(docker(["container", "inspect", "--format", "{{.Image}}", *container_ids]).split())
+    containers = container_inventory()
     ids = sorted(set(docker(["image", "ls", "--all", "--quiet", "--no-trunc", "--filter",
                             "label=" + LABEL + "project=" + PROJECT, "--filter",
                             "label=" + LABEL + "role=" + role]).split()))
     images = json.loads(docker(["image", "inspect", *ids])) if ids else []
+    container_plan, container_results = [], []
+    if retire_stopped_containers:
+        protected.update(row["Image"] for row in containers
+                         if row.get("State", {}).get("Status") not in {"exited", "created", "dead"}
+                         or row.get("State", {}).get("Running") is not False
+                         or row.get("State", {}).get("Restarting") is not False)
+        container_plan = stopped_container_plan(containers, images, role, protected)
+        if apply:
+            for row in container_plan:
+                ident = row["containerId"]
+                current = json.loads(docker(["container", "inspect", "--format", CONTAINER_FORMAT, ident]))
+                if stopped_container_plan([current], images, role, protected) != [row]:
+                    container_results.append({"containerId": ident, "status": "SKIPPED_CHANGED"})
+                    continue
+                try:
+                    docker(["container", "rm", ident])
+                    container_results.append({"containerId": ident, "status": "DELETED"})
+                except subprocess.CalledProcessError as error:
+                    container_results.append({"containerId": ident, "status": "RETAINED_DOCKER_REFUSED",
+                                              "exitCode": error.returncode})
+            containers = container_inventory()
+        else:
+            planned_ids = {row["containerId"] for row in container_plan}
+            containers = [row for row in containers if row["Id"] not in planned_ids]
+    protected.update(row["Image"] for row in containers)
     plan = retirement_plan(images, role, protected)
     results = []
     if apply:
@@ -94,7 +151,7 @@ def retire(role, keep, apply=False):
                 results.append({"imageId": ident, "status": "SKIPPED_CHANGED"})
                 continue
             try:
-                # No force, no ancestor pruning, and no container deletion.
+                # No force, ancestor pruning or volume deletion.
                 for ref in row["tags"][:-1]:
                     if docker(["image", "inspect", "--format", "{{.Id}}", ref]).strip() != ident:
                         raise ValueError("IMAGE_TAG_CHANGED")
@@ -104,7 +161,9 @@ def retire(role, keep, apply=False):
             except subprocess.CalledProcessError as error:
                 results.append({"imageId": ident, "status": "RETAINED_DOCKER_REFUSED", "exitCode": error.returncode})
     return {"project": PROJECT, "role": role, "apply": apply, "protectedImageIds": sorted(protected),
-            "candidates": plan, "results": results, "forceDelete": False, "globalPrune": False}
+            "candidates": plan, "results": results, "forceDelete": False, "globalPrune": False,
+            "retireStoppedContainers": retire_stopped_containers, "containerCandidates": container_plan,
+            "containerResults": container_results, "volumesDeleted": False}
 
 
 def main():
@@ -126,6 +185,8 @@ def main():
     item.add_argument("--role", required=True)
     item.add_argument("--keep-file", required=True, type=Path)
     item.add_argument("--apply", action="store_true")
+    item.add_argument("--retire-stopped-containers", action="store_true",
+                      help="Also retire stopped embedded instances with persistent /data bind mounts")
     item.add_argument("--receipt", required=True, type=Path)
     args = parser.parse_args()
     if args.mode == "plan":
@@ -141,7 +202,8 @@ def main():
         result = {**meta, "imageId": docker(["image", "inspect", "--format", "{{.Id}}", meta["tag"]]).strip(),
                   "phase": "BUILT_NOT_ACCEPTED", "cleanupRequiredAfterAcceptance": True}
     else:
-        result = retire(args.role, json.loads(args.keep_file.read_bytes()), args.apply)
+        result = retire(args.role, json.loads(args.keep_file.read_bytes()), args.apply,
+                        args.retire_stopped_containers)
     args.receipt.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2))
 

@@ -2,7 +2,7 @@
 
 ## 合入目的
 
-为 AT 管理员提供“联网巡检 → 证据诊断 → 模型候选 → 隔离复验 → 平台发布”的源维护入口。能力、目录责任与已验边界见[贡献说明](github-review-2026-11-19.md)。本 PR 仅 AT `/#/maintenance`，不保留独立工作台页面或服务发行入口。
+为 AT 管理员提供“联网巡检 → 证据诊断 → 模型候选 → 隔离复验 → 平台发布”的源维护入口。能力、目录责任与兼容边界见[贡献说明](module-overview.md)。本 PR 仅 AT `/#/maintenance`，不保留独立工作台页面或服务发行入口。
 
 ## 1. 先合宿主合同
 
@@ -21,7 +21,7 @@
 - 持久队列默认增量；替换需显式选择；失败候选不能发布。
 - 维护迁移不占用宿主版本历史，不改写旧 SQL 字节或历史账本。
 
-RC16.3 的单入口网关与宿主 Cookie 轻量复用已通过 NAS 双适配器实站验收，见[验收记录](gateway-cookie-rc16-2026-11-19.md)。合入或部署时应用与 15 文件宿主执行包必须配套，不能只更新 JAR；生产 AT/T4 网络实现不因合入自动改变。
+近期能力增量见[核心能力补强](core-capabilities.md)。合入或部署时应用与可信宿主执行包必须配套，按 `managed-runtime.json` 核对，不能只更新 JAR；生产 AT/T4 网络实现不因合入自动改变。
 
 本 PR 正式待审阅，不请求跳过这些检查直接合并；提交不等于稳定发行或生产换版。
 
@@ -57,7 +57,7 @@ mvn -Pmaintenance-embedded '-Dtest=EmbeddedMaintenanceIntegrationTest#embeddedWo
 
 先对自己持有的实例做冷备并使用全新测试副本，不能对活动 AT 库启动第二个 JVM。宿主 Flyway 先运行，维护使用同库独立 `maintenance_schema_history`；备份须包含两套历史。
 
-旧私有 RC 混合 V59-V74 历史会被明确拒绝；按[数据库说明](database-archive.md)与 `LegacyMaintenanceExport` 工具移交至全新副本，不覆盖原库、不 repair。首次启动不自动重放旧任务或重置累计账本。H2 为当前验证范围，其他数据库及 Native Image 另行验收。
+旧私有 RC 混合 V59-V75 历史会被明确拒绝；按[数据库说明](database-archive.md)与 `LegacyMaintenanceExport` 工具移交至全新副本，不覆盖原库、不 repair。首次启动不自动重放旧任务或重置累计账本。H2 为当前验证范围，其他数据库及 Native Image 另行验收。
 
 联网执行需要管理员安装/授权的 T4 IPC 或固定受管通道及其依赖镜像，不因合入自动安装或取得 Docker 权限。按[运行器运维](managed-runner-operations.md)配置；同机 IPC 示例在 `plugin-maintenance/deployment/compose.t4.yaml`。模型中转地址、模型名与密钥在 AT 工作台设置，私有配置不提交 Git。
 

@@ -42,7 +42,7 @@ npm.cmd --prefix plugin-maintenance/reverse-engine ci --ignore-scripts --no-audi
 脚本位置按 session 绑定已解析源码并优先采集；原始错误消息和异常对象不保存。
 本机 `0.70` 允许仅运行器、执行策略或检查器变化的旧任务继续独立访客诊断，
 保留历史基线 freshness/staleInputs；源码/画像变化仍拒绝，不改变原验收、轮次或发布资格。
-真实播放 POST/HTTP200 已观测，业务内容及媒体仍未验，见[本轮结果](runtime-exception-evidence-2026-11-15.md)。
+实际请求、业务返回与媒体有效性分别核对；POST 成功或 HTTP 200 不等于播放合同成立。
 
 ## AT 内置配置
 

@@ -106,7 +106,8 @@ NATIVE_FILES = (
     "docs/plugin-maintenance/at-native-deployment.md",
 )
 DOCS = (
-    "docs/plugin-maintenance/github-review-2026-11-19.md",
+    "docs/plugin-maintenance/module-overview.md",
+    "docs/plugin-maintenance/core-capabilities.md",
     "docs/plugin-maintenance/merge-guide.md",
     "docs/plugin-maintenance/embedded-integration.md",
     "docs/plugin-maintenance/build-and-acceptance.md",
@@ -122,8 +123,6 @@ DOCS = (
     "docs/plugin-maintenance/source-companion-modules.md",
     "docs/plugin-maintenance/reverse-engine.md",
     "docs/plugin-maintenance/image-lifecycle.md",
-    "docs/plugin-maintenance/t4-home-current-runtime-2026-11-16.md",
-    "docs/plugin-maintenance/configured-source-origins-2026-11-16.md",
 )
 
 

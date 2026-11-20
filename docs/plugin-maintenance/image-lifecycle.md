@@ -49,12 +49,15 @@ python3 -B maintenance_image.py retire --role source --keep-file keep-images.jso
 不带 `--apply` 时只生成清理计划。实际迭代脚本在验收/失败处理结束后调用带 `--apply` 的入口。
 清理器额外自动保留所有运行和停止容器的镜像引用，只删除 project 和 role 标签精确匹配且未保留的镜像。
 每次使用新回执文件；失败的 STARTED 回执先核对真实状态，不盲目重放。
-旧镜像标签、ID、删除或跳过结果进入回执，发生冲突则保留并报告。禁止强制删、顺带删父镜像、删容器和全局 prune。
+旧镜像标签、ID、删除或跳过结果进入回执，发生冲突则保留并报告。默认不删除容器。禁止强制删、顺带删父镜像或全局 prune。
 
-## 本次范围
+## 显式退役停止实例
 
-2026-11-15 首批 73 个历史候选已经全部删除。用户随后明确要求清理截图中的停止实例并重发布，新增删除 28 个停止试验容器及 26 个解除引用的旧镜像，累计删除历史镜像 99 个。
-当前三个执行器已通过标准入口在 NAS 本地重新封装、采用新名称及完整管理标签，并切换全部 42 个通道。保留三个原执行器作为各用途的一个已验收回滚版本，本项目目前合计六个镜像。
-新旧镜像文件层、启动配置完全一致，三个关键执行文件在新镜像内哈希核验通过；这属于元数据重发布验收，不是新一轮爬虫业务验收。未推送公共仓库，未构建完整维护服务容器。
-完整结果见 `nas-image-republish-2026-11-15.md`。六个归属不明镜像、其他项目、数据卷、生产 AT 与构建缓存未动，也不将逻辑大小相加当实际释放量。
-临时验收容器优先使用 `--rm`；失败或弃用后按准确的 run owner 收尾，不能只删除镜像而长期留下停止容器引用。旧构建助手不自动改名，后续构建必须沿用标准入口，禁止重放历史脚本。
+停止容器仍会引用旧镜像。需要同时退役时显式增加 `--retire-stopped-containers`，仍先查看计划：
+
+```text
+python3 -B maintenance_image.py retire --role embedded --keep-file keep-images.json --receipt retire-plan.json --retire-stopped-containers
+python3 -B maintenance_image.py retire --role embedded --keep-file keep-images.json --receipt retire-apply.json --retire-stopped-containers --apply
+```
+
+仅处理项目和用途标签精确匹配、处于停止状态、`/data` 绑定宿主持久目录且不在 current/rollback/runtime 保留清单中的实例。删除前再次读取状态与身份，运行中、挂载不明确或数据不持久的实例保留并报告。只删除容器引用，不删除数据目录或卷；解除引用后再按同一范围退役镜像。

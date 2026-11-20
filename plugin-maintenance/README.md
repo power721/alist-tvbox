@@ -6,9 +6,9 @@
 
 - [内置构建与数据库说明](../docs/plugin-maintenance/embedded-integration.md)
 - [使用入口](../docs/plugin-maintenance/getting-started.md)
-- [贡献分层与验收边界](../docs/plugin-maintenance/github-review-2026-11-19.md)
+- [能力与结构](../docs/plugin-maintenance/module-overview.md)
 - [上游合入步骤](../docs/plugin-maintenance/merge-guide.md)
 
 `plugin-maintenance/server` 保存共享控制面源码和独立的测试夹具；不是可启动的发行服务。真正的运行入口是 AT 的 `AListApplication`，仅显式 `maintenance-embedded` profile 加载维护模块。
 
-当前为 RC 候选，不是通用零干预稳定版。静态检查或 HTTP 200 不等于真实修复成功。站点源码、Cookie、模型密钥、活动数据库和私有运行回执不随源码交付。
+不承诺任意站点零干预修复。静态检查或 HTTP 200 不等于真实修复成功。站点源码、Cookie、模型密钥、活动数据库和私有运行回执不随源码交付。
