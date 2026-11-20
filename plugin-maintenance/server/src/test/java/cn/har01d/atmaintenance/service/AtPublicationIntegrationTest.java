@@ -102,9 +102,21 @@ class AtPublicationIntegrationTest {
     @AfterEach void stop() { at.stop(0); }
 
     void verified(boolean success) {
+        var result = JSON.createObjectNode().put("repairSuccessful", success);
+        result.putObject("contentAcceptance").put("successful", success);
         when(repairs.candidate("candidate")).thenReturn(new RepairCandidateSummary("candidate", "repair", 1,
                 CANDIDATE_SHA, "proposal", "RUNTIME_OBSERVED", null, Instant.now(), Instant.now(),
-                JSON.createObjectNode(), JSON.createObjectNode().put("repairSuccessful", success), null, null, null));
+                JSON.createObjectNode(), result, null, null, null));
+    }
+
+    @Test
+    void historicalImageOnlySuccessCannotPublishWithoutContentAcceptance() {
+        when(repairs.candidate("candidate")).thenReturn(new RepairCandidateSummary("candidate", "repair", 1,
+                CANDIDATE_SHA, "proposal", "RUNTIME_OBSERVED", null, Instant.now(), Instant.now(),
+                JSON.createObjectNode(), JSON.createObjectNode().put("repairSuccessful", true), null, null, null));
+        assertEquals("AT_PUBLISH_CONTENT_VALIDATION_REQUIRED", service.target("candidate").blockedReason());
+        assertThrows(ResponseStatusException.class, () -> service.publish("candidate", input("incremental", "old-image-only")));
+        assertEquals(0, writes);
     }
 
     StartAtPublicationRequest input(String mode, String key) {
@@ -546,9 +558,11 @@ class AtPublicationIntegrationTest {
         String sha = Hashes.sha256(code);
         plugins.get(7).put("externalId", "fixed-origin");
         when(repairs.content("candidate")).thenReturn(code);
+        var result = JSON.createObjectNode().put("repairSuccessful", true);
+        result.putObject("contentAcceptance").put("successful", true);
         when(repairs.candidate("candidate")).thenReturn(new RepairCandidateSummary("candidate", "repair", 1,
                 sha, "proposal", "RUNTIME_OBSERVED", null, Instant.now(), Instant.now(),
-                JSON.createObjectNode(), JSON.createObjectNode().put("repairSuccessful", true), null, null, null));
+                JSON.createObjectNode(), result, null, null, null));
         when(exports.delivery("candidate")).thenReturn(SpiderDeliveryNames.describe("测试源", "original.py", sha, 1, true));
         var error = assertThrows(ResponseStatusException.class, () -> service.publish("candidate",
                 new StartAtPublicationRequest(sha, BINDING_SHA, "incremental", "fixed-id", true, null)));

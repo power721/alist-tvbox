@@ -38,14 +38,18 @@ test('only explicit recoverable transport failures expose continue, not quota au
   }
   assert.match(view.stopLabels.MODEL_HTTP_ERROR, /新模型请求/)
 })
-function setup(handler, permission = 'sha') {
+function setup(handler, permission = 'sha', rounds = { id: 'repair', faultSha256: 'fault',
+  usedRounds: 3, maxRounds: 3, freshness: 'current', frozen: {} }) {
   const calls = [], events = []
   const props = { sourceId: 'source', artifactSha256: 'sha', disabled: false, runtimeEnabled: true }
-  const view = vm.runInNewContext(code + '\n;({start, refresh, submit, cancel, resume, canResume, task, taskLabel, stopLabels, active, pending, pendingResume, connection, consent, reviewing, props, evidenceOffer, reviewContinuation, continueWithEvidence, confirmingContinuation, pendingContinuation})', {
+  const view = vm.runInNewContext(code + '\n;({start, refresh, submit, cancel, resume, canResume, task, taskLabel, stopLabels, active, pending, pendingResume, connection, consent, reviewing, props, evidenceOffer, reviewContinuation, continueWithEvidence, confirmingContinuation, pendingContinuation, maxRounds, roundState, saveRoundLimit})', {
     ref, computed, defineProps: () => props, defineEmits: () => (...args) => events.push(args),
     onMounted() {}, onUnmounted() {}, setTimeout: () => 1, clearTimeout() {},
     crypto: { randomUUID: () => 'stable_request_key' }, sourceContent: async () => 'source bytes',
-    request: async (path, input) => { calls.push({ path, input }); return handler(path, input) }
+    request: async (path, input, method) => {
+      calls.push({ path, input, method })
+      return path === '/repairs/repair' ? rounds : handler(path, input)
+    }
   })
   view.connection.value = config
   view.consent.value = { sourceId: 'source', artifactSha256: permission }
@@ -99,12 +103,60 @@ test('DNS recovery resumes the same stopped inspection, never a cancellation or 
 
 test('lost start response preserves the request identity across retry', async () => {
   const { view, calls } = setup(() => { throw new Error('connection lost') })
+  view.maxRounds.value = 8
   await view.start()
+  view.maxRounds.value = 10
   await view.start()
   assert.equal(calls.length, 2)
   assert.equal(calls[0].path, '/sources/source/maintenance')
   assert.equal(calls[0].input.requestKey, calls[1].input.requestKey)
+  assert.equal(calls[0].input.maxRounds, 8)
+  assert.equal(calls[1].input.maxRounds, 8)
   assert.equal(view.pending.value.requestKey, 'stable_request_key')
+})
+
+test('saving a stopped workflow round limit preserves history and does not resume or call a model', async () => {
+  const task = { runId: 'run', artifactSha256: 'sha', status: 'STOPPED', repairId: 'repair', stopCode: 'ROUND_LIMIT' }
+  const rounds = { id: 'repair', faultSha256: 'fault', usedRounds: 3, maxRounds: 3, freshness: 'current', frozen: {} }
+  const { view, calls } = setup((path, input) => {
+    if (path === '/model/connection') return config
+    if (path.endsWith('/model-consent')) return { artifactSha256: 'sha' }
+    if (path.endsWith('/round-limit')) {
+      rounds.maxRounds = input.maxRounds
+      rounds.frozen.roundLimit = { maxRounds: input.maxRounds }
+      return rounds
+    }
+    if (path.endsWith('/evidence-continuation')) return { available: false }
+    return [task]
+  }, 'sha', rounds)
+  await view.refresh()
+  assert.equal(view.canResume.value, false)
+  view.maxRounds.value = 8
+  await view.saveRoundLimit()
+  assert.equal(view.roundState.value.maxRounds, 8)
+  assert.equal(view.roundState.value.usedRounds, 3)
+  assert.equal(view.task.value.status, 'STOPPED')
+  assert.equal(view.canResume.value, true)
+  const writes = calls.filter(call => call.input !== undefined)
+  assert.equal(writes.length, 1)
+  assert.equal(writes[0].path, '/repairs/repair/round-limit')
+  assert.equal(writes[0].method, 'PUT')
+  assert.equal(writes[0].input.expectedMaxRounds, 3)
+  await view.resume()
+  assert.equal(calls.filter(call => call.path.endsWith('/maintenance/resume')).length, 1)
+  assert.ok(!calls.some(call => call.path.includes('/model-calls')))
+})
+
+test('running maintenance reloads the configured limit and cannot save a limit mid-call', async () => {
+  const task = { runId: 'run', artifactSha256: 'sha', status: 'REPAIRING', repairId: 'repair' }
+  const rounds = { id: 'repair', faultSha256: 'fault', usedRounds: 4, maxRounds: 8, freshness: 'current', frozen: {} }
+  const { view, calls } = setup(path => path === '/model/connection' ? config
+    : path.endsWith('/model-consent') ? { artifactSha256: 'sha' } : [task], 'sha', rounds)
+  await view.refresh()
+  assert.equal(view.maxRounds.value, 8)
+  view.maxRounds.value = 10
+  await view.saveRoundLimit()
+  assert.ok(calls.every(call => call.input === undefined))
 })
 
 test('confirmed access challenges explain both historical and early stops without resending repair', async () => {

@@ -227,6 +227,22 @@ class ManagedResourceEvidenceTest {
     }
 
     @Test
+    void projectsInitializationAndRecommendationEvidenceWithoutRelaxingHttpBinding() throws Exception {
+        for (String target : List.of("S06", "C02")) {
+            var value = fixture(mapper, "a".repeat(64)).put("targetNode", target).putNull("image");
+            assertEquals(value, new ManagedResourceEvidence(mapper)
+                    .project(value, "a".repeat(64), events(mapper), mapper.createArrayNode()));
+            var unmatched = events(mapper);
+            ((ObjectNode) unmatched.get(1)).put("responseComplete", false);
+            assertThrows(IOException.class, () -> new ManagedResourceEvidence(mapper)
+                    .project(value, "a".repeat(64), unmatched, mapper.createArrayNode()));
+        }
+        var unsupported = fixture(mapper, "a".repeat(64)).put("targetNode", "C04").putNull("image");
+        assertThrows(IOException.class, () -> new ManagedResourceEvidence(mapper)
+                .project(unsupported, "a".repeat(64), events(mapper), mapper.createArrayNode()));
+    }
+
+    @Test
     void projectsPageStructureWithoutRequiringAnImageAndKeepsHttpBinding() throws Exception {
         var value = fixture(mapper, "a".repeat(64));
         value.put("targetNode", "C03").putNull("image");

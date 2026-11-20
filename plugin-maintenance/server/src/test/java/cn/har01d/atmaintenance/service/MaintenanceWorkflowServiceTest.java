@@ -75,6 +75,30 @@ class MaintenanceWorkflowServiceTest {
     }
 
     @Test
+    void hostOnlyInspectionStopsBeforeModelButAnIndependentSourceFaultStillEntersRepair() {
+        String sha = "a".repeat(64), profile = "b".repeat(64), runtime = "c".repeat(64);
+        when(run.artifactSha256()).thenReturn(sha);
+        when(run.profileSha256()).thenReturn(profile);
+        when(run.runtimeSha256()).thenReturn(runtime);
+        when(run.profile()).thenReturn(mapper.createObjectNode().set("requiredNodes", mapper.createArrayNode().add("C03").add("C07")));
+        var evidence = new RepairDiagnosticsTest().evidence(sha, "C07", "LOADER_METHOD_FAILED");
+        evidence.putObject("cleanup").put("confirmed", true).put("containerAbsent", true);
+        ((ObjectNode) evidence.at("/loaderValidation/nodes/0")).putObject("failureContext").put("hostStage", "atvp_backend_endpoint");
+        evidence.set("httpObservations", result.at("/managedSourceEvidence/httpObservations"));
+        result.set("managedSourceEvidence", evidence);
+        service.poll();
+        assertEquals("LIVE_INSPECTION_HOST_CONFIGURATION_REQUIRED", row.getMaintenanceStopCode());
+        verifyNoInteractions(repairs, automation, client);
+        row.setMaintenanceStatus("CHECKING");
+        row.setMaintenanceStopCode(null);
+        evidence.withObject("loaderValidation").withArray("nodes").addObject()
+                .put("id", "C03").put("status", "fail").put("reason", "CONTENT_LIST_EMPTY_OR_INVALID");
+        service.poll();
+        assertEquals("REPAIRING", row.getMaintenanceStatus());
+        verify(automation).start(eq("repair"), any());
+    }
+
+    @Test
     void originInfrastructureRecoveryKeepsTheRepairAndDoesNotResumeOrReinspectItsBaseline() {
         row.setMaintenanceStatus("STOPPED"); row.setMaintenanceRepairId("repair");
         row.setMaintenanceStopCode("REVERSE_ENGINE_NOT_READY");
@@ -330,6 +354,15 @@ class MaintenanceWorkflowServiceTest {
         observation.put("responseStatus", 200);
         ((ObjectNode) result.path("managedSourceEvidence").path("cleanup")).put("confirmed", false);
         assertFalse(RepairReport.playbackNotProvided(result));
+    }
+
+    @Test
+    void configuredRoundsAreForwardedToTheRepairCreatedAfterInspection() {
+        row.setMaintenanceMaxRounds(8);
+        when(repairs.create("source", new StartRepairRequest("run", "sha", 8))).thenReturn(repair);
+        service.poll();
+        verify(repairs).create("source", new StartRepairRequest("run", "sha", 8));
+        verify(automation).start(eq("repair"), any());
     }
 
     @Test

@@ -19,16 +19,17 @@ function panel() {
   const calls = [], events = [], timers = [], errors = []
   const context = { props, ref, computed, watch, Error, onUnmounted() {}, evidenceFields: () => [],
     setTimeout: fn => { timers.push(fn); return timers.length }, clearTimeout() {},
-    ElMessage: { error: value => errors.push(value) }, emit: (name, value) => events.push({ name, value }),
+    ElMessage: { error: value => errors.push(value), success() {} }, emit: (name, value) => events.push({ name, value }),
     request: (path, body) => path.endsWith('/imported-candidates') ? Promise.resolve([])
       : new Promise((resolve, reject) => calls.push({ path, body, resolve, reject })) }
   const code = ts.transpileModule(body, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText
-  const value = vm.runInNewContext(code + '\n;({create, refresh, loadSelection, evidenceChanged, selectedId, selected, candidates, busy, evidenceBusy, canProposeSelector,submittedForValidation,pendingValidation,canRetest,canRevalidate,revalidateRuntime})', context)
+  const value = vm.runInNewContext(code + '\n;({create, refresh, loadSelection, evidenceChanged, selectedId, selected, candidates, busy, evidenceBusy, canProposeSelector,submittedForValidation,pendingValidation,canRetest,canRevalidate,revalidateRuntime,maxRounds,saveRoundLimit})', context)
   return { ...value, props, calls, events, timers, errors }
 }
 const repair = (id, run = 'run-A') => ({ id, baselineRunId: run, baselineArtifactSha256: 'sha-A',
+  usedRounds: 0, maxRounds: 3,
   status: 'AWAITING_PROPOSAL', freshness: 'current', staleInputs: [], faultSha256: 'fault-sha', frozen: { policy: { scope: 'managed_loader_candidate' }, baseline: { context: {
     auxiliaryEvidence: { extractionReplay: { passed: false } } } } } })
 
@@ -39,6 +40,7 @@ test('repair creation is available before any session exists and retains the cur
   const pending = view.create()
   assert.equal(view.calls[1].path, '/sources/source-A/repairs')
   assert.equal(view.calls[1].body.baselineRunId, 'run-A')
+  assert.equal(view.calls[1].body.maxRounds, 3)
   const created = repair('new-repair')
   view.calls[1].resolve(created)
   await settle()
@@ -145,6 +147,24 @@ test('current-environment revalidation keeps candidate and fault identities with
   await settleRefresh(view, 'VALIDATING_RUNTIME', [candidate('RUNTIME_QUEUED')])
   await operation
   assert.ok(!view.calls.some(call => call.path.includes('/model-calls') || call.path.includes('/release-plans')))
+})
+
+test('host configuration pause offers current candidate revalidation without resuming the model', async () => {
+  const view = await selectedPanel()
+  view.selected.value = { ...repair('repair-A'), status: 'BLOCKED', stopCode: 'RUNTIME_HOST_CONFIGURATION_REQUIRED' }
+  const item = candidate('BLOCKED')
+  view.candidates.value = [item]
+  assert.equal(view.canRevalidate(item), true)
+  const operation = view.revalidateRuntime(item)
+  assert.equal(view.calls.at(-1).path, '/repair-candidates/candidate-A/runtime-revalidation')
+  view.calls.at(-1).resolve({})
+  await settle()
+  await settleRefresh(view, 'VALIDATING_RUNTIME', [candidate('RUNTIME_QUEUED')])
+  await operation
+  assert.ok(!view.calls.some(call => call.path.endsWith('/resume') || call.path.includes('/model-calls')))
+  const source = readFileSync(new URL('../../src/maintenance/RepairPanel.vue', import.meta.url), 'utf8')
+  assert.ok(source.includes("selected.stopCode !== 'RUNTIME_HOST_CONFIGURATION_REQUIRED'"))
+  assert.ok(source.includes('stopLabels[candidate.errorCode]'))
 })
 
 test('revalidation is unavailable for stopped repairs, non-runtime drift, unavailable runners or older candidates', async () => {

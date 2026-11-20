@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import java.io.IOException;
 
 @Service
 @RequiredArgsConstructor
@@ -174,8 +175,16 @@ public class RepairReport {
                 .put("targetRecovered", false).put("publishEligible", false);
         report.set("runtimeEvidence", evidence.deepCopy());
         boolean networkPending = networkRetryable(frozen, report);
+        boolean hostVerified = verifiedLoader(evidence.path("loaderValidation"), report.path("artifactSha256"), frozen.path("baseline"))
+                && sameSha(evidence.path("inputSourceSha256"), report.path("artifactSha256"))
+                && sameSha(evidence.path("bundleSha256"), runtimeInputs(frozen).path("runtimeSha256"));
+        boolean hostPending = report.path("staticValidationPassed").asBoolean() && hostVerified
+                && hostConfigurationUnavailable(evidence, frozen.path("baseline").path("profile").path("requiredNodes"));
         boolean outputOnlyNetwork = networkPending && !networkUnavailable(evidence);
-        report.put("runtimeValidationPaused", networkPending);
+        report.put("runtimeValidationPaused", networkPending || hostPending);
+        report.remove("runtimeValidationPauseReason");
+        if (networkPending || hostPending) report.put("runtimeValidationPauseReason",
+                hostPending ? "RUNTIME_HOST_CONFIGURATION_REQUIRED" : "RUNTIME_NETWORK_UNAVAILABLE");
         JsonNode before = frozen.path("baseline").path("result").path("managedSourceEvidence")
                 .path("untrustedRuntimeSummary");
         JsonNode after = evidence.path("untrustedRuntimeSummary");
@@ -191,9 +200,11 @@ public class RepairReport {
             row.set("after", after.path(field).deepCopy());
             boolean networkAffected = networkPending && (!outputOnlyNetwork
                     || networkFailureForMethod(evidence, outputMethod(field)));
-            boolean comparable = !networkAffected && !(field.equals("page2Items") && singlePageRecovery);
+            boolean hostAffected = hostVerified && hostConfigurationAffectedOutput(evidence, field);
+            boolean comparable = !networkAffected && !hostAffected && !(field.equals("page2Items") && singlePageRecovery);
             row.put("comparable", comparable);
             if (networkAffected) row.put("reason", "RUNTIME_NETWORK_UNAVAILABLE");
+            if (hostAffected) row.put("reason", "RUNTIME_HOST_CONFIGURATION_REQUIRED");
             if (field.equals("page2Items") && singlePageRecovery)
                 row.put("reason", "FAILED_PAGINATION_RECOVERED_AS_VERIFIED_SINGLE_PAGE");
             if (comparable && before.path(field).asInt() > 0 && after.path(field).asInt() == 0)
@@ -208,10 +219,12 @@ public class RepairReport {
             row.set("before", previous.isMissingNode() ? mapper.nullNode() : previous.deepCopy());
             row.set("after", current.isMissingNode() ? mapper.nullNode() : current.deepCopy());
             String success = field.equals("playerStatus") ? "returned" : "prefix_returned";
-            boolean comparable = !networkPending || outputOnlyNetwork
-                    && !networkFailureForMethod(evidence, outputMethod(field));
+            boolean hostAffected = hostVerified && hostConfigurationAffectedOutput(evidence, field);
+            boolean comparable = !hostAffected && (!networkPending || outputOnlyNetwork
+                    && !networkFailureForMethod(evidence, outputMethod(field)));
             row.put("comparable", comparable);
-            if (!comparable) row.put("reason", "RUNTIME_NETWORK_UNAVAILABLE");
+            if (!comparable) row.put("reason", hostAffected
+                    ? "RUNTIME_HOST_CONFIGURATION_REQUIRED" : "RUNTIME_NETWORK_UNAVAILABLE");
             if (comparable && previous.asText().equals(success) && !current.asText().equals(success))
                 regressions.add(field);
         }
@@ -228,11 +241,22 @@ public class RepairReport {
                         + "客户端兼容或发布资格；必需节点尚未全部由装载器验证，不能宣布爬虫修复成功。"
                         + "有效源码未切换，没有模型调用或生产发布。");
         attachRuntimeAcceptance(frozen, report);
+        // Independent content loss still needs a source repair, even when another action lacks its host.
+        hostPending = hostPending && report.path("observedRegressions").isEmpty();
+        report.put("runtimeValidationPaused", networkPending || hostPending);
+        report.remove("runtimeValidationPauseReason");
+        if (networkPending || hostPending) report.put("runtimeValidationPauseReason",
+                hostPending ? "RUNTIME_HOST_CONFIGURATION_REQUIRED" : "RUNTIME_NETWORK_UNAVAILABLE");
         if (networkPending) report.put("verdict", "runtime_network_paused")
                 .put("targetObservedRecovered", false).put("runtimeProgressObserved", false)
                 .put("nextRequired", "retry_existing_candidate_runtime")
                 .put("boundary", "源站网络请求未完成，联网验证暂停；原始失败回执保留。"
                         + "不能据此判定源码退化或修复成功，也不继续调用模型。恢复后复测同一候选，不增加修复轮次。");
+        if (hostPending) report.put("verdict", "runtime_host_configuration_paused")
+                .put("targetObservedRecovered", false).put("runtimeProgressObserved", false)
+                .put("nextRequired", "configure_host_then_revalidate_existing_candidate")
+                .put("boundary", "宿主后端解析未配置，候选及原始回执保留，未继续调用模型。"
+                        + "补齐宿主环境后复验同一候选，不增加修复轮次；当前不是源码修复成功或生产播放证据。");
         return report;
     }
 
@@ -295,6 +319,7 @@ public class RepairReport {
 
     static boolean repairableLoaderNode(JsonNode node) {
         if ("optional".equals(node.path("requirement").asText())) return false;
+        if (hostConfigurationFailure(node)) return false;
         String status = node.path("status").asText();
         if ("fail".equals(status)) return true;
         // These are observed output defects, not missing credentials, host adapters or network access.
@@ -302,6 +327,35 @@ public class RepairReport {
                 "PLAYER_URL_EMPTY", "PLAYER_URL_INVALID", "PLAYER_HEADERS_INVALID",
                 "PLAYER_OUTPUT_INVALID", "PLAYER_EXTERNAL_PARSER_REQUIRED", "LOADER_METHOD_FAILED")
                 .contains(node.path("reason").asText());
+    }
+
+    static boolean hostConfigurationFailure(JsonNode observation) {
+        return "atvp_backend_endpoint".equals(observation.at("/failureContext/hostStage").asText());
+    }
+
+    static boolean hostConfigurationUnavailable(JsonNode evidence, JsonNode requiredNodes) {
+        JsonNode loader = evidence.path("loaderValidation");
+        if (!ManagedLoaderReceipt.PROJECTION.equals(loader.path("projection").asText())
+                || !sameSha(evidence.path("inputSourceSha256"), loader.path("inputSourceSha256"))
+                || !evidence.at("/cleanup/confirmed").asBoolean()
+                || !evidence.at("/cleanup/containerAbsent").asBoolean()
+                || !requiredNodes.isArray() || requiredNodes.isEmpty()) return false;
+        var failed = loader.path("nodes").valueStream().filter(node ->
+                requiredNodes.valueStream().anyMatch(id -> id.asText().equals(node.path("id").asText()))
+                    && java.util.Set.of("fail", "blocked").contains(node.path("status").asText())).toList();
+        // An independent source defect can still be repaired while another action lacks a host adapter.
+        return failed.stream().anyMatch(RepairReport::hostConfigurationFailure)
+                && failed.stream().noneMatch(RepairReport::repairableLoaderNode);
+    }
+
+    private static boolean hostConfigurationAffectedOutput(JsonNode evidence, String field) {
+        String method = outputMethod(field);
+        if (!ManagedLoaderReceipt.PROJECTION.equals(evidence.at("/loaderValidation/projection").asText())) return false;
+        return evidence.at("/loaderValidation/calls").valueStream().anyMatch(call ->
+                call.path("ok").isBoolean() && !call.path("ok").asBoolean() && hostConfigurationFailure(call)
+                    && (method.equals(call.path("method").asText())
+                        || java.util.Set.of("play", "media").contains(method)
+                            && "detail".equals(call.path("method").asText())));
     }
 
     static java.util.List<JsonNode> unresolvedEgressCodes(JsonNode evidence) {
@@ -418,10 +472,13 @@ public class RepairReport {
         var blockers = acceptance.putArray("blockers");
         if (!declared.isArray() || declared.isEmpty()) blockers.add("REPAIR_REQUIREMENTS_UNAVAILABLE");
         JsonNode evidence = report.path("runtimeEvidence");
-        boolean networkPending = report.path("runtimeValidationPaused").asBoolean();
+        boolean networkPending = report.path("runtimeValidationPaused").asBoolean()
+                && !"RUNTIME_HOST_CONFIGURATION_REQUIRED".equals(report.path("runtimeValidationPauseReason").asText());
+        boolean hostPending = "RUNTIME_HOST_CONFIGURATION_REQUIRED".equals(report.path("runtimeValidationPauseReason").asText());
         boolean outputOnlyNetwork = networkPending && !networkUnavailable(evidence);
         JsonNode loader = evidence.path("loaderValidation");
         boolean loaderVerified = verifiedLoader(loader, report.path("artifactSha256"), frozen.path("baseline"));
+        boolean hostInterrupted = loaderVerified && loader.path("nodes").valueStream().anyMatch(RepairReport::hostConfigurationFailure);
         if (!loaderVerified) blockers.add("LOADER_REQUIRED_RESULTS_UNVERIFIED");
         if (!sameSha(evidence.path("inputSourceSha256"), report.path("artifactSha256"))
                 || !sameSha(evidence.path("bundleSha256"), runtimeInputs(frozen).path("runtimeSha256")))
@@ -455,6 +512,10 @@ public class RepairReport {
             String reason = staticNode ? original.path("reason").asText("CANDIDATE_STATIC_RESULT_MISSING")
                     : !loaded.isMissingNode() ? loaded.path("reason").asText("LOADER_NODE_UNRESOLVED")
                     : id.equals("S06") ? "LOADER_RESULT_UNVERIFIED" : "LOADER_NODE_NOT_VALIDATED";
+            if (loaderVerified && hostConfigurationFailure(loaded)) {
+                status = "blocked";
+                reason = "RUNTIME_HOST_CONFIGURATION_REQUIRED";
+            }
             if (networkPending && !outputOnlyNetwork && !staticNode && !status.equals("pass")) {
                 status = "blocked";
                 reason = "RUNTIME_NETWORK_UNAVAILABLE";
@@ -478,6 +539,7 @@ public class RepairReport {
         acceptance.put("firstUnresolvedNode", firstUnresolved);
         acceptance.putObject("requiredCoverage").put("total", required.size()).put("pass", passed)
                 .put("fail", failed).put("blocked", blocked).put("notTested", untested);
+        attachContentAcceptance(frozen, report, loader, loaderVerified, networkPending, blockers);
         boolean originMode = frozen.path("policy").path("scope").asText().equals("managed_origin_candidate");
         boolean loaderMode = originMode || frozen.path("policy").path("scope").asText().equals("managed_loader_candidate");
         if (originMode && RepairEvidenceMaterial.originRoute(mapper, frozen.path("originRecoveryRepairId").asText(),
@@ -500,7 +562,9 @@ public class RepairReport {
                 JsonNode beforeNode = baselineVerified ? node(previous.path("nodes"), id) : mapper.missingNode();
                 String beforeStatus = beforeNode.path("status").asText("not_tested");
                 String afterStatus = current.path("status").asText();
-                boolean comparable = !networkPending || outputOnlyNetwork;
+                boolean comparable = (!networkPending || outputOnlyNetwork)
+                        && !hostConfigurationFailure(current.path("evidence"))
+                        && !(hostInterrupted && afterStatus.equals("not_tested"));
                 comparison.addObject().put("id", id).put("before", beforeStatus).put("after", afterStatus)
                         .put("comparable", comparable)
                         .put("beforeReason", beforeNode.path("reason").asText("LOADER_NODE_NOT_VALIDATED"))
@@ -518,6 +582,7 @@ public class RepairReport {
                     && !targets.isEmpty() && targets.valueStream().allMatch(target ->
                         node(nodes, target.asText()).path("status").asText().equals("pass")));
         }
+        if (hostPending) blockers.add("RUNTIME_HOST_CONFIGURATION_REQUIRED");
         if (!report.path("observedRegressions").isEmpty()) blockers.add("RUNTIME_REGRESSION");
         if (loaderMode) {
             boolean progress = !report.path("runtimeNodeProgress").path("recovered").isEmpty() && blockers.isEmpty();
@@ -557,6 +622,210 @@ public class RepairReport {
                 + "仅采纳经受管运行器核对源码、运行时和冻结画像的宿主节点回执；"
                 + "源摘要、HTTP 200、非空 URL、私有聚合成功均不能代替。缺项继续修复；"
                 + "节点全过只代表该冻结画像的装载合同，不自动认证客户端长播或授予发布资格。");
+    }
+
+    private void attachContentAcceptance(JsonNode frozen, ObjectNode report, JsonNode loader,
+                                         boolean loaderVerified, boolean networkPending,
+                                         com.fasterxml.jackson.databind.node.ArrayNode blockers) {
+        JsonNode baseline = frozen.path("baseline");
+        JsonNode previous = baseline.path("result").path("managedSourceEvidence").path("loaderValidation");
+        JsonNode supplement = contentBaseline(frozen);
+        if (!previous.path("contentSnapshot").isObject() && !supplement.isMissingNode())
+            previous = supplement.path("loaderValidation");
+        JsonNode before = previous.path("contentSnapshot"), after = loader.path("contentSnapshot");
+        var acceptance = report.putObject("contentAcceptance").put("policy", "category_detail_preservation_v1")
+                .put("successful", false).put("status", "evidence_required");
+        if (!supplement.isMissingNode() && previous.equals(supplement.path("loaderValidation")))
+            acceptance.put("baselineRunId", supplement.path("runId").asText())
+                    .put("baselineSupplemental", true);
+        if (!after.isObject()) {
+            JsonNode carried = priorCandidateContent(report, frozen);
+            if (carried.isObject()) {
+                after = carried;
+                acceptance.put("candidateContentSource", "same_runtime_attempt");
+            }
+        }
+        // Historical verdicts remain historical; publication independently requires the new evidence.
+        if (!before.isObject() && !after.isObject()) return;
+        boolean baselineVerified = verifiedLoader(previous, baseline.path("artifactSha256"), baseline);
+        if (!baselineVerified || !before.isObject()) {
+            blockers.add("CONTENT_BASELINE_REQUIRED");
+            return;
+        }
+        if (!loaderVerified || !after.isObject()) {
+            blockers.add("CONTENT_CANDIDATE_REQUIRED");
+            return;
+        }
+        if (networkPending) {
+            acceptance.put("status", "network_pending");
+            blockers.add("CONTENT_NETWORK_PENDING");
+            return;
+        }
+        acceptance.put("baselineCategories", before.path("declaredCategories").asInt())
+                .put("candidateCategories", after.path("declaredCategories").asInt())
+                .put("sampledCategories", after.path("categories").size())
+                .put("allCategoriesSampled", after.path("allCategoriesSampled").asBoolean());
+        if (!after.path("detailsSampled").asBoolean()) blockers.add("CONTENT_DETAIL_COVERAGE_REQUIRED");
+        var regressions = acceptance.putArray("regressions");
+        var comparison = acceptance.putArray("comparison");
+        var warnings = acceptance.putArray("warnings");
+        var pageComparison = acceptance.putArray("pageComparison");
+        if (after.path("declaredCategories").asInt() < before.path("declaredCategories").asInt())
+            regressions.add("DECLARED_CATEGORY_LOSS");
+        boolean unresolved = false;
+        boolean metadata = baseline.path("profile").path("sourcePurpose").asText().equals("metadata-navigation");
+        for (JsonNode current : after.path("categories")) {
+            if (current.path("status").asText().equals("error") || current.path("status").asText().equals("returned")
+                    && (current.path("detail").path("status").asText().equals("error")
+                        || !metadata && !current.path("detail").path("status").asText().equals("returned")))
+                unresolved = true;
+            JsonNode page = observedPagePlaylist(report.path("runtimeEvidence"), current.path("detail"));
+            if (!metadata && page.path("complete").asBoolean() && page.path("linkCoverage").isObject()) {
+                var row = pageComparison.addObject();
+                row.set("categoryIdSha256", current.path("categoryIdSha256"));
+                row.set("detailCallId", current.path("detail").path("detailCallId"));
+                row.set("pagePlaylistObservation", page);
+                if (page.path("linkCoverage").path("missingPageLinks").asInt() > 0)
+                    regressions.add("DETAIL_PAGE_PLAYBACK_LINKS_MISSING:" + current.path("categoryIdSha256").asText());
+            }
+        }
+        for (JsonNode original : before.path("categories")) {
+            String id = original.path("categoryIdSha256").asText();
+            JsonNode current = after.path("categories").valueStream().filter(row ->
+                    row.path("categoryIdSha256").asText().equals(id)).findFirst().orElse(mapper.missingNode());
+            var row = comparison.addObject().put("categoryIdSha256", id)
+                    .put("beforeItems", original.path("firstItems").asInt())
+                    .put("afterItems", current.path("firstItems").asInt());
+            if (original.path("status").asText().equals("returned")
+                    && (current.isMissingNode() || current.path("status").asText().equals("empty")))
+                regressions.add("CATEGORY_BECAME_EMPTY:" + id);
+            else if (current.path("status").asText().equals("returned")
+                    && collapsed(original.path("firstItems").asInt(), current.path("firstItems").asInt()))
+                regressions.add("CATEGORY_ITEMS_COLLAPSED:" + id);
+            JsonNode first = original.path("detail"), second = current.path("detail");
+            boolean comparable = first.path("status").asText().equals("returned")
+                    && first.path("itemIdSha256").equals(second.path("itemIdSha256"));
+            row.put("detailComparable", comparable);
+            if (comparable) {
+                row.put("beforeEpisodes", first.path("episodes").asInt())
+                        .put("afterEpisodes", second.path("episodes").asInt());
+                if (second.path("status").asText().equals("returned")
+                        && collapsed(first.path("episodes").asInt(), second.path("episodes").asInt())) {
+                    JsonNode page = completePagePlaylist(report.path("runtimeEvidence"), second);
+                    if (page.isObject()) {
+                        row.set("pagePlaylistObservation", page);
+                        warnings.add("DETAIL_COUNTS_RECONCILED_WITH_PAGE:" + id);
+                    } else regressions.add("DETAIL_EPISODES_COLLAPSED:" + id);
+                } else if (second.path("status").asText().equals("no_playback"))
+                    regressions.add("DETAIL_EPISODES_COLLAPSED:" + id);
+            } else if (first.path("status").asText().equals("returned") && second.isObject())
+                warnings.add("DETAIL_SELECTION_CHANGED:" + id);
+        }
+        for (JsonNode regression : regressions) report.withArray("observedRegressions").add(regression);
+        if (unresolved) blockers.add("CONTENT_SAMPLE_UNRESOLVED");
+        boolean successful = after.path("detailsSampled").asBoolean() && !unresolved && regressions.isEmpty();
+        acceptance.put("successful", successful).put("status", successful ? "preserved" : "regressed_or_incomplete");
+    }
+
+    private JsonNode priorCandidateContent(ObjectNode report, JsonNode frozen) {
+        JsonNode context = runtimeInputs(frozen);
+        String runtimeSha = context.path("runtimeSha256").asText();
+        String policySha = context.path("executionPolicySha256").asText();
+        String artifactSha = report.path("artifactSha256").asText();
+        if (!runtimeSha.matches("[a-f0-9]{64}") || !policySha.matches("[a-f0-9]{64}")
+                || !artifactSha.matches("[a-f0-9]{64}")) return mapper.missingNode();
+        JsonNode attempts = report.path("runtimeAttempts");
+        for (int index = attempts.size() - 1; index >= 0; index--) {
+            JsonNode attempt = attempts.get(index);
+            JsonNode evidence = attempt.path("runtimeEvidence");
+            JsonNode attemptContext = attempt.path("runtimeValidationContext");
+            JsonNode loader = evidence.path("loaderValidation");
+            if (!artifactSha.equals(attempt.path("artifactSha256").asText())
+                    || !artifactSha.equals(evidence.path("inputSourceSha256").asText())
+                    || !runtimeSha.equals(evidence.path("bundleSha256").asText())
+                    || !runtimeSha.equals(attemptContext.path("runtimeSha256").asText())
+                    || !policySha.equals(attemptContext.path("executionPolicySha256").asText())
+                    || !evidence.path("cleanup").path("confirmed").asBoolean()
+                    || !evidence.path("cleanup").path("containerAbsent").asBoolean()
+                    || !loader.path("contentSnapshot").isObject()
+                    || !verifiedLoader(loader, attempt.path("artifactSha256"), frozen.path("baseline"))) continue;
+            return loader.path("contentSnapshot");
+        }
+        return mapper.missingNode();
+    }
+
+    private static boolean collapsed(int before, int after) {
+        return before > 1 && after <= 1 || before >= 8 && (long) after * 4 < before;
+    }
+
+    private JsonNode completePagePlaylist(JsonNode evidence, JsonNode detail) {
+        JsonNode page = observedPagePlaylist(evidence, detail);
+        return page.path("complete").asBoolean() && page.path("outputMatchesPage").asBoolean()
+                && page.path("groups").equals(detail.path("groups"))
+                && page.path("maxEpisodes").equals(detail.path("episodes")) ? page : mapper.missingNode();
+    }
+
+    private JsonNode observedPagePlaylist(JsonNode evidence, JsonNode detail) {
+        if (!evidence.has("contentResourceEvidence")) return mapper.missingNode();
+        try {
+            JsonNode resources = new ManagedResourceEvidence(mapper).project(evidence.path("contentResourceEvidence"),
+                    evidence.path("inputSourceSha256").asText(), evidence.path("httpObservations"),
+                    evidence.path("loaderValidation").path("calls")).path("resources");
+            for (JsonNode resource : resources) {
+                JsonNode call = resource.path("observedDuringCall"), page = resource.path("playlistObservation");
+                if (!detail.path("detailCallId").equals(call.path("id")) || !"detail".equals(call.path("method").asText())
+                        || !page.isObject()) continue;
+                boolean sameResponse = evidence.path("httpObservations").valueStream().anyMatch(event ->
+                        call.equals(event.path("observedDuringCall"))
+                                && resource.path("urlSha256").equals(event.path("requestUrlSha256"))
+                                && resource.path("responseSha256").equals(event.path("responseSha256")));
+                if (sameResponse) {
+                    var result = ((ObjectNode) page).deepCopy();
+                    result.set("responseSha256", resource.path("responseSha256"));
+                    result.put("basis", "host_current_page_exact_link_coverage");
+                    return result;
+                }
+            }
+        } catch (IOException ignored) { /* Partial or unbound pages cannot reconcile a content loss. */ }
+        return mapper.missingNode();
+    }
+
+    ObjectNode contentBaseline(cn.har01d.atmaintenance.dto.ProbeSummary run, JsonNode frozen,
+                               String sourceId, String sourceSha, String runtimeSha, String policySha) {
+        JsonNode baseline = frozen.path("baseline");
+        JsonNode evidence = run.result() == null ? mapper.missingNode() : run.result().path("managedSourceEvidence");
+        JsonNode loader = evidence.path("loaderValidation");
+        if (!sourceId.equals(run.sourceId()) || !sourceSha.equals(run.artifactSha256())
+                || !"managed_source".equals(run.executionMode()) || !"COMPLETED".equals(run.status())
+                || !"current".equals(run.freshness()) || !runtimeSha.equals(run.runtimeSha256())
+                || !policySha.equals(run.executionPolicySha256())
+                || !baseline.path("profileSha256").asText().equals(run.profileSha256())
+                || !sourceSha.equals(evidence.path("inputSourceSha256").asText())
+                || !runtimeSha.equals(evidence.path("bundleSha256").asText())
+                || !evidence.path("cleanup").path("confirmed").asBoolean()
+                || !evidence.path("cleanup").path("containerAbsent").asBoolean()
+                || !verifiedLoader(loader, baseline.path("artifactSha256"), baseline)
+                || !loader.path("contentSnapshot").isObject()) return null;
+        var value = mapper.createObjectNode().put("schemaVersion", 1).put("authority", "current_original_content_probe")
+                .put("runId", run.id()).put("artifactSha256", sourceSha).put("profileSha256", run.profileSha256())
+                .put("runtimeSha256", runtimeSha).put("executionPolicySha256", policySha);
+        value.set("loaderValidation", loader.deepCopy());
+        return value;
+    }
+
+    JsonNode contentBaseline(JsonNode frozen) {
+        JsonNode value = frozen.path("runtimeValidationContext").path("contentBaseline");
+        JsonNode baseline = frozen.path("baseline"), context = runtimeInputs(frozen);
+        return value.path("schemaVersion").asInt() == 1
+                && value.path("authority").asText().equals("current_original_content_probe")
+                && !value.path("runId").asText().isBlank()
+                && sameSha(value.path("artifactSha256"), baseline.path("artifactSha256"))
+                && sameSha(value.path("profileSha256"), baseline.path("profileSha256"))
+                && sameSha(value.path("runtimeSha256"), context.path("runtimeSha256"))
+                && sameSha(value.path("executionPolicySha256"), context.path("executionPolicySha256"))
+                && verifiedLoader(value.path("loaderValidation"), baseline.path("artifactSha256"), baseline)
+                && value.path("loaderValidation").path("contentSnapshot").isObject()
+                ? value : mapper.missingNode();
     }
 
     private static boolean sameSha(JsonNode actual, JsonNode expected) {

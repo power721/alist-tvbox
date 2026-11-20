@@ -25,6 +25,9 @@ public class RepairDiagnostics {
         JsonNode result = run.result() == null ? mapper.missingNode() : run.result();
         var diagnostic = build(run.id(), run.artifactSha256(), run.profileSha256(), run.runtimeSha256(),
                 result.path("managedSourceEvidence"), run.freshness(), null);
+        diagnostic.put("hostConfigurationRequired", diagnostic.path("loaderReceiptMatched").asBoolean()
+                && run.profile() != null && RepairReport.hostConfigurationUnavailable(
+                    result.path("managedSourceEvidence"), run.profile().path("requiredNodes")));
         if ("managed_source".equals(run.executionMode())) {
             JsonNode failure = storedRunFailure(result, run.artifactSha256(), run.profileSha256(),
                     run.runtimeSha256(), run.executionPolicySha256(), run.errorCode());
@@ -45,7 +48,8 @@ public class RepairDiagnostics {
         JsonNode diagnostic = report.path("managedExecutionDiagnostic");
         if (!boundedInteger(diagnostic.path("schemaVersion"), 1, 1)
                 || !"managed_source_broker_observed".equals(diagnostic.path("authority").asText())) return null;
-        var failure = mapper.createObjectNode().put("code", code);
+        var failure = mapper.createObjectNode().put("code", code)
+                .put("inputSourceSha256", sha).put("inputProfileSha256", profile);
         failure.set("diagnostic", diagnostic);
         return failure;
     }
@@ -118,6 +122,9 @@ public class RepairDiagnostics {
         result.put("repairId", repair.id()).put("baselineArtifactSha256", repair.baselineArtifactSha256())
                 .put("usedRounds", repair.usedRounds()).put("maxRounds", repair.maxRounds());
         result.put("latestCandidateEvidenceUnavailable", latest.isPresent() && candidateId == null);
+        result.put("hostConfigurationRequired", result.path("loaderReceiptMatched").asBoolean()
+                && !result.path("latestCandidateEvidenceUnavailable").asBoolean()
+                && RepairReport.hostConfigurationUnavailable(evidence, baseline.path("profile").path("requiredNodes")));
         if (failure.isMissingNode() && latest.isEmpty()) {
             JsonNode originalFailure = storedRunFailure(baseline.path("result"), repair.baselineArtifactSha256(),
                     baseline.path("profileSha256").asText(), baseline.path("runtimeSha256").asText(),
@@ -125,9 +132,98 @@ public class RepairDiagnostics {
             if (originalFailure != null) failure = originalFailure;
         }
         if (!failure.isMissingNode()) failureDiagnostic(result, failure);
-        else if (candidateId != null) regressionDiagnostics(result, repair, latest.orElseThrow());
+        else if (candidateId != null) {
+            regressionDiagnostics(result, repair, latest.orElseThrow());
+            contentRegressionDiagnostics(result, latest.orElseThrow());
+        }
+        if (result.path("findings").valueStream().anyMatch(row -> "source_regression".equals(row.path("route").asText())))
+            result.put("hostConfigurationRequired", false);
         result.put("automaticEnhancementRecommended", automaticEnhancement(repair, result));
         return result;
+    }
+
+    private void contentRegressionDiagnostics(ObjectNode diagnostic, RepairCandidateSummary candidate) {
+        JsonNode report = candidate.result(), content = report.path("contentAcceptance");
+        if (!"category_detail_preservation_v1".equals(content.path("policy").asText())
+                || !"regressed_or_incomplete".equals(content.path("status").asText())
+                || content.path("successful").asBoolean()) return;
+        JsonNode evidence = report.path("runtimeEvidence");
+        var resources = mapper.createArrayNode();
+        for (String field : List.of("resourceEvidence", "contentResourceEvidence")) if (evidence.has(field)) {
+            try {
+                new ManagedResourceEvidence(mapper).project(evidence.path(field),
+                        candidate.sha256(), evidence.path("httpObservations"),
+                        evidence.path("loaderValidation").path("calls")).path("resources").forEach(resources::add);
+            } catch (IOException ignored) { /* Missing resources must not hide an observed content loss. */ }
+        }
+        var seen = new java.util.HashSet<String>();
+        for (JsonNode loss : content.path("regressions").valueStream().limit(25).toList()) {
+            String code = loss.asText();
+            if (!code.matches("DECLARED_CATEGORY_LOSS|(?:CATEGORY_BECAME_EMPTY|CATEGORY_ITEMS_COLLAPSED|DETAIL_EPISODES_COLLAPSED|DETAIL_PAGE_PLAYBACK_LINKS_MISSING):[a-f0-9]{64}")
+                    || !seen.add(code) || !report.path("observedRegressions").valueStream()
+                        .anyMatch(row -> code.equals(row.asText()))) continue;
+            String[] parts = code.split(":", 2);
+            boolean pageLinks = parts[0].equals("DETAIL_PAGE_PLAYBACK_LINKS_MISSING");
+            boolean detail = pageLinks || parts[0].equals("DETAIL_EPISODES_COLLAPSED");
+            JsonNode comparison = parts.length == 1 ? content : content.path(pageLinks ? "pageComparison" : "comparison").valueStream()
+                    .filter(row -> parts[1].equals(row.path("categoryIdSha256").asText()))
+                    .findFirst().orElse(mapper.missingNode());
+            String beforeField = parts.length == 1 ? "baselineCategories" : detail ? "beforeEpisodes" : "beforeItems";
+            String afterField = parts.length == 1 ? "candidateCategories" : detail ? "afterEpisodes" : "afterItems";
+            JsonNode before = comparison.path(beforeField), after = comparison.path(afterField);
+            if (pageLinks) {
+                JsonNode coverage = comparison.path("pagePlaylistObservation").path("linkCoverage");
+                before = coverage.path("pageUniqueLinks");
+                if (!boundedInteger(before, 1, 1280000)
+                        || !boundedInteger(coverage.path("missingPageLinks"), 1, before.asInt())) continue;
+                after = mapper.getNodeFactory().numberNode(before.asInt() - coverage.path("missingPageLinks").asInt());
+            }
+            if (!boundedInteger(before, 1, 40_000_000) || !boundedInteger(after, 0, 40_000_000)
+                    || before.asInt() <= after.asInt() || detail && !pageLinks && !comparison.path("detailComparable").asBoolean()) continue;
+            var finding = diagnostic.withArray("findings").addObject().put("node", "").put("status", "blocked")
+                    .put("reason", parts[0]).put("route", "source_regression")
+                    .put("basis", "matched_content_preservation_gate").put("failureCauseEstablished", false);
+            var regression = finding.putObject("contentRegression").put("before", before.asInt())
+                    .put("after", after.asInt()).put("basis", pageLinks ? "host_page_unique_link_coverage" : "untrusted_source_output_count");
+            if (pageLinks) regression.set("linkCoverage", comparison.path("pagePlaylistObservation").path("linkCoverage"));
+            if (parts.length > 1) {
+                regression.put("categoryIdSha256", parts[1]);
+                if (detail && !pageLinks) regression.put("detailComparable", true);
+                JsonNode sample = evidence.path("loaderValidation").path("contentSnapshot").path("categories")
+                        .valueStream().filter(row -> parts[1].equals(row.path("categoryIdSha256").asText()))
+                        .findFirst().orElse(mapper.missingNode());
+                JsonNode observed = detail ? sample.path("detail") : sample;
+                JsonNode callId = observed.path(detail ? "detailCallId" : "categoryCallId");
+                String method = detail ? "detail" : "category";
+                JsonNode call = evidence.path("loaderValidation").path("calls").valueStream()
+                        .filter(row -> boundedInteger(callId, 1, 128) && callId.equals(row.path("id"))
+                                && method.equals(row.path("method").asText())
+                                && row.path("inputSha256").asText().matches("[a-f0-9]{64}"))
+                        .findFirst().orElse(mapper.missingNode());
+                boolean available = false;
+                if (!call.isMissingNode() && (pageLinks || after.equals(observed.path(detail ? "episodes" : "firstItems")))) {
+                    var association = finding.putObject("observedDuringCall");
+                    for (String key : List.of("id", "method", "inputSha256")) association.set(key, call.path(key));
+                    var node = mapper.createObjectNode().put("id", detail ? "C10" : "C03");
+                    if (detail) node.putObject("playbackContract").set("detailCallId", callId);
+                    else node.set("categoryCallId", callId);
+                    ObjectNode http = actionHttpEvidence(evidence, resources, node);
+                    if (http != null) finding.set("httpEvidence", http);
+                    available = resources.valueStream().anyMatch(row -> sameCall(row.path("observedDuringCall"), call)
+                            && (!row.path("excerpts").isEmpty() || row.path("jsonStructure").isObject()));
+                }
+                finding.put("matchedResourceEvidenceAvailable", available);
+                if (!available && !diagnostic.withArray("missingMaterials").valueStream()
+                        .anyMatch(row -> row.asText().equals("content_regression_action_resources")))
+                    diagnostic.withArray("missingMaterials").add("content_regression_action_resources");
+            }
+            if (!diagnostic.withArray("routes").valueStream().anyMatch(row -> row.asText().equals("source_regression"))) {
+                diagnostic.withArray("routes").add("source_regression");
+                diagnostic.withArray("nextActions").addObject().put("route", "source_regression")
+                        .put("action", action("source_regression"));
+            }
+            diagnostic.put("conclusion", "triage_only");
+        }
     }
 
     private void regressionDiagnostics(ObjectNode diagnostic, RepairSummary repair, RepairCandidateSummary candidate) {
@@ -178,6 +274,11 @@ public class RepairDiagnostics {
                 .put("reason", code).put("route", selectedRoute).put("basis", "matched_host_failure_diagnostic")
                 .put("failureCauseEstablished", false);
         JsonNode context = diagnostic.path("exchangeContext");
+        interruptedGatewayDiagnostics(result, context);
+        JsonNode progress = new ManagedLoaderReceipt(mapper).partialProgress(context.path("loaderProgress"));
+        if (progress != null && progress.path("inputSourceSha256").equals(failure.path("inputSourceSha256"))
+                && progress.path("profileSha256").equals(failure.path("inputProfileSha256")))
+            result.set("interruptedLoaderProgress", progress);
         if (Set.of("ready", "source", "frame", "loader", "fetch", "exit").contains(context.path("phase").asText()))
             finding.put("executionPhase", context.path("phase").asText());
         // The tail observation can predate the terminal error; never call it the current failure cause.
@@ -234,6 +335,26 @@ public class RepairDiagnostics {
             if (!result.path("freshness").asText().equals("current")) missing.add("current_input_receipt");
         }
         result.put("conclusion", "triage_only");
+    }
+
+    private void interruptedGatewayDiagnostics(ObjectNode result, JsonNode context) {
+        JsonNode gateway = context.path("runtimeGateway");
+        if (!Set.of("trawl", "flaresolverr", "flaresolverr-rs-alt").contains(gateway.path("adapter").asText())
+                || !gateway.path("fullAcceptance").isBoolean() || gateway.path("fullAcceptance").asBoolean()
+                || !gateway.path("cookiesExported").isBoolean() || gateway.path("cookiesExported").asBoolean()
+                || !gateway.path("cleanupConfirmed").isBoolean()) return;
+        for (String key : List.of("sessionCount", "requestCount", "responseCount", "sessionReuseCount"))
+            if (!boundedInteger(gateway.path(key), 0, 64)) return;
+        var safe = result.putObject("gatewayEvidence").put("basis", "matched_host_failure_diagnostic")
+                .put("scope", "before_interruption").put("fullAcceptance", false)
+                .put("businessContentVerified", false);
+        for (String key : List.of("adapter", "sessionCount", "requestCount", "responseCount", "sessionReuseCount",
+                "cookiesExported", "cleanupConfirmed")) safe.set(key, gateway.path(key));
+        long completed = context.path("completedHttpObservations").valueStream().limit(64)
+                .filter(row -> row.path("transport").asText().equals("external_evidence_gateway")
+                        && row.path("representation").asText().equals("gateway_rendered_document")
+                        && row.path("responseComplete").asBoolean()).count();
+        safe.put("completedGatewayResponses", completed);
     }
 
     private void dnsDiagnostics(ObjectNode result, JsonNode input) {
@@ -330,13 +451,19 @@ public class RepairDiagnostics {
                 String reason = ManagedLoaderReceipt.safeReason(node.path("reason").asText());
                 String type = ManagedLoaderReceipt.safeFailureType(node.path("failureType").asText());
                 String route = route(id, reason, type);
+                if (node.at("/failureContext/hostStage").asText().equals("atvp_backend_endpoint"))
+                    route = "runtime_configuration";
+                if ("INVALID_DETAIL_ID_RETURNED_CONTENT".equals(reason)) route = "compatibility_observation";
+                if ("C03".equals(id) && "CONTENT_LIST_EMPTY_OR_INVALID".equals(reason)
+                        && "magnet_or_cloud_resource".equals(node.path("sourcePurposeHint").asText()))
+                    route = "source_purpose";
                 if (authentication != null && id.equals(authentication.path("targetNode").asText())
                         && route.equals("source_contract")) route = "credentials";
                 boolean challenge = id.equals(accessTarget) && route.equals("source_contract");
                 if (challenge) route = "access_evidence";
                 boolean network = route.equals("source_contract") && networkFailureForNode(evidence, id);
                 if (network) route = "network";
-                ObjectNode actionHttp = actionHttpEvidence(evidence, resources, id);
+                ObjectNode actionHttp = actionHttpEvidence(evidence, resources, node);
                 if (route.equals("source_contract") && actionHttp != null
                         && actionHttp.has("unavailableRoute")) route = actionHttp.path("unavailableRoute").asText();
                 var finding = findings.addObject().put("node", id).put("status", status)
@@ -345,6 +472,13 @@ public class RepairDiagnostics {
                 if (challenge) finding.put("accessClassification", accessClassification)
                         .put("accessAssociation", accessAssociation)
                         .put("failureCauseEstablished", false);
+                if ("PLAYER_EXTERNAL_PARSER_REQUIRED".equals(reason))
+                    finding.put("parserRequired", true).put("failureCauseEstablished", false);
+                if ("compatibility_observation".equals(route))
+                    finding.put("compatibilityObservation", true).put("failureCauseEstablished", false);
+                if ("source_purpose".equals(route))
+                    finding.put("sourcePurposeHint", "magnet_or_cloud_resource")
+                            .put("failureCauseEstablished", false);
                 if (network) finding.put("networkFailureObserved", true)
                         .put("networkAssociation", "source_method_observation")
                         .put("failureCauseEstablished", false);
@@ -362,6 +496,7 @@ public class RepairDiagnostics {
                 }
                 routes.add(route);
             }
+            sampledCallFailures(result, evidence, routes);
         } else {
             missing.add("matched_loader_receipt");
             routes.add("runtime_evidence");
@@ -603,6 +738,33 @@ public class RepairDiagnostics {
                 && profileSha.equals(loader.path("inputProfileSha256").asText());
     }
 
+    private void sampledCallFailures(ObjectNode result, JsonNode evidence, java.util.Set<String> routes) {
+        var failures = mapper.createArrayNode();
+        for (JsonNode call : evidence.path("loaderValidation").path("calls").valueStream().limit(128).toList()) {
+            String method = call.path("method").asText();
+            String type = ManagedLoaderReceipt.safeFailureType(call.path("failureType").asText());
+            if (!call.path("ok").isBoolean() || call.path("ok").asBoolean() || type == null
+                    || !Set.of("init", "home", "category", "detail", "search", "play").contains(method)
+                    || !boundedInteger(call.path("id"), 1, 128)
+                    || !call.path("inputSha256").asText().matches("[a-f0-9]{64}")) continue;
+            var row = failures.addObject().put("id", call.path("id").asInt()).put("method", method)
+                    .put("inputSha256", call.path("inputSha256").asText()).put("failureType", type)
+                    .put("basis", "matched_host_sample_call").put("failureCauseEstablished", false);
+            var context = ManagedLoaderReceipt.failureContext(mapper, call);
+            if (!context.isEmpty()) row.set("failureContext", context);
+            boolean httpObserved = evidence.path("httpObservations").valueStream().anyMatch(event ->
+                    event.path("observedDuringCall").path("id").equals(call.path("id"))
+                    && event.path("observedDuringCall").path("method").asText().equals(method)
+                    && event.path("observedDuringCall").path("inputSha256").equals(call.path("inputSha256")));
+            row.put("httpObserved", httpObserved);
+            if (context.path("hostStage").asText().equals("atvp_backend_endpoint")) {
+                row.put("route", "runtime_configuration").put("sourceRewriteRecommended", false);
+                routes.add("runtime_configuration");
+            }
+        }
+        if (!failures.isEmpty()) result.set("sampledCallFailures", failures);
+    }
+
     private String route(String id, String reason, String type) {
         if (reason.equals("LOADER_NODE_UNRESOLVED")) return "runtime_evidence";
         if (reason.equals("EGRESS_REQUEST_BUDGET") || reason.equals("EGRESS_BYTE_BUDGET")) return "request_budget";
@@ -631,13 +793,22 @@ public class RepairDiagnostics {
         };
     }
 
-    private ObjectNode actionHttpEvidence(JsonNode evidence, JsonNode resources, String id) {
+    private ObjectNode actionHttpEvidence(JsonNode evidence, JsonNode resources, JsonNode node) {
+        String id = node.path("id").asText();
         String method = sourceMethod(id);
         if (method.isEmpty()) return null;
+        JsonNode selectedCall = switch (id) {
+            case "C03" -> node.path("categoryCallId");
+            case "C10" -> node.at("/playbackContract/detailCallId");
+            case "R01" -> node.at("/playerContract/playCallId");
+            default -> com.fasterxml.jackson.databind.node.MissingNode.getInstance();
+        };
+        if (!selectedCall.isMissingNode() && !boundedInteger(selectedCall, 1, 32)) return null;
         var calls = mapper.createArrayNode();
         boolean httpIntervals = false, resourceIntervals = false;
         for (JsonNode call : evidence.path("loaderValidation").path("calls")) {
             if (!method.equals(call.path("method").asText())) continue;
+            if (!selectedCall.isMissingNode() && !selectedCall.equals(call.path("id"))) continue;
             var statuses = new java.util.TreeMap<Integer, Integer>();
             // Count each host HTTP event once, even when several resources sample that response.
             for (JsonNode response : evidence.path("httpObservations")) {
@@ -733,13 +904,16 @@ public class RepairDiagnostics {
             case "request_policy" -> "Trace the denied request to its source call and observed origin; do not weaken egress policy.";
             case "dependency" -> "Identify the import and pinned runtime dependency; source edits alone do not install packages.";
             case "initialization" -> "Trace init and the first failed host action; use the exception type, not guessed error text.";
+            case "runtime_configuration" -> "The AT wrapper requires a configured backend endpoint for this action. Restore the authorized host contract before source repair; do not bypass the wrapper or claim source acceptance.";
             case "player_resource" -> "Use the actual player page and script evidence before changing media extraction.";
+            case "source_purpose" -> "Treat this as a magnet or cloud-resource compatibility observation; verify search/resource output before changing the source.";
+            case "compatibility_observation" -> "Keep the valid detail result and record the invalid-ID behavior as a compatibility observation; do not trigger an automatic source rewrite.";
             case "at_offline" -> "Preserve the magnet or cloud handoff; AT resolution is separate from HTTP playback.";
             case "media_resource" -> "Compare the observed callback, MIME and bytes on the same source session.";
             case "credentials" -> "Configure source credentials through the private source-credentials panel.";
             case "access_evidence" -> "Use an authorized API or visible original-page verification for a confirmed challenge; do not repair selectors or export clearance cookies. HTTP 403 or 444 alone does not prove login is required.";
             case "runtime_evidence" -> "Obtain a current platform runtime receipt before assigning a source-code cause.";
-            case "source_regression" -> "Restore the previously non-empty output while retaining recovered nodes; compare the actual home/list/detail paths and prior edits. Counts are observations, not fixed expected totals or proof of cause.";
+            case "source_regression" -> "Compare the same category and detail action's original/candidate extraction with its actual page or API evidence before another patch. Counts are observations, not business truth: distinguish lost real episodes from previously misparsed recommendations; never restore unrelated links or relax acceptance just to recover counts. Retain recovered nodes; missing action resources remain an evidence gap.";
             default -> "Trace input, extraction, transformation and returned contract; reuse bounded page evidence and replay.";
         };
     }

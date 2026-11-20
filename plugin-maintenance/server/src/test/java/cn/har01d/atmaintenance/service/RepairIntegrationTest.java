@@ -64,6 +64,44 @@ class RepairIntegrationTest {
     @LocalServerPort int port;
 
     @Test
+    void customRoundLimitsPersistAndResumeTheSameLedgerWithoutResettingHistoryOrUsage() throws Exception {
+        var repair = begin(false, 7);
+        assertEquals(7, repair.maxRounds());
+        assertEquals(7, repair.frozen().path("policy").path("maxRounds").asInt());
+        assertEquals(7, repair.frozen().path("roundLimit").path("maxRounds").asInt());
+        String frozen = repairRows.findById(repair.id()).orElseThrow().getFrozenJson();
+        var row = repairRows.findById(repair.id()).orElseThrow();
+        row.setUsedRounds(3); row.setStatus("STOPPED"); row.setStopCode("ROUND_LIMIT");
+        repairRows.saveAndFlush(row);
+        var budget = models.budget();
+        var input = new UpdateRepairRoundLimitRequest(repair.faultSha256(), 7, 10);
+        assertEquals("REPAIR_FAULT_CHANGED", assertThrows(ResponseStatusException.class,
+                () -> repairs.updateRoundLimit(repair.id(), new UpdateRepairRoundLimitRequest("0".repeat(64), 7, 10))).getReason());
+        assertEquals("REPAIR_ROUND_LIMIT_CHANGED", assertThrows(ResponseStatusException.class,
+                () -> repairs.updateRoundLimit(repair.id(), new UpdateRepairRoundLimitRequest(repair.faultSha256(), 3, 10))).getReason());
+        assertEquals("REPAIR_ROUND_LIMIT_BELOW_USED", assertThrows(ResponseStatusException.class,
+                () -> repairs.updateRoundLimit(repair.id(), new UpdateRepairRoundLimitRequest(repair.faultSha256(), 7, 2))).getReason());
+        var updated = repairs.updateRoundLimit(repair.id(), input);
+        assertEquals(10, repairs.get(repair.id()).maxRounds());
+        assertEquals(3, updated.usedRounds());
+        assertEquals("STOPPED", updated.status());
+        assertEquals(repair.id(), updated.id());
+        assertEquals(frozen, repairRows.findById(repair.id()).orElseThrow().getFrozenJson());
+        var resumed = repairs.resume(repair.id(), repair.faultSha256());
+        assertEquals("AWAITING_PROPOSAL", resumed.status());
+        assertEquals(3, resumed.usedRounds());
+        var fourth = repairs.reserve(repair.id(), good(repair));
+        assertEquals(4, fourth.getRoundNumber());
+        assertEquals("REPAIR_ROUND_LIMIT_BUSY", assertThrows(ResponseStatusException.class,
+                () -> repairs.updateRoundLimit(repair.id(), new UpdateRepairRoundLimitRequest(repair.faultSha256(), 10, 12))).getReason());
+        repairs.cancel(repair.id());
+        assertEquals(4, repairs.updateRoundLimit(repair.id(), new UpdateRepairRoundLimitRequest(repair.faultSha256(), 10, 4)).maxRounds());
+        assertEquals(1, repairs.candidates(repair.id()).size());
+        assertEquals(budget, models.budget());
+        assertEquals(BAD, sources.artifact(repair.sourceId(), repair.baselineArtifactSha256()).getBody());
+    }
+
+    @Test
     void reverseEvidencePersistsOnTheSameRepairWithoutChangingSourceBudgetOrAcceptance() throws Exception {
         var source = sources.create(new CreateSourceRequest("reverse-evidence", null, "reverse.py", null, BAD));
         var run = awaitProbe(probes.start(source.id()).id());
@@ -1254,6 +1292,51 @@ class RepairIntegrationTest {
     }
 
     @Test
+    void awaitingProposalCanRefreshChangedRuntimeBeforeSpendingAnotherModelRound() throws Exception {
+        var baseline = nodeBaseline();
+        var repair = repairs.create(baseline.sourceId(), new StartRepairRequest(baseline.id(), baseline.artifactSha256()));
+        var candidate = await(service.propose(repair.id(), nodeProposal(repair, 1)).id());
+        failCandidateRuntime(repair, candidate);
+        var row = repairRows.findById(repair.id()).orElseThrow();
+        row.setStatus("AWAITING_PROPOSAL");
+        row.setStopCode(null);
+        repairRows.saveAndFlush(row);
+        var budget = models.budget();
+        upgradeRevalidationEnvironment();
+        doReturn(nodeEvidence(baseline, candidate.sha256(), true, true, true).put("bundleSha256", managed.sha256()))
+                .when(managed).inspect(anyString(), anyString(), any(), anyString(), anyString(), any());
+        service.revalidateRuntime(candidate.id(), candidate.sha256(), repair.faultSha256());
+        assertEquals("RUNTIME_OBSERVED", await(candidate.id()).status());
+        assertEquals(1, repairs.get(repair.id()).usedRounds());
+        assertEquals(1, repairs.candidates(repair.id()).size());
+        assertEquals(budget, models.budget());
+    }
+
+    @Test
+    void observedCandidateCanRevalidateChangedToolsWithoutResettingItsLedger() throws Exception {
+        var baseline = nodeBaseline();
+        var repair = repairs.create(baseline.sourceId(), new StartRepairRequest(baseline.id(), baseline.artifactSha256()));
+        var candidate = await(service.propose(repair.id(), nodeProposal(repair, 1)).id());
+        doReturn(nodeEvidence(baseline, candidate.sha256(), true, true, true)).when(managed)
+                .inspect(anyString(), anyString(), any(), anyString(), anyString(), any());
+        service.validateRuntime(candidate.id(), candidate.sha256());
+        assertEquals("RUNTIME_OBSERVED", await(candidate.id()).status());
+        String frozen = repairRows.findById(repair.id()).orElseThrow().getFrozenJson();
+        var budget = models.budget();
+        upgradeRevalidationEnvironment();
+        doReturn(nodeEvidence(baseline, candidate.sha256(), true, true, true).put("bundleSha256", managed.sha256()))
+                .when(managed).inspect(anyString(), anyString(), any(), anyString(), anyString(), any());
+        service.revalidateRuntime(candidate.id(), candidate.sha256(), repair.faultSha256());
+        var observed = await(candidate.id());
+        assertEquals("RUNTIME_OBSERVED", observed.status());
+        assertEquals(1, repairs.get(repair.id()).usedRounds());
+        assertEquals(1, repairs.candidates(repair.id()).size());
+        assertEquals(frozen, repairRows.findById(repair.id()).orElseThrow().getFrozenJson());
+        assertEquals(1, observed.result().path("runtimeAttempts").size());
+        assertEquals(budget, models.budget());
+    }
+
+    @Test
     void revalidatedNetworkPauseCanResumeAndNewCandidatesInheritCurrentEnvironment() throws Exception {
         var baseline = nodeBaseline();
         var repair = repairs.create(baseline.sourceId(), new StartRepairRequest(baseline.id(), baseline.artifactSha256()));
@@ -1490,6 +1573,53 @@ class RepairIntegrationTest {
         assertEquals("REPEATED_FAILURE", repairs.get(repair.id()).stopCode());
         assertEquals(2, repairs.get(repair.id()).usedRounds());
         assertTrue(repairs.candidates(repair.id()).stream().allMatch(c -> c.result().has("runtimeEvidence")));
+    }
+
+    @Test
+    void hostConfigurationPauseRevalidatesOriginalCandidateWithoutNewRoundsOrModelCalls() throws Exception {
+        var baseline = nodeBaseline();
+        var repair = repairs.create(baseline.sourceId(), new StartRepairRequest(baseline.id(), baseline.artifactSha256()));
+        var candidate = await(service.propose(repair.id(), nodeProposal(repair, 1)).id());
+        var blocked = nodeEvidence(baseline, candidate.sha256(), true, true, false);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) blocked.at("/loaderValidation/nodes/4"))
+                .put("reason", "LOADER_METHOD_FAILED").putObject("failureContext").put("hostStage", "atvp_backend_endpoint");
+        var budget = models.budget();
+        doReturn(blocked).when(managed).inspect(anyString(), anyString(), any(), anyString(), anyString(), any());
+        service.validateRuntime(candidate.id(), candidate.sha256());
+        var held = await(candidate.id());
+        assertEquals("BLOCKED", held.status());
+        assertEquals("RUNTIME_HOST_CONFIGURATION_REQUIRED", repairs.get(repair.id()).stopCode());
+        assertNull(candidateRows.findById(candidate.id()).orElseThrow().getFailureSha256());
+        assertEquals("REPAIR_RUNTIME_NOT_READY", assertThrows(ResponseStatusException.class,
+                () -> service.retryAutomaticRuntime(repair.id())).getReason());
+        assertEquals("AWAITING_RUNTIME_VALIDATION", repairs.resume(repair.id(), repair.faultSha256()).status());
+        doReturn(nodeEvidence(baseline, candidate.sha256(), true, true, true)).when(managed)
+                .inspect(anyString(), anyString(), any(), anyString(), anyString(), any());
+        service.revalidateRuntime(candidate.id(), candidate.sha256(), repair.faultSha256());
+        var recovered = await(candidate.id());
+        assertTrue(recovered.result().path("repairSuccessful").asBoolean(), recovered.result()::toString);
+        assertEquals(candidate.sha256(), recovered.sha256());
+        assertEquals(held.result().path("runtimeEvidence"), recovered.result().at("/runtimeAttempts/0/runtimeEvidence"));
+        assertEquals(1, repairs.get(repair.id()).usedRounds());
+        assertEquals(1, repairs.candidates(repair.id()).size());
+        assertEquals(budget, models.budget());
+        assertEquals(baseline.artifactSha256(), sources.get(repair.sourceId()).artifactSha256());
+    }
+
+    @Test
+    void hostOnlyBaselineCannotCreateASourceRepair() throws Exception {
+        var baseline = nodeBaseline();
+        var evidence = nodeEvidence(baseline, baseline.artifactSha256(), true, true, false);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) evidence.at("/loaderValidation/nodes/4"))
+                .put("reason", "LOADER_METHOD_FAILED").putObject("failureContext").put("hostStage", "atvp_backend_endpoint");
+        var row = probeRuns.findById(baseline.id()).orElseThrow();
+        var result = (com.fasterxml.jackson.databind.node.ObjectNode) baseline.result().deepCopy();
+        result.set("managedSourceEvidence", evidence);
+        row.setResultJson(result.toString());
+        probeRuns.saveAndFlush(row);
+        assertEquals("LIVE_INSPECTION_HOST_CONFIGURATION_REQUIRED", assertThrows(ResponseStatusException.class,
+                () -> repairs.create(baseline.sourceId(), new StartRepairRequest(baseline.id(), baseline.artifactSha256()))).getReason());
+        assertTrue(repairs.list(baseline.sourceId()).isEmpty());
     }
 
     @Test
@@ -1901,7 +2031,7 @@ class RepairIntegrationTest {
         profiles.update(source.id(), new UpdateProfileRequest(profile.sha256(), "t4", "unverified",
                 required, List.of(), null, null));
         var staticProbe = awaitProbe(probes.start(source.id()).id());
-        assertEquals("COMPLETED", staticProbe.status());
+        assertEquals("COMPLETED", staticProbe.status(), () -> "Baseline probe: " + staticProbe);
         var run = probeStore.create(source.id(), staticProbe.inspectorSha256(), staticProbe.knowledgeSha256(), "managed_source");
         assertTrue(probeStore.start(run.getId()));
         var baseline = probeStore.get(run.getId());
@@ -1938,6 +2068,9 @@ class RepairIntegrationTest {
     }
 
     private RepairSummary begin(boolean requireRuntime) throws Exception {
+        return begin(requireRuntime, null);
+    }
+    private RepairSummary begin(boolean requireRuntime, Integer maxRounds) throws Exception {
         var source = sources.create(new CreateSourceRequest("修复夹具", null, "repair.py", null, BAD));
         if (requireRuntime) {
             var profile = profiles.get(source.id());
@@ -1950,7 +2083,7 @@ class RepairIntegrationTest {
         assertNotNull(probe.result(),
                 () -> "Missing probe report " + probe.id() + " error=" + probe.errorCode());
         assertEquals("fail", node(probe.result(), "S03").path("status").asText());
-        return repairs.create(source.id(), new StartRepairRequest(probe.id(), source.artifactSha256()));
+        return repairs.create(source.id(), new StartRepairRequest(probe.id(), source.artifactSha256(), maxRounds));
     }
     private RepairProposal good(RepairSummary repair) { return proposal(repair, List.of(new RepairEdit(OVERRIDE, ""))); }
     private RepairProposal proposal(RepairSummary repair, List<RepairEdit> edits) {

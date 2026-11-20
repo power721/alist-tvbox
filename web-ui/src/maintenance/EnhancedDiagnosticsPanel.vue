@@ -23,6 +23,8 @@ interface Diagnostic {
     executionPhase?: string; networkDenials?: { denialIndex: number; method: string; code: string }[]
     httpEvidence?: { calls: { id: number; method: string; statusCounts: Record<string, number> }[] }
     regression?: { field: string; before: number; after: number }
+    contentRegression?: { categoryIdSha256?: string; before: number; after: number; detailComparable?: boolean }
+    observedDuringCall?: ObservedCall; matchedResourceEvidenceAvailable?: boolean
     playerValueEvidence?: { truncated: boolean; matches: { path: (string | number)[]; embeddedPath?: (string | number)[]
       observedDuringCall: ObservedCall; playerValueMatches: Record<string, string> }[] }
     accessClassification?: string; accessAssociation?: string; requestDiagnostic?: { reason: string; headerName: string }
@@ -45,13 +47,14 @@ const routes: Record<string, string> = {
   request_policy: '请求适配：定位被拒请求与来源',
   dependency: '运行依赖：核对导入与隔离环境',
   initialization: '初始化：定位首个失败动作',
+  runtime_configuration: 'AT 宿主解析未配置：补齐宿主环境后复验原候选',
   player_resource: '外部解析：补齐实际播放页证据',
   at_offline: 'AT 离线资源：保留磁力或网盘交接',
   media_resource: '媒体资源：核对回调、类型与字节',
   credentials: '站点认证：补充或更新凭据',
   access_evidence: '访问受限：区分登录、拒绝和挑战页面',
   runtime_evidence: '运行证据不足',
-  source_regression: '候选功能退化：恢复原有内容，同时保留已修复能力',
+  source_regression: '候选内容减少：核对真实选集与误入链接，保留已修复能力',
   source_contract: '源码返回异常：追踪输入、提取与变换'
 }
 const materials: Record<string, string> = {
@@ -61,9 +64,16 @@ const materials: Record<string, string> = {
   public_response_structure: '页面或接口结构证据',
   current_input_receipt: '当前版本的运行报告',
   player_value_correspondence: '选集或返回地址与接口字段的匹配证据',
-  action_http_association: '错误响应与具体动作的关联证据'
+  action_http_association: '错误响应与具体动作的关联证据',
+  content_regression_action_resources: '内容减少的分类或详情调用所对应的页面、接口证据'
 }
 function findingLabel(finding: Diagnostic['findings'][number]) {
+  if (finding.contentRegression) {
+    const names: Record<string, string> = { DECLARED_CATEGORY_LOSS: '分类数量', CATEGORY_BECAME_EMPTY: '分类条目',
+      CATEGORY_ITEMS_COLLAPSED: '分类条目', DETAIL_EPISODES_COLLAPSED: '同作品选集' }
+    const { before, after } = finding.contentRegression
+    return `${names[finding.reason] || '内容'}减少：${before} → ${after}${callIntervalLabel(finding.observedDuringCall)}（原因待核验）`
+  }
   if (['RUNTIME_REGRESSION', 'RUNTIME_NETWORK_UNAVAILABLE'].includes(finding.reason) && finding.regression) {
     const names: Record<string, string> = { homeClasses: '首页分类', homeItems: '首页条目', homeCovers: '首页封面',
       categoryItems: '分类条目', categoryCovers: '分类封面', page2Items: '第二页条目', detailItems: '详情条目',

@@ -26,6 +26,7 @@ function view() {
     scheduleMode: { value: 'managed_source' }, scheduleHours: { value: 6 }, scheduleDailyLimit: { value: 2 },
     scheduleApprovalConfirmed: { value: false }, scheduleApprovalRunId: { value: 'run-A' },
     scheduleAutomaticRepair: { value: false },
+    scheduleMaxRounds: { value: 3 },
     scheduleRepairConfigurationSha: { value: '' }, scheduleFirstRunAt: { value: null },
     computed: fn => ({ get value() { return fn() } }), action: async fn => fn(),
     ElMessage: { success: message => messages.push(message) },
@@ -107,7 +108,7 @@ test('repair opt-in binds the current model only after checking the existing sou
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(app.requests[2].path, '/sources/A/schedule')
   assert.deepEqual(JSON.parse(JSON.stringify(app.requests[2].body.automaticRepair)),
-    { expectedConfigurationSha256: 'model-config' })
+    { expectedConfigurationSha256: 'model-config', maxRounds: 3 })
   app.pending[2]({ sha256: 'saved', policy: { automaticRepair: { configurationSha256: 'model-config' } } })
   await saving
   assert.equal(app.context.scheduleRepairConfigurationSha.value, 'model-config')
@@ -119,12 +120,25 @@ test('editing and disabling preserve the frozen model rather than silently autho
   app.context.scheduleAutomaticRepair.value = true
   app.context.scheduleRepairConfigurationSha.value = 'frozen-model'
   app.context.scheduleEnabled.value = false
+  app.context.scheduleMaxRounds.value = 8
   const saving = app.saveSchedule()
   assert.equal(app.requests.length, 1)
   assert.equal(app.requests[0].path, '/sources/A/schedule')
   assert.equal(app.requests[0].body.automaticRepair.expectedConfigurationSha256, 'frozen-model')
+  assert.equal(app.requests[0].body.automaticRepair.maxRounds, 8)
   app.pending[0]({ sha256: 'saved', policy: {} })
   await saving
+})
+
+test('invalid scheduled repair rounds do not submit a schedule or contact the model', async () => {
+  const app = view()
+  app.context.schedule.value.policy.approval = { approvedRunId: 'run-A' }
+  app.context.scheduleAutomaticRepair.value = true
+  for (const limit of [0, -1, 1.5, undefined]) {
+    app.context.scheduleMaxRounds.value = limit
+    await assert.rejects(app.saveSchedule(), /正整数/)
+  }
+  assert.equal(app.requests.length, 0)
 })
 
 test('source change during model approval aborts before consent lookup or policy update', async () => {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { MagicStick } from '@element-plus/icons-vue'
+import { Check, MagicStick } from '@element-plus/icons-vue'
 import { request, sourceContent } from './api'
 
 interface Task { runId: string; sourceId: string; artifactSha256: string; status: string
@@ -9,17 +9,21 @@ interface Connection { enabled: boolean; model: string; configurationSha256: str
 interface Consent { sourceId: string; artifactSha256: string | null }
 interface EvidenceOffer { available: boolean; candidateSha256: string; evidenceSha256: string
   expectedFaultSha256: string; usedRounds: number; maxRounds: number }
+interface RoundState { id: string; faultSha256: string; usedRounds: number; maxRounds: number; freshness: string
+  frozen: { roundLimit?: { maxRounds: number } } }
 const props = defineProps<{ sourceId: string; artifactSha256: string; disabled: boolean; runtimeEnabled: boolean }>()
 const emit = defineEmits<{ changed: [task: Task]; configure: [] }>()
 const task = ref<Task>()
 const connection = ref<Connection>()
 const consent = ref<Consent>()
 const busy = ref(false)
+const maxRounds = ref(3)
+const roundState = ref<RoundState>()
 const error = ref('')
 const reviewing = ref(false)
 const reviewed = ref(false)
 const content = ref('')
-const pending = ref<{ expectedArtifactSha256: string; expectedConfigurationSha256: string; requestKey: string }>()
+const pending = ref<{ expectedArtifactSha256: string; expectedConfigurationSha256: string; requestKey: string; maxRounds: number }>()
 const pendingResume = ref<{ expectedArtifactSha256: string; expectedConfigurationSha256: string; requestKey: string }>()
 const evidenceOffer = ref<EvidenceOffer>()
 const confirmingContinuation = ref(false)
@@ -63,6 +67,9 @@ const stopLabels: Record<string, string> = {
   LIVE_INSPECTION_POLICY_LIMITED: '联网检查受执行策略限制',
   LIVE_INSPECTION_RESPONSE_MISSING: '未取得完整源站响应',
   LIVE_INSPECTION_NETWORK_UNAVAILABLE: '源站网络暂不可用，未判定源码故障',
+  LIVE_INSPECTION_HOST_CONFIGURATION_REQUIRED: 'AT 宿主解析未配置，未启动模型修复',
+  MODEL_HOST_CONFIGURATION_REQUIRED: 'AT 宿主解析未配置，模型未调用，候选与历史保留',
+  RUNTIME_HOST_CONFIGURATION_REQUIRED: 'AT 宿主解析未配置，候选已保留；补齐后可复验原候选',
   LIVE_INSPECTION_HTTP_ACCESS_DENIED: '源站仅返回 401/403，未取得业务页面，未启动模型修复',
   LIVE_INSPECTION_SOURCE_ACCESS_CHALLENGE: '源站返回访问挑战页，未判定解析故障，未启动模型修复',
   MODEL_SOURCE_ACCESS_CHALLENGE: '源站返回访问挑战页，模型未调用，原失败记录保留',
@@ -77,13 +84,18 @@ const stopLabels: Record<string, string> = {
   SOURCE_AUTHENTICATION_REJECTED: '站点凭据已失效，请更新',
   SOURCE_SETUP_DNS_NO_ADDRESS: '站点域名暂无可用地址，可继续发现并验证备用域',
   SOURCE_SETUP_DNS_FAILED: '站点域名解析失败，未启动模型修复',
-  SOURCE_SETUP_NONPUBLIC_DNS: '域名未解析到可用公网地址，未启动模型修复'
+  SOURCE_SETUP_NONPUBLIC_DNS: '域名未解析到可用公网地址，未启动模型修复',
+  ROUND_LIMIT: '已到本次轮数上限，可调整后继续',
+  REPEATED_FAILURE: '出现重复失败，可查看证据并调整轮数后继续'
 }
 const taskLabel = computed(() => task.value?.status === 'STOPPED' && task.value.stopCode?.startsWith('SOURCE_SETUP_')
   ? '准备失败，源未执行' : labels[task.value?.status || ''] || task.value?.status || '')
 const canResume = computed(() => task.value?.status === 'STOPPED'
   && (task.value.stopCode === 'SOURCE_SETUP_DNS_NO_ADDRESS' && !task.value.repairId
-    || !!task.value.repairId && (task.value.stopCode === 'RUNTIME_NETWORK_UNAVAILABLE'
+    || !!task.value.repairId && (roundState.value?.freshness === 'current' && !!roundState.value.frozen.roundLimit
+      && roundState.value.usedRounds < roundState.value.maxRounds
+      && ['ROUND_LIMIT', 'REPEATED_FAILURE'].includes(task.value.stopCode ?? '')
+    || task.value.stopCode === 'RUNTIME_NETWORK_UNAVAILABLE'
     || task.value.stopCode === 'MODEL_INPUT_TOO_LARGE'
     || ['MODEL_HTTP_ERROR', 'MODEL_RATE_LIMITED', 'MODEL_SERVICE_UNAVAILABLE', 'MODEL_CONNECTION_FAILED']
       .includes(task.value.stopCode || '')
@@ -114,13 +126,30 @@ async function refresh() {
     || current.repairId !== task.value?.repairId)) emit('changed', current)
   task.value = current
   evidenceOffer.value = undefined
-  if (current?.status === 'STOPPED' && current.repairId
-    && ['REPEATED_FAILURE', 'ROUND_LIMIT'].includes(current.stopCode || '')) {
-    const offer = await request<EvidenceOffer>(`/repairs/${current.repairId}/evidence-continuation`)
+  roundState.value = undefined
+  if (current?.repairId) {
+    const rounds = await request<RoundState>(`/repairs/${current.repairId}`)
     if (disposed || task.value?.runId !== current.runId) return
-    evidenceOffer.value = offer
+    roundState.value = rounds
+    maxRounds.value = rounds.maxRounds
+    if (current.status === 'STOPPED' && ['REPEATED_FAILURE', 'ROUND_LIMIT'].includes(current.stopCode || '')) {
+      const offer = await request<EvidenceOffer>(`/repairs/${current.repairId}/evidence-continuation`)
+      if (disposed || task.value?.runId !== current.runId) return
+      evidenceOffer.value = offer
+    }
   }
   if (active.value) poll = setTimeout(() => action(refresh), 1500)
+}
+async function saveRoundLimit() {
+  const repair = roundState.value
+  if (!repair || busy.value || props.disabled || active.value || !Number.isInteger(maxRounds.value)
+    || maxRounds.value < Math.max(1, repair.usedRounds)) return
+  await action(async () => {
+    await request(`/repairs/${repair.id}/round-limit`, {
+      expectedFaultSha256: repair.faultSha256, expectedMaxRounds: repair.maxRounds, maxRounds: maxRounds.value
+    }, 'PUT')
+    await refresh()
+  })
 }
 function reviewContinuation() {
   if (busy.value || props.disabled || !props.runtimeEnabled || !task.value
@@ -157,7 +186,7 @@ async function submit() {
   pending.value ??= {
     expectedArtifactSha256: props.artifactSha256,
     expectedConfigurationSha256: connection.value!.configurationSha256,
-    requestKey: crypto.randomUUID()
+    requestKey: crypto.randomUUID(), maxRounds: maxRounds.value
   }
   const accepted = await request<Task>(`/sources/${props.sourceId}/maintenance`, pending.value)
   if (disposed) return
@@ -167,7 +196,8 @@ async function submit() {
   await refresh()
 }
 async function start() {
-  if (busy.value || props.disabled || !props.runtimeEnabled || active.value) return
+  if (busy.value || props.disabled || !props.runtimeEnabled || active.value
+    || !Number.isInteger(maxRounds.value) || maxRounds.value < 1) return
   if (!connection.value?.enabled || !connection.value.autoSubmitEnabled) { emit('configure'); return }
   await action(async () => {
     if (consent.value?.artifactSha256 !== props.artifactSha256) {
@@ -217,6 +247,13 @@ onUnmounted(() => { disposed = true; if (poll) clearTimeout(poll) })
 <template>
   <div class="maintenance-workflow">
     <div class="workflow-actions">
+      <label for="maintenance-round-limit">修复轮数上限</label>
+      <el-input-number id="maintenance-round-limit" v-model="maxRounds" :min="Math.max(1, roundState?.usedRounds ?? 0)"
+        :precision="0" :disabled="disabled || busy || active" aria-label="自动修复轮数上限" style="width: 150px" />
+      <el-tooltip v-if="roundState && !active" content="保存轮数上限，不清零历史或自动调用模型">
+        <el-button :icon="Check" :disabled="disabled || busy || !Number.isInteger(maxRounds) || maxRounds === roundState.maxRounds"
+          aria-label="保存自动修复轮数" @click="saveRoundLimit" />
+      </el-tooltip>
       <el-button :icon="MagicStick" :disabled="disabled || busy || !runtimeEnabled || active" @click="start">
         联网巡检并修复
       </el-button>

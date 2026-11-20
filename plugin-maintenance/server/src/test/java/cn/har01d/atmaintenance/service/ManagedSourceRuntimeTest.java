@@ -25,6 +25,29 @@ class ManagedSourceRuntimeTest {
     ManagedSourceRuntimeTest() throws IOException {}
 
     @Test
+    void interruptedLoaderProgressProjectsOnlyBoundedCompletedCallsAndNeverAcceptance() throws Exception {
+        var runtime = runtime(true, "/run/managed/executor.sock");
+        var input = mapper.createObjectNode().put("schemaVersion", 1).put("fullAcceptance", true)
+                .put("inputSourceSha256", "a".repeat(64)).put("profileSha256", "b".repeat(64))
+                .put("secret", "PRIVATE");
+        var calls = input.putArray("completedCalls");
+        for (int id = 1; id <= 40; id++)
+            calls.addObject().put("id", id).put("method", "category").put("ok", true)
+                    .put("inputSha256", "c".repeat(64)).put("outputSha256", "d".repeat(64))
+                    .put("body", "PRIVATE");
+        var safe = runtime.projectLoaderProgress(input);
+        assertNotNull(safe);
+        assertFalse(safe.path("fullAcceptance").asBoolean());
+        assertEquals(40, safe.path("completedCalls").size());
+        assertFalse(safe.toString().contains("PRIVATE"));
+        ((ObjectNode) calls.get(1)).put("id", 99);
+        assertNull(runtime.projectLoaderProgress(input));
+        ((ObjectNode) calls.get(1)).put("id", 2);
+        input.putObject("contentSnapshot").put("schemaVersion", 1);
+        assertNull(runtime.projectLoaderProgress(input));
+    }
+
+    @Test
     void disabledSnapshotsNeverConnectAndHideSocketPathAndInvalidConfiguration() throws Exception {
         var runtime = runtime(false, "/private/executor.sock");
         assertEquals("MANAGED_EXECUTION_DISABLED", runtime.blockedReason(profile()));
@@ -38,6 +61,7 @@ class ManagedSourceRuntimeTest {
         assertEquals("MANAGED_EXECUTION_ERROR", runtime.errorCode("PRIVATE_RAW_ERROR"));
         assertEquals("MANAGED_EXECUTION_ERROR", runtime.errorCode(null));
         assertEquals("MANAGED_LOCAL_SOCKET_REQUIRED", runtime.errorCode("MANAGED_LOCAL_SOCKET_REQUIRED"));
+        assertEquals("EGRESS_IMAGE_BUNDLE_MISMATCH", runtime.errorCode("EGRESS_IMAGE_BUNDLE_MISMATCH"));
     }
 
     @Test
@@ -245,6 +269,37 @@ class ManagedSourceRuntimeTest {
         request.put("requestUrlSha256", "PRIVATE");
         assertFalse(runtime.projectDiagnostic(input).path("exchangeContext").path("denialObservations")
                 .get(0).path("requestDiagnostic").has("requestUrlSha256"));
+    }
+
+    @Test
+    void interruptedGatewayEvidenceKeepsTransportAndCountsWithoutAcceptanceOrSecrets() throws Exception {
+        var runtime = runtime(true, "/run/managed/executor.sock");
+        var input = diagnostic();
+        var context = input.putObject("exchangeContext").put("phase", "fetch").put("lastHttpId", 2)
+                .put("loaderCallCount", 1).putNull("peerExitCode").put("policyDenied", false)
+                .put("completedHttpCount", 1);
+        var event = context.putArray("completedHttpObservations").addObject().put("method", "GET")
+                .put("requestUrlSha256", "a".repeat(64)).put("responseStatus", 200).put("responseBytes", 45157)
+                .put("responseSha256", "b".repeat(64)).put("responseComplete", true)
+                .put("responseContentType", "text/html").put("transport", "external_evidence_gateway")
+                .put("representation", "gateway_rendered_document").put("gatewaySessionReused", true)
+                .put("cookiesExported", false).put("gatewayOutcome", "response_returned")
+                .put("cookie", "PRIVATE");
+        var gateway = context.putObject("runtimeGateway").put("adapter", "flaresolverr-rs-alt")
+                .put("sessionCount", 1).put("requestCount", 2).put("responseCount", 1).put("sessionReuseCount", 1)
+                .put("cookiesExported", false).put("cleanupConfirmed", true).put("session", "PRIVATE");
+        var safe = runtime.projectDiagnostic(input).path("exchangeContext");
+        assertEquals("external_evidence_gateway", safe.at("/completedHttpObservations/0/transport").asText());
+        assertEquals("response_returned", safe.at("/completedHttpObservations/0/gatewayOutcome").asText());
+        assertEquals(2, safe.path("runtimeGateway").path("requestCount").asInt());
+        assertFalse(safe.path("runtimeGateway").path("fullAcceptance").asBoolean());
+        assertFalse(safe.toString().contains("PRIVATE"));
+        event.put("gatewayOutcome", "PRIVATE");
+        gateway.put("requestCount", 65);
+        safe = runtime.projectDiagnostic(input).path("exchangeContext");
+        assertFalse(safe.has("runtimeGateway"));
+        assertFalse(safe.at("/completedHttpObservations/0").has("gatewayOutcome"));
+        assertFalse(safe.toString().contains("PRIVATE"));
     }
 
     @Test
@@ -675,6 +730,19 @@ class ManagedSourceRuntimeTest {
             assertEquals(outcome, runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256())
                     .at("/httpObservations/0/gatewayOutcome").asText());
         }
+        event.put("gatewayOutcome", "request_not_reproducible").put("challengePage", true);
+        for (String reason : List.of("request_method", "request_body", "host_credentials", "request_headers",
+                "response_content_type")) {
+            event.put("gatewaySkipReason", reason);
+            assertEquals(reason, runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256())
+                    .at("/httpObservations/0/gatewaySkipReason").asText());
+        }
+        event.put("gatewaySkipReason", "PRIVATE");
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+        event.put("gatewaySkipReason", "request_headers").put("gatewayOutcome", "response_returned");
+        assertThrows(IOException.class, () -> runtime.inspect(job, source, profile(), runtime.sha256(), runtime.policySha256()));
+        event.remove("gatewaySkipReason");
+        event.put("gatewayOutcome", "EVIDENCE_GATEWAY_READ_TIMEOUT");
         var recovery = event.putObject("gatewayRecovery").put("phase", "read").put("action", "reset_after_cooldown")
                 .put("remainingWaitMilliseconds", 2000).put("taskBudgetRemainingMilliseconds", 10000)
                 .put("fitsTaskBudget", true).put("errorMessage", "PRIVATE");
@@ -1236,14 +1304,23 @@ class ManagedSourceRuntimeTest {
         page.putObject("observedDuringCall").put("id", 1).put("method", "init")
                 .put("inputSha256", "d".repeat(64));
         result.set("resourceEvidence", resources);
+        result.set("contentResourceEvidence", resources.deepCopy());
         result.set("httpObservations", events);
         doAnswer(call -> httpReply(runtime, call.getArgument(0), row, policy)).when(runtime).control(any());
         var evidence = runtime.inspect(job, source, profile, runtime.sha256(), runtime.policySha256());
         assertEquals(resources, evidence.path("resourceEvidence"));
+        assertEquals(resources, evidence.path("contentResourceEvidence"));
         assertEquals(403, evidence.path("resourceEvidence").path("resources").get(0).path("responseStatus").asInt());
         assertEquals("init", evidence.path("resourceEvidence").path("resources").get(0)
                 .path("observedDuringCall").path("method").asText());
         assertFalse(evidence.path("publishEligible").asBoolean());
+        result.remove("resourceEvidence");
+        ((ObjectNode) result.path("contentResourceEvidence").path("resources").get(0)
+                .path("observedDuringCall")).put("inputSha256", "0".repeat(64));
+        assertEquals("MANAGED_RESOURCE_EVIDENCE_INVALID", assertThrows(IOException.class,
+                () -> runtime.inspect(job, source, profile, runtime.sha256(), runtime.policySha256())).getMessage());
+        result.set("resourceEvidence", resources);
+        result.remove("contentResourceEvidence");
         page.withObject("observedDuringCall").put("inputSha256", "0".repeat(64));
         assertEquals("MANAGED_RESOURCE_EVIDENCE_INVALID", assertThrows(IOException.class,
                 () -> runtime.inspect(job, source, profile, runtime.sha256(), runtime.policySha256())).getMessage());

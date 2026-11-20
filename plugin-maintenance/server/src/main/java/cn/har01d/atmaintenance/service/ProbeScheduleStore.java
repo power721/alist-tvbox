@@ -112,9 +112,13 @@ public class ProbeScheduleStore {
                 if (approval == null || !approval.isObject()) throw error("MANAGED_SCHEDULE_APPROVAL_REQUIRED");
             }
             ((ObjectNode) policy).set("approval", approval);
-            if (input.automaticRepair() != null)
+            if (input.automaticRepair() != null) {
+                if (input.automaticRepair().maxRounds() != null && input.automaticRepair().maxRounds() < 1)
+                    throw error("REPAIR_ROUND_LIMIT_INVALID");
                 ((ObjectNode) policy).putObject("automaticRepair").put("configurationSha256",
-                        input.automaticRepair().expectedConfigurationSha256());
+                        input.automaticRepair().expectedConfigurationSha256())
+                        .put("maxRounds", input.automaticRepair().maxRounds() == null ? 3 : input.automaticRepair().maxRounds());
+            }
             if (input.enabled()) {
                 String blocked = approvalBlockedReason(sourceId, policy);
                 if (blocked != null) throw error(blocked);
@@ -215,6 +219,7 @@ public class ProbeScheduleStore {
         if (policy.has("automaticRepair")) {
             run.setMaintenanceKey("schedule_" + run.getId());
             run.setMaintenanceConfigurationSha256(policy.path("automaticRepair").path("configurationSha256").asText());
+            run.setMaintenanceMaxRounds(policy.path("automaticRepair").path("maxRounds").asInt(3));
             run.setMaintenanceStatus("CHECKING");
         }
         schedule.setActiveRunId(run.getId());

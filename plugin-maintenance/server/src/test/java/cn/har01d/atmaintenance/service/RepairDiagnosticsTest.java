@@ -18,6 +18,45 @@ class RepairDiagnosticsTest {
     private final RepairDiagnostics diagnostics = new RepairDiagnostics(mapper);
     private final String sha = "a".repeat(64), profile = "b".repeat(64), runtime = "c".repeat(64);
 
+    @Test
+    void onlyCurrentRequiredHostBlockPausesModelAndIndependentFaultsRemainRepairable() {
+        var observed = evidence(sha, "C07", "LOADER_METHOD_FAILED");
+        observed.putObject("cleanup").put("confirmed", true).put("containerAbsent", true);
+        ((ObjectNode) observed.at("/loaderValidation/nodes/0")).putObject("failureContext")
+                .put("hostStage", "atvp_backend_endpoint");
+        var repair = repair(observed);
+        ((ObjectNode) repair.frozen().path("baseline")).putObject("profile").putArray("requiredNodes").add("C07").add("C03");
+        assertTrue(diagnostics.forRepair(repair, List.of()).path("hostConfigurationRequired").asBoolean());
+        var candidate = candidate(sha, 1, observed);
+        assertTrue(diagnostics.forRepair(repair, List.of(candidate)).path("hostConfigurationRequired").asBoolean());
+        observed.withObject("loaderValidation").withArray("nodes").addObject().put("id", "C03")
+                .put("status", "fail").put("reason", "CONTENT_LIST_EMPTY_OR_INVALID");
+        assertFalse(diagnostics.forRepair(repair, List.of(candidate)).path("hostConfigurationRequired").asBoolean());
+        observed.withObject("loaderValidation").withArray("nodes").remove(1);
+        observed.put("bundleSha256", "f".repeat(64));
+        assertFalse(diagnostics.forRepair(repair, List.of(candidate)).path("hostConfigurationRequired").asBoolean());
+    }
+
+    @Test
+    void sampledDetailFailuresRemainVisibleAfterCategoryFailureAndDoNotBecomeSourceRepairs() {
+        var observed = evidence(sha, "C03", "LOADER_METHOD_FAILED");
+        var call = observed.withObject("loaderValidation").withArray("calls").addObject()
+                .put("id", 7).put("method", "detail").put("ok", false)
+                .put("inputSha256", "d".repeat(64)).put("failureType", "ValueError");
+        call.putObject("failureContext").put("hostStage", "atvp_backend_endpoint").put("message", "PRIVATE");
+        var report = diagnostics.forRepair(repair(observed), List.of(candidate(sha, 1, observed)));
+        var failure = report.path("sampledCallFailures").get(0);
+        assertEquals(7, failure.path("id").asInt());
+        assertEquals("runtime_configuration", failure.path("route").asText());
+        assertFalse(failure.path("httpObserved").asBoolean());
+        assertFalse(failure.path("sourceRewriteRecommended").asBoolean());
+        assertFalse(report.path("automaticEnhancementRecommended").asBoolean());
+        assertFalse(report.toString().contains("PRIVATE"));
+        assertFalse(report.path("acceptanceChanged").asBoolean());
+        observed.put("bundleSha256", "e".repeat(64));
+        assertFalse(diagnostics.forRepair(repair(observed), List.of()).has("sampledCallFailures"));
+    }
+
     ObjectNode evidence(String source, String node, String reason) {
         var value = mapper.createObjectNode().put("inputSourceSha256", source).put("bundleSha256", runtime);
         value.putArray("deniedCodes");
@@ -119,6 +158,147 @@ class RepairDiagnosticsTest {
         assertFalse(report.path("acceptanceChanged").asBoolean());
         assertFalse(diagnostics.automaticEnhancement(repair(original), List.of(candidate)));
         assertEquals(before, stored.toString());
+    }
+
+    @Test
+    void contentLossRemainsABlockerWhenEveryRequiredLoaderNodePasses() {
+        var observed = evidence(sha, "R01", "SELECTED_PLAY_ID_TO_DIRECT_PLAYER_CONTRACT");
+        ((ObjectNode) observed.path("loaderValidation").path("nodes").get(0)).put("status", "pass");
+        var calls = observed.withObject("loaderValidation").putArray("calls");
+        calls.addObject().put("id", 8).put("method", "detail").put("inputSha256", "d".repeat(64)).put("ok", true);
+        calls.addObject().put("id", 10).put("method", "detail").put("inputSha256", "e".repeat(64)).put("ok", true);
+        var categories = observed.withObject("loaderValidation").putObject("contentSnapshot").putArray("categories");
+        categories.addObject().put("categoryIdSha256", "f".repeat(64)).putObject("detail")
+                .put("detailCallId", 8).put("episodes", 8);
+        var responses = observed.putArray("httpObservations");
+        for (int id : List.of(8, 10)) {
+            var response = responses.addObject().put("responseStatus", id == 8 ? 200 : 503).put("responseComplete", true);
+            response.putObject("observedDuringCall").put("id", id).put("method", "detail")
+                    .put("inputSha256", (id == 8 ? "d" : "e").repeat(64));
+        }
+        var candidate = candidate(sha, 1, observed);
+        var stored = (ObjectNode) candidate.result();
+        String loss = "DETAIL_EPISODES_COLLAPSED:" + "f".repeat(64);
+        stored.putArray("observedRegressions").add(loss);
+        var content = stored.putObject("contentAcceptance").put("policy", "category_detail_preservation_v1")
+                .put("status", "regressed_or_incomplete").put("successful", false).put("raw", "PRIVATE");
+        content.putArray("regressions").add(loss).add(loss).add("Cookie=PRIVATE");
+        content.putArray("comparison").addObject().put("categoryIdSha256", "f".repeat(64))
+                .put("detailComparable", true).put("beforeEpisodes", 79).put("afterEpisodes", 8).put("title", "PRIVATE");
+        String before = stored.toString();
+        var report = diagnostics.forRepair(repair(observed), List.of(candidate));
+        assertEquals("triage_only", report.path("conclusion").asText());
+        assertEquals(1, report.path("findings").size());
+        var finding = report.path("findings").get(0);
+        assertEquals("DETAIL_EPISODES_COLLAPSED", finding.path("reason").asText());
+        assertEquals(79, finding.path("contentRegression").path("before").asInt());
+        assertEquals(8, finding.path("contentRegression").path("after").asInt());
+        assertEquals(8, finding.path("observedDuringCall").path("id").asInt());
+        assertEquals(1, finding.path("httpEvidence").path("calls").size());
+        assertTrue(finding.path("httpEvidence").path("calls").get(0).path("statusCounts").has("200"));
+        assertFalse(finding.path("matchedResourceEvidenceAvailable").asBoolean(true));
+        assertTrue(report.path("missingMaterials").toString().contains("content_regression_action_resources"));
+        assertFalse(report.path("automaticEnhancementRecommended").asBoolean());
+        assertFalse(report.path("acceptanceChanged").asBoolean());
+        assertFalse(report.toString().contains("PRIVATE"));
+        assertEquals(before, stored.toString());
+        var retained = ManagedResourceEvidenceTest.fixture(mapper, sha).put("targetNode", "C10").putNull("image");
+        ((ObjectNode) retained.path("resources").get(1)).set("observedDuringCall", calls.get(0).deepCopy());
+        ((ObjectNode) retained.path("resources").get(1).path("observedDuringCall")).remove("ok");
+        observed.set("contentResourceEvidence", retained);
+        ManagedResourceEvidenceTest.events(mapper).forEach(responses::add);
+        finding = diagnostics.forRepair(repair(observed), List.of(candidate)).path("findings").get(0);
+        assertTrue(finding.path("matchedResourceEvidenceAvailable").asBoolean());
+        assertFalse(diagnostics.forRepair(repair(observed), List.of(candidate)).path("missingMaterials")
+                .toString().contains("content_regression_action_resources"));
+        retained.put("artifactSha256", "e".repeat(64));
+        assertFalse(diagnostics.forRepair(repair(observed), List.of(candidate)).path("findings").get(0)
+                .path("matchedResourceEvidenceAvailable").asBoolean());
+        ((ObjectNode) categories.get(0).path("detail")).put("episodes", 9);
+        assertFalse(diagnostics.forRepair(repair(observed), List.of(candidate)).path("findings").get(0).has("observedDuringCall"));
+        ((ObjectNode) content.path("comparison").get(0)).put("detailComparable", false);
+        assertTrue(diagnostics.forRepair(repair(observed), List.of(candidate)).path("findings").isEmpty());
+        ((ObjectNode) content.path("comparison").get(0)).put("detailComparable", true);
+        stored.putArray("observedRegressions");
+        assertTrue(diagnostics.forRepair(repair(observed), List.of(candidate)).path("findings").isEmpty());
+        stored.putArray("observedRegressions").add(loss);
+        observed.put("inputSourceSha256", "e".repeat(64));
+        assertTrue(diagnostics.forRepair(repair(observed), List.of(candidate)).path("findings").isEmpty());
+    }
+
+    @Test
+    void contentCategoryLossUsesOnlyTheMatchingCategoryCall() {
+        var observed = evidence(sha, "R01", "SELECTED_PLAY_ID_TO_DIRECT_PLAYER_CONTRACT");
+        ((ObjectNode) observed.path("loaderValidation").path("nodes").get(0)).put("status", "pass");
+        observed.withObject("loaderValidation").putArray("calls").addObject()
+                .put("id", 7).put("method", "category").put("inputSha256", "d".repeat(64)).put("ok", true);
+        observed.withObject("loaderValidation").putObject("contentSnapshot").putArray("categories")
+                .addObject().put("categoryIdSha256", "f".repeat(64)).put("categoryCallId", 7).put("firstItems", 1);
+        var candidate = candidate(sha, 1, observed);
+        var stored = (ObjectNode) candidate.result();
+        String loss = "CATEGORY_ITEMS_COLLAPSED:" + "f".repeat(64);
+        stored.putArray("observedRegressions").add(loss).add("DECLARED_CATEGORY_LOSS");
+        var content = stored.putObject("contentAcceptance").put("policy", "category_detail_preservation_v1")
+                .put("status", "regressed_or_incomplete").put("successful", false)
+                .put("baselineCategories", 3).put("candidateCategories", 2);
+        content.putArray("regressions").add(loss).add("DECLARED_CATEGORY_LOSS");
+        content.putArray("comparison").addObject().put("categoryIdSha256", "f".repeat(64))
+                .put("beforeItems", 20).put("afterItems", 1);
+        var findings = diagnostics.forRepair(repair(observed), List.of(candidate)).path("findings");
+        assertEquals(2, findings.size());
+        assertEquals("category", findings.get(0).path("observedDuringCall").path("method").asText());
+        assertEquals(7, findings.get(0).path("observedDuringCall").path("id").asInt());
+        assertEquals("DECLARED_CATEGORY_LOSS", findings.get(1).path("reason").asText());
+        assertFalse(findings.get(1).has("observedDuringCall"));
+    }
+
+    @Test
+    void missingCurrentPageLinksAreDiagnosedWithoutAComparableOriginalDetail() {
+        var observed = evidence(sha, "R01", "SELECTED_PLAY_ID_TO_DIRECT_PLAYER_CONTRACT");
+        ((ObjectNode) observed.path("loaderValidation").path("nodes").get(0)).put("status", "pass");
+        observed.withObject("loaderValidation").putArray("calls").addObject()
+                .put("id", 8).put("method", "detail").put("inputSha256", "d".repeat(64)).put("ok", true);
+        observed.withObject("loaderValidation").putObject("contentSnapshot").putArray("categories")
+                .addObject().put("categoryIdSha256", "f".repeat(64)).putObject("detail").put("detailCallId", 8);
+        var candidate = candidate(sha, 1, observed);
+        var result = (ObjectNode) candidate.result();
+        String code = "DETAIL_PAGE_PLAYBACK_LINKS_MISSING:" + "f".repeat(64);
+        result.putArray("observedRegressions").add(code);
+        var content = result.putObject("contentAcceptance").put("policy", "category_detail_preservation_v1")
+                .put("status", "regressed_or_incomplete").put("successful", false);
+        content.putArray("regressions").add(code);
+        content.putArray("pageComparison").addObject().put("categoryIdSha256", "f".repeat(64))
+                .putObject("pagePlaylistObservation").putObject("linkCoverage")
+                .put("pageUniqueLinks", 9).put("outputUniqueLinks", 8).put("missingPageLinks", 1).put("extraOutputLinks", 0);
+        var finding = diagnostics.forRepair(repair(observed), List.of(candidate)).path("findings").get(0);
+        assertEquals("DETAIL_PAGE_PLAYBACK_LINKS_MISSING", finding.path("reason").asText());
+        assertEquals("host_page_unique_link_coverage", finding.path("contentRegression").path("basis").asText());
+        assertEquals(8, finding.path("observedDuringCall").path("id").asInt());
+        assertFalse(finding.path("contentRegression").has("detailComparable"));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "maintenance.content-regression-replay", matches = ".+")
+    void savedRealContentLossIsDiagnosedAcrossAllThreeCandidatesWithoutReexecutingSources() throws Exception {
+        var saved = mapper.readTree(Files.readAllBytes(Path.of(System.getProperty("maintenance.content-regression-replay"))));
+        var json = mapper.copy().findAndRegisterModules();
+        var repair = json.treeToValue(saved.path("repair"), RepairSummary.class);
+        String before = saved.toString();
+        for (var row : saved.path("candidates")) {
+            var candidate = json.treeToValue(row, RepairCandidateSummary.class);
+            var report = diagnostics.forRepair(repair, List.of(candidate));
+            var losses = report.path("findings").valueStream()
+                    .filter(finding -> "DETAIL_EPISODES_COLLAPSED".equals(finding.path("reason").asText())).toList();
+            assertEquals(2, losses.size());
+            assertEquals(List.of(8, 16), losses.stream().map(finding -> finding.path("observedDuringCall").path("id").asInt()).toList());
+            assertEquals(List.of(79, 59), losses.stream().map(finding -> finding.path("contentRegression").path("before").asInt()).toList());
+            assertEquals(List.of(8, 1), losses.stream().map(finding -> finding.path("contentRegression").path("after").asInt()).toList());
+            assertTrue(report.path("routes").toString().contains("source_regression"));
+            assertFalse(report.path("acceptanceChanged").asBoolean());
+            assertEquals(0, report.path("newNetworkRequests").asInt());
+            assertEquals(0, report.path("newModelCalls").asInt());
+        }
+        assertEquals(before, saved.toString());
     }
 
     @Test
@@ -474,10 +654,42 @@ class RepairDiagnosticsTest {
         var evidence = evidence(sha, "S06", "LOADER_INIT_FAILED");
         ((ObjectNode) evidence.path("loaderValidation").path("nodes").get(0))
                 .put("failureType", "NameError").put("error", "Cookie=SECRET");
+        ((ObjectNode) evidence.at("/loaderValidation/nodes/0")).putObject("failureContext")
+                .put("sourceLine", 27).put("message", "SECRET");
         var result = diagnostics.forRepair(repair(evidence), List.of());
         assertEquals("initialization", result.path("findings").get(0).path("route").asText());
         assertEquals("NameError", result.path("findings").get(0).path("failureType").asText());
+        assertEquals(27, result.at("/findings/0/contractObservations/failureContext/sourceLine").asInt());
         assertFalse(result.toString().contains("SECRET"));
+    }
+
+    @Test
+    void initializationCarriesBoundedReturnedShapeIntoRepairContext() {
+        var evidence = evidence(sha, "S06", "LOADER_INIT_FAILED");
+        ((ObjectNode) evidence.at("/loaderValidation/nodes/0")).putObject("initObservation")
+                .put("stage", "init_identity").put("resultShape", "html").put("namePresent", false);
+        var result = diagnostics.forRepair(repair(evidence), List.of());
+        assertEquals("html", result.at("/findings/0/contractObservations/initObservation/resultShape").asText());
+        assertFalse(result.path("acceptanceChanged").asBoolean());
+    }
+
+    @Test
+    void invalidDetailIdIsACompatibilityObservationAndDoesNotTriggerAutomaticRewrite() {
+        var evidence = evidence(sha, "C07", "INVALID_DETAIL_ID_RETURNED_CONTENT");
+        var result = diagnostics.forRepair(repair(evidence), List.of());
+        assertEquals("compatibility_observation", result.path("findings").get(0).path("route").asText());
+        assertTrue(result.path("findings").get(0).path("compatibilityObservation").asBoolean());
+        assertFalse(result.path("automaticEnhancementRecommended").asBoolean());
+    }
+
+    @Test
+    void magnetSourceHintKeepsEmptyCategoryOutOfAutomaticRepair() {
+        var evidence = evidence(sha, "C03", "CONTENT_LIST_EMPTY_OR_INVALID");
+        ((ObjectNode) evidence.at("/loaderValidation/nodes/0")).put("sourcePurposeHint", "magnet_or_cloud_resource");
+        var result = diagnostics.forRepair(repair(evidence), List.of());
+        assertEquals("source_purpose", result.path("findings").get(0).path("route").asText());
+        assertEquals("magnet_or_cloud_resource", result.path("findings").get(0).path("sourcePurposeHint").asText());
+        assertFalse(result.path("automaticEnhancementRecommended").asBoolean());
     }
 
     @Test
@@ -771,6 +983,42 @@ class RepairDiagnosticsTest {
         when(run.errorCode()).thenReturn("EGRESS_URL_DENIED");
         when(run.result()).thenReturn(report);
         return run;
+    }
+
+    @Test
+    void interruptedGatewayCountsReachDiagnosisWithoutPromotingBusinessSuccess() {
+        var report = interruptedReport();
+        var context = (ObjectNode) report.path("managedExecutionDiagnostic").path("exchangeContext");
+        var gateway = context.putObject("runtimeGateway").put("adapter", "flaresolverr-rs-alt")
+                .put("fullAcceptance", false).put("sessionCount", 1).put("requestCount", 2)
+                .put("responseCount", 1).put("sessionReuseCount", 1).put("cookiesExported", false)
+                .put("cleanupConfirmed", true).put("cookie", "PRIVATE");
+        var result = diagnostics.forRun(interruptedRun(report));
+        assertEquals(2, result.path("gatewayEvidence").path("requestCount").asInt());
+        assertFalse(result.path("gatewayEvidence").path("fullAcceptance").asBoolean());
+        assertFalse(result.path("gatewayEvidence").path("businessContentVerified").asBoolean());
+        assertFalse(result.toString().contains("PRIVATE"));
+        gateway.put("requestCount", 65);
+        assertFalse(diagnostics.forRun(interruptedRun(report)).has("gatewayEvidence"));
+    }
+
+    @Test
+    void interruptedLoaderProgressReachesDiagnosticOnlyWhenSourceAndProfileMatch() {
+        var report = interruptedReport();
+        var progress = report.withObject("managedExecutionDiagnostic").withObject("exchangeContext")
+                .putObject("loaderProgress").put("schemaVersion", 1).put("fullAcceptance", true)
+                .put("inputSourceSha256", sha).put("profileSha256", profile).put("token", "PRIVATE");
+        progress.putArray("completedCalls").addObject().put("id", 1).put("method", "init").put("ok", true)
+                .put("inputSha256", "a".repeat(64)).put("outputSha256", "b".repeat(64)).put("body", "PRIVATE");
+        var result = diagnostics.forRun(interruptedRun(report));
+        assertEquals(1, result.path("interruptedLoaderProgress").path("completedCalls").size());
+        assertFalse(result.path("interruptedLoaderProgress").path("fullAcceptance").asBoolean());
+        assertFalse(result.path("loaderReceiptMatched").asBoolean());
+        assertFalse(result.toString().contains("PRIVATE"));
+        progress.put("inputSourceSha256", "f".repeat(64));
+        assertFalse(diagnostics.forRun(interruptedRun(report)).has("interruptedLoaderProgress"));
+        progress.put("inputSourceSha256", sha).put("profileSha256", "f".repeat(64));
+        assertFalse(diagnostics.forRun(interruptedRun(report)).has("interruptedLoaderProgress"));
     }
 
     @Test
@@ -1088,6 +1336,63 @@ class RepairDiagnosticsTest {
         rate.put("automaticRetry", false);
         for (int i = 0; i < 70; i++) rates.add(rate.deepCopy());
         assertEquals(64, diagnostics.forRepair(repair(observed), List.of()).path("cooldownEvidence").path("observations").size());
+    }
+
+    @Test
+    void playbackHttpEvidenceUsesTheSelectedCallInsteadOfOtherSamplesOfTheSameMethod() {
+        for (String id : List.of("C10", "R01")) {
+            String method = id.equals("C10") ? "detail" : "play";
+            var observed = evidence(sha, id, id.equals("C10") ? "PLAY_EPISODE_INVALID" : "PLAYER_URL_INVALID");
+            var node = (ObjectNode) observed.at("/loaderValidation/nodes/0");
+            node.putObject(id.equals("C10") ? "playbackContract" : "playerContract")
+                    .put(id.equals("C10") ? "detailCallId" : "playCallId", 5);
+            actionResponse(mapper, observed, sha, method, 5, 200);
+            actionResponse(mapper, observed, sha, method, 8, 503);
+            String before = observed.toString();
+            var report = diagnostics.forRepair(repair(observed), List.of());
+            var http = report.at("/findings/0/httpEvidence");
+            assertEquals(1, http.path("calls").size(), id);
+            assertEquals(5, http.at("/calls/0/id").asInt(), id);
+            assertEquals("source_contract", report.at("/findings/0/route").asText(), id);
+            assertFalse(http.has("unavailableRoute"), id);
+            assertFalse(report.path("acceptanceChanged").asBoolean(), id);
+            assertEquals(before, observed.toString());
+        }
+    }
+
+    @Test
+    void invalidOrUnmatchedSelectedCallsDoNotFallBackToUnrelatedHttpEvidence() {
+        for (int callId : List.of(0, 3, 4, 33)) {
+            var observed = evidence(sha, "C10", "PLAY_EPISODE_INVALID");
+            ((ObjectNode) observed.at("/loaderValidation/nodes/0"))
+                    .putObject("playbackContract").put("detailCallId", callId);
+            actionResponse(mapper, observed, sha, "category", 3, 200);
+            actionResponse(mapper, observed, sha, "detail", 5, 503);
+            var report = diagnostics.forRepair(repair(observed), List.of());
+            assertFalse(report.at("/findings/0").has("httpEvidence"), "call " + callId);
+            assertEquals("source_contract", report.at("/findings/0/route").asText());
+        }
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "maintenance.selected-call-replay", matches = ".+")
+    void savedRealPlaybackFailureKeepsItsExactHttpCallWithoutReexecutingTheSource() throws Exception {
+        var saved = mapper.readTree(Files.readAllBytes(Path.of(System.getProperty("maintenance.selected-call-replay"))));
+        var run = mapper.copy().findAndRegisterModules().treeToValue(saved.path("probe"), ProbeSummary.class);
+        String before = saved.toString();
+        var report = diagnostics.forRun(run);
+        var finding = report.at("/findings/0");
+        assertTrue(report.path("loaderReceiptMatched").asBoolean());
+        assertEquals("C10", finding.path("node").asText());
+        assertEquals("PLAY_EPISODE_INVALID", finding.path("reason").asText());
+        assertEquals("source_contract", finding.path("route").asText());
+        assertEquals(1, finding.at("/httpEvidence/calls").size());
+        assertEquals(finding.at("/contractObservations/playbackContract/detailCallId").asInt(),
+                finding.at("/httpEvidence/calls/0/id").asInt());
+        assertEquals(0, report.path("newNetworkRequests").asInt());
+        assertEquals(0, report.path("newModelCalls").asInt());
+        assertFalse(report.path("acceptanceChanged").asBoolean());
+        assertEquals(before, saved.toString());
     }
 
     @Test

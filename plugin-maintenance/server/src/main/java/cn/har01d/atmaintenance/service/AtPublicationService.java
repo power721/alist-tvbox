@@ -33,6 +33,8 @@ public class AtPublicationService {
         var binding = bindings.get(repair.sourceId());
         boolean verified = candidate.result() != null && candidate.result().path("repairSuccessful").asBoolean();
         String blocked = !verified ? "AT_PUBLISH_REAL_VALIDATION_REQUIRED"
+                : !candidate.result().path("contentAcceptance").path("successful").asBoolean()
+                    ? "AT_PUBLISH_CONTENT_VALIDATION_REQUIRED"
                 : binding != null && !binding.connectionMatches() ? "AT_PUBLISH_CONNECTION_CHANGED" : null;
         String targetSha = binding == null ? null : binding.sha256();
         if (binding == null && blocked == null) {

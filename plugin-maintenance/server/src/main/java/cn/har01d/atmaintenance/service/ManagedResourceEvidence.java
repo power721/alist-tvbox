@@ -36,7 +36,7 @@ final class ManagedResourceEvidence {
         require(number(input.path("schemaVersion"), 1, 1)
                 && input.path("authority").asText().equals("host_public_resource_observed")
                 && input.path("artifactSha256").asText().equals(sourceSha)
-                && Set.of("C01", "C03", "C07", "C09", "C10", "R01")
+                && Set.of("S06", "C01", "C02", "C03", "C07", "C09", "C10", "R01")
                     .contains(input.path("targetNode").asText())
                 && number(input.path("textByteLimit"), 18000, 18000)
                 && number(input.path("fetchLimit"), 8, 8)
@@ -80,6 +80,7 @@ final class ManagedResourceEvidence {
             if (row.has("responseStatus")) rowFields.add("responseStatus");
             if (row.has("observedDuringCall")) rowFields.add("observedDuringCall");
             if (row.has("discoveredFromCall")) rowFields.add("discoveredFromCall");
+            if (row.has("playlistObservation")) rowFields.add("playlistObservation");
             boolean json = row.path("kind").asText().equals("api_json");
             if (json) rowFields.addAll(Set.of("requestMethod", "jsonStructure"));
             require(fields(row, rowFields)
@@ -101,6 +102,43 @@ final class ManagedResourceEvidence {
                         && call.path("id").equals(playerContext.path(call.path("method").asText() + "CallId"));
                 validateStructure(row.path("jsonStructure"), true, playerValues);
                 textBytes += compactJson.writeValueAsBytes(row.path("jsonStructure")).length;
+                require(textBytes <= 18000);
+            }
+            if (row.has("playlistObservation")) {
+                JsonNode playlist = row.path("playlistObservation");
+                var playlistFields = new HashSet<>(Set.of("policy", "complete", "groups", "maxEpisodes",
+                        "groupEpisodeCounts", "playlistSha256", "outputMatchesPage"));
+                if (playlist.has("linkCoverage")) playlistFields.add("linkCoverage");
+                require(input.path("targetNode").asText().equals("C10")
+                        && row.path("kind").asText().equals("page") && row.path("responseStatus").asInt() == 200
+                        && row.path("observedDuringCall").path("method").asText().equals("detail")
+                        && fields(playlist, playlistFields)
+                        && playlist.path("policy").asText().equals("indexed_playlist_links_v1")
+                        && playlist.path("complete").isBoolean() && playlist.path("outputMatchesPage").isBoolean()
+                        && (!playlist.path("outputMatchesPage").asBoolean() || playlist.path("complete").asBoolean())
+                        && sha(playlist.path("playlistSha256")) && number(playlist.path("groups"), 1, 128)
+                        && playlist.path("groupEpisodeCounts").isArray()
+                        && playlist.path("groupEpisodeCounts").size() == playlist.path("groups").asInt());
+                int maximum = 0;
+                for (JsonNode count : playlist.path("groupEpisodeCounts")) {
+                    require(number(count, playlist.path("complete").asBoolean() ? 1 : 0, 10000));
+                    maximum = Math.max(maximum, count.asInt());
+                }
+                require(number(playlist.path("maxEpisodes"), maximum, maximum));
+                if (playlist.has("linkCoverage")) {
+                    JsonNode coverage = playlist.path("linkCoverage");
+                    require(playlist.path("complete").asBoolean()
+                            && fields(coverage, Set.of("pageUniqueLinks", "outputUniqueLinks", "missingPageLinks", "extraOutputLinks"))
+                            && number(coverage.path("pageUniqueLinks"), 1, 1280000)
+                            && number(coverage.path("outputUniqueLinks"), 1, 1280000)
+                            && number(coverage.path("missingPageLinks"), 0, coverage.path("pageUniqueLinks").asInt())
+                            && number(coverage.path("extraOutputLinks"), 0, coverage.path("outputUniqueLinks").asInt())
+                            && coverage.path("pageUniqueLinks").asInt() - coverage.path("missingPageLinks").asInt()
+                                == coverage.path("outputUniqueLinks").asInt() - coverage.path("extraOutputLinks").asInt()
+                            && (!playlist.path("outputMatchesPage").asBoolean()
+                                || coverage.path("missingPageLinks").asInt() + coverage.path("extraOutputLinks").asInt() == 0));
+                }
+                textBytes += compactJson.writeValueAsBytes(playlist).length;
                 require(textBytes <= 18000);
             }
             if (row.has("observedDuringCall")) {

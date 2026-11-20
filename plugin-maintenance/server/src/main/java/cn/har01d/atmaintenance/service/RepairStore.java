@@ -32,6 +32,7 @@ public class RepairStore {
     private final SourceImportService imports;
     private final ManagedSourceRuntime managed;
     private final ModelCallRepository modelCalls;
+    private final ModelBudgetRepository modelBudgets;
 
     @Transactional(readOnly = true)
     public int deliveryIteration(String candidateId) {
@@ -56,6 +57,7 @@ public class RepairStore {
     }
 
     private RepairSummary create(String sourceId, StartRepairRequest input, boolean originRecovery) {
+        if (input.maxRounds() != null && input.maxRounds() < 1) throw conflict("REPAIR_ROUND_LIMIT_INVALID");
         sources.requireMaintenanceAllowed(sourceId);
         var source = sources.get(sourceId);
         var baseline = probes.get(input.baselineRunId());
@@ -71,6 +73,11 @@ public class RepairStore {
                 : !baseline.status().equals("COMPLETED") || baseline.result() == null || baseline.profile() == null)
             throw conflict("REPAIR_BASELINE_NOT_READY");
         JsonNode frozenBaseline = mapper.valueToTree(baseline);
+        if (RepairDiagnostics.bound(frozenBaseline.path("result").path("managedSourceEvidence"),
+                baseline.artifactSha256(), baseline.profileSha256(), baseline.runtimeSha256())
+                && RepairReport.hostConfigurationUnavailable(frozenBaseline.path("result").path("managedSourceEvidence"),
+                    frozenBaseline.path("profile").path("requiredNodes")))
+            throw conflict("LIVE_INSPECTION_HOST_CONFIGURATION_REQUIRED");
         if (RepairReport.networkUnavailable(frozenBaseline.path("result").path("managedSourceEvidence")))
             throw conflict("LIVE_INSPECTION_NETWORK_UNAVAILABLE");
         if (RepairReport.httpAccessDenied(frozenBaseline.path("result").path("managedSourceEvidence")))
@@ -127,7 +134,8 @@ public class RepairStore {
                 .put("nodeCatalogSha256", knowledge.nodeCatalogSha256());
         frozen.set("baseline", frozenBaseline);
         if (originRecovery) frozen.set("preparationInspection", evidence);
-        var policy = frozen.putObject("policy").put("maxRounds", 3).put("budgetUnit", "accepted_candidate")
+        var policy = frozen.putObject("policy").put("maxRounds", input.maxRounds() == null ? 3 : input.maxRounds())
+                .put("budgetUnit", "accepted_candidate")
                 .put("maxProposalBytes", 32768).put("protocol", "exact_edits_v1")
                 .put("externalModelCalls", false).put("deploymentAllowed", false);
         policy.put("scope", originRecovery ? "managed_origin_candidate" : !loaderFaults.isEmpty() ? "managed_loader_candidate"
@@ -158,6 +166,7 @@ public class RepairStore {
         repair.setBaselineArtifactSha256(baseline.artifactSha256());
         repair.setFaultSha256(faultSha);
         repair.setFrozenJson(frozen.toString());
+        repair.setMaxRounds(input.maxRounds());
         if (originRecovery) {
             var selected = managed.forSource(sourceId);
             var context = mapper.createObjectNode().put("schemaVersion", 1).put("authority", "current_runtime_preparation")
@@ -352,11 +361,24 @@ public class RepairStore {
         if (current.staleInputs().stream().anyMatch(value ->
                 !Set.of("runtime", "execution_policy", "inspector").contains(value)))
             throw conflict("REPAIR_INPUTS_CHANGED");
-        boolean stoppedToolsChanged = repair.getStatus().equals("STOPPED")
+        var selected = managed.forSource(repair.getSourceId());
+        boolean revalidationToolsChanged = Set.of("STOPPED", "RUNTIME_OBSERVED", "AWAITING_PROPOSAL").contains(repair.getStatus())
                 && current.staleInputs().stream().anyMatch(Set.of("runtime", "inspector")::contains);
         var history = candidates.findByRepairIdOrderByRoundNumberAsc(repair.getId());
         JsonNode priorResult = decode(candidate.getResultJson());
         boolean assessmentRecovered = false;
+        boolean compatibleContentBaseline = false;
+        boolean contentBaselineMissing = !current.frozen().path("baseline").path("result")
+                .path("managedSourceEvidence").path("loaderValidation").path("contentSnapshot").isObject();
+        if (contentBaselineMissing) {
+            for (var observed : probes.list(repair.getSourceId())) {
+                if (reports.contentBaseline(observed, current.frozen(), repair.getSourceId(),
+                        repair.getBaselineArtifactSha256(), selected.sha256(), selected.policySha256()) != null) {
+                    compatibleContentBaseline = true;
+                    break;
+                }
+            }
+        }
         if (repair.getStatus().equals("STOPPED")
                 && "RUNTIME_TARGET_UNRESOLVED".equals(candidate.getErrorCode())
                 && priorResult != null && priorResult.path("runtimeEvidence").isObject()
@@ -366,13 +388,17 @@ public class RepairStore {
                     || reassessed.path("runtimeValidationPaused").asBoolean()
                         && reassessed.path("observedRegressions").isEmpty();
         }
+        // A compatible original content probe is enough to reopen an existing
+        // runtime candidate so the platform can bind the missing content gate.
+        assessmentRecovered = assessmentRecovered || compatibleContentBaseline;
         boolean latestEquivalent = history.getLast().getId().equals(candidateId)
                 || assessmentRecovered && history.stream()
                     .filter(row -> row.getRoundNumber() > candidate.getRoundNumber())
                     .allMatch(row -> row.getSha256().equals(candidate.getSha256())
                             && "REPEATED_CANDIDATE".equals(row.getErrorCode()));
-        if (repair.getActiveCandidateId() != null
-                || !stoppedToolsChanged && !assessmentRecovered
+        if (repair.getActiveCandidateId() != null || modelCalls.findByRepairIdOrderByAttemptNumberAsc(repair.getId()).stream()
+                .anyMatch(call -> Set.of("QUEUED", "RUNNING", "CANCELLING", "RETRY_WAIT").contains(call.getStatus()))
+                || !revalidationToolsChanged && !assessmentRecovered
                     && !Set.of("BLOCKED", "INTERRUPTED", "AWAITING_RUNTIME_VALIDATION").contains(repair.getStatus())
                 || !latestEquivalent)
             throw conflict("REPAIR_REVALIDATION_NOT_READY");
@@ -385,7 +411,6 @@ public class RepairStore {
                 || !originalInspection.path("methodContracts").isObject()
                 || originalInspection.path("methodContracts").isEmpty())
             throw conflict("REPAIR_CONTRACT_UNAVAILABLE");
-        var selected = managed.forSource(repair.getSourceId());
         var baseline = current.frozen().path("baseline");
         var context = mapper.createObjectNode().put("schemaVersion", 1)
                 .put("authority", "current_runtime_revalidation")
@@ -404,6 +429,17 @@ public class RepairStore {
             ObjectNode previous = previousContext.deepCopy();
             previous.remove("previousContexts");
             contexts.add(previous);
+        }
+        if (!baseline.path("result").path("managedSourceEvidence").path("loaderValidation")
+                .path("contentSnapshot").isObject()) {
+            for (var observed : probes.list(repair.getSourceId())) {
+                ObjectNode supplement = reports.contentBaseline(observed, current.frozen(), repair.getSourceId(),
+                        repair.getBaselineArtifactSha256(), selected.sha256(), selected.policySha256());
+                if (supplement != null) {
+                    context.set("contentBaseline", supplement);
+                    break;
+                }
+            }
         }
         repair.setRuntimeContextJson(context.toString());
         var previousResult = (ObjectNode) decode(candidate.getResultJson());
@@ -486,8 +522,8 @@ public class RepairStore {
             boolean successful = result.path("runtimeAcceptance").path("successful").asBoolean()
                     && result.path("repairSuccessful").asBoolean();
             boolean repeated = false;
-            boolean networkPending = result.path("runtimeValidationPaused").asBoolean();
-            if (!successful && !networkPending) {
+            boolean validationPaused = result.path("runtimeValidationPaused").asBoolean();
+            if (!successful && !validationPaused) {
                 candidate.setFailureSha256(Hashes.sha256(result.path(loaderMode
                         ? "runtimeFailureSignature" : "runtimeObservation").toString()));
                 repeated = candidates.findByRepairIdOrderByRoundNumberAsc(repairId).stream()
@@ -502,11 +538,14 @@ public class RepairStore {
                 terminal(candidate, "BLOCKED", "REPAIR_INPUTS_CHANGED");
                 repair.setStatus("STOPPED");
                 repair.setStopCode("REPAIR_INPUTS_CHANGED");
-            } else if (networkPending) {
+            } else if (validationPaused) {
+                String pauseReason = "RUNTIME_HOST_CONFIGURATION_REQUIRED".equals(
+                        result.path("runtimeValidationPauseReason").asText())
+                        ? "RUNTIME_HOST_CONFIGURATION_REQUIRED" : "RUNTIME_NETWORK_UNAVAILABLE";
                 candidate.setFailureSha256(null);
-                terminal(candidate, "BLOCKED", "RUNTIME_NETWORK_UNAVAILABLE");
+                terminal(candidate, "BLOCKED", pauseReason);
                 repair.setStatus("BLOCKED");
-                repair.setStopCode("RUNTIME_NETWORK_UNAVAILABLE");
+                repair.setStopCode(pauseReason);
             } else if (successful) {
                 terminal(candidate, "RUNTIME_OBSERVED", null);
                 repair.setStatus("RUNTIME_OBSERVED");
@@ -623,6 +662,27 @@ public class RepairStore {
     }
 
     @Transactional
+    public RepairSummary updateRoundLimit(String id, UpdateRepairRoundLimitRequest input) {
+        modelBudgets.lock().orElseThrow();
+        var repair = lock(id);
+        sources.requireMaintenanceAllowed(repair.getSourceId());
+        if (!repair.getFaultSha256().equals(input.expectedFaultSha256())) throw conflict("REPAIR_FAULT_CHANGED");
+        int previous = roundLimit(repair);
+        if (previous != input.expectedMaxRounds()) throw conflict("REPAIR_ROUND_LIMIT_CHANGED");
+        if (input.maxRounds() < 1 || input.maxRounds() < repair.getUsedRounds())
+            throw conflict("REPAIR_ROUND_LIMIT_BELOW_USED");
+        if (repair.getActiveCandidateId() != null || modelCalls.findByRepairIdOrderByAttemptNumberAsc(id).stream()
+                .anyMatch(call -> Set.of("QUEUED", "RUNNING", "CANCELLING", "RETRY_WAIT").contains(call.getStatus())))
+            throw conflict("REPAIR_ROUND_LIMIT_BUSY");
+        repair.setMaxRounds(input.maxRounds());
+        if ("AWAITING_PROPOSAL".equals(repair.getStatus()) && repair.getUsedRounds() >= input.maxRounds()) {
+            repair.setStatus("STOPPED");
+            repair.setStopCode("ROUND_LIMIT");
+        }
+        return summary(repair);
+    }
+
+    @Transactional
     public RepairSummary resume(String id, String expectedFaultSha) {
         var repair = lock(id);
         if (!repair.getFaultSha256().equals(expectedFaultSha)) throw conflict("REPAIR_FAULT_CHANGED");
@@ -631,13 +691,16 @@ public class RepairStore {
                 && reports.networkRetryable(summary(repair).frozen(), decode(history.getLast().getResultJson()));
         boolean evidencePending = "STOPPED".equals(repair.getStatus())
                 && "REPEATED_FAILURE".equals(repair.getStopCode()) && hasNewReverseEvidence(id);
+        boolean roundsAvailable = "STOPPED".equals(repair.getStatus()) && repair.getMaxRounds() != null
+                && repair.getUsedRounds() < roundLimit(repair)
+                && Set.of("ROUND_LIMIT", "REPEATED_FAILURE").contains(repair.getStopCode() == null ? "" : repair.getStopCode());
         if (!Set.of("BLOCKED", "INTERRUPTED", "CANCELLED").contains(repair.getStatus())
-                && !evidencePending
+                && !evidencePending && !roundsAvailable
                 && !(repair.getStatus().equals("STOPPED") && networkPending
                     && Set.of("REPEATED_FAILURE", "ROUND_LIMIT").contains(repair.getStopCode())))
             throw conflict("REPAIR_NOT_RESUMABLE");
         if (!summary(repair).freshness().equals("current")) throw conflict("REPAIR_INPUTS_CHANGED");
-        boolean runtimePending = networkPending
+        boolean runtimePending = networkPending || "RUNTIME_HOST_CONFIGURATION_REQUIRED".equals(repair.getStopCode())
                 || !history.isEmpty() && history.getLast().getStatus().equals("STATIC_VALIDATED");
         boolean exhausted = repair.getUsedRounds() >= roundLimit(repair) && !runtimePending;
         repair.setStatus(runtimePending ? "AWAITING_RUNTIME_VALIDATION" : exhausted ? "STOPPED" : "AWAITING_PROPOSAL");
@@ -706,6 +769,9 @@ public class RepairStore {
         if (!input.expectedCandidateSha256().equals(offer.path("candidateSha256").asText())
                 || !input.expectedEvidenceSha256().equals(offer.path("evidenceSha256").asText()))
             throw conflict("REPAIR_EVIDENCE_CHANGED");
+        int nextLimit;
+        try { nextLimit = Math.addExact(roundLimit(row), 1); }
+        catch (ArithmeticException error) { throw conflict("REPAIR_ROUND_LIMIT_OVERFLOW"); }
         var grant = grants.addObject().put("requestKey", input.requestKey()).put("authority", "explicit_new_evidence_round")
                 .put("candidateId", offer.path("candidateId").asText())
                 .put("candidateSha256", input.expectedCandidateSha256()).put("evidenceSha256", input.expectedEvidenceSha256())
@@ -716,6 +782,7 @@ public class RepairStore {
             grant.set("playerContract", offer.path("playerContract"));
         }
         row.setEvidenceContinuationsJson(grants.toString());
+        row.setMaxRounds(nextLimit);
         row.setStatus("AWAITING_PROPOSAL");
         row.setStopCode(null);
         return summary(row);
@@ -835,6 +902,8 @@ public class RepairStore {
             ((ObjectNode) frozen).set("reverseAnalysis", decode(repair.getReverseAnalysisJson()));
         if (repair.getEvidenceContinuationsJson() != null)
             ((ObjectNode) frozen).set("evidenceContinuations", decode(repair.getEvidenceContinuationsJson()));
+        if (repair.getMaxRounds() != null) ((ObjectNode) frozen).putObject("roundLimit")
+                .put("authority", "administrator_configured").put("maxRounds", repair.getMaxRounds());
         if (!frozen.path("nodeCatalogSha256").asText().equals(knowledge.nodeCatalogSha256())) stale.add("node_catalog");
         String freshness = stale.isEmpty() ? "current"
                 : baseline.freshness().equals("current") ? "repair_tools_changed" : baseline.freshness();
@@ -845,7 +914,9 @@ public class RepairStore {
     }
 
     private int roundLimit(RepairSession repair) {
-        return 3 + (repair.getEvidenceContinuationsJson() == null ? 0 : decode(repair.getEvidenceContinuationsJson()).size());
+        if (repair.getMaxRounds() != null) return repair.getMaxRounds();
+        int initial = decode(repair.getFrozenJson()).path("policy").path("maxRounds").asInt(3);
+        return initial + (repair.getEvidenceContinuationsJson() == null ? 0 : decode(repair.getEvidenceContinuationsJson()).size());
     }
 
     private RepairCandidateSummary candidateSummary(RepairCandidate candidate) {

@@ -142,6 +142,11 @@ public class RepairController {
     @GetMapping("/repairs/{id}")
     public RepairSummary repair(@PathVariable String id) { return store.get(id); }
 
+    @PutMapping("/repairs/{id}/round-limit")
+    public RepairSummary updateRoundLimit(@PathVariable String id, @Valid @RequestBody UpdateRepairRoundLimitRequest input) {
+        return store.updateRoundLimit(id, input);
+    }
+
     @GetMapping("/repairs/{id}/candidates")
     public List<RepairCandidateSummary> candidates(@PathVariable String id) { return store.candidates(id); }
 

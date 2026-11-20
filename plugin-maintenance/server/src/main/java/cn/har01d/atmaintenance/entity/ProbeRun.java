@@ -72,6 +72,8 @@ public class ProbeRun {
     private String maintenanceKey;
     @Column(name = "maintenance_configuration_sha256", length = 64)
     private String maintenanceConfigurationSha256;
+    @Column(name = "maintenance_max_rounds")
+    private Integer maintenanceMaxRounds;
     @Column(name = "maintenance_status", length = 30)
     private String maintenanceStatus;
     @Column(name = "maintenance_repair_id", length = 36)

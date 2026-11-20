@@ -58,7 +58,7 @@ interface SchedulePolicy {
   enabled: boolean; mode: string; intervalSeconds: number; dailyLimit: number
   firstRunAt?: string
   approval?: { approvedRunId: string; sourceRevision: number; artifactSha256: string }
-  automaticRepair?: { configurationSha256: string }
+  automaticRepair?: { configurationSha256: string; maxRounds?: number }
 }
 interface Schedule {
   sha256: string | null; policy: SchedulePolicy; nextDueAt: string | null
@@ -188,6 +188,7 @@ const scheduleDailyLimit = ref(4)
 const scheduleApprovalRunId = ref('')
 const scheduleApprovalConfirmed = ref(false)
 const scheduleAutomaticRepair = ref(false)
+const scheduleMaxRounds = ref(3)
 const scheduleRepairConfigurationSha = ref('')
 const scheduleApprovalOptions = computed(() => runs.value.filter(run =>
   run.triggerKind === 'manual' && run.executionMode === 'managed_source' && run.status === 'COMPLETED'
@@ -338,6 +339,7 @@ async function selectSource(id: string) {
   scheduleDailyLimit.value = currentSchedule.policy.dailyLimit
   scheduleApprovalRunId.value = currentSchedule.policy.approval?.approvedRunId ?? ''
   scheduleAutomaticRepair.value = !!currentSchedule.policy.automaticRepair
+  scheduleMaxRounds.value = currentSchedule.policy.automaticRepair?.maxRounds ?? 3
   scheduleRepairConfigurationSha.value = currentSchedule.policy.automaticRepair?.configurationSha256 ?? ''
   if (inspectionDrawer.value) openInspection()
   runtime.value = currentProfile.snapshot.runtime
@@ -527,6 +529,8 @@ async function saveSchedule() {
         throw new Error('请明确批准所选回执对应的自动隔离巡检')
       }
       if (scheduleAutomaticRepair.value) {
+        if (!Number.isInteger(scheduleMaxRounds.value) || scheduleMaxRounds.value < 1)
+          throw new Error('修复轮数必须为正整数')
         let configuration = scheduleRepairConfigurationSha.value
         if (!configuration) {
           const connection = await request<{ enabled: boolean; autoSubmitEnabled: boolean; configurationSha256: string }>('/model/connection')
@@ -537,7 +541,7 @@ async function saveSchedule() {
           if (consent.artifactSha256 !== selected.value?.artifactSha256) throw new Error('请先在自动维护中授权当前版本源码')
           configuration = connection.configurationSha256
         }
-        automaticRepair = { expectedConfigurationSha256: configuration }
+        automaticRepair = { expectedConfigurationSha256: configuration, maxRounds: scheduleMaxRounds.value }
       }
     }
     const saved = await request<Schedule>(`/sources/${id}/schedule`, {
@@ -550,6 +554,7 @@ async function saveSchedule() {
     scheduleApprovalRunId.value = saved.policy.approval?.approvedRunId ?? ''
     scheduleApprovalConfirmed.value = false
     scheduleAutomaticRepair.value = !!saved.policy.automaticRepair
+    scheduleMaxRounds.value = saved.policy.automaticRepair?.maxRounds ?? 3
     scheduleRepairConfigurationSha.value = saved.policy.automaticRepair?.configurationSha256 ?? ''
     ElMessage.success(saved.policy.enabled ? '智能巡检计划已保存' : '智能巡检已关闭')
   })
@@ -994,6 +999,9 @@ onUnmounted(() => { disposed = true; if (poll) clearTimeout(poll); if (overviewP
         </el-form-item>
         <el-form-item label="巡检后自动修复">
           <el-switch v-model="scheduleAutomaticRepair" @change="scheduleRepairConfigurationSha = ''" />
+        </el-form-item>
+        <el-form-item v-if="scheduleAutomaticRepair" label="每次修复轮数上限">
+          <el-input-number v-model="scheduleMaxRounds" :min="1" :precision="0" aria-label="巡检自动修复轮数上限" />
         </el-form-item>
         <el-alert v-if="!scheduling?.enabled" title="定时调度尚未启用，计划保存后暂不执行。" type="warning" :closable="false" />
         <el-alert v-if="!scheduleApprovalOptions.length && !schedule.policy.approval"

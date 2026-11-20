@@ -129,7 +129,7 @@ public class MaintenanceWorkflowService {
             if (RepairReport.dnsPreparationFailure(run)) {
                 requireModel(row.getSourceId(), row.getArtifactSha256(), row.getMaintenanceConfigurationSha256());
                 repairId = repairs.createOriginRecovery(row.getSourceId(),
-                        new StartRepairRequest(id, row.getArtifactSha256())).id();
+                        new StartRepairRequest(id, row.getArtifactSha256(), row.getMaintenanceMaxRounds())).id();
                 store.finishMaintenance(id, "REPAIRING", repairId, null);
                 var repair = repairs.get(repairId);
                 automation.start(repairId, new StartModelCallRequest(repair.faultSha256(),
@@ -142,6 +142,8 @@ public class MaintenanceWorkflowService {
             String credentialBlock = credentials.blockedReason(row.getSourceId());
             if (credentialBlock != null) throw conflict(credentialBlock);
             requireLive(run.result());
+            if (diagnostics.forRun(run).path("hostConfigurationRequired").asBoolean())
+                throw conflict("LIVE_INSPECTION_HOST_CONFIGURATION_REQUIRED");
             boolean fault = run.result().path("nodes").valueStream().anyMatch(node ->
                     RepairReport.repairableLoaderNode(node)
                             && "host_loader_contract_observed".equals(node.path("evidenceClass").asText()));
@@ -168,7 +170,7 @@ public class MaintenanceWorkflowService {
                 throw conflict("cloudflare_access_denied".equals(access.path("classification").asText())
                         ? "LIVE_INSPECTION_SOURCE_ACCESS_DENIED" : "LIVE_INSPECTION_SOURCE_ACCESS_CHALLENGE");
             requireModel(row.getSourceId(), row.getArtifactSha256(), row.getMaintenanceConfigurationSha256());
-            repairId = repairs.create(row.getSourceId(), new StartRepairRequest(id, row.getArtifactSha256())).id();
+            repairId = repairs.create(row.getSourceId(), new StartRepairRequest(id, row.getArtifactSha256(), row.getMaintenanceMaxRounds())).id();
             // Persist the link before starting automation so a restart reuses this exact repair.
             store.finishMaintenance(id, "REPAIRING", repairId, null);
         }

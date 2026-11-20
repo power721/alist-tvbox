@@ -16,6 +16,44 @@ class ManagedLoaderReceiptTest {
     private final String source = "a".repeat(64), worker = "b".repeat(64);
 
     @Test
+    void contentSnapshotRequiresBoundCategoryAndDetailCallsAndDropsRawFields() throws Exception {
+        var input = receipt();
+        var calls = input.withArray("calls");
+        for (String method : List.of("category", "detail")) {
+            int callId = calls.size() + 1;
+            calls.addObject().put("id", callId).put("method", method).put("ok", true)
+                    .put("inputSha256", "d".repeat(64)).put("outputSha256", "e".repeat(64)).put("elapsedMillis", 1);
+        }
+        input.put("callsSha256", Hashes.sha256(mapper.writer().with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+                .writeValueAsString(mapper.convertValue(calls, Object.class))));
+        var snapshot = input.putObject("contentSnapshot").put("schemaVersion", 1).put("declaredCategories", 1)
+                .put("declaredCategoryIdsSha256", "f".repeat(64)).put("allCategoriesSampled", true)
+                .put("detailsSampled", true)
+                .put("rawUrl", "PRIVATE");
+        var row = snapshot.putArray("categories").addObject().put("categoryIdSha256", "c".repeat(64))
+                .put("status", "returned").put("firstItems", 20).put("categoryCallId", 2).put("rawId", "PRIVATE");
+        row.putObject("detail").put("itemIdSha256", "d".repeat(64)).put("status", "returned")
+                .put("detailCallId", 3).put("groups", 2).put("episodes", 12).put("listedEpisodes", 1)
+                .put("rawUrl", "PRIVATE");
+        var projected = receipts.project(input, profile(), source, source, worker).path("contentSnapshot");
+        assertEquals(12, projected.path("categories").get(0).path("detail").path("episodes").asInt());
+        assertFalse(projected.toString().contains("PRIVATE"));
+        for (String defect : List.of("wrongCategoryCall", "wrongDetailCall", "negativeCount", "duplicateCategory", "coverage")) {
+            var changed = input.deepCopy();
+            var content = changed.withObject("contentSnapshot");
+            var category = (ObjectNode) content.path("categories").get(0);
+            switch (defect) {
+                case "wrongCategoryCall" -> category.put("categoryCallId", 3);
+                case "wrongDetailCall" -> ((ObjectNode) category.path("detail")).put("detailCallId", 2);
+                case "negativeCount" -> category.put("firstItems", -1);
+                case "duplicateCategory" -> content.withArray("categories").add(category.deepCopy());
+                default -> content.put("allCategoriesSampled", false);
+            }
+            assertThrows(IOException.class, () -> receipts.project(changed, profile(), source, source, worker), defect);
+        }
+    }
+
+    @Test
     void projectsPlayerOutputShapesOnlyWhenBoundToSuccessfulDetailAndPlayCalls() throws Exception {
         var profile = profile();
         profile.withArray("requiredNodes").add("R01");
@@ -256,8 +294,11 @@ class ManagedLoaderReceiptTest {
         var init = (ObjectNode) input.path("nodes").get(0);
         init.put("status", "blocked").put("reason", "LOADER_INIT_FAILED")
                 .put("failureType", "ModuleNotFoundError").put("message", "PRIVATE_SECRET");
+        init.putObject("failureContext").put("sourceLine", 27).put("errno", 38)
+                .put("hostStage", "atvp_backend_endpoint");
         var call = (ObjectNode) input.path("calls").get(0);
         call.put("ok", false).put("failureType", "ModuleNotFoundError");
+        call.set("failureContext", init.path("failureContext").deepCopy());
         input.put("callsSha256", Hashes.sha256(mapper.writer()
                 .with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
                 .without(SerializationFeature.INDENT_OUTPUT)
@@ -265,8 +306,34 @@ class ManagedLoaderReceiptTest {
         var safe = project(input);
         assertEquals("ModuleNotFoundError", safe.path("nodes").get(0).path("failureType").asText());
         assertEquals("ModuleNotFoundError", safe.path("calls").get(0).path("failureType").asText());
+        assertEquals(init.path("failureContext"), safe.path("nodes").get(0).path("failureContext"));
+        assertEquals(init.path("failureContext"), safe.path("calls").get(0).path("failureContext"));
         assertFalse(safe.toString().contains("PRIVATE_SECRET"));
         call.put("failureType", "PRIVATE_SECRET");
+        assertThrows(IOException.class, () -> project(input));
+    }
+
+    @Test
+    void failureContextRejectsTextBooleansAndOutOfBoundsValues() throws Exception {
+        for (String json : List.of("{}", "{\"sourceLine\":true}", "{\"sourceLine\":0}",
+                "{\"sourceLine\":1000001}", "{\"errno\":4096}", "{\"errno\":\"38\"}",
+                "{\"sourceLine\":27,\"message\":\"PRIVATE\"}", "{\"hostStage\":\"PRIVATE\"}")) {
+            var input = receipt();
+            var init = (ObjectNode) input.path("nodes").get(0);
+            init.put("status", "blocked").put("reason", "LOADER_INIT_FAILED").put("failureType", "OSError");
+            init.set("failureContext", mapper.readTree(json));
+            assertThrows(IOException.class, () -> project(input), json);
+        }
+    }
+
+    @Test
+    void passingInitCanObserveAnOptionalNameWithoutWeakeningSourceIdentity() throws Exception {
+        var input = receipt();
+        var init = (ObjectNode) input.path("nodes").get(0);
+        init.putObject("initObservation").put("stage", "init_identity").put("resultShape", "object")
+                .put("namePresent", false);
+        assertEquals(init.path("initObservation"), project(input).at("/nodes/0/initObservation"));
+        ((ObjectNode) init.path("initObservation")).put("resultShape", "html");
         assertThrows(IOException.class, () -> project(input));
     }
 

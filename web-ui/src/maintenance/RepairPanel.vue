@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Download, MagicStick, Refresh, Setting, View } from '@element-plus/icons-vue'
+import { Check, Download, MagicStick, Refresh, Setting, View } from '@element-plus/icons-vue'
 import { downloadFile, request } from './api'
 import { evidenceFields, type EvidenceChange, type ManagedEvidence } from './evidence'
 import ModelProposalPanel from './ModelProposalPanel.vue'
@@ -16,8 +16,9 @@ const emit = defineEmits<{ 'evidence-changed': [change: EvidenceChange]; 'config
 interface Repair {
   id: string; baselineRunId: string; baselineArtifactSha256: string; faultSha256: string
   status: string; stopCode: string | null; usedRounds: number; maxRounds: number
+  activeCandidateId?: string | null
   freshness: string; staleInputs: string[]
-  frozen: { runtimeValidationContext?: unknown; policy?: { scope?: string; targetNodes?: string[] }
+  frozen: { runtimeValidationContext?: unknown; roundLimit?: { maxRounds: number }; policy?: { scope?: string; targetNodes?: string[] }
     baseline?: { context?: { auxiliaryEvidence?: { extractionReplay?: unknown } }
       result?: { managedSourceEvidence?: ManagedEvidence } } }
 }
@@ -44,6 +45,9 @@ interface Candidate {
 const list = ref<Repair[]>([])
 const selectedId = ref('')
 const selected = ref<Repair>()
+const maxRounds = ref(3)
+const roundLimitEditable = computed(() => !selected.value?.activeCandidateId
+  && !['VALIDATING', 'VALIDATING_RUNTIME', 'CANCELLING'].includes(selected.value?.status ?? ''))
 const candidates = ref<Candidate[]>([])
 interface ImportedCandidate {
   importId: string; archiveSha256: string; originalCandidateId: string; candidateSha256: string
@@ -86,6 +90,11 @@ const labels: Record<string, string> = {
   STATIC_VALIDATED: '静态验证通过', REJECTED: '已拒绝', FAILED: '验证失败',
   VALIDATING_RUNTIME: '隔离复测中', RUNTIME_QUEUED: '等待隔离复测',
   RUNTIME_RUNNING: '隔离复测中', RUNTIME_OBSERVED: '已取得运行观察'
+}
+const stopLabels: Record<string, string> = {
+  RUNTIME_HOST_CONFIGURATION_REQUIRED: 'AT 宿主解析未配置，候选已保留，补齐后复验',
+  LIVE_INSPECTION_HOST_CONFIGURATION_REQUIRED: 'AT 宿主解析未配置，未启动模型修复',
+  MODEL_HOST_CONFIGURATION_REQUIRED: 'AT 宿主解析未配置，模型未调用'
 }
 const countLabels: Record<string, string> = {
   homeClasses: '首页分类', homeItems: '首页条目', homeCovers: '首页封面',
@@ -141,6 +150,7 @@ async function loadSelection() {
     request<Repair>(`/repairs/${id}`), request<Candidate[]>(`/repairs/${id}/candidates`)
   ])
   if (disposed || current !== revision || id !== selectedId.value) return
+  if (selected.value?.id !== repair.id || selected.value.maxRounds !== repair.maxRounds) maxRounds.value = repair.maxRounds
   selected.value = repair
   list.value = list.value.map(item => item.id === id ? repair : item)
   candidates.value = items
@@ -180,17 +190,30 @@ async function refresh() {
   await loadSelection()
 }
 async function create() {
-  if (!baselineReady.value || busy.value || evidenceBusy.value) return
+  if (!baselineReady.value || busy.value || evidenceBusy.value
+    || !Number.isInteger(maxRounds.value) || maxRounds.value < 1) return
   const current = revision
   await action(async () => {
     const repair = await request<Repair>(`/sources/${props.sourceId}/repairs`, {
-      baselineRunId: props.baselineRunId, expectedArtifactSha256: props.artifactSha256
+      baselineRunId: props.baselineRunId, expectedArtifactSha256: props.artifactSha256, maxRounds: maxRounds.value
     })
     if (disposed || current !== revision) return
     selectedId.value = repair.id
     emit('activity-started')
     proposalJson.value = ''
     await refresh()
+  })
+}
+async function saveRoundLimit() {
+  const repair = selected.value
+  if (!repair || busy.value || !roundLimitEditable.value || !Number.isInteger(maxRounds.value)
+    || maxRounds.value < Math.max(1, repair.usedRounds)) return
+  await action(async () => {
+    await request(`/repairs/${repair.id}/round-limit`, {
+      expectedFaultSha256: repair.faultSha256, expectedMaxRounds: repair.maxRounds, maxRounds: maxRounds.value
+    }, 'PUT')
+    await refresh()
+    ElMessage.success('修复轮数已保存，历史和用量保留')
   })
 }
 function evidenceChanged(change: EvidenceChange) {
@@ -311,6 +334,13 @@ onUnmounted(() => { disposed = true; revision++; pendingValidation.value = undef
 
 <template>
   <div class="repair-actions">
+    <label for="repair-round-limit">修复轮数上限</label>
+    <el-input-number id="repair-round-limit" v-model="maxRounds" :min="Math.max(1, selected?.usedRounds ?? 0)"
+      :precision="0" :disabled="busy || !roundLimitEditable" aria-label="修复轮数上限" style="width: 150px" />
+    <el-tooltip v-if="selected" content="保存轮数上限，不清零历史或自动调用模型">
+      <el-button :icon="Check" :disabled="busy || !roundLimitEditable || !Number.isInteger(maxRounds)"
+        aria-label="保存修复轮数" @click="saveRoundLimit" />
+    </el-tooltip>
     <el-button v-if="!evidenceRepair" type="primary" :icon="MagicStick"
                :disabled="busy || evidenceBusy || !baselineReady" @click="create">开始修复</el-button>
     <el-button :icon="Setting" :disabled="busy" @click="emit('configure-model')">模型设置</el-button>
@@ -332,7 +362,7 @@ onUnmounted(() => { disposed = true; revision++; pendingValidation.value = undef
     @busy-change="value => evidenceBusy = value" />
   <template v-if="selected">
     <p>{{ labels[selected.status] || selected.status }} · 已用 {{ selected.usedRounds }}/{{ selected.maxRounds }} 轮
-      <span v-if="selected.stopCode"> · {{ selected.stopCode }}</span></p>
+      <span v-if="selected.stopCode"> · {{ stopLabels[selected.stopCode] || selected.stopCode }}</span></p>
     <el-alert v-if="selected.freshness !== 'current'" :title="`输入已变化：${selected.staleInputs.join('、')}`"
               type="warning" :closable="false" />
     <p v-if="selected.frozen.runtimeValidationContext" class="boundary">已绑定复验环境，原始巡检和历次失败记录保留。</p>
@@ -351,7 +381,9 @@ onUnmounted(() => { disposed = true; revision++; pendingValidation.value = undef
     <div class="repair-actions">
       <el-button v-if="['AWAITING_PROPOSAL', 'VALIDATING', 'VALIDATING_RUNTIME', 'CANCELLING', 'AWAITING_RUNTIME_VALIDATION'].includes(selected.status)"
                  :disabled="busy || selected.status === 'CANCELLING'" @click="cancel">取消会话</el-button>
-      <el-button v-if="['BLOCKED', 'INTERRUPTED', 'CANCELLED'].includes(selected.status)"
+      <el-button v-if="selected.stopCode !== 'RUNTIME_HOST_CONFIGURATION_REQUIRED' && (['BLOCKED', 'INTERRUPTED', 'CANCELLED'].includes(selected.status)
+          || selected.status === 'STOPPED' && selected.frozen.roundLimit && selected.usedRounds < selected.maxRounds
+            && ['ROUND_LIMIT', 'REPEATED_FAILURE'].includes(selected.stopCode ?? ''))"
                  :disabled="busy || selected.freshness !== 'current'" @click="resume">问题修正后恢复（保留次数）</el-button>
     </div>
     <details class="manual-proposal">
@@ -363,7 +395,7 @@ onUnmounted(() => { disposed = true; revision++; pendingValidation.value = undef
     </details>
     <el-card v-for="candidate in candidates" :key="candidate.id" class="candidate">
       <p>第 {{ candidate.roundNumber }} 轮 · {{ labels[candidate.status] || candidate.status }}
-        <span v-if="candidate.errorCode"> · {{ candidate.errorCode }}</span></p>
+        <span v-if="candidate.errorCode"> · {{ stopLabels[candidate.errorCode] || candidate.errorCode }}</span></p>
       <p v-if="candidate.result && !candidate.result.runtimeAcceptance">静态阶段必需项 {{ candidate.result.requiredCoverage.total }}：
         通过 {{ candidate.result.requiredCoverage.pass }}，失败 {{ candidate.result.requiredCoverage.fail }}，
         未测 {{ candidate.result.requiredCoverage.notTested }}。候选尚未获得发布资格。</p>

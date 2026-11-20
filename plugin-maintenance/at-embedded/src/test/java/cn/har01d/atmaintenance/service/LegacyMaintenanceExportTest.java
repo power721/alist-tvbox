@@ -33,9 +33,9 @@ class LegacyMaintenanceExportTest {
             assertTrue(rows.next());
             assertEquals("private fixture", rows.getString(1));
             rows = statement.executeQuery("SELECT COUNT(*) FROM \"legacy_maintenance_schema_history\"");
-            assertTrue(rows.next()); assertEquals(17, rows.getInt(1));
+            assertTrue(rows.next()); assertEquals(18, rows.getInt(1));
             rows = statement.executeQuery("SELECT COUNT(*) FROM \"maintenance_schema_history\"");
-            assertTrue(rows.next()); assertEquals(16, rows.getInt(1));
+            assertTrue(rows.next()); assertEquals(17, rows.getInt(1));
             rows = statement.executeQuery("SELECT COUNT(*) FROM \"flyway_schema_history\"");
             assertTrue(rows.next()); assertEquals(1, rows.getInt(1));
         }

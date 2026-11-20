@@ -94,8 +94,23 @@ final class ManagedLoaderReceipt {
         return FAILURE_TYPES.contains(type) ? type : null;
     }
 
+    static ObjectNode failureContext(ObjectMapper mapper, JsonNode node) {
+        var result = mapper.createObjectNode();
+        if (safeFailureType(node.path("failureType").asText()) == null) return result;
+        JsonNode context = node.path("failureContext");
+        for (var entry : Map.of("sourceLine", 1_000_000, "errno", 4095).entrySet()) {
+            JsonNode value = context.path(entry.getKey());
+            if (integer(value, entry.getValue()) && value.asInt() > 0) result.set(entry.getKey(), value);
+        }
+        if (context.path("hostStage").asText().equals("atvp_backend_endpoint"))
+            result.put("hostStage", "atvp_backend_endpoint");
+        return result;
+    }
+
     static ObjectNode contractObservations(ObjectMapper mapper, JsonNode node) {
         var result = mapper.createObjectNode();
+        var failure = failureContext(mapper, node);
+        if (!failure.isEmpty()) result.set("failureContext", failure);
         for (String field : List.of("classes", "firstItems", "secondItems", "lastItems", "pages", "items",
                 "groups", "episodes", "sampledPlayers", "sampledVariants", "segments", "width", "height",
                 "bytes", "pagesObserved")) {
@@ -108,6 +123,19 @@ final class ManagedLoaderReceipt {
         }
         if (Set.of("page-window", "exact-total").contains(node.path("paginationMode").asText()))
             result.put("paginationMode", node.path("paginationMode").asText());
+        if (Set.of("magnet_or_cloud_resource").contains(node.path("sourcePurposeHint").asText()))
+            result.put("sourcePurposeHint", node.path("sourcePurposeHint").asText());
+        if ("S06".equals(node.path("id").asText()) && node.path("initObservation").isObject()) {
+            var init = mapper.createObjectNode();
+            if ("init_identity".equals(node.path("initObservation").path("stage").asText()))
+                init.put("stage", "init_identity");
+            if (Set.of("null", "object", "array", "empty_text", "html", "json_text", "text", "boolean",
+                    "number", "other").contains(node.path("initObservation").path("resultShape").asText()))
+                init.put("resultShape", node.path("initObservation").path("resultShape").asText());
+            if (node.path("initObservation").path("namePresent").isBoolean())
+                init.put("namePresent", node.path("initObservation").path("namePresent").asBoolean());
+            if (init.size() == 3) result.set("initObservation", init);
+        }
         if (Set.of("absent", "http", "https", "magnet", "other").contains(node.path("playerRouteKind").asText()))
             result.put("playerRouteKind", node.path("playerRouteKind").asText());
         var identity = mapper.createObjectNode();
@@ -547,8 +575,8 @@ final class ManagedLoaderReceipt {
                 String callId = recommendation ? "homeCallId" : "searchCallId";
                 require((recommendation || sha(row.path("keywordSha256"))) && row.path("items").asInt() > 0
                         && row.has("identityEvidence")
-                        && integer(row.path(callId), 32) && row.path(callId).asInt() > 0
-                        && integer(row.path("detailCallId"), 32)
+                        && integer(row.path(callId), 128) && row.path(callId).asInt() > 0
+                        && integer(row.path("detailCallId"), 128)
                         && row.path("detailCallId").asInt() > row.path(callId).asInt()
                         && input.path("calls").valueStream().anyMatch(call ->
                             call.path("id").equals(row.path(callId))
@@ -567,11 +595,34 @@ final class ManagedLoaderReceipt {
                         "MANAGED_LOADER_RECEIPT_INVALID");
                 node.put("failureType", row.path("failureType").asText());
             }
+            if (row.has("failureContext")) {
+                var context = failureContext(mapper, row);
+                require(!passed && !context.isEmpty() && context.equals(row.path("failureContext"))
+                        && Set.of("LOADER_INIT_FAILED", "LOADER_METHOD_FAILED").contains(reason),
+                        "MANAGED_LOADER_RECEIPT_INVALID");
+                node.set("failureContext", context);
+            }
+            if (row.has("initObservation")) {
+                JsonNode init = row.path("initObservation");
+                require(id.equals("S06") && init.isObject() && init.size() == 3
+                        && (!passed || init.path("resultShape").asText().equals("object"))
+                        && init.path("stage").asText().equals("init_identity")
+                        && Set.of("null", "object", "array", "empty_text", "html", "json_text", "text",
+                            "boolean", "number", "other").contains(init.path("resultShape").asText())
+                        && init.path("namePresent").isBoolean(), "MANAGED_LOADER_RECEIPT_INVALID");
+                node.set("initObservation", init.deepCopy());
+            }
+            if (row.has("sourcePurposeHint")) {
+                require(id.equals("C03") && !passed
+                        && row.path("sourcePurposeHint").asText().equals("magnet_or_cloud_resource"),
+                        "MANAGED_LOADER_RECEIPT_INVALID");
+                node.put("sourcePurposeHint", "magnet_or_cloud_resource");
+            }
             if (row.has("playbackContract")) {
                 JsonNode contract = row.path("playbackContract");
                 require(id.equals("C10") && !passed
                         && Set.of("PLAY_GROUPS_INVALID", "PLAY_EPISODE_INVALID").contains(reason)
-                        && contract.isObject() && integer(contract.path("detailCallId"), 32)
+                        && contract.isObject() && integer(contract.path("detailCallId"), 128)
                         && contract.path("detailCallId").asInt() > 0
                         && input.path("calls").valueStream().anyMatch(call ->
                             call.path("id").equals(contract.path("detailCallId"))
@@ -582,8 +633,8 @@ final class ManagedLoaderReceipt {
             if (row.has("playerContract")) {
                 var contract = playerContractObservations(mapper, row.path("playerContract"));
                 require(id.equals("R01") && row.path("playerContract").isObject() && contract.size() == 12
-                        && integer(contract.path("detailCallId"), 32) && contract.path("detailCallId").asInt() > 0
-                        && integer(contract.path("playCallId"), 32)
+                        && integer(contract.path("detailCallId"), 128) && contract.path("detailCallId").asInt() > 0
+                        && integer(contract.path("playCallId"), 128)
                         && contract.path("playCallId").asInt() > contract.path("detailCallId").asInt()
                         && input.path("calls").valueStream().anyMatch(call ->
                             call.path("id").equals(contract.path("detailCallId"))
@@ -647,7 +698,7 @@ final class ManagedLoaderReceipt {
                 JsonNode proxy = row.path("proxyObservation");
                 require(id.equals("C09") && passed
                         && fields(proxy, Set.of("workerCallId", "paramsSha256", "resultSha256", "targetSha256"))
-                        && integer(proxy.path("workerCallId"), 32) && proxy.path("workerCallId").asInt() > 0
+                        && integer(proxy.path("workerCallId"), 128) && proxy.path("workerCallId").asInt() > 0
                         && sha(proxy.path("paramsSha256")) && sha(proxy.path("resultSha256"))
                         && sha(proxy.path("targetSha256"))
                         && input.path("calls").valueStream().anyMatch(call ->
@@ -811,11 +862,11 @@ final class ManagedLoaderReceipt {
                     .put("dependencySha256", input.path("dependencySha256").asText());
         }
         JsonNode calls = input.path("calls");
-        require(calls.isArray() && !calls.isEmpty() && calls.size() <= 32, "MANAGED_LOADER_RECEIPT_INVALID");
+        require(calls.isArray() && !calls.isEmpty() && calls.size() <= 128, "MANAGED_LOADER_RECEIPT_INVALID");
         var safeCalls = safe.putArray("calls");
         int ordinal = 0;
         for (JsonNode call : calls) {
-            require(integer(call.path("id"), 32) && call.path("id").intValue() == ++ordinal
+            require(integer(call.path("id"), 128) && call.path("id").intValue() == ++ordinal
                     && Set.of("init", "home", "category", "search", "detail", "play", "proxy", "destroy", "ping", "",
                             "loader_unknown_method").contains(call.path("method").asText())
                     && call.path("ok").isBoolean() && sha(call.path("inputSha256")) && sha(call.path("outputSha256"))
@@ -829,6 +880,12 @@ final class ManagedLoaderReceipt {
                         "MANAGED_LOADER_RECEIPT_INVALID");
                 value.put("failureType", call.path("failureType").asText());
             }
+            if (call.has("failureContext")) {
+                var context = failureContext(mapper, call);
+                require(!call.path("ok").asBoolean() && !context.isEmpty()
+                        && context.equals(call.path("failureContext")), "MANAGED_LOADER_RECEIPT_INVALID");
+                value.set("failureContext", context);
+            }
         }
         String callsSha = Hashes.sha256(mapper.writer().with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
                 .without(SerializationFeature.INDENT_OUTPUT)
@@ -837,7 +894,99 @@ final class ManagedLoaderReceipt {
                 && (!loaded || calls.get(0).path("method").asText().equals("init")
                         && calls.get(0).path("ok").booleanValue()), "MANAGED_LOADER_RECEIPT_INVALID");
         safe.put("callsSha256", callsSha).put("successful", allPassed);
+        if (input.has("contentSnapshot"))
+            safe.set("contentSnapshot", contentSnapshot(input.path("contentSnapshot"), safeCalls));
         return safe;
+    }
+
+    ObjectNode partialProgress(JsonNode input) {
+        if (input.path("schemaVersion").asInt() != 1
+                || !sha(input.path("inputSourceSha256")) || !sha(input.path("profileSha256"))
+                || !input.path("completedCalls").isArray() || input.path("completedCalls").size() > 128) return null;
+        var safe = mapper.createObjectNode().put("schemaVersion", 1).put("fullAcceptance", false)
+                .put("inputSourceSha256", input.path("inputSourceSha256").asText())
+                .put("profileSha256", input.path("profileSha256").asText());
+        var calls = safe.putArray("completedCalls");
+        for (JsonNode call : input.path("completedCalls")) {
+            if (!call.path("id").isInt() || call.path("id").asInt() != calls.size() + 1
+                    || !Set.of("init", "home", "category", "detail", "search", "play", "proxy", "destroy", "ping")
+                        .contains(call.path("method").asText())
+                    || !call.path("ok").isBoolean() || !sha(call.path("inputSha256"))
+                    || !sha(call.path("outputSha256"))) return null;
+            var row = calls.addObject();
+            for (String field : List.of("id", "method", "ok", "inputSha256", "outputSha256"))
+                row.set(field, call.path(field).deepCopy());
+            String type = safeFailureType(call.path("failureType").asText());
+            if (!call.path("ok").asBoolean() && type != null) {
+                row.put("failureType", type);
+                var context = failureContext(mapper, call);
+                if (!context.isEmpty()) row.set("failureContext", context);
+            }
+        }
+        if (input.has("contentSnapshot")) {
+            try {
+                safe.set("contentSnapshot", contentSnapshot(input.path("contentSnapshot"), calls));
+            } catch (IOException invalid) {
+                return null;
+            }
+        }
+        return safe;
+    }
+
+    ObjectNode contentSnapshot(JsonNode input, JsonNode calls) throws IOException {
+        require(input.path("schemaVersion").asInt() == 1
+                && integer(input.path("declaredCategories"), 40_000_000) && input.path("declaredCategories").asInt() > 0
+                && sha(input.path("declaredCategoryIdsSha256")) && input.path("allCategoriesSampled").isBoolean()
+                && input.path("detailsSampled").isBoolean()
+                && input.path("categories").isArray()
+                && input.path("categories").size() == Math.min(input.path("declaredCategories").asInt(), 12)
+                && input.path("allCategoriesSampled").asBoolean() == (input.path("declaredCategories").asInt() <= 12),
+                "MANAGED_CONTENT_SNAPSHOT_INVALID");
+        var safe = mapper.createObjectNode().put("schemaVersion", 1)
+                .put("declaredCategories", input.path("declaredCategories").asInt())
+                .put("declaredCategoryIdsSha256", input.path("declaredCategoryIdsSha256").asText())
+                .put("detailsSampled", input.path("detailsSampled").asBoolean())
+                .put("allCategoriesSampled", input.path("allCategoriesSampled").asBoolean());
+        var categories = safe.putArray("categories");
+        var ids = new java.util.HashSet<String>();
+        for (JsonNode row : input.path("categories")) {
+            String status = row.path("status").asText();
+            require(sha(row.path("categoryIdSha256")) && ids.add(row.path("categoryIdSha256").asText())
+                    && Set.of("returned", "empty", "error").contains(status)
+                    && integer(row.path("firstItems"), 40_000_000)
+                    && (!status.equals("returned") || row.path("firstItems").asInt() > 0)
+                    && (!status.equals("empty") || row.path("firstItems").asInt() == 0)
+                    && contentCall(calls, row.path("categoryCallId"), "category", !status.equals("error")),
+                    "MANAGED_CONTENT_SNAPSHOT_INVALID");
+            var item = categories.addObject();
+            for (String key : List.of("categoryIdSha256", "status", "firstItems", "categoryCallId"))
+                item.set(key, row.path(key).deepCopy());
+            if (!status.equals("returned") || !input.path("detailsSampled").asBoolean()) {
+                require(!row.has("detail"), "MANAGED_CONTENT_SNAPSHOT_INVALID");
+                continue;
+            }
+            JsonNode detail = row.path("detail");
+            String detailStatus = detail.path("status").asText();
+            require(sha(detail.path("itemIdSha256"))
+                    && Set.of("returned", "no_playback", "error").contains(detailStatus)
+                    && contentCall(calls, detail.path("detailCallId"), "detail", !detailStatus.equals("error"))
+                    && integer(detail.path("groups"), 40_000_000) && integer(detail.path("episodes"), 40_000_000)
+                    && (!detailStatus.equals("returned") || detail.path("groups").asInt() > 0 && detail.path("episodes").asInt() > 0)
+                    && (!detailStatus.equals("no_playback") || detail.path("groups").asInt() == 0 && detail.path("episodes").asInt() == 0),
+                    "MANAGED_CONTENT_SNAPSHOT_INVALID");
+            var target = item.putObject("detail");
+            for (String key : List.of("itemIdSha256", "status", "detailCallId", "groups", "episodes"))
+                target.set(key, detail.path(key).deepCopy());
+            if (integer(detail.path("listedEpisodes"), 999999))
+                target.set("listedEpisodes", detail.path("listedEpisodes"));
+        }
+        return safe;
+    }
+
+    private static boolean contentCall(JsonNode calls, JsonNode id, String method, boolean successful) {
+        return integer(id, 128) && id.asInt() > 0 && calls.valueStream().anyMatch(call ->
+                call.path("id").equals(id) && call.path("method").asText().equals(method)
+                        && (!successful || call.path("ok").asBoolean()));
     }
 
     private boolean sha(JsonNode value) { return value.isTextual() && value.textValue().matches("[a-f0-9]{64}"); }

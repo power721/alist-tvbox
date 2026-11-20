@@ -559,6 +559,8 @@ public class ModelStore {
 
     private void requireAccessibleInput(RepairSummary repair) {
         var triage = diagnostics.forRepair(repair, repairs.candidates(repair.id()));
+        if (triage.path("hostConfigurationRequired").asBoolean())
+            throw conflict("MODEL_HOST_CONFIGURATION_REQUIRED");
         if (!triage.path("latestCandidateEvidenceUnavailable").asBoolean()
                 && triage.path("authenticationEvidence").isObject())
             throw conflict("SOURCE_AUTHENTICATION_REJECTED");
@@ -602,7 +604,7 @@ public class ModelStore {
                 ModelClient.enhancedRequest(mapper, call.getRequestJson()), decode(call.getResponseDiagnosticsJson()));
     }
     private void requireFaultCall(RepairSummary repair, StartModelCallRequest input, List<ModelCall> history) {
-        if (history.stream().filter(this::consumesFaultCall).count() < 3) return;
+        if (history.stream().filter(this::consumesFaultCall).count() < repair.maxRounds()) return;
         JsonNode grant = RepairEvidenceMaterial.activeGrant(repair);
         if (input.enhancedDiagnostics() && !grant.isMissingNode()
                 && history.stream().filter(this::consumesFaultCall).noneMatch(call -> grant.path("evidenceSha256").equals(

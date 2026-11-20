@@ -1,6 +1,11 @@
 const base = '/api/plugin-maintenance'
 
 const setupErrors: Record<string, string> = {
+  REPAIR_ROUND_LIMIT_INVALID: '修复轮数必须为正整数',
+  REPAIR_ROUND_LIMIT_BELOW_USED: '轮数上限不能小于已经使用的轮数',
+  REPAIR_ROUND_LIMIT_CHANGED: '轮数上限已被更新，请刷新后再保存',
+  REPAIR_ROUND_LIMIT_BUSY: '修复或模型调用正在进行，请停止或等待本轮结束后调整',
+  REPAIR_ROUND_LIMIT_OVERFLOW: '轮数上限已达到整数存储上限',
   PAGE_DIAGNOSTICS_HOST_EVIDENCE_REQUIRED: '本次巡检缺少可匹配的宿主联网证据',
   PAGE_DIAGNOSTICS_OBSERVED_URL_REQUIRED: '尚未定位巡检访问的原页网址，请在诊断请求中指定已观测的网址',
   AUXILIARY_EVIDENCE_ALREADY_FROZEN: '这次巡检的诊断证据已保存，请查看原记录',

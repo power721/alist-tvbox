@@ -43,6 +43,7 @@ public class ProbeStore {
         var run = create(sourceId, inspectorSha, knowledgeSha, "managed_source");
         run.setMaintenanceKey(input.requestKey());
         run.setMaintenanceConfigurationSha256(input.expectedConfigurationSha256());
+        run.setMaintenanceMaxRounds(input.maxRounds());
         run.setMaintenanceStatus("CHECKING");
         return runs.saveAndFlush(run);
     }
@@ -58,7 +59,9 @@ public class ProbeStore {
         if (previous.isPresent()) {
             var run = previous.get();
             if (!run.getArtifactSha256().equals(input.expectedArtifactSha256())
-                    || !run.getMaintenanceConfigurationSha256().equals(input.expectedConfigurationSha256()))
+                    || !run.getMaintenanceConfigurationSha256().equals(input.expectedConfigurationSha256())
+                    || !java.util.Objects.equals(run.getMaintenanceMaxRounds() == null ? 3 : run.getMaintenanceMaxRounds(),
+                            input.maxRounds() == null ? 3 : input.maxRounds()))
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "MAINTENANCE_INPUTS_CHANGED");
             return run;
         }

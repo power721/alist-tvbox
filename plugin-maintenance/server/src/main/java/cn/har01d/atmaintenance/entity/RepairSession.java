@@ -44,6 +44,8 @@ public class RepairSession {
     private boolean automaticEnhancedDiagnostics;
     @Column(name = "used_rounds", nullable = false)
     private int usedRounds;
+    @Column(name = "max_rounds")
+    private Integer maxRounds;
     @Column(name = "active_candidate_id", length = 36)
     private String activeCandidateId;
     @Column(name = "created_at", nullable = false, updatable = false)

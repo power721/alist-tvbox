@@ -28,6 +28,21 @@ class MaintenanceWorkflowStoreTest {
     @Autowired RepairStore repairs;
 
     @Test
+    void customRoundsSurvivePreparationFailureAndRequestReplayWithoutCreatingAnotherTask() {
+        var source = sources.create(new CreateSourceRequest("custom-rounds", null, "custom.py", null,
+                "class Spider:\n    pass\n"));
+        var input = new StartMaintenanceRequest(source.artifactSha256(), "a".repeat(64), "custom_rounds", 8);
+        var run = store.recordPreparationFailure(source.id(), inspector.sha256(), knowledge.sha256(), input,
+                "SOURCE_SETUP_DNS_NO_ADDRESS");
+        assertEquals(8, store.existingMaintenance(source.id(), input).getMaintenanceMaxRounds());
+        assertEquals(run.getId(), store.existingMaintenance(source.id(), input).getId());
+        assertEquals("MAINTENANCE_INPUTS_CHANGED", assertThrows(ResponseStatusException.class,
+                () -> store.existingMaintenance(source.id(), new StartMaintenanceRequest(source.artifactSha256(),
+                        "a".repeat(64), "custom_rounds", 9))).getReason());
+        assertEquals(1, store.maintenanceList(source.id()).size());
+    }
+
+    @Test
     void preparationFailureIsPersistentUnexecutedAndSameRequestNeverPreparesAgain() {
         var source = sources.create(new CreateSourceRequest("unresolved", null, "unresolved.py", null,
                 "class Spider:\n    pass\n"));

@@ -35,6 +35,8 @@ class EmbeddedMaintenanceMigrationsTest {
             assertEquals(1, rows.getInt(1));
             assertTrue(connection.getMetaData().getTables(null, null, "MAINTENANCE_SOURCE", null).next());
             assertTrue(connection.getMetaData().getTables(null, null, "HOST_NAMESPACE_FIXTURE", null).next());
+            assertTrue(connection.getMetaData().getColumns(null, null, "MAINTENANCE_REPAIR", "MAX_ROUNDS").next());
+            assertTrue(connection.getMetaData().getColumns(null, null, "MAINTENANCE_PROBE_RUN", "MAINTENANCE_MAX_ROUNDS").next());
         }
     }
 

@@ -96,6 +96,59 @@ class ModelIntegrationTest {
     static void close() { fake.stop(0); }
 
     @Test
+    void storedHostConfigurationBlockCannotReserveAModelCallOrSpendBudget() throws Exception {
+        var base = beginHome();
+        var frozen = (com.fasterxml.jackson.databind.node.ObjectNode) base.frozen().deepCopy();
+        var evidence = (com.fasterxml.jackson.databind.node.ObjectNode) frozen.at("/baseline/result/managedSourceEvidence");
+        var loader = evidence.putObject("loaderValidation").put("projection", ManagedLoaderReceipt.PROJECTION)
+                .put("inputSourceSha256", base.baselineArtifactSha256())
+                .put("inputProfileSha256", frozen.at("/baseline/profileSha256").asText());
+        loader.putArray("nodes").addObject().put("id", "C01").put("status", "fail")
+                .put("reason", "LOADER_METHOD_FAILED").putObject("failureContext").put("hostStage", "atvp_backend_endpoint");
+        var row = new RepairSession();
+        row.setSourceId(base.sourceId()); row.setBaselineRunId(base.baselineRunId());
+        row.setBaselineArtifactSha256(base.baselineArtifactSha256());
+        row.setFaultSha256(Hashes.sha256(UUID.randomUUID().toString()));
+        row.setFrozenJson(frozen.toString());
+        repairRows.saveAndFlush(row);
+        var repair = repairs.get(row.getId());
+        var diagnostic = new RepairDiagnostics(mapper).forRepair(repair, List.of());
+        assertTrue(diagnostic.path("hostConfigurationRequired").asBoolean(), diagnostic::toString);
+        var budget = models.budget();
+        int before = received.get();
+        assertCode("MODEL_HOST_CONFIGURATION_REQUIRED", () -> models.reserve(repair.id(), input(repair, "host_block_001")));
+        assertEquals(budget, models.budget());
+        assertEquals(before, received.get());
+        assertTrue(models.list(repair.id()).isEmpty());
+        assertEquals(0, repairs.get(repair.id()).usedRounds());
+    }
+
+    @Test
+    void customRoundLimitAlsoControlsModelCallsPastThreeWithoutClearingAccounting() throws Exception {
+        var repair = begin();
+        repairs.updateRoundLimit(repair.id(), new UpdateRepairRoundLimitRequest(repair.faultSha256(), 3, 4));
+        long before = models.budget().usedCalls();
+        int receivedBefore = received.get();
+        for (int index = 0; index < 4; index++) {
+            var call = models.reserve(repair.id(), input(repair, "custom_rounds_" + index));
+            assertTrue(models.start(call.getId()));
+            models.finish(call.getId(), null, "MODEL_HTTP_ERROR");
+        }
+        assertEquals(4, models.list(repair.id()).size());
+        assertCode("MODEL_FAULT_CALL_LIMIT", () -> models.reserve(repair.id(), input(repair, "custom_rounds_blocked")));
+        repairs.updateRoundLimit(repair.id(), new UpdateRepairRoundLimitRequest(repair.faultSha256(), 4, 8));
+        var fifth = models.reserve(repair.id(), input(repair, "custom_rounds_fifth"));
+        assertEquals(5, models.list(repair.id()).size());
+        assertEquals(before + 5, models.budget().usedCalls());
+        assertEquals(0, repairs.get(repair.id()).usedRounds());
+        assertEquals(receivedBefore, received.get());
+        assertEquals("REPAIR_ROUND_LIMIT_BUSY", assertThrows(ResponseStatusException.class,
+                () -> repairs.updateRoundLimit(repair.id(), new UpdateRepairRoundLimitRequest(repair.faultSha256(), 8, 9))).getReason());
+        assertTrue(models.start(fifth.getId()));
+        models.finish(fifth.getId(), null, "MODEL_HTTP_ERROR");
+    }
+
+    @Test
     void originDiscoveryUsesOneDurableBudgetCallButNoRepairRoundOrProposal() throws Exception {
         var repair = begin();
         var search = mapper.createObjectNode().put("status", "results_observed");
@@ -1161,6 +1214,7 @@ class ModelIntegrationTest {
     @Test
     void explicitNewStructureAddsOneRoundAndOneCallWithoutResettingFrozenInputsOrLedgers() throws Exception {
         var repair = stoppedJsonRepair(false);
+        repairs.updateRoundLimit(repair.id(), new UpdateRepairRoundLimitRequest(repair.faultSha256(), 3, 3));
         var candidate = repairs.candidates(repair.id()).getLast();
         var frozen = repairRows.findById(repair.id()).orElseThrow().getFrozenJson();
         var history = models.list(repair.id());

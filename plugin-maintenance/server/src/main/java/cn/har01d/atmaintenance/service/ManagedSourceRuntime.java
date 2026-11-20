@@ -449,6 +449,10 @@ public class ManagedSourceRuntime {
             JsonNode completed = projectCompletedHttp(context.path("completedHttpObservations"),
                     context.path("completedHttpCount"));
             if (completed != null) exchange.set("completedHttpObservations", completed);
+            JsonNode gateway = projectGatewayProgress(context.path("runtimeGateway"));
+            if (gateway != null) exchange.set("runtimeGateway", gateway);
+            JsonNode progress = projectLoaderProgress(context.path("loaderProgress"));
+            if (progress != null) exchange.set("loaderProgress", progress);
             JsonNode http = context.path("httpObservation");
             if (Set.of("GET", "HEAD", "POST").contains(http.path("method").asText())
                     && http.path("requestUrlSha256").asText().matches("[a-f0-9]{64}")
@@ -473,6 +477,10 @@ public class ManagedSourceRuntime {
             }
         }
         return safe;
+    }
+
+    JsonNode projectLoaderProgress(JsonNode input) {
+        return new ManagedLoaderReceipt(mapper).partialProgress(input);
     }
 
     private JsonNode projectRequestDiagnostic(JsonNode request) {
@@ -552,8 +560,48 @@ public class ManagedSourceRuntime {
                 event.set("requestCookiePresent", row.path("requestCookiePresent").deepCopy());
             if (boundedInteger(row.path("receivedSetCookieCount"), 32))
                 event.set("receivedSetCookieCount", row.path("receivedSetCookieCount").deepCopy());
+            if (row.path("transport").asText().equals("external_evidence_gateway")
+                    && row.path("representation").asText().equals("gateway_rendered_document")
+                    && row.path("gatewaySessionReused").isBoolean()
+                    && row.path("cookiesExported").isBoolean() && !row.path("cookiesExported").asBoolean()) {
+                for (String field : List.of("transport", "representation", "gatewaySessionReused", "cookiesExported"))
+                    event.set(field, row.path(field).deepCopy());
+            }
+            if (row.path("challengePage").isBoolean()) event.set("challengePage", row.path("challengePage"));
+            if (knownGatewayOutcome(row.path("gatewayOutcome").asText()))
+                event.set("gatewayOutcome", row.path("gatewayOutcome"));
+            if (row.path("gatewayOutcome").asText().equals("request_not_reproducible")
+                    && Set.of("request_method", "request_body", "host_credentials", "request_headers",
+                        "response_content_type").contains(row.path("gatewaySkipReason").asText()))
+                event.set("gatewaySkipReason", row.path("gatewaySkipReason"));
         }
         return safe;
+    }
+
+    private JsonNode projectGatewayProgress(JsonNode input) {
+        if (!Set.of("trawl", "flaresolverr", "flaresolverr-rs-alt").contains(input.path("adapter").asText())
+                || !input.path("cookiesExported").isBoolean() || input.path("cookiesExported").asBoolean()
+                || !input.path("cleanupConfirmed").isBoolean()) return null;
+        var safe = mapper.createObjectNode().put("fullAcceptance", false);
+        for (String key : List.of("sessionCount", "requestCount", "responseCount", "sessionReuseCount")) {
+            if (!boundedInteger(input.path(key), 64)) return null;
+            safe.set(key, input.path(key));
+        }
+        for (String key : List.of("adapter", "cookiesExported", "cleanupConfirmed")) safe.set(key, input.path(key));
+        return safe;
+    }
+
+    private boolean knownGatewayOutcome(String outcome) {
+        return Set.of("request_not_reproducible", "response_returned", "target_rate_limited", "EVIDENCE_GATEWAY_BUSY",
+                "EVIDENCE_GATEWAY_UNAVAILABLE", "EVIDENCE_GATEWAY_DEADLINE", "EVIDENCE_GATEWAY_TIMEOUT",
+                "EVIDENCE_GATEWAY_TARGET_DNS_FAILED", "EVIDENCE_GATEWAY_HTTP_FAILED",
+                "EVIDENCE_GATEWAY_CHALLENGE_BLOCKED", "EVIDENCE_GATEWAY_SESSION_INVALID",
+                "EVIDENCE_GATEWAY_RESPONSE_INVALID", "EVIDENCE_GATEWAY_RESPONSE_TOO_LARGE",
+                "EVIDENCE_GATEWAY_BUDGET", "EVIDENCE_GATEWAY_EMPTY_OR_INVALID_RESPONSE",
+                "EVIDENCE_GATEWAY_FINAL_URL_CHANGED", "EVIDENCE_GATEWAY_FINAL_URL_DENIED",
+                "EVIDENCE_GATEWAY_REPRESENTATION_INVALID", "EVIDENCE_GATEWAY_SESSION_LOST",
+                "EVIDENCE_GATEWAY_CONNECTION_FAILED", "EVIDENCE_GATEWAY_CONNECT_TIMEOUT",
+                "EVIDENCE_GATEWAY_READ_TIMEOUT", "EVIDENCE_GATEWAY_CLEANUP_UNCONFIRMED").contains(outcome);
     }
 
     private JsonNode projectNetworkObservation(JsonNode row) {
@@ -993,19 +1041,17 @@ public class ManagedSourceRuntime {
             }
             if (event.has("gatewayOutcome")) {
                 String outcome = event.path("gatewayOutcome").asText();
-                require(Set.of("request_not_reproducible", "response_returned", "target_rate_limited", "EVIDENCE_GATEWAY_BUSY",
-                        "EVIDENCE_GATEWAY_UNAVAILABLE", "EVIDENCE_GATEWAY_DEADLINE", "EVIDENCE_GATEWAY_TIMEOUT",
-                        "EVIDENCE_GATEWAY_TARGET_DNS_FAILED", "EVIDENCE_GATEWAY_HTTP_FAILED",
-                        "EVIDENCE_GATEWAY_CHALLENGE_BLOCKED", "EVIDENCE_GATEWAY_SESSION_INVALID",
-                        "EVIDENCE_GATEWAY_RESPONSE_INVALID", "EVIDENCE_GATEWAY_RESPONSE_TOO_LARGE",
-                        "EVIDENCE_GATEWAY_BUDGET", "EVIDENCE_GATEWAY_EMPTY_OR_INVALID_RESPONSE",
-                        "EVIDENCE_GATEWAY_FINAL_URL_CHANGED", "EVIDENCE_GATEWAY_FINAL_URL_DENIED",
-                        "EVIDENCE_GATEWAY_REPRESENTATION_INVALID", "EVIDENCE_GATEWAY_SESSION_LOST",
-                        "EVIDENCE_GATEWAY_CONNECTION_FAILED", "EVIDENCE_GATEWAY_CONNECT_TIMEOUT",
-                        "EVIDENCE_GATEWAY_READ_TIMEOUT", "EVIDENCE_GATEWAY_CLEANUP_UNCONFIRMED")
-                        .contains(outcome), "MANAGED_RECEIPT_MISMATCH");
+                require(knownGatewayOutcome(outcome), "MANAGED_RECEIPT_MISMATCH");
                 safe.put("gatewayOutcome", outcome);
                 projectGatewayRecovery(safe, event);
+            }
+            if (event.has("gatewaySkipReason")) {
+                require(event.path("gatewayOutcome").asText().equals("request_not_reproducible")
+                        && event.path("challengePage").asBoolean()
+                        && Set.of("request_method", "request_body", "host_credentials", "request_headers",
+                            "response_content_type").contains(event.path("gatewaySkipReason").asText()),
+                        "MANAGED_RECEIPT_MISMATCH");
+                safe.set("gatewaySkipReason", event.path("gatewaySkipReason").deepCopy());
             }
             if (event.has("connectedAddressIndex")) {
                 require(boundedInteger(event.path("connectedAddressIndex"), 15), "MANAGED_RECEIPT_MISMATCH");
@@ -1126,11 +1172,11 @@ public class ManagedSourceRuntime {
                 safeCalls.add(call.deepCopy());
             }
         }
-        if (result.has("resourceEvidence")) {
-            evidence.set("resourceEvidence", new ManagedResourceEvidence(mapper).project(
-                    result.path("resourceEvidence"), evidence.path("inputSourceSha256").asText(), safeEvents,
-                    evidence.path("loaderValidation").path("calls")));
-        }
+        for (String field : List.of("resourceEvidence", "contentResourceEvidence"))
+            if (result.has(field))
+                evidence.set(field, new ManagedResourceEvidence(mapper).project(
+                        result.path(field), evidence.path("inputSourceSha256").asText(), safeEvents,
+                        evidence.path("loaderValidation").path("calls")));
         JsonNode rates = result.path("rateLimitObservations");
         if (!rates.isMissingNode()) {
             require(rates.isArray() && rates.size() <= 64, "MANAGED_RECEIPT_MISMATCH");
@@ -1241,6 +1287,7 @@ public class ManagedSourceRuntime {
                 "MANAGED_LOCAL_SOCKET_UNAVAILABLE", "MANAGED_LOCAL_SOCKET_REQUIRED", "ENGINE_TIMEOUT", "ENGINE_OUTPUT_LIMIT",
                 "EGRESS_RATE_LIMITED", "EGRESS_COOLDOWN_BUDGET", "EGRESS_CANCELLED",
                 "CONTAINER_EXECUTION_FAILED", "LINUX_CGROUP_V2_REQUIRED", "MANAGED_CANCELLED",
+                "EGRESS_IMAGE_BUNDLE_MISMATCH",
                 "MANAGED_ACCEPTANCE_PARENT_INVALID", "MANAGED_ACCEPTANCE_CANCELLED",
                 "T4_HTTP_DISABLED", "T4_HTTP_ALREADY_STARTED", "T4_HTTP_DRIVER_FAILED", "T4_HTTP_RECEIPT_MISMATCH",
                 "LOADER_PROFILE_INVALID", "LOADER_RECEIPT_INVALID", "MANAGED_RESOURCE_EVIDENCE_INVALID",

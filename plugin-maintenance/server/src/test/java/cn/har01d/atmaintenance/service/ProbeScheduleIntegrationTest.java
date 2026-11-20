@@ -552,6 +552,24 @@ class ProbeScheduleIntegrationTest {
     }
 
     @Test
+    void scheduledRepairRoundsAreSavedAndFrozenIntoTheClaimedRun() {
+        var budget = models.budget();
+        String source = source();
+        var approved = approval(source);
+        models.consent(source, new UpdateModelConsentRequest(null, approved.artifactSha256()));
+        var policy = schedules.update(source, new UpdateScheduleRequest(null, true,
+                "managed_source", 1800, 2, new ManagedScheduleApproval(approved.id(), approved.sourceRevision()),
+                new ScheduleRepairApproval("a".repeat(64), 8)));
+        assertEquals(8, schedules.get(source).policy().path("automaticRepair").path("maxRounds").asInt());
+        CLOCK.at(policy.nextDueAt().plusSeconds(1));
+        var run = schedules.claim(source);
+        assertNotNull(run);
+        assertEquals(8, runRepository.findById(run.getId()).orElseThrow().getMaintenanceMaxRounds());
+        assertEquals(8, runs.get(run.getId()).schedule().path("automaticRepair").path("maxRounds").asInt());
+        assertEquals(budget, models.budget());
+    }
+
+    @Test
     void modelDriftOrConsentRevocationSuspendsBeforeAnyNewReservation() {
         for (boolean revoke : List.of(false, true)) {
             when(modelConnection.configurationSha256()).thenReturn("a".repeat(64));

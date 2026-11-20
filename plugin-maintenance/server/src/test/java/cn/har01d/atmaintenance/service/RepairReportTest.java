@@ -7,6 +7,249 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RepairReportTest {
+    @Test
+    void hostConfigurationPausesWithoutMislabelingOutputOrNodeRegression() {
+        var frozen = frozenLoaderProfile();
+        var before = loaderEvidence(frozen);
+        frozen.putObject("policy").put("scope", "managed_loader_candidate").putArray("targetNodes").add("C01");
+        frozen.withObject("baseline").put("artifactSha256", "b".repeat(64))
+                .putObject("result").set("managedSourceEvidence", before);
+        var evidence = hostFailure(frozen);
+        var report = reports.runtime(frozen, identifiedStaticReport(), evidence);
+        assertTrue(report.path("runtimeValidationPaused").asBoolean(), report::toString);
+        assertEquals("RUNTIME_HOST_CONFIGURATION_REQUIRED", report.path("runtimeValidationPauseReason").asText());
+        assertFalse(report.path("repairSuccessful").asBoolean());
+        assertTrue(report.path("observedRegressions").isEmpty(), report::toString);
+        assertTrue(report.path("runtimeNodeProgress").path("regressed").isEmpty());
+        assertEquals(0, report.path("runtimeAcceptance").path("requiredCoverage").path("fail").asInt());
+        assertEquals(1, report.path("runtimeAcceptance").path("requiredCoverage").path("blocked").asInt());
+        assertFalse(report.path("runtimeComparison").get(0).path("comparable").asBoolean());
+        assertFalse(reports.networkRetryable(frozen, report));
+    }
+
+    @Test
+    void independentSourceFailureOrContentLossIsStillRepairableBesideHostFailure() {
+        var frozen = frozenLoaderProfile();
+        frozen.withObject("baseline").withObject("profile").withArray("requiredNodes").add("C03");
+        frozen.withObject("baseline").put("profileSha256", Hashes.sha256(frozen.path("baseline").path("profile").toString()));
+        var evidence = hostFailure(frozen);
+        evidence.withObject("loaderValidation").withArray("nodes").addObject()
+                .put("id", "C03").put("status", "fail").put("reason", "CONTENT_LIST_EMPTY_OR_INVALID");
+        var report = reports.runtime(frozen, identifiedStaticReport(), evidence);
+        assertFalse(report.path("runtimeValidationPaused").asBoolean());
+        assertFalse(report.path("repairSuccessful").asBoolean());
+        assertTrue(RepairReport.repairableLoaderNode(evidence.at("/loaderValidation/nodes/2")));
+        assertFalse(RepairReport.repairableLoaderNode(evidence.at("/loaderValidation/nodes/1")));
+        evidence.withObject("loaderValidation").withArray("nodes").remove(2);
+        frozen.withObject("baseline").putObject("result").putObject("managedSourceEvidence")
+                .set("untrustedRuntimeSummary", summary(true));
+        evidence.withObject("untrustedRuntimeSummary").put("categoryItems", 0);
+        report = reports.runtime(frozen, identifiedStaticReport(), evidence);
+        assertFalse(report.path("runtimeValidationPaused").asBoolean());
+        assertTrue(report.path("observedRegressions").toString().contains("categoryItems"));
+    }
+
+    @Test
+    void optionalOrUnboundHostFailuresCannotPauseRequiredSourceRepairs() {
+        var frozen = frozenLoaderProfile();
+        var evidence = hostFailure(frozen);
+        var node = (ObjectNode) evidence.at("/loaderValidation/nodes/1");
+        node.put("id", "R01");
+        assertFalse(reports.runtime(frozen, identifiedStaticReport(), evidence).path("runtimeValidationPaused").asBoolean());
+        node.put("id", "C01");
+        for (String defect : List.of("source", "profile", "runtime", "cleanup")) {
+            var invalid = evidence.deepCopy();
+            switch (defect) {
+                case "source" -> invalid.put("inputSourceSha256", "f".repeat(64));
+                case "profile" -> invalid.withObject("loaderValidation").put("inputProfileSha256", "f".repeat(64));
+                case "runtime" -> invalid.put("bundleSha256", "f".repeat(64));
+                default -> invalid.withObject("cleanup").put("confirmed", false);
+            }
+            var report = reports.runtime(frozen, identifiedStaticReport(), invalid);
+            assertFalse(report.path("runtimeValidationPaused").asBoolean(), defect);
+            assertFalse(report.path("repairSuccessful").asBoolean(), defect);
+        }
+    }
+
+    private ObjectNode hostFailure(ObjectNode frozen) {
+        var evidence = loaderEvidence(frozen);
+        var loader = evidence.withObject("loaderValidation");
+        ((ObjectNode) loader.path("nodes").get(1)).put("status", "fail").put("reason", "LOADER_METHOD_FAILED")
+                .putObject("failureContext").put("hostStage", "atvp_backend_endpoint");
+        loader.putArray("calls").addObject().put("id", 1).put("method", "home").put("ok", false)
+                .putObject("failureContext").put("hostStage", "atvp_backend_endpoint");
+        evidence.withObject("untrustedRuntimeSummary").put("homeClasses", 0).put("homeItems", 0).put("homeCovers", 0);
+        return evidence;
+    }
+
+    @Test
+    void currentPageExactPlaylistCoverageReconcilesCountsButPartialOrUnboundEvidenceDoesNot() throws Exception {
+        var frozen = frozenLoaderProfile();
+        frozen.withObject("baseline").put("artifactSha256", "b".repeat(64));
+        var evidence = loaderEvidence(frozen);
+        var loader = evidence.withObject("loaderValidation");
+        var snapshot = loader.putObject("contentSnapshot").put("schemaVersion", 1)
+                .put("declaredCategories", 1).put("allCategoriesSampled", true).put("detailsSampled", true);
+        var detail = snapshot.putArray("categories").addObject().put("categoryIdSha256", "c".repeat(64))
+                .put("status", "returned").put("firstItems", 20).putObject("detail")
+                .put("itemIdSha256", "d".repeat(64)).put("status", "returned")
+                .put("episodes", 59).put("groups", 1).put("detailCallId", 8);
+        frozen.withObject("baseline").putObject("result").putObject("managedSourceEvidence")
+                .set("loaderValidation", loader.deepCopy());
+        detail.put("episodes", 1);
+        var call = mapper.createObjectNode().put("id", 8).put("method", "detail").put("inputSha256", "7".repeat(64));
+        loader.putArray("calls").add(call.deepCopy().put("ok", true));
+        var resources = ManagedResourceEvidenceTest.fixture(mapper, evidence.path("inputSourceSha256").asText())
+                .put("targetNode", "C10").putNull("image");
+        resources.withArray("resources").remove(1);
+        var page = (ObjectNode) resources.path("resources").get(0);
+        page.put("responseStatus", 200).set("observedDuringCall", call);
+        var proof = page.putObject("playlistObservation").put("policy", "indexed_playlist_links_v1")
+                .put("complete", true).put("groups", 1).put("maxEpisodes", 1)
+                .put("playlistSha256", "9".repeat(64)).put("outputMatchesPage", true);
+        proof.putArray("groupEpisodeCounts").add(1);
+        resources.put("textBytes", mapper.writeValueAsBytes(proof).length);
+        var events = ManagedResourceEvidenceTest.events(mapper);
+        ((ObjectNode) events.get(1)).set("observedDuringCall", call.deepCopy());
+        evidence.set("httpObservations", events);
+        evidence.set("contentResourceEvidence", resources);
+        var accepted = reports.runtime(frozen, identifiedStaticReport(), evidence);
+        assertTrue(accepted.path("contentAcceptance").path("successful").asBoolean(), accepted::toString);
+        assertTrue(accepted.path("contentAcceptance").path("regressions").isEmpty());
+        assertEquals("host_current_page_exact_link_coverage", accepted.path("contentAcceptance")
+                .path("comparison").get(0).path("pagePlaylistObservation").path("basis").asText());
+        for (String defect : List.of("partial", "missingEpisode", "otherGroups", "otherCall", "otherResponse", "otherSource")) {
+            var changed = evidence.deepCopy();
+            var block = (ObjectNode) changed.path("contentResourceEvidence");
+            var row = (ObjectNode) block.path("resources").get(0);
+            var observed = (ObjectNode) row.path("playlistObservation");
+            switch (defect) {
+                case "partial" -> observed.put("complete", false).put("outputMatchesPage", false);
+                case "missingEpisode" -> observed.put("outputMatchesPage", false);
+                case "otherGroups" -> { observed.put("groups", 2); observed.withArray("groupEpisodeCounts").add(1); }
+                case "otherCall" -> ((ObjectNode) changed.path("httpObservations").get(1).path("observedDuringCall")).put("id", 9);
+                case "otherResponse" -> row.put("responseSha256", "f".repeat(64));
+                default -> block.put("artifactSha256", "f".repeat(64));
+            }
+            block.put("textBytes", mapper.writeValueAsBytes(observed).length);
+            var rejected = reports.runtime(frozen, identifiedStaticReport(), changed);
+            assertFalse(rejected.path("contentAcceptance").path("successful").asBoolean(), defect);
+        }
+        var changed = evidence.deepCopy();
+        var block = (ObjectNode) changed.path("contentResourceEvidence");
+        var observed = (ObjectNode) block.path("resources").get(0).path("playlistObservation");
+        observed.put("outputMatchesPage", false).putObject("linkCoverage")
+                .put("pageUniqueLinks", 2).put("outputUniqueLinks", 1)
+                .put("missingPageLinks", 1).put("extraOutputLinks", 0);
+        block.put("textBytes", mapper.writeValueAsBytes(observed).length);
+        ((ObjectNode) frozen.path("baseline").path("result").path("managedSourceEvidence")
+                .path("loaderValidation").path("contentSnapshot").path("categories").get(0).path("detail"))
+                .put("status", "error");
+        var missing = reports.runtime(frozen, identifiedStaticReport(), changed);
+        assertFalse(missing.path("contentAcceptance").path("successful").asBoolean());
+        assertTrue(missing.path("contentAcceptance").path("regressions").toString()
+                .contains("DETAIL_PAGE_PLAYBACK_LINKS_MISSING"));
+    }
+
+    @Test
+    void historicalRepairCanCompareCurrentOriginalContentWithoutReplacingFrozenBaseline() {
+        var frozen = frozenLoaderProfile();
+        frozen.withObject("baseline").put("artifactSha256", "b".repeat(64));
+        var evidence = loaderEvidence(frozen);
+        evidence.put("inputSourceSha256", "b".repeat(64)).put("bundleSha256", "e".repeat(64));
+        evidence.putObject("cleanup").put("confirmed", true).put("containerAbsent", true);
+        var loader = evidence.withObject("loaderValidation");
+        var content = loader.putObject("contentSnapshot").put("schemaVersion", 1)
+                .put("declaredCategories", 1).put("allCategoriesSampled", true).put("detailsSampled", true);
+        content.putArray("categories").addObject().put("categoryIdSha256", "c".repeat(64))
+                .put("status", "returned").put("firstItems", 20)
+                .putObject("detail").put("itemIdSha256", "d".repeat(64))
+                .put("status", "returned").put("episodes", 12).put("groups", 1);
+        var run = org.mockito.Mockito.mock(cn.har01d.atmaintenance.dto.ProbeSummary.class);
+        org.mockito.Mockito.when(run.id()).thenReturn("current-original-probe");
+        org.mockito.Mockito.when(run.sourceId()).thenReturn("source");
+        org.mockito.Mockito.when(run.artifactSha256()).thenReturn("b".repeat(64));
+        org.mockito.Mockito.when(run.executionMode()).thenReturn("managed_source");
+        org.mockito.Mockito.when(run.status()).thenReturn("COMPLETED");
+        org.mockito.Mockito.when(run.freshness()).thenReturn("current");
+        org.mockito.Mockito.when(run.runtimeSha256()).thenReturn("e".repeat(64));
+        org.mockito.Mockito.when(run.executionPolicySha256()).thenReturn("f".repeat(64));
+        org.mockito.Mockito.when(run.profileSha256()).thenReturn(frozen.path("baseline").path("profileSha256").asText());
+        var result = mapper.createObjectNode().set("managedSourceEvidence", evidence);
+        org.mockito.Mockito.when(run.result()).thenReturn(result);
+        String original = frozen.path("baseline").toString();
+        var supplement = reports.contentBaseline(run, frozen, "source", "b".repeat(64), "e".repeat(64), "f".repeat(64));
+        assertNotNull(supplement);
+        frozen.putObject("runtimeValidationContext").put("runtimeSha256", "e".repeat(64))
+                .put("executionPolicySha256", "f".repeat(64)).set("contentBaseline", supplement);
+        assertEquals(original, frozen.path("baseline").toString());
+        assertFalse(reports.contentBaseline(frozen).isMissingNode());
+        var accepted = reports.runtime(frozen, identifiedStaticReport(), evidence);
+        assertTrue(accepted.path("contentAcceptance").path("successful").asBoolean());
+        assertEquals("current-original-probe", accepted.path("contentAcceptance").path("baselineRunId").asText());
+        ((ObjectNode) content.path("categories").get(0).path("detail")).put("episodes", 1);
+        assertFalse(reports.runtime(frozen, identifiedStaticReport(), evidence)
+                .path("contentAcceptance").path("successful").asBoolean());
+        assertNull(reports.contentBaseline(run, frozen, "other-source", "b".repeat(64), "e".repeat(64), "f".repeat(64)));
+        assertNull(reports.contentBaseline(run, frozen, "source", "c".repeat(64), "e".repeat(64), "f".repeat(64)));
+        assertNull(reports.contentBaseline(run, frozen, "source", "b".repeat(64), "c".repeat(64), "f".repeat(64)));
+        frozen.withObject("runtimeValidationContext").put("executionPolicySha256", "0".repeat(64));
+        assertTrue(reports.contentBaseline(frozen).isMissingNode());
+        evidence.withObject("cleanup").put("confirmed", false);
+        assertNull(reports.contentBaseline(run, frozen, "source", "b".repeat(64), "e".repeat(64), "f".repeat(64)));
+    }
+
+    @org.junit.jupiter.api.Test
+    void contentGateRejectsEmptyCategoriesAndSingletonCollapseEvenForAnImageOnlyRepair() {
+        for (String defect : List.of("empty", "oneItem", "oneEpisode", "missingCategory", "detailError")) {
+            var frozen = frozenLoaderProfile();
+            frozen.withObject("baseline").put("artifactSha256", "b".repeat(64));
+            var evidence = loaderEvidence(frozen);
+            var loader = evidence.withObject("loaderValidation");
+            var content = loader.putObject("contentSnapshot").put("schemaVersion", 1)
+                    .put("declaredCategories", 1).put("allCategoriesSampled", true).put("detailsSampled", true);
+            var row = content.putArray("categories").addObject().put("categoryIdSha256", "c".repeat(64))
+                    .put("status", "returned").put("firstItems", 20);
+            var detail = row.putObject("detail").put("itemIdSha256", "d".repeat(64))
+                    .put("status", "returned").put("episodes", 12).put("groups", 1);
+            frozen.withObject("baseline").putObject("result").putObject("managedSourceEvidence")
+                    .set("loaderValidation", loader.deepCopy());
+            switch (defect) {
+                case "empty" -> { row.put("status", "empty").put("firstItems", 0); row.remove("detail"); }
+                case "oneItem" -> row.put("firstItems", 1);
+                case "oneEpisode" -> detail.put("episodes", 1);
+                case "missingCategory" -> { content.put("declaredCategories", 0); content.withArray("categories").removeAll(); }
+                default -> detail.put("status", "error");
+            }
+            var report = reports.runtime(frozen, identifiedStaticReport(), evidence);
+            assertFalse(report.path("repairSuccessful").asBoolean(), defect);
+            assertFalse(report.path("contentAcceptance").path("successful").asBoolean(), defect);
+        }
+    }
+
+    @org.junit.jupiter.api.Test
+    void contentGateAllowsOriginallyEmptySingleItemAndSingleEpisodeCategories() {
+        var frozen = frozenLoaderProfile();
+        frozen.withObject("baseline").put("artifactSha256", "b".repeat(64));
+        var evidence = loaderEvidence(frozen);
+        var loader = evidence.withObject("loaderValidation");
+        var snapshot = loader.putObject("contentSnapshot").put("schemaVersion", 1)
+                .put("declaredCategories", 2).put("allCategoriesSampled", true).put("detailsSampled", true);
+        var categories = snapshot.putArray("categories");
+        categories.addObject().put("categoryIdSha256", "c".repeat(64)).put("status", "empty").put("firstItems", 0);
+        categories.addObject().put("categoryIdSha256", "e".repeat(64)).put("status", "returned").put("firstItems", 1)
+                .putObject("detail").put("itemIdSha256", "d".repeat(64)).put("status", "returned")
+                .put("episodes", 1).put("groups", 1);
+        frozen.withObject("baseline").putObject("result").putObject("managedSourceEvidence")
+                .set("loaderValidation", loader.deepCopy());
+        assertTrue(reports.runtime(frozen, identifiedStaticReport(), evidence).path("repairSuccessful").asBoolean());
+        var detail = (ObjectNode) snapshot.path("categories").get(1).path("detail");
+        detail.put("itemIdSha256", "f".repeat(64));
+        var report = reports.runtime(frozen, identifiedStaticReport(), evidence);
+        assertTrue(report.path("contentAcceptance").path("regressions").isEmpty());
+        assertFalse(report.path("contentAcceptance").path("comparison").get(1).path("detailComparable").asBoolean());
+    }
+
     private final ObjectMapper mapper = new ObjectMapper();
     private final RepairReport reports = new RepairReport(mapper);
 

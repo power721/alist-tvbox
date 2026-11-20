@@ -601,6 +601,9 @@ class ModelClientTest {
             assertEquals("additive_preserve_bindings", data.path("candidateImportPolicy").path("mode").asText());
             assertTrue(data.path("candidateImportPolicy").path("runtimeValidationRequired").asBoolean());
             assertEquals("localProxy", data.path("imageDelivery").path("callback").asText());
+            assertFalse(data.path("imageDelivery").path("plainSpiderFactoryInjected").asBoolean(true));
+            assertFalse(data.path("imageDelivery").path("baseSpiderFactoryInjected").asBoolean(true));
+            assertFalse(data.path("imageDelivery").path("nativeT4BaseFactorySupported").asBoolean(true));
             assertTrue(data.path("imageDelivery").path("sameSpiderInstance").asBoolean());
             assertFalse(data.path("imageDelivery").path("inlineDataUriSupported").asBoolean());
             assertFalse(data.toString().contains("PRIVATE"));
@@ -846,6 +849,64 @@ class ModelClientTest {
                 "AWAITING_PROPOSAL", null, 1, 3, null, Instant.now(), frozen, "current", List.of());
     }
 
+    @Test
+    void contentLossFeedbackCarriesOnlyMatchedCountsAndCategoryHashes() throws Exception {
+        var client = new ModelClient(mapper, validator, enabled());
+        try {
+            String source = "value = 1\n";
+            var repair = coverRepair(source);
+            var candidate = coverCandidate(repair, source);
+            var result = (ObjectNode) candidate.result();
+            var content = result.putObject("contentAcceptance").put("policy", "category_detail_preservation_v1")
+                    .put("status", "regressed_or_incomplete").put("successful", false).put("rawUrl", "PRIVATE");
+            content.putArray("comparison").addObject().put("categoryIdSha256", "d".repeat(64))
+                    .put("detailComparable", true).put("beforeItems", 20).put("afterItems", 1)
+                    .put("beforeEpisodes", 12).put("afterEpisodes", 1).put("title", "PRIVATE");
+            content.putArray("regressions").add("CATEGORY_ITEMS_COLLAPSED:" + "d".repeat(64)).add("PRIVATE");
+            result.putArray("observedRegressions").add("CATEGORY_ITEMS_COLLAPSED:" + "d".repeat(64));
+            var request = mapper.readTree(client.request(repair, source, List.of(candidate)));
+            var data = mapper.readTree(request.path("messages").get(1).path("content").asText());
+            var feedback = data.path("previousCandidates").get(0).path("contentAcceptance");
+            assertEquals(1, feedback.path("regressions").size());
+            assertEquals(12, feedback.path("comparison").get(0).path("beforeEpisodes").asInt());
+            assertFalse(feedback.toString().contains("PRIVATE"));
+            var findings = data.path("repairDiagnostics").path("findings");
+            assertTrue(findings.valueStream().anyMatch(row -> row.path("reason").asText().equals("CATEGORY_ITEMS_COLLAPSED")
+                    && row.path("contentRegression").path("before").asInt() == 20
+                    && !row.path("matchedResourceEvidenceAvailable").asBoolean(true)));
+            assertTrue(request.path("messages").get(0).path("content").asText()
+                    .contains("neither restore recommendation/footer links"));
+            ((ObjectNode) result.path("runtimeEvidence")).put("inputSourceSha256", "f".repeat(64));
+            request = mapper.readTree(client.request(repair, source, List.of(candidate)));
+            data = mapper.readTree(request.path("messages").get(1).path("content").asText());
+            assertFalse(data.path("previousCandidates").get(0).has("contentAcceptance"));
+        } finally { client.close(); }
+    }
+
+    @Test
+    void candidateDetailResourcesReachModelWithoutPlaybackResourcesAndRejectChangedIdentity() throws Exception {
+        var client = new ModelClient(mapper, validator, enabled());
+        try {
+            String source = "value = 1\n";
+            var repair = coverRepair(source);
+            var candidate = coverCandidate(repair, source);
+            var runtime = (ObjectNode) candidate.result().path("runtimeEvidence");
+            runtime.remove("resourceEvidence");
+            var resources = ManagedResourceEvidenceTest.fixture(mapper, candidate.sha256())
+                    .put("targetNode", "C10").putNull("image");
+            runtime.set("contentResourceEvidence", resources);
+            var data = mapper.readTree(mapper.readTree(client.request(repair, source, List.of(candidate)))
+                    .path("messages").get(1).path("content").asText());
+            assertEquals(resources, data.path("previousCandidates").get(0).path("contentResourceEvidence"));
+            assertFalse(data.path("previousCandidates").get(0).has("resourceEvidence"));
+            assertFalse(data.toString().contains("PRIVATE"));
+            resources.put("artifactSha256", "f".repeat(64));
+            data = mapper.readTree(mapper.readTree(client.request(repair, source, List.of(candidate)))
+                    .path("messages").get(1).path("content").asText());
+            assertFalse(data.path("previousCandidates").get(0).has("contentResourceEvidence"));
+        } finally { client.close(); }
+    }
+
     private RepairCandidateSummary coverCandidate(RepairSummary repair, String source) {
         var proposal = validProposal().put("expectedBaselineSha256", Hashes.sha256(source));
         proposal.putArray("validationTargets").add("C09");
@@ -891,6 +952,7 @@ class ModelClientTest {
             var after = (ObjectNode) runtime.path("loaderValidation").path("nodes").get(0);
             after.put("id", "C07").put("reason", "LOADER_METHOD_FAILED").put("failureType", "KeyError")
                     .put("error", "PRIVATE");
+            after.putObject("failureContext").put("sourceLine", 27).put("message", "PRIVATE");
             after.putObject("identityEvidence").put("exactMatch", true).put("coverMatch", true);
             result.putObject("runtimeAcceptance").putArray("nodes").addObject()
                     .put("id", "C07").put("status", "fail").put("reason", "LOADER_METHOD_FAILED");
@@ -905,6 +967,7 @@ class ModelClientTest {
                     .path("identityEvidence").path("exactMatch").asBoolean(true));
             var unresolved = data.path("previousCandidates").get(0).path("unresolvedNodes").get(0);
             assertEquals("KeyError", unresolved.path("failureType").asText());
+            assertEquals(27, unresolved.at("/contractObservations/failureContext/sourceLine").asInt());
             var regression = data.path("previousCandidates").get(0).path("regressedObservations").get(0);
             assertEquals("homeItems", regression.path("field").asText());
             assertEquals(20, regression.path("before").asInt());

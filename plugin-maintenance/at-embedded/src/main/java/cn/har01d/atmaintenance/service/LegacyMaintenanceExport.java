@@ -21,7 +21,7 @@ public final class LegacyMaintenanceExport {
             "V64__AtPublication.sql", "V65__RuntimeActivation.sql", "V66__SourceCredentials.sql",
             "V67__EnhancedDiagnostics.sql", "V68__ReverseAnalysis.sql", "V69__ModelResponseDiagnostics.sql",
             "V70__RepairRuntimeContext.sql", "V71__UpstreamObservation.sql", "V72__EvidenceContinuation.sql",
-            "V73__MaintenanceAutomation.sql", "V74__NewSourcePublication.sql");
+            "V73__MaintenanceAutomation.sql", "V74__NewSourcePublication.sql", "V75__ConfigurableRepairRounds.sql");
     private static final String ARCHIVE = "legacy_maintenance_schema_history";
 
     private LegacyMaintenanceExport() {}
