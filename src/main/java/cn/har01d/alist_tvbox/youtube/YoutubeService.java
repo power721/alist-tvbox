@@ -126,6 +126,13 @@ public class YoutubeService {
             .expireAfterWrite(Duration.ofSeconds(10))
             .build();
 
+    /** 字幕清洗缓存(聚合+去重后的 vtt,按 url):字幕内容不变,10 分钟避免切轨重拉分段。 */
+    private final com.github.benmanes.caffeine.cache.Cache<String, byte[]> subtitleCache = Caffeine.newBuilder()
+            .maximumWeight(64L * 1024 * 1024)
+            .weigher((String key, byte[] value) -> value.length)
+            .expireAfterWrite(Duration.ofMinutes(10))
+            .build();
+
     private final LoadingCache<String, JsonNode> videos = Caffeine.newBuilder()
             .maximumSize(50)
             .expireAfterAccess(Duration.ofSeconds(900))
@@ -788,6 +795,11 @@ public class YoutubeService {
         if (!isAllowedUpstream(url)) {
             throw new BadRequestException("Invalid proxy URL");
         }
+        // 字幕:timedtext 需聚合分段+去重(见 relaySubtitle),先行拦截
+        if (url.contains("/api/timedtext")) {
+            relaySubtitle(url, response);
+            return;
+        }
         // 分片 URL 路径中段也含 "/playlist/index.m3u8" 再接 /file/seg.ts,必须按后缀判定
         boolean manifest = url.endsWith(".m3u8") || url.contains("/api/manifest/");
         if (manifest) {
@@ -795,6 +807,67 @@ public class YoutubeService {
         } else {
             relayStream(url, request, response);
         }
+    }
+
+    private static final Pattern TIMEDTEXT_URL = Pattern.compile("https?://[^\\s\"']+youtube\\.com/api/timedtext[^\\s\"']*");
+
+    /**
+     * 字幕中继与清洗。YouTube timedtext 导出的两个坑:
+     * 1. 每个 cue 原样出现两遍(网页播放器自带去重,通用 WebVTT 播放器逐条渲染 → 每句重复两行);
+     * 2. 自动字幕(长视频)的 vtt URL 返回 HLS 分段清单(m3u8 of vtt 段),播放器无法直接消费。
+     * 处理:若是分段清单则逐段拉取(段内时间戳为绝对时间,直接拼接),相邻去重后输出单份 WEBVTT。
+     */
+    private void relaySubtitle(String url, HttpServletResponse response) throws IOException {
+        byte[] cached = subtitleCache.getIfPresent(url);
+        if (cached == null) {
+            List<String> cues = new ArrayList<>();
+            String body;
+            try (okhttp3.Response upstream = fetchUpstream(url, null)) {
+                if (!upstream.isSuccessful()) {
+                    response.sendError(HttpServletResponse.SC_NOT_FOUND);
+                    return;
+                }
+                body = upstream.body().string();
+            }
+            if (body.startsWith("#EXTM3U")) {
+                Matcher segment = TIMEDTEXT_URL.matcher(body);
+                while (segment.find()) {
+                    try (okhttp3.Response seg = fetchUpstream(segment.group(), null)) {
+                        if (seg.isSuccessful()) {
+                            cues.addAll(extractCues(seg.body().string()));
+                        }
+                    }
+                }
+            } else {
+                cues.addAll(extractCues(body));
+            }
+            StringBuilder out = new StringBuilder("WEBVTT\n\n");
+            String previous = null;
+            for (String cue : cues) {
+                if (cue.equals(previous)) {
+                    continue; // 相邻重复 cue 只留一份
+                }
+                out.append(cue).append("\n\n");
+                previous = cue;
+            }
+            cached = out.toString().getBytes(StandardCharsets.UTF_8);
+            subtitleCache.put(url, cached);
+        }
+        response.setContentType("text/vtt");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentLength(cached.length);
+        response.getOutputStream().write(cached);
+    }
+
+    /** 按空行分块取出含时间轴的 cue 块(原样保留 <c> 内联标签与多行文本)。 */
+    static List<String> extractCues(String vtt) {
+        List<String> cues = new ArrayList<>();
+        for (String block : vtt.split("\\n\\s*\\n")) {
+            if (block.contains("-->")) {
+                cues.add(block.strip());
+            }
+        }
+        return cues;
     }
 
     private void relayManifest(String token, String url, HttpServletRequest request, HttpServletResponse response) throws IOException {
