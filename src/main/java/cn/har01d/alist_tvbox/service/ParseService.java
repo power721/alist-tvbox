@@ -5,9 +5,12 @@ import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.DownloadTarget;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.youtube.YtdlpParseService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -15,19 +18,36 @@ public class ParseService {
     private final TvBoxService tvBoxService;
     private final OfflineDownloadService offlineDownloadService;
     private final ShareService shareService;
+    private final YtdlpParseService ytdlpParseService;
 
-    public ParseService(TvBoxService tvBoxService, OfflineDownloadService offlineDownloadService, ShareService shareService) {
+    public ParseService(TvBoxService tvBoxService, OfflineDownloadService offlineDownloadService, ShareService shareService,
+                        YtdlpParseService ytdlpParseService) {
         this.tvBoxService = tvBoxService;
         this.offlineDownloadService = offlineDownloadService;
         this.shareService = shareService;
+        this.ytdlpParseService = ytdlpParseService;
     }
 
     public Object parse(ParseRequest request, String ac) {
+        return parse("", request, ac);
+    }
+
+    public Object parse(String token, ParseRequest request, String ac) {
         if (StringUtils.isBlank(request.url())) {
             throw new BadRequestException("url is required");
         }
         if (request.url().startsWith("http")) {
-            return drive(request.url(), request.title(), request.keyword(), ac);
+            try {
+                return drive(request.url(), request.title(), request.keyword(), ac);
+            } catch (Exception e) {
+                // 非网盘链接:yt-dlp 通用解析(TikTok/X/Twitch 等 1800+ 站点);
+                // 失败抛回原错,调用方(jar Push/T4 pushDetail)自行回落直链三线路
+                Map<String, Object> ytdlp = ytdlpParseService.detail(request.url(), token);
+                if (ytdlp != null) {
+                    return ytdlp;
+                }
+                throw e;
+            }
         }
         DownloadTarget target = offlineDownloadService.downloadTarget(request);
         String targetPath = target.path();

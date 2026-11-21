@@ -147,6 +147,20 @@ class YoutubeServiceTest {
     }
 
     @Test
+    void proxyHostAllowlistMatchesRegisteredAndSubDomains() {
+        ProxyHostAllowlist allowlist = new ProxyHostAllowlist();
+        allowlist.register("v16-webapp-prime.tiktok.com");
+        assertThat(allowlist.allows("v16-webapp-prime.tiktok.com")).isTrue();
+        // CDN 子域分片:登记域的后缀匹配
+        assertThat(allowlist.allows("v19-webapp-prime.tiktok.com")).isFalse();
+        assertThat(allowlist.allows("chunk-v16-webapp-prime.tiktok.com.edge.tiktokcdn.com")).isFalse();
+        allowlist.register("tiktokcdn.com");
+        assertThat(allowlist.allows("chunk.any.tiktokcdn.com")).isTrue();
+        assertThat(allowlist.allows(null)).isFalse();
+        assertThat(allowlist.allows("evil.com")).isFalse();
+    }
+
+    @Test
     void resolveDownloadUrlsWithGitHubProxies() {
         AppProperties properties = new AppProperties();
         YoutubeDlpRuntime runtime = new YoutubeDlpRuntime(properties, new cn.har01d.alist_tvbox.service.GitHubProxyService(), objectMapper);

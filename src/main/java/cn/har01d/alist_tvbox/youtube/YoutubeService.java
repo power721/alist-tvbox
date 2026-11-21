@@ -25,9 +25,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -97,6 +95,36 @@ public class YoutubeService {
 
     private final YoutubeDlpRuntime runtime;
     private final AppProperties appProperties;
+    private final ProxyHostAllowlist proxyHostAllowlist;
+
+    /** 中继客户端:连接池复用 TLS(切轨道/连续分片),gzip 透明解压;proxy.txt 热更走 ProxySelector。 */
+    private final okhttp3.OkHttpClient relayClient = new okhttp3.OkHttpClient.Builder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .readTimeout(Duration.ofSeconds(60))
+            .proxySelector(new java.net.ProxySelector() {
+                @Override
+                public List<java.net.Proxy> select(URI uri) {
+                    String proxyUrl = proxyForUpstream();
+                    if (proxyUrl == null) {
+                        return List.of(java.net.Proxy.NO_PROXY);
+                    }
+                    URI parsed = URI.create(proxyUrl);
+                    return List.of(new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                            new java.net.InetSocketAddress(parsed.getHost(), parsed.getPort())));
+                }
+
+                @Override
+                public void connectFailed(URI uri, java.net.SocketAddress sa, java.io.IOException ioe) {
+                }
+            })
+            .build();
+
+    /** 清单中继短缓存(重写后字节,按 url+token):切轨道回跳/seek 免整份清单重复回源。 */
+    private final com.github.benmanes.caffeine.cache.Cache<String, byte[]> manifestCache = Caffeine.newBuilder()
+            .maximumWeight(32L * 1024 * 1024)
+            .weigher((String key, byte[] value) -> value.length)
+            .expireAfterWrite(Duration.ofSeconds(10))
+            .build();
 
     private final LoadingCache<String, JsonNode> videos = Caffeine.newBuilder()
             .maximumSize(50)
@@ -113,9 +141,10 @@ public class YoutubeService {
             .expireAfterWrite(Duration.ofSeconds(900))
             .build(this::getSearchInfo);
 
-    public YoutubeService(YoutubeDlpRuntime runtime, AppProperties appProperties) {
+    public YoutubeService(YoutubeDlpRuntime runtime, AppProperties appProperties, ProxyHostAllowlist proxyHostAllowlist) {
         this.runtime = runtime;
         this.appProperties = appProperties;
+        this.proxyHostAllowlist = proxyHostAllowlist;
     }
 
     public MovieList home() {
@@ -769,15 +798,22 @@ public class YoutubeService {
     }
 
     private void relayManifest(String token, String url, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        HttpURLConnection conn = openUpstream(url, null);
-        int code = conn.getResponseCode();
-        if (code != 200) {
-            response.sendError(code == 403 || code == 404 ? HttpServletResponse.SC_NOT_FOUND : HttpServletResponse.SC_BAD_GATEWAY);
+        // 短缓存(重写后字节):切轨道回跳/seek 重拉清单免回源;key 带 token——重写前缀含 token 不可跨 token 复用
+        byte[] cached = manifestCache.getIfPresent(url + "@" + token);
+        if (cached != null) {
+            response.setContentType("application/vnd.apple.mpegurl");
+            response.setContentLength(cached.length);
+            response.getOutputStream().write(cached);
             return;
         }
         String body;
-        try (InputStream in = conn.getInputStream()) {
-            body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        try (okhttp3.Response upstream = fetchUpstream(url, null)) {
+            if (!upstream.isSuccessful()) {
+                response.sendError(upstream.code() == 403 || upstream.code() == 404
+                        ? HttpServletResponse.SC_NOT_FOUND : HttpServletResponse.SC_BAD_GATEWAY);
+                return;
+            }
+            body = upstream.body().string();
         }
         String prefix = ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http")
@@ -799,48 +835,72 @@ public class YoutubeService {
             last = matcher.end();
         }
         out.append(body.substring(last));
+        byte[] bytes = out.toString().getBytes(StandardCharsets.UTF_8);
+        manifestCache.put(url + "@" + token, bytes);
         response.setContentType("application/vnd.apple.mpegurl");
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.setContentLength(out.toString().getBytes(StandardCharsets.UTF_8).length);
-        response.getWriter().write(out.toString());
+        response.setContentLength(bytes.length);
+        response.getOutputStream().write(bytes);
     }
 
     private void relayStream(String url, HttpServletRequest request, HttpServletResponse response) throws IOException {
         String range = request.getHeader(HttpHeaders.RANGE);
-        HttpURLConnection conn = openUpstream(url, range);
-        int code = conn.getResponseCode();
-        response.setStatus(code);
-        for (String header : List.of(HttpHeaders.CONTENT_TYPE, HttpHeaders.CONTENT_LENGTH, HttpHeaders.CONTENT_RANGE, HttpHeaders.ACCEPT_RANGES)) {
-            String value = conn.getHeaderField(header);
-            if (value != null) {
-                response.setHeader(header, value);
+        try (okhttp3.Response upstream = fetchUpstream(url, range)) {
+            response.setStatus(upstream.code());
+            for (String header : List.of(HttpHeaders.CONTENT_TYPE, HttpHeaders.CONTENT_LENGTH, HttpHeaders.CONTENT_RANGE, HttpHeaders.ACCEPT_RANGES)) {
+                String value = upstream.header(header);
+                if (value != null) {
+                    response.setHeader(header, value);
+                }
             }
-        }
-        if (code >= 400) {
-            response.setHeader(HttpHeaders.CONTENT_LENGTH, "0");
-            return;
-        }
-        try (InputStream in = conn.getInputStream(); OutputStream out = response.getOutputStream()) {
-            in.transferTo(out);
+            if (upstream.code() >= 400) {
+                response.setHeader(HttpHeaders.CONTENT_LENGTH, "0");
+                return;
+            }
+            try (InputStream in = upstream.body().byteStream(); OutputStream out = response.getOutputStream()) {
+                in.transferTo(out);
+            }
         }
     }
 
-    private HttpURLConnection openUpstream(String url, String range) throws IOException {
-        HttpURLConnection conn;
-        String proxyUrl = proxyForUpstream();
-        if (proxyUrl != null) {
-            URI uri = URI.create(proxyUrl);
-            conn = (HttpURLConnection) new URL(url).openConnection(new java.net.Proxy(java.net.Proxy.Type.HTTP,
-                    new java.net.InetSocketAddress(uri.getHost(), uri.getPort())));
-        } else {
-            conn = (HttpURLConnection) new URL(url).openConnection();
-        }
-        conn.setConnectTimeout(10000);
-        conn.setReadTimeout(60000);
+    /**
+     * 上游抓取:okhttp 连接池复用到同 CDN host 的 TLS 连接——切换轨道/连续播分片
+     * 不再每请求重握手(此前 HttpURLConnection 逐请求新建,切轨道串行握手放大延迟);
+     * gzip 由 okhttp 透明解压;proxy.txt 热更经 ProxySelector 每连接生效;
+     * 通用解析站点(YtdlpParseService 登记)的防盗链头(Referer/UA)按 host 自动补。
+     */
+    private okhttp3.Response fetchUpstream(String url, String range) throws IOException {
+        okhttp3.Request.Builder builder = new okhttp3.Request.Builder().url(url);
         if (range != null) {
-            conn.setRequestProperty(HttpHeaders.RANGE, range);
+            builder.header(HttpHeaders.RANGE, range);
         }
-        return conn;
+        applySiteHeaders(builder, url);
+        return relayClient.newCall(builder.build()).execute();
+    }
+
+    private void applySiteHeaders(okhttp3.Request.Builder builder, String url) {
+        String headersJson = proxyHostAllowlist.headersFor(hostOf(url));
+        if (headersJson == null) {
+            return;
+        }
+        try {
+            JsonNode headers = new com.fasterxml.jackson.databind.ObjectMapper().readTree(headersJson);
+            headers.fields().forEachRemaining(e -> {
+                String value = e.getValue().asText(null);
+                if (value != null && !HttpHeaders.RANGE.equalsIgnoreCase(e.getKey())) {
+                    builder.header(e.getKey(), value);
+                }
+            });
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static String hostOf(String url) {
+        try {
+            return URI.create(url).getHost();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String proxyForUpstream() {
@@ -859,7 +919,8 @@ public class YoutubeService {
         return null;
     }
 
-    private static boolean isAllowedUpstream(String url) {
+    /** 代理上游判定:静态基础表(googlevideo/youtube)+ 动态白名单(yt-dlp 通用解析登记的站点 CDN 域)。 */
+    private boolean isAllowedUpstream(String url) {
         if (!Utils.isSafeExternalUrl(url)) {
             return false;
         }
@@ -868,8 +929,11 @@ public class YoutubeService {
             return false;
         }
         host = host.toLowerCase();
-        return host.equals("manifest.googlevideo.com") || host.endsWith(".googlevideo.com")
-                || host.equals("www.youtube.com") || host.equals("youtube.com");
+        if (host.equals("manifest.googlevideo.com") || host.endsWith(".googlevideo.com")
+                || host.equals("www.youtube.com") || host.equals("youtube.com")) {
+            return true;
+        }
+        return proxyHostAllowlist.allows(host);
     }
 
     static String encodeProxyUrl(String url) {
