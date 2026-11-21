@@ -3,9 +3,20 @@
 
 # 升级 H2 数据库
 upgrade_h2() {
+  # 运行时 H2 版本(取自应用 lib 内 jar 文件名)
+  runtime_h2_version=$(ls /opt/atv/BOOT-INF/lib/h2-*.jar 2>/dev/null | sed -n 's/.*\/h2-\(.*\)\.jar/\1/p' | head -n 1)
+
   if [ -f /data/h2.version.txt ]; then
-    log_info "H2 database already upgraded"
-    return 0
+    db_h2_version=$(tr -d '[:space:]' < /data/h2.version.txt)
+    # 版本一致,或无法判定(缺 jar/空标记)时放行,保持旧行为
+    if [ -z "$runtime_h2_version" ] || [ -z "$db_h2_version" ] || [ "$db_h2_version" = "$runtime_h2_version" ]; then
+      log_info "H2 database already upgraded"
+      return 0
+    fi
+    log_error "H2 version mismatch: database written by $db_h2_version, image ships $runtime_h2_version"
+    log_error "Refusing to open the database with a different H2 engine"
+    log_error "Use an image built with H2 $db_h2_version, or restore from backup (/data/database.zip)"
+    return 1
   fi
 
   log_info "Attempting to upgrade H2 database"
@@ -33,8 +44,8 @@ upgrade_h2() {
       -user sa -password password \
       -script backup.sql; then
 
-      echo "2.3.232" > /data/h2.version.txt
-      log_info "H2 database upgraded to 2.3.232"
+      echo "${runtime_h2_version:-2.3.232}" > /data/h2.version.txt
+      log_info "H2 database upgraded to ${runtime_h2_version:-2.3.232}"
       rm -f backup.sql  # Clean up backup
       return 0
     else

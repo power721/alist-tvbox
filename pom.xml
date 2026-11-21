@@ -31,6 +31,8 @@
 
     <properties>
         <java.version>21</java.version>
+        <!-- 锁定 H2:存量库文件由 2.3.232 写入,升 2.4.240 开库时 chunk 重写失败会导致启动崩溃循环 -->
+        <h2.version>2.3.232</h2.version>
     </properties>
 
     <dependencies>
