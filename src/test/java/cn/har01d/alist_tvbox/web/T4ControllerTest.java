@@ -57,6 +57,8 @@ class T4ControllerTest {
     @Mock
     private BiliBiliController biliBiliController;
     @Mock
+    private cn.har01d.alist_tvbox.youtube.YoutubeController youtubeController;
+    @Mock
     private EmbyController embyController;
     @Mock
     private JellyfinController jellyfinController;
@@ -86,7 +88,7 @@ class T4ControllerTest {
     void setUp() {
         appProperties = new AppProperties();
         controller = new T4Controller(subscriptionService, appProperties, tvBoxController, pianDanController,
-                mediaLibraryController, biliBiliController, embyController, jellyfinController,
+                mediaLibraryController, biliBiliController, youtubeController, embyController, jellyfinController,
                 feiniuController, liveController, telegramController, remoteSearchController,
                 playController, pluginWorkerService, pluginRepository, new ObjectMapper(), t4DetailEnhancer);
         // vod/cenc 入口的 T4 专用 token 换算:默认回显(未命中),个别用例按需覆写

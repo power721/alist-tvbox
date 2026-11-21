@@ -45,6 +45,7 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
+                mock(cn.har01d.alist_tvbox.youtube.YoutubeDlpRuntime.class),
                 new ObjectMapper()
         );
 
@@ -63,6 +64,58 @@ class SubscriptionSourceServiceTest {
                 .returns(true, SubscriptionSourceService.ManagedSource::builtin)
                 .returns(true, SubscriptionSourceService.ManagedSource::enabled)
                 .returns(1, SubscriptionSourceService.ManagedSource::sortOrder);
+    }
+
+    @Test
+    void exposesYouTubeOnlyWhenRuntimeAvailable() {
+        // YouTube 内置源由 yt-dlp 运行时可用性门控:未装 python3/未完成下载时不进源列表
+        PluginRepository pluginRepository = mock(PluginRepository.class);
+        SettingRepository settingRepository = mock(SettingRepository.class);
+        SiteRepository siteRepository = mock(SiteRepository.class);
+        EmbyRepository embyRepository = mock(EmbyRepository.class);
+        FeiniuRepository feiniuRepository = mock(FeiniuRepository.class);
+        JellyfinRepository jellyfinRepository = mock(JellyfinRepository.class);
+        cn.har01d.alist_tvbox.youtube.YoutubeDlpRuntime runtime =
+                mock(cn.har01d.alist_tvbox.youtube.YoutubeDlpRuntime.class);
+        when(settingRepository.findById("builtin_subscription_sources")).thenReturn(Optional.empty());
+        when(siteRepository.findById(1)).thenReturn(Optional.empty());
+        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of());
+        when(embyRepository.count()).thenReturn(0L);
+        when(feiniuRepository.count()).thenReturn(0L);
+        when(jellyfinRepository.count()).thenReturn(0L);
+        when(runtime.isAvailable()).thenReturn(false);
+
+        SubscriptionSourceService unavailable = new SubscriptionSourceService(
+                new AppProperties(),
+                pluginRepository,
+                settingRepository,
+                siteRepository,
+                embyRepository,
+                feiniuRepository,
+                jellyfinRepository,
+                runtime,
+                new ObjectMapper()
+        );
+        assertThat(unavailable.findAll())
+                .noneMatch(source -> "csp_YouTube".equals(source.key()));
+
+        when(runtime.isAvailable()).thenReturn(true);
+        SubscriptionSourceService available = new SubscriptionSourceService(
+                new AppProperties(),
+                pluginRepository,
+                settingRepository,
+                siteRepository,
+                embyRepository,
+                feiniuRepository,
+                jellyfinRepository,
+                runtime,
+                new ObjectMapper()
+        );
+        assertThat(available.findAll())
+                .anySatisfy(source -> assertThat(source)
+                        .returns("csp_YouTube", SubscriptionSourceService.ManagedSource::key)
+                        .returns("YouTube", SubscriptionSourceService.ManagedSource::name)
+                        .returns(true, SubscriptionSourceService.ManagedSource::builtin));
     }
 
     @Test
@@ -108,6 +161,7 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
+                mock(cn.har01d.alist_tvbox.youtube.YoutubeDlpRuntime.class),
                 new ObjectMapper()
         );
 
@@ -157,6 +211,7 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
+                mock(cn.har01d.alist_tvbox.youtube.YoutubeDlpRuntime.class),
                 new ObjectMapper()
         );
 
@@ -200,6 +255,7 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
+                mock(cn.har01d.alist_tvbox.youtube.YoutubeDlpRuntime.class),
                 new ObjectMapper()
         );
 
@@ -253,6 +309,7 @@ class SubscriptionSourceServiceTest {
                 embyRepository,
                 feiniuRepository,
                 jellyfinRepository,
+                mock(cn.har01d.alist_tvbox.youtube.YoutubeDlpRuntime.class),
                 objectMapper
         );
 

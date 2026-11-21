@@ -14,6 +14,7 @@ import cn.har01d.alist_tvbox.service.T4DetailEnhancer;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.youtube.YoutubeController;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -77,6 +78,7 @@ public class T4Controller {
     private final PianDanController pianDanController;
     private final MediaLibraryController mediaLibraryController;
     private final BiliBiliController biliBiliController;
+    private final YoutubeController youtubeController;
     private final EmbyController embyController;
     private final JellyfinController jellyfinController;
     private final FeiniuController feiniuController;
@@ -360,6 +362,7 @@ public class T4Controller {
                     mediaLibraryController.browse(token, null, null, null, null, null, 1, Map.of(), request);
             case "csp_BiliBili" ->
                     biliBiliController.api(token, null, null, null, false, new FilterDto(), null, 1, request, response);
+            case "csp_YouTube" -> youtubeController.browse(token, null, null, null, null, null, null, null, 1);
             case "csp_Emby" -> embyController.browse(token, null, null, null, null, 1);
             case "csp_Jellyfin" -> jellyfinController.browse(token, null, null, null, null, 1);
             case "csp_FeiNiu" -> feiniuController.browse(token, null, null, null, null, 1, request);
@@ -382,6 +385,7 @@ public class T4Controller {
             case "csp_Media" -> mediaLibraryController.browse(token, null, "0", null, null, null, 1, Map.of(), request);
             case "csp_BiliBili" ->
                     biliBiliController.api(token, null, "recommend", null, false, new FilterDto(), null, 1, request, response);
+            case "csp_YouTube" -> youtubeController.browse(token, "recommend", null, null, null, null, null, null, 1);
             case "csp_Emby" -> embyController.browse(token, "recommend", null, null, null, 1);
             case "csp_Jellyfin" -> jellyfinController.browse(token, "recommend", null, null, null, 1);
             case "csp_FeiNiu" -> feiniuController.browse(token, "recommend", null, null, null, 1, request);
@@ -405,6 +409,7 @@ public class T4Controller {
             case "csp_Media" -> mediaLibraryController.browse(token, null, t, null, null, null, page, extend, request);
             case "csp_BiliBili" ->
                     biliBiliController.api(token, t, null, null, false, toFilter(extend), null, page, request, response);
+            case "csp_YouTube" -> youtubeController.browse(token, null, null, null, null, null, null, t, page);
             case "csp_Emby" -> embyController.browse(token, null, null, t, null, page);
             case "csp_Jellyfin" -> jellyfinController.browse(token, null, null, t, null, page);
             case "csp_FeiNiu" -> feiniuController.browse(token, null, null, t, null, page, request);
@@ -451,6 +456,7 @@ public class T4Controller {
             case "csp_Media" -> mediaLibraryController.browse(token, ids, null, null, null, null, 1, Map.of(), request);
             case "csp_BiliBili" ->
                     biliBiliController.api(token, null, ids, null, false, new FilterDto(), null, 1, request, response);
+            case "csp_YouTube" -> youtubeController.browse(token, ids, null, null, null, null, null, null, 1);
             case "csp_Emby" -> embyController.browse(token, ids, null, null, null, 1);
             case "csp_Jellyfin" -> jellyfinController.browse(token, ids, null, null, null, 1);
             case "csp_FeiNiu" -> feiniuController.browse(token, ids, null, null, null, 1, request);
@@ -478,6 +484,7 @@ public class T4Controller {
             case "csp_Media" -> mediaLibraryController.browse(token, null, null, null, wd, null, page, Map.of(), request);
             case "csp_BiliBili" ->
                     biliBiliController.api(token, null, null, wd, quick, new FilterDto(), null, 1, request, response);
+            case "csp_YouTube" -> youtubeController.browse(token, null, wd, null, null, null, null, null, page);
             case "csp_Emby" -> embyController.browse(token, null, wd, null, null, 1);
             case "csp_Jellyfin" -> jellyfinController.browse(token, null, wd, null, null, 1);
             case "csp_FeiNiu" -> feiniuController.browse(token, null, wd, null, null, 1, request);
@@ -506,6 +513,8 @@ public class T4Controller {
             // 直连形态(t4d,原始 durl+脱敏头,由 t4_proxy_mode 直连优先策略触发)
             case "csp_BiliBili" ->
                     playController.play(token, null, null, null, play, null, false, withT4Client(request, t4BiliClient()));
+            // YouTube 播放地址本就是服务端 /youtube-proxy 中继,T4 壳子直连即可
+            case "csp_YouTube" -> youtubeController.play(token, play, request);
             case "csp_Emby" -> embyController.play(token, play, 0L, request);
             case "csp_Jellyfin" -> jellyfinController.play(token, play, 0L, request);
             case "csp_FeiNiu" -> feiniuController.play(token, play, 0L, request);

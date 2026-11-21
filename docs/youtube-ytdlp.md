@@ -19,6 +19,13 @@
   - 直播 → 一律 master HLS 清单。
 - `GET /youtube-proxy[/{token}]?u=<base64url>`：中继。m3u8 内容做嵌套 URL 重写（master→variant→segment 全部代理化）；其余 Range 透传流式转发。上游白名单 `*.googlevideo.com`/`manifest.googlevideo.com`/`youtube.com`，防 SSRF。
 
+## 订阅内置源（csp_YouTube）
+
+- 订阅源管理内置「YouTube」源，由 yt-dlp 运行时可用性门控（未装 python3/未完成下载时不进列表与配置）。
+- T3 形态：type=3 站点，jar=spring.jar（内含 `com.github.catvod.spider.YouTube` 薄管道 spider，同 BiliBili 模式，X-CLIENT 透传包名供服务端识别 EXO 下发 HLS master）。
+- T4 形态：type=4，api=`/t4/{token}/v/YouTube`，五动作（home/category/detail/search/play）由 T4Controller 直投 YoutubeController；播放地址本就是服务端中继，T4 壳子直连。
+- 改 spider 后重打 jar：CatVodTVSpider `./build.sh`（自动回拷 spring.jar/spring.md5，SPIDER_JAR_VERSION 随 md5 自动变化）。
+
 ## 运行时管理（网页）
 
 - `GET /api/youtube/ytdlp[?refresh=1]`：当前/最新版本（latest 缓存 5 分钟防 GitHub API 限流）。

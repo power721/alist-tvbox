@@ -861,7 +861,7 @@ public class SubscriptionService {
 
     /** T4 可适配的内置站点(= spring.jar 内纯管道 spider,业务全在本服务端控制器)。 */
     public static final Set<String> T4_SITE_KEYS = Set.of(
-            "csp_AList", "csp_XiaoYa", "csp_PianDan", "csp_Media", "csp_BiliBili",
+            "csp_AList", "csp_XiaoYa", "csp_PianDan", "csp_Media", "csp_BiliBili", "csp_YouTube",
             "csp_Emby", "csp_Jellyfin", "csp_FeiNiu", "csp_Live", "csp_TgDouBan",
             "csp_TgChannel", "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup");
 
@@ -1941,6 +1941,11 @@ public class SubscriptionService {
             Map<String, Object> style = new HashMap<>();
             style.put("type", "rect");
             style.put("ratio", 1.597);
+            site.put("style", style);
+        } else if ("csp_YouTube".equals(key)) {
+            Map<String, Object> style = new HashMap<>();
+            style.put("type", "rect");
+            style.put("ratio", 1.78);
             site.put("style", style);
         }
         return site;

@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.BuiltinSubscriptionSourceState;
+import cn.har01d.alist_tvbox.youtube.YoutubeDlpRuntime;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -41,6 +42,7 @@ public class SubscriptionSourceService {
     private final EmbyRepository embyRepository;
     private final FeiniuRepository feiniuRepository;
     private final JellyfinRepository jellyfinRepository;
+    private final YoutubeDlpRuntime youtubeDlpRuntime;
     private final ObjectMapper objectMapper;
 
     public SubscriptionSourceService(AppProperties appProperties,
@@ -50,6 +52,7 @@ public class SubscriptionSourceService {
                                      EmbyRepository embyRepository,
                                      FeiniuRepository feiniuRepository,
                                      JellyfinRepository jellyfinRepository,
+                                     YoutubeDlpRuntime youtubeDlpRuntime,
                                      ObjectMapper objectMapper) {
         this.appProperties = appProperties;
         this.pluginRepository = pluginRepository;
@@ -58,6 +61,7 @@ public class SubscriptionSourceService {
         this.embyRepository = embyRepository;
         this.feiniuRepository = feiniuRepository;
         this.jellyfinRepository = jellyfinRepository;
+        this.youtubeDlpRuntime = youtubeDlpRuntime;
         this.objectMapper = objectMapper;
     }
 
@@ -389,6 +393,9 @@ public class SubscriptionSourceService {
         definitions.add(new BuiltinDefinition("csp_AList", "AList", order++));
         definitions.add(new BuiltinDefinition("csp_Media", "我的追剧", order++));
         definitions.add(new BuiltinDefinition("csp_BiliBili", "BiliBili", order++));
+        if (youtubeDlpRuntime.isAvailable()) {
+            definitions.add(new BuiltinDefinition("csp_YouTube", "YouTube", order++));
+        }
         if (embyRepository.count() > 0) {
             definitions.add(new BuiltinDefinition("csp_Emby", "Emby", order++));
         }
