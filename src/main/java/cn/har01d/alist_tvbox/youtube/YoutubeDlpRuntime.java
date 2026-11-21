@@ -27,8 +27,10 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -65,6 +67,7 @@ public class YoutubeDlpRuntime {
     });
 
     private volatile String pythonBin;
+    private volatile String pythonVersion;
     private volatile boolean pythonProbed;
     private volatile String version;
     private volatile String proxy;
@@ -106,27 +109,55 @@ public class YoutubeDlpRuntime {
             if (pythonProbed) {
                 return pythonBin != null;
             }
-            List<String> candidates = new ArrayList<>();
-            if (System.getProperty("youtube.python") != null) {
-                candidates.add(System.getProperty("youtube.python"));
-            }
-            candidates.addAll(List.of("python3", "/usr/bin/python3", "/usr/local/bin/python3"));
+            // yt-dlp 要求 Python 3.11+;老 Alpine 基座/Ubuntu 22.04 的系统 python3 是 3.10,
+            // 探测按版本门控并依次尝试带版本号的解释器(覆盖 PATH 落在旧系统 python 的环境)
+            Set<String> candidates = new LinkedHashSet<>();
+            addCandidate(candidates, System.getProperty("youtube.python"));
+            addCandidate(candidates, System.getenv("YOUTUBE_PYTHON"));
+            candidates.addAll(List.of("python3", "python3.13", "python3.12", "python3.11",
+                    "/usr/bin/python3", "/usr/local/bin/python3"));
+            String foundVersion = null;
+            String tooOld = null;
             for (String candidate : candidates) {
                 try {
-                    Process p = new ProcessBuilder(candidate, "-c", "import sys; print(sys.version_info[0])")
+                    Process p = new ProcessBuilder(candidate, "-c",
+                            "import sys; v = '%d.%d' % sys.version_info[:2]; print(v); sys.exit(0 if sys.version_info >= (3, 11) else 1)")
                             .redirectErrorStream(true).start();
-                    if (p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0 && p.getInputStream().readAllBytes().length > 0) {
+                    if (!p.waitFor(5, TimeUnit.SECONDS)) {
+                        p.destroyForcibly();
+                        continue;
+                    }
+                    String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+                    if (p.exitValue() == 0 && !output.isEmpty()) {
                         pythonBin = candidate;
+                        foundVersion = output.lines().findFirst().orElse("");
                         break;
+                    }
+                    if (p.exitValue() == 1 && output.matches("(?s).*\\b3\\.\\d+.*")) {
+                        tooOld = candidate + " " + output.lines().findFirst().map(s -> "(" + s + ")").orElse("");
                     }
                 } catch (Exception e) {
                     log.debug("python probe failed: {}", candidate);
                 }
             }
             pythonProbed = true;
-            log.info("yt-dlp runtime python={}", pythonBin == null ? "not found" : pythonBin);
+            pythonVersion = foundVersion;
+            if (pythonBin != null) {
+                log.info("yt-dlp runtime python={} {}", pythonBin, foundVersion);
+            } else if (tooOld != null) {
+                pythonVersion = tooOld;
+                log.warn("yt-dlp 运行时不可用:现有 python 过旧 {} 需 3.11+;安装 3.11+ 或以 -Dyoutube.python=/path 指定", tooOld);
+            } else {
+                log.warn("yt-dlp 运行时不可用:未找到 python3");
+            }
         }
         return pythonBin != null;
+    }
+
+    private static void addCandidate(Set<String> candidates, String candidate) {
+        if (candidate != null && !candidate.isBlank()) {
+            candidates.add(candidate.trim());
+        }
     }
 
     /** yt_dlp 包根目录(PYTHONPATH 指向这里)。tar.gz 是仓库快照,包在 <data>/yt-dlp/yt-dlp/ 下。 */
@@ -211,6 +242,9 @@ public class YoutubeDlpRuntime {
             map.put("python", "");
             map.put("version", "");
             map.put("latest", "");
+            map.put("message", pythonVersion == null
+                    ? "未找到 python3,yt-dlp 需 Python 3.11+"
+                    : "python 过旧 " + pythonVersion + ",yt-dlp 需 Python 3.11+");
             return map;
         }
         if (refresh || latestVersion == null
@@ -236,7 +270,7 @@ public class YoutubeDlpRuntime {
     /** 手动更新:强制重下(版本相同也重装),与自动更新共用下载闸门。 */
     public Map<String, Object> update() {
         if (!detectPython()) {
-            throw new BadGatewayException("服务端插件运行时不可用(未安装 python3)");
+            throw new BadGatewayException("yt-dlp 运行时不可用:需 Python 3.11+(可用 -Dyoutube.python=/path 指定)");
         }
         if (downloading.get()) {
             return Map.of("updated", false, "version", StringUtils.defaultString(getVersion()), "message", "更新进行中");
@@ -374,7 +408,7 @@ public class YoutubeDlpRuntime {
     /** 执行 yt-dlp 子进程并返回 stdout(一般为 JSON)。 */
     public String exec(List<String> ytArgs, Duration timeout) {
         if (!detectPython()) {
-            throw new BadGatewayException("服务端插件运行时不可用(未安装 python3)");
+            throw new BadGatewayException("yt-dlp 运行时不可用:需 Python 3.11+(可用 -Dyoutube.python=/path 指定)");
         }
         ensureInstalled();
         List<String> command = new ArrayList<>();

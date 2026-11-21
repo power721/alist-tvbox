@@ -246,7 +246,7 @@
           </template><template v-else>，已是最新。</template>
           </div>
           <div v-else>最新版本：获取失败，可稍后重试。</div>
-          <div v-if="!ytdlp.available">运行时不可用：未安装 python3 或下载未完成。</div>
+          <div v-if="!ytdlp.available">{{ ytdlp.message || '运行时不可用：未安装 python3 或下载未完成。' }}</div>
         </el-card>
         <el-card class="box-card" v-if="!store.xiaoya">
           <template #header>
