@@ -33,6 +33,15 @@
 - `POST /api/youtube/ytdlp/update`：手动更新（强制重下，与自动更新共用闸门）。
 - 两者随 `/api/**` 规则要求 ADMIN/CLIENT。配置页「豆瓣电影数据」卡片下方有「YouTube 数据源」卡片展示版本并提供按钮。
 
+## GitHub 镜像（`app.youtube-dlp-mirror`）
+
+GitHub 直连不通的环境（无 HTTP 代理可用）配置前缀型镜像，如 `app.youtube-dlp-mirror=https://gh-proxy.com`：
+
+- 下载（首装/手动/自动更新）拼前缀；`latest/download` 动态资产被镜像拦截时自动按已知 tag 重试静态资产 `releases/download/{tag}/yt-dlp.tar.gz`；响应按 gzip 魔数校验，反爬验证页会被拦下报错。
+- 版本探测：`api.github.com` 直连（或 proxy.txt）优先，失败后走镜像 releases/latest 页面（302 落地 URL 或页面内 tag 链接解析）。
+- 显式配置 `app.youtube-dlp-url`（非默认值）时下载直接用之、镜像不介入（版本探测仍可用镜像）。
+- 实测（2026-11）：`gh-proxy.com`/`ghproxy.net` 可用（含 latest/download 动态资产）；`ghproxy.cn` 对非浏览器请求全反爬；镜像可用性多变，建议自查后配置。
+
 ## 搜索筛选 sp 编码
 
 YouTube `sp` 参数为 protobuf base64url，本仓构造逻辑经官方筛选面板抓取+真机实证对齐（**网上流传的标签表时间位是错位的，勿参考**）：

@@ -35,6 +35,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -54,7 +55,9 @@ public class YoutubeDlpRuntime {
     private static final Duration EXEC_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration SHORT_TIMEOUT = Duration.ofSeconds(20);
     private static final String LATEST_RELEASE_API = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest";
+    private static final String DEFAULT_DOWNLOAD_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz";
     private static final String GITHUB_TOKEN_HEADER = "Authorization";
+    private static final Pattern TAG_PATTERN = Pattern.compile("releases/tag/((?:\\d{4}\\.\\d+\\.\\d+))");
 
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
@@ -183,7 +186,7 @@ public class YoutubeDlpRuntime {
             return;
         }
         try {
-            log.info("yt-dlp missing, downloading from {}", appProperties.getYoutubeDlpUrl());
+            log.info("yt-dlp missing, downloading from {}", StringUtils.abbreviate(resolveDownloadUrl(null), 90));
             downloadAndExtract();
             log.info("yt-dlp installed: {}", getVersion());
         } catch (Exception e) {
@@ -293,14 +296,73 @@ public class YoutubeDlpRuntime {
     private String fetchLatestVersion() throws IOException {
         HttpURLConnection conn = openConnection(LATEST_RELEASE_API, "application/vnd.github+json");
         int code = conn.getResponseCode();
-        if (code != 200) {
+        if (code == 200) {
+            try (InputStream in = conn.getInputStream()) {
+                JsonNode node = objectMapper.readTree(in);
+                String tag = node.path("tag_name").asText(null);
+                if (tag != null) {
+                    return tag;
+                }
+            }
+        } else {
             log.debug("github latest release api: {}", code);
+        }
+        // GitHub 直连不通:前缀型镜像兜底(ghproxy.net 型 302 落地 URL 含 tag;gh-proxy.com 型 200 页面内含 tag 链接)
+        String mirror = mirror();
+        if (StringUtils.isNotBlank(mirror)) {
+            return fetchLatestVersionFromMirror(mirror);
+        }
+        return null;
+    }
+
+    private String fetchLatestVersionFromMirror(String mirror) throws IOException {
+        HttpURLConnection conn = openConnection(mirror + "/" + "https://github.com/yt-dlp/yt-dlp/releases/latest", "text/html");
+        if (conn.getResponseCode() != 200) {
+            log.debug("mirror latest page: {}", conn.getResponseCode());
             return null;
         }
-        try (InputStream in = conn.getInputStream()) {
-            JsonNode node = objectMapper.readTree(in);
-            return node.path("tag_name").asText(null);
+        String tag = parseTag(conn.getURL().toString());
+        if (tag != null) {
+            return tag;
         }
+        // 页面正文限长读取(og/canonical 链接含 releases/tag/{tag})
+        try (InputStream in = conn.getInputStream()) {
+            String body = new String(in.readNBytes(512 * 1024), StandardCharsets.UTF_8);
+            java.util.regex.Matcher matcher = TAG_PATTERN.matcher(body);
+            return matcher.find() ? matcher.group(1) : null;
+        }
+    }
+
+    static String parseTag(String url) {
+        java.util.regex.Matcher matcher = TAG_PATTERN.matcher(url);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private String mirror() {
+        String mirror = appProperties.getYoutubeDlpMirror();
+        if (StringUtils.isBlank(mirror)) {
+            return null;
+        }
+        return mirror.trim().replaceAll("/+$", "");
+    }
+
+    /**
+     * 下载地址解析:
+     * 1. 指定 tag → 镜像/直连的静态资产 releases/download/{tag}/yt-dlp.tar.gz(镜像兼容性最好)
+     * 2. 未指定 tag → 用户显式配置过 youtubeDlpUrl(非默认值)时直接用之(镜像不介入);
+     *    否则有镜像走镜像 latest/download,无镜像走默认地址
+     */
+    String resolveDownloadUrl(String tag) {
+        String m = mirror();
+        if (tag != null && !tag.isBlank()) {
+            String url = "https://github.com/yt-dlp/yt-dlp/releases/download/" + tag + "/yt-dlp.tar.gz";
+            return m != null ? m + "/" + url : url;
+        }
+        String configured = appProperties.getYoutubeDlpUrl();
+        if (!DEFAULT_DOWNLOAD_URL.equals(configured)) {
+            return configured;
+        }
+        return m != null ? m + "/" + DEFAULT_DOWNLOAD_URL : DEFAULT_DOWNLOAD_URL;
     }
 
     private void downloadAndExtract() throws IOException {
@@ -309,13 +371,7 @@ public class YoutubeDlpRuntime {
         Path tarball = Files.createTempFile(home, "ytdlp-", ".tar.gz");
         Path staging = Files.createTempDirectory(home, "extract-");
         try {
-            HttpURLConnection conn = openConnection(appProperties.getYoutubeDlpUrl(), null);
-            if (conn.getResponseCode() != 200) {
-                throw new IOException("download HTTP " + conn.getResponseCode());
-            }
-            try (InputStream in = conn.getInputStream()) {
-                Files.copy(in, tarball, StandardCopyOption.REPLACE_EXISTING);
-            }
+            downloadTo(tarball, null);
             extractTarGz(tarball, staging);
             // tar.gz 内是仓库快照,顶层目录名固定为 yt-dlp;解压结果整体换入
             Path extracted = staging.resolve("yt-dlp");
@@ -341,6 +397,36 @@ public class YoutubeDlpRuntime {
         } finally {
             Files.deleteIfExists(tarball);
             deleteRecursively(staging);
+        }
+    }
+
+    /** 下载 tar.gz 到目标文件;latest/download 动态资产被镜像拦截时按已知 tag 重试静态资产。 */
+    private void downloadTo(Path tarball, String tag) throws IOException {
+        try {
+            downloadTo0(tarball, resolveDownloadUrl(tag));
+        } catch (IOException e) {
+            if (tag == null && StringUtils.isNotBlank(latestVersion)) {
+                log.debug("latest/download failed ({}), retry with static tag asset {}", e.getMessage(), latestVersion);
+                downloadTo0(tarball, resolveDownloadUrl(latestVersion));
+                return;
+            }
+            throw e;
+        }
+    }
+
+    private void downloadTo0(Path tarball, String url) throws IOException {
+        HttpURLConnection conn = openConnection(url, null);
+        if (conn.getResponseCode() != 200) {
+            throw new IOException("download HTTP " + conn.getResponseCode() + " from " + StringUtils.abbreviate(url, 80));
+        }
+        try (InputStream in = conn.getInputStream()) {
+            Files.copy(in, tarball, StandardCopyOption.REPLACE_EXISTING);
+        }
+        // 部分镜像把反爬验证页当 200 返回(几 KB 的 HTML):按 gzip 魔数校验拦下
+        try (InputStream in = Files.newInputStream(tarball)) {
+            if ((in.read() & 0xFF) != 0x1F || (in.read() & 0xFF) != 0x8B) {
+                throw new IOException("download is not a gzip payload (mirror challenge page?): " + StringUtils.abbreviate(url, 80));
+            }
         }
     }
 

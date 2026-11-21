@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.youtube;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import cn.har01d.alist_tvbox.config.AppProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -113,5 +114,33 @@ class YoutubeServiceTest {
     void proxyUrlRoundTrip() {
         String url = "https://rr5---sn-x.googlevideo.com/videoplayback?id=x&range=0-1023";
         assertThat(YoutubeService.decodeProxyUrl(YoutubeService.encodeProxyUrl(url))).isEqualTo(url);
+    }
+
+    @Test
+    void parseTagFromMirrorLandingUrl() {
+        assertThat(YoutubeDlpRuntime.parseTag("https://ghproxy.net/https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.26"))
+                .isEqualTo("2026.10.26");
+        assertThat(YoutubeDlpRuntime.parseTag("https://github.com/yt-dlp/yt-dlp/releases/latest")).isNull();
+    }
+
+    @Test
+    void resolveDownloadUrlWithMirror() {
+        AppProperties properties = new AppProperties();
+        YoutubeDlpRuntime runtime = new YoutubeDlpRuntime(properties, objectMapper);
+
+        // 无镜像:默认地址原样
+        assertThat(runtime.resolveDownloadUrl(null))
+                .isEqualTo("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz");
+
+        // 镜像:latest/download 与静态 tag 资产都拼前缀
+        properties.setYoutubeDlpMirror("https://gh-proxy.com/");
+        assertThat(runtime.resolveDownloadUrl(null))
+                .isEqualTo("https://gh-proxy.com/https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz");
+        assertThat(runtime.resolveDownloadUrl("2026.10.21"))
+                .isEqualTo("https://gh-proxy.com/https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.21/yt-dlp.tar.gz");
+
+        // 用户显式配置 youtubeDlpUrl 时下载不走镜像(版本探测仍可用镜像)
+        properties.setYoutubeDlpUrl("https://example.com/yt-dlp.tar.gz");
+        assertThat(runtime.resolveDownloadUrl(null)).isEqualTo("https://example.com/yt-dlp.tar.gz");
     }
 }

@@ -86,6 +86,8 @@ public class AppProperties {
     private String panCheckUrl;
     private Integer panCheckTimeoutMs;
     private String youtubeDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz";
+    /** GitHub 前缀型镜像(如 https://gh-proxy.com),加速 yt-dlp 下载与版本探测;显式配置 youtubeDlpUrl 时下载不走镜像。 */
+    private String youtubeDlpMirror = "";
     private boolean youtubeDlpAutoUpdate = true;
     private String panSouUrl;
     private String panSouSource = "all";
