@@ -1,0 +1,111 @@
+package cn.har01d.alist_tvbox.youtube;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * YouTube 站点测试:sp 筛选编码以官方筛选面板抓取值为准(网上标签表时间位错位),
+ * 格式选择与条目映射用真实 yt-dlp 输出 fixture。
+ */
+class YoutubeServiceTest {
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private JsonNode fixture(String name) throws Exception {
+        try (var in = getClass().getResourceAsStream("/youtube/" + name)) {
+            return objectMapper.readTree(in);
+        }
+    }
+
+    @Test
+    void buildSpSort() {
+        assertThat(YoutubeService.buildSp("VIEW_COUNT", null, null, null)).isEqualTo("CAM");
+        assertThat(YoutubeService.buildSp("RATING", null, null, null)).isEqualTo("CAE");
+        assertThat(YoutubeService.buildSp("UPLOAD_DATE", null, null, null)).isEqualTo("CAI");
+        assertThat(YoutubeService.buildSp(null, null, null, null)).isEmpty();
+        assertThat(YoutubeService.buildSp("RELEVANCE", null, null, null)).isEmpty();
+    }
+
+    @Test
+    void buildSpDateMatchesOfficialUICodes() {
+        // 官方筛选面板:今日 EgIIAg== / 本星期 EgIIAw== / 本月 EgIIBA== / 今年 EgIIBQ==
+        assertThat(YoutubeService.buildSp(null, "HOUR", null, null)).isEqualTo("EgIIAQ");
+        assertThat(YoutubeService.buildSp(null, "DAY", null, null)).isEqualTo("EgIIAg");
+        assertThat(YoutubeService.buildSp(null, "WEEK", null, null)).isEqualTo("EgIIAw");
+        assertThat(YoutubeService.buildSp(null, "MONTH", null, null)).isEqualTo("EgIIBA");
+        assertThat(YoutubeService.buildSp(null, "YEAR", null, null)).isEqualTo("EgIIBQ");
+    }
+
+    @Test
+    void buildSpTypeAndFeatures() {
+        assertThat(YoutubeService.buildSp(null, null, "VIDEO", null)).isEqualTo("EgIQAQ");
+        assertThat(YoutubeService.buildSp(null, null, "CHANNEL", null)).isEqualTo("EgIQAg");
+        assertThat(YoutubeService.buildSp(null, null, "PLAYLIST", null)).isEqualTo("EgIQAw");
+        assertThat(YoutubeService.buildSp(null, null, "MOVIE", null)).isEqualTo("EgIQBA");
+        assertThat(YoutubeService.buildSp(null, null, null, "HD")).isEqualTo("EgIgAQ");
+        assertThat(YoutubeService.buildSp(null, null, null, "_4K")).isEqualTo("EgJwAQ");
+        assertThat(YoutubeService.buildSp(null, null, null, "HDR")).isEqualTo("EgPIAQE");
+    }
+
+    @Test
+    void buildSpCombined() {
+        assertThat(YoutubeService.buildSp("VIEW_COUNT", "WEEK", null, null)).isEqualTo("CAMSAggD");
+        assertThat(YoutubeService.buildSp("RATING", null, "MOVIE", null)).isEqualTo("CAESAhAE");
+    }
+
+    @Test
+    void pickMasterManifest() throws Exception {
+        JsonNode info = fixture("video.json");
+        assertThat(YoutubeService.findMasterManifest(info))
+                .startsWith("https://manifest.googlevideo.com/api/manifest/hls_variant");
+    }
+
+    @Test
+    void pickMuxedFormats() throws Exception {
+        JsonNode info = fixture("video.json");
+        List<JsonNode> muxed = YoutubeService.muxedFormats(info);
+        assertThat(muxed).extracting(f -> f.path("format_id").asText()).containsExactly("18");
+    }
+
+    @Test
+    void pickVideoOnlyAndAudio() throws Exception {
+        JsonNode info = fixture("video.json");
+        List<JsonNode> videos = YoutubeService.videoOnlyFormats(info, 1080);
+        assertThat(videos).isNotEmpty();
+        assertThat(videos).allSatisfy(f -> assertThat(f.path("height").asInt()).isGreaterThanOrEqualTo(1080));
+        assertThat(YoutubeService.videoOnlyFormats(info, 2160))
+                .allSatisfy(f -> assertThat(f.path("height").asInt()).isGreaterThanOrEqualTo(2160));
+        List<JsonNode> audio = YoutubeService.audioFormats(info);
+        assertThat(audio).isNotEmpty();
+        assertThat(audio).allSatisfy(f -> assertThat(f.path("acodec").asText()).isNotEqualTo("none"));
+    }
+
+    @Test
+    void liveManifest() throws Exception {
+        JsonNode live = fixture("live.json");
+        assertThat(YoutubeService.findMasterManifest(live)).startsWith("https://manifest.googlevideo.com");
+        assertThat(YoutubeService.muxedFormats(live)).isEmpty();
+    }
+
+    @Test
+    void searchEntryMapping() throws Exception {
+        JsonNode entries = fixture("search-flat.json").path("entries");
+        // 条目0=视频,1=频道,2=播放列表(真实 yt-dlp flat 输出)
+        assertThat(YoutubeService.channelOrHandleOf(entries.get(0))).isNull();
+        assertThat(YoutubeService.playlistIdOf(entries.get(0))).isNull();
+        assertThat(YoutubeService.channelOrHandleOf(entries.get(1))).startsWith("UC");
+        assertThat(YoutubeService.playlistIdOf(entries.get(1))).isNull();
+        assertThat(YoutubeService.channelOrHandleOf(entries.get(2))).isNull();
+        assertThat(YoutubeService.playlistIdOf(entries.get(2))).startsWith("PL");
+    }
+
+    @Test
+    void proxyUrlRoundTrip() {
+        String url = "https://rr5---sn-x.googlevideo.com/videoplayback?id=x&range=0-1023";
+        assertThat(YoutubeService.decodeProxyUrl(YoutubeService.encodeProxyUrl(url))).isEqualTo(url);
+    }
+}

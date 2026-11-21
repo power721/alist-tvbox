@@ -1,0 +1,402 @@
+package cn.har01d.alist_tvbox.youtube;
+
+import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.exception.BadGatewayException;
+import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import jakarta.annotation.PreDestroy;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.zip.GZIPInputStream;
+
+/**
+ * yt-dlp 运行时:python3 探测、yt-dlp 源码包下载/解压/版本管理与子进程执行。
+ *
+ * <p>交付形态用 GitHub Releases 的 yt-dlp.tar.gz 源码包(纯 Python,Alpine musl 可直接跑),
+ * 解压后经 PYTHONPATH 由 {@code python3 -m yt_dlp} 调起,不依赖 pip 与系统包。
+ * 官方 standalone 二进制是 glibc 专享,musl 容器跑不了,勿改回二进制形态。</p>
+ *
+ * <p>选 yt-dlp 而非 Java 库(sealedtx/java-youtube-downloader)是维护性决策:
+ * 后者单维护者曾停更 17 个月导致 #760 整站移除;yt-dlp 由社区维护,YouTube 改版通常数日内修复,
+ * 且运行时自更新不需要重发镜像。</p>
+ */
+@Slf4j
+@Service
+public class YoutubeDlpRuntime {
+    private static final Duration EXEC_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration SHORT_TIMEOUT = Duration.ofSeconds(20);
+    private static final String LATEST_RELEASE_API = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest";
+    private static final String GITHUB_TOKEN_HEADER = "Authorization";
+
+    private final AppProperties appProperties;
+    private final ObjectMapper objectMapper;
+
+    private final AtomicBoolean downloading = new AtomicBoolean();
+    private final ExecutorService warmupExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "yt-dlp-warmup");
+        t.setDaemon(true);
+        return t;
+    });
+
+    private volatile String pythonBin;
+    private volatile boolean pythonProbed;
+    private volatile String version;
+    private volatile String proxy;
+
+    public YoutubeDlpRuntime(AppProperties appProperties, ObjectMapper objectMapper) {
+        this.appProperties = appProperties;
+        this.objectMapper = objectMapper;
+        try {
+            Path path = Utils.getDataPath("proxy.txt");
+            if (Files.exists(path)) {
+                String line = Files.readString(path).trim();
+                URI uri = URI.create(line);
+                if (uri.getHost() != null && uri.getPort() > 0) {
+                    log.debug("use http proxy for yt-dlp: {}", uri.getHost());
+                    proxy = line;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("read proxy.txt failed", e);
+        }
+    }
+
+    /** python3 与 yt-dlp 包是否就绪;未下载时触发一次后台安装。 */
+    public boolean isAvailable() {
+        if (!detectPython() || !Files.isDirectory(packageRoot())) {
+            ensureInstalledAsync();
+            return false;
+        }
+        return true;
+    }
+
+    private boolean detectPython() {
+        if (pythonProbed) {
+            return pythonBin != null;
+        }
+        synchronized (this) {
+            if (pythonProbed) {
+                return pythonBin != null;
+            }
+            List<String> candidates = new ArrayList<>();
+            if (System.getProperty("youtube.python") != null) {
+                candidates.add(System.getProperty("youtube.python"));
+            }
+            candidates.addAll(List.of("python3", "/usr/bin/python3", "/usr/local/bin/python3"));
+            for (String candidate : candidates) {
+                try {
+                    Process p = new ProcessBuilder(candidate, "-c", "import sys; print(sys.version_info[0])")
+                            .redirectErrorStream(true).start();
+                    if (p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0 && p.getInputStream().readAllBytes().length > 0) {
+                        pythonBin = candidate;
+                        break;
+                    }
+                } catch (Exception e) {
+                    log.debug("python probe failed: {}", candidate);
+                }
+            }
+            pythonProbed = true;
+            log.info("yt-dlp runtime python={}", pythonBin == null ? "not found" : pythonBin);
+        }
+        return pythonBin != null;
+    }
+
+    /** yt_dlp 包根目录(PYTHONPATH 指向这里)。tar.gz 是仓库快照,包在 <data>/yt-dlp/yt-dlp/ 下。 */
+    private Path packageRoot() {
+        return Utils.getDataPath("yt-dlp", "yt-dlp");
+    }
+
+    public String getVersion() {
+        if (version == null) {
+            try {
+                version = exec(List.of("--version"), SHORT_TIMEOUT).trim();
+                log.info("yt-dlp version: {}", version);
+            } catch (Exception e) {
+                log.warn("get yt-dlp version failed", e);
+            }
+        }
+        return version;
+    }
+
+    /** 缺包时同步安装(首个请求或定时任务触发);其余请求直接失败等下一轮。 */
+    private void ensureInstalled() {
+        if (Files.isDirectory(packageRoot()) || !downloading.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            log.info("yt-dlp missing, downloading from {}", appProperties.getYoutubeDlpUrl());
+            downloadAndExtract();
+            log.info("yt-dlp installed: {}", getVersion());
+        } catch (Exception e) {
+            log.warn("yt-dlp install failed", e);
+            throw new BadGatewayException("yt-dlp 下载失败: " + e.getMessage());
+        } finally {
+            downloading.set(false);
+        }
+    }
+
+    private void ensureInstalledAsync() {
+        if (detectPython()) {
+            warmupExecutor.submit(() -> {
+                try {
+                    ensureInstalled();
+                } catch (Exception e) {
+                    log.debug("async yt-dlp install failed: {}", e.getMessage());
+                }
+            });
+        }
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void warmup() {
+        ensureInstalledAsync();
+    }
+
+    /** 每日比对 GitHub 最新 release,落后则更新;GitHub 不可达时静默跳过。 */
+    @Scheduled(cron = "0 47 6 * * ?")
+    public void autoUpdate() {
+        if (!appProperties.isYoutubeDlpAutoUpdate() || !detectPython() || !Files.isDirectory(packageRoot())) {
+            return;
+        }
+        try {
+            String latest = fetchLatestVersion();
+            String current = getVersion();
+            if (latest != null && current != null && !latest.equals(current)) {
+                log.info("yt-dlp update: {} -> {}", current, latest);
+                downloadAndExtract();
+                version = null;
+                log.info("yt-dlp updated: {}", getVersion());
+            }
+        } catch (Exception e) {
+            log.debug("yt-dlp auto update skipped: {}", e.getMessage());
+        }
+    }
+
+    private String fetchLatestVersion() throws IOException {
+        HttpURLConnection conn = openConnection(LATEST_RELEASE_API, "application/vnd.github+json");
+        int code = conn.getResponseCode();
+        if (code != 200) {
+            log.debug("github latest release api: {}", code);
+            return null;
+        }
+        try (InputStream in = conn.getInputStream()) {
+            JsonNode node = objectMapper.readTree(in);
+            return node.path("tag_name").asText(null);
+        }
+    }
+
+    private void downloadAndExtract() throws IOException {
+        Path home = Utils.getDataPath("yt-dlp");
+        Files.createDirectories(home);
+        Path tarball = Files.createTempFile(home, "ytdlp-", ".tar.gz");
+        Path staging = Files.createTempDirectory(home, "extract-");
+        try {
+            HttpURLConnection conn = openConnection(appProperties.getYoutubeDlpUrl(), null);
+            if (conn.getResponseCode() != 200) {
+                throw new IOException("download HTTP " + conn.getResponseCode());
+            }
+            try (InputStream in = conn.getInputStream()) {
+                Files.copy(in, tarball, StandardCopyOption.REPLACE_EXISTING);
+            }
+            extractTarGz(tarball, staging);
+            // tar.gz 内是仓库快照,顶层目录名固定为 yt-dlp;解压结果整体换入
+            Path extracted = staging.resolve("yt-dlp");
+            if (!Files.isDirectory(extracted)) {
+                throw new IOException("unexpected tarball layout: " + staging);
+            }
+            Path target = home.resolve("yt-dlp");
+            Path old = home.resolve("yt-dlp.old");
+            deleteRecursively(old);
+            if (Files.isDirectory(target)) {
+                Files.move(target, old);
+            }
+            try {
+                Files.move(extracted, target);
+            } catch (IOException e) {
+                if (Files.isDirectory(old)) {
+                    Files.move(old, target);
+                }
+                throw e;
+            }
+            deleteRecursively(old);
+            version = null;
+        } finally {
+            Files.deleteIfExists(tarball);
+            deleteRecursively(staging);
+        }
+    }
+
+    private static void extractTarGz(Path tarball, Path target) throws IOException {
+        try (TarArchiveInputStream in = new TarArchiveInputStream(new GZIPInputStream(Files.newInputStream(tarball)))) {
+            TarArchiveEntry entry;
+            int count = 0;
+            while ((entry = in.getNextTarEntry()) != null) {
+                if (++count > 20000) {
+                    throw new IOException("tarball entry count exceeded");
+                }
+                Path file = target.resolve(entry.getName()).normalize();
+                if (!file.startsWith(target)) {
+                    continue; // zip-slip 防御
+                }
+                if (entry.isDirectory()) {
+                    Files.createDirectories(file);
+                } else {
+                    Files.createDirectories(file.getParent());
+                    Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    private static void deleteRecursively(Path path) throws IOException {
+        if (!Files.exists(path)) {
+            return;
+        }
+        try (var walk = Files.walk(path)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException ignored) {
+                }
+            });
+        }
+    }
+
+    private HttpURLConnection openConnection(String url, String accept) throws IOException {
+        // GitHub 与 YouTube 的访问统一走 proxy.txt(若配置),YouTube 域名见 exec 的 --proxy
+        HttpURLConnection conn;
+        if (proxy != null && url.contains("github.com")) {
+            URI uri = URI.create(proxy);
+            java.net.Proxy httpProxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                    new java.net.InetSocketAddress(uri.getHost(), uri.getPort()));
+            conn = (HttpURLConnection) new URL(url).openConnection(httpProxy);
+        } else {
+            conn = (HttpURLConnection) new URL(url).openConnection();
+        }
+        conn.setInstanceFollowRedirects(true);
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(120000);
+        conn.setRequestProperty("User-Agent", "alist-tvbox");
+        if (accept != null) {
+            conn.setRequestProperty("Accept", accept);
+        }
+        String token = System.getenv("GITHUB_TOKEN");
+        if (token != null && url.contains("github.com")) {
+            conn.setRequestProperty(GITHUB_TOKEN_HEADER, "Bearer " + token);
+        }
+        return conn;
+    }
+
+    /** 执行 yt-dlp 子进程并返回 stdout(一般为 JSON)。 */
+    public String exec(List<String> ytArgs, Duration timeout) {
+        if (!detectPython()) {
+            throw new BadGatewayException("服务端插件运行时不可用(未安装 python3)");
+        }
+        ensureInstalled();
+        List<String> command = new ArrayList<>();
+        command.add(pythonBin);
+        command.add("-m");
+        command.add("yt_dlp");
+        command.add("--ignore-config");
+        command.add("--no-warnings");
+        command.add("--no-progress");
+        command.add("--retries");
+        command.add("2");
+        command.add("--socket-timeout");
+        command.add("15");
+        if (proxy != null) {
+            command.add("--proxy");
+            command.add(proxy);
+        }
+        command.addAll(ytArgs);
+        log.debug("yt-dlp exec: {}", String.join(" ", ytArgs));
+        try {
+            ProcessBuilder builder = new ProcessBuilder(command);
+            // PYTHONPATH 必须显式注入:宿主 python 若装过 pip 版 yt-dlp 会遮蔽下载的副本,
+            // 容器里则根本没有 yt_dlp 模块,-m 直接失败
+            builder.environment().put("PYTHONPATH", packageRoot().toString());
+            Process process = builder.start();
+            // stdout/stderr 必须由独立线程排空,否则缓冲填满后进程卡死,waitFor 超时永不触发
+            StringBuilder stderr = new StringBuilder();
+            byte[][] stdoutHolder = new byte[1][];
+            Thread outThread = new Thread(() -> {
+                try (var in = process.getInputStream()) {
+                    stdoutHolder[0] = in.readAllBytes();
+                } catch (IOException ignored) {
+                }
+            });
+            Thread errThread = new Thread(() -> {
+                try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (stderr.length() < 8000) {
+                            stderr.append(line).append('\n');
+                        }
+                    }
+                } catch (IOException ignored) {
+                }
+            });
+            outThread.setDaemon(true);
+            errThread.setDaemon(true);
+            outThread.start();
+            errThread.start();
+            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                process.destroyForcibly();
+                throw new BadGatewayException("yt-dlp 执行超时");
+            }
+            outThread.join(3000);
+            errThread.join(1000);
+            int exit = process.exitValue();
+            String stdout = stdoutHolder[0] == null ? "" : new String(stdoutHolder[0], StandardCharsets.UTF_8);
+            if (exit != 0) {
+                String tail = stderr.toString();
+                String message = tail.lines().filter(StringUtils::isNotBlank).reduce((a, b) -> b).orElse("exit " + exit);
+                throw new BadGatewayException("yt-dlp 执行失败: " + StringUtils.abbreviate(message, 300));
+            }
+            return stdout;
+        } catch (BadGatewayException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BadGatewayException("yt-dlp 执行异常: " + e.getMessage());
+        }
+    }
+
+    public JsonNode execJson(List<String> ytArgs, Duration timeout) {
+        try {
+            return objectMapper.readTree(exec(ytArgs, timeout));
+        } catch (BadGatewayException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BadGatewayException("yt-dlp 输出解析失败: " + e.getMessage());
+        }
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        warmupExecutor.shutdownNow();
+    }
+}

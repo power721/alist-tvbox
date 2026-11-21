@@ -85,6 +85,8 @@ public class AppProperties {
     private boolean tgLogin;
     private String panCheckUrl;
     private Integer panCheckTimeoutMs;
+    private String youtubeDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz";
+    private boolean youtubeDlpAutoUpdate = true;
     private String panSouUrl;
     private String panSouSource = "all";
     private String panSouChannels = "custom";

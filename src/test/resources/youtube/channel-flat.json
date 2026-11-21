@@ -1,0 +1,78 @@
+{
+ "_type": "playlist",
+ "title": "瞎鸡二看 - Videos",
+ "channel": "瞎鸡二看",
+ "channel_id": "UC8duh0LQmipYD70qddvWSww",
+ "playlist_count": null,
+ "entries": [
+  {
+   "_type": "url",
+   "id": "lwGQ1DIVP3s",
+   "title": "bgst finished film~1",
+   "url": "https://www.youtube.com/watch?v=lwGQ1DIVP3s",
+   "duration": 800,
+   "view_count": 150000,
+   "live_status": null,
+   "uploader": null,
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/lwGQ1DIVP3s/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLDNlvZDWH8lECtAT-47sDuakkuOzg",
+     "height": 202,
+     "width": 360
+    },
+    {
+     "url": "https://i.ytimg.com/vi/lwGQ1DIVP3s/hq720.jpg?sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLDGzV1IWnMwd158sYIRgsmxo9WfXg",
+     "height": 404,
+     "width": 720
+    }
+   ],
+   "video_count": null
+  },
+  {
+   "_type": "url",
+   "id": "fd9aH5XtO7s",
+   "title": "Gonjiam: Haunted Asylum + akgbf",
+   "url": "https://www.youtube.com/watch?v=fd9aH5XtO7s",
+   "duration": 1334,
+   "view_count": 51000,
+   "live_status": null,
+   "uploader": null,
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/fd9aH5XtO7s/hq720_custom_3.jpg?sqp=CNzJg9gG-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCnf0YjYMcyTBTJE4AwdjhOBFm6jQ",
+     "height": 202,
+     "width": 360
+    },
+    {
+     "url": "https://i.ytimg.com/vi/fd9aH5XtO7s/hq720_custom_3.jpg?sqp=CNzJg9gG-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBkHp5NNS918QYQY3MaDQQp0iyFKw",
+     "height": 404,
+     "width": 720
+    }
+   ],
+   "video_count": null
+  },
+  {
+   "_type": "url",
+   "id": "8mrOaQVtt8w",
+   "title": "The Vanishing Side",
+   "url": "https://www.youtube.com/watch?v=8mrOaQVtt8w",
+   "duration": 1189,
+   "view_count": 53000,
+   "live_status": null,
+   "uploader": null,
+   "thumbnails": [
+    {
+     "url": "https://i.ytimg.com/vi/8mrOaQVtt8w/hq720_custom_2.jpg?sqp=CNzJg9gG-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBzZLd0EPCJ1t1s1JcgRxCZaKdxjw",
+     "height": 202,
+     "width": 360
+    },
+    {
+     "url": "https://i.ytimg.com/vi/8mrOaQVtt8w/hq720_custom_2.jpg?sqp=CNzJg9gG-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBnLDyAS5gFPT7Dk0Nu12cGFnavIA",
+     "height": 404,
+     "width": 720
+    }
+   ],
+   "video_count": null
+  }
+ ]
+}

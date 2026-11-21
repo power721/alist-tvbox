@@ -1,0 +1,766 @@
+package cn.har01d.alist_tvbox.youtube;
+
+import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.FileNameInfo;
+import cn.har01d.alist_tvbox.model.Filter;
+import cn.har01d.alist_tvbox.model.FilterValue;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.CategoryList;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.DashUtils;
+import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.HttpHeaders;
+import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+/**
+ * YouTube 站点服务:搜索/频道/播放列表/直播的 TVBox VOD API,数据源为 yt-dlp 子进程。
+ *
+ * <p>端点契约与 2025-06 移除前(#760)保持一致:browse/wd/t 三入口、channel@/playlist@ 前缀、
+ * /watch 播放、/youtube-proxy 中继。播放策略变化:手搓 MPD(initRange 已不可得)改为代理
+ * 官方 HLS master 清单(URL 重写),EXO 等播放器原生自适应;老播放器走 muxed itag18 兜底。</p>
+ */
+@Slf4j
+@Service
+public class YoutubeService {
+    private static final Pattern CHANNEL_URL = Pattern.compile("https://www\\.youtube\\.com/(channel/(UC[0-9A-Za-z_-]{22})|(@[0-9A-Za-z._-]+))[/\\s\"'<>]");
+    private static final Pattern PLAYLIST_URL = Pattern.compile("[?&]list=([0-9A-Za-z_-]+)");
+    private static final Pattern PLAYLIST_LINE_URL = Pattern.compile("https?://[^\\s\"'<>]+");
+    private static final int PAGE_SIZE = 20;
+    private static final int BROWSE_LIMIT = 200;
+
+    private final List<FilterValue> sorts = Arrays.asList(
+            new FilterValue("原始顺序", ""),
+            new FilterValue("相关性", "RELEVANCE"),
+            new FilterValue("评价", "RATING"),
+            new FilterValue("时间", "UPLOAD_DATE"),
+            new FilterValue("播放量", "VIEW_COUNT")
+    );
+
+    private final List<FilterValue> times = Arrays.asList(
+            new FilterValue("全部", ""),
+            new FilterValue("最近", "HOUR"),
+            new FilterValue("本日", "DAY"),
+            new FilterValue("本周", "WEEK"),
+            new FilterValue("本月", "MONTH"),
+            new FilterValue("本年", "YEAR")
+    );
+
+    private final List<FilterValue> types = Arrays.asList(
+            new FilterValue("全部", ""),
+            new FilterValue("视频", "VIDEO"),
+            new FilterValue("频道", "CHANNEL"),
+            new FilterValue("播放列表", "PLAYLIST"),
+            new FilterValue("电影", "MOVIE")
+    );
+
+    private final List<FilterValue> formats = Arrays.asList(
+            new FilterValue("全部", ""),
+            new FilterValue("HD", "HD"),
+            new FilterValue("4K", "_4K"),
+            new FilterValue("HDR", "HDR")
+    );
+
+    private final YoutubeDlpRuntime runtime;
+    private final AppProperties appProperties;
+
+    private final LoadingCache<String, JsonNode> videos = Caffeine.newBuilder()
+            .maximumSize(50)
+            .expireAfterAccess(Duration.ofSeconds(900))
+            .build(this::getVideoInfo);
+
+    private final LoadingCache<String, JsonNode> playlists = Caffeine.newBuilder()
+            .maximumSize(20)
+            .expireAfterWrite(Duration.ofSeconds(900))
+            .build(this::getPlaylistInfo);
+
+    private final LoadingCache<String, JsonNode> searches = Caffeine.newBuilder()
+            .maximumSize(50)
+            .expireAfterWrite(Duration.ofSeconds(900))
+            .build(this::getSearchInfo);
+
+    public YoutubeService(YoutubeDlpRuntime runtime, AppProperties appProperties) {
+        this.runtime = runtime;
+        this.appProperties = appProperties;
+    }
+
+    public MovieList home() {
+        return list("电影", "", "", "", "", 1);
+    }
+
+    public CategoryList category() throws IOException {
+        CategoryList result = new CategoryList();
+
+        Path path = Utils.getDataPath("youtube.txt");
+        if (Files.exists(path)) {
+            for (String line : Files.readAllLines(path)) {
+                if (StringUtils.isBlank(line)) {
+                    continue;
+                }
+                String[] parts = line.split(":");
+                String id = parts[0];
+                String name = id;
+                if (parts.length > 1) {
+                    name = parts[1];
+                }
+                Category category = new Category();
+                category.setType_id(id);
+                category.setType_name(name);
+                category.setType_flag(0);
+                category.setLand(1);
+                category.setRatio(1.33);
+                result.getCategories().add(category);
+                if (!id.contains("@")) {
+                    result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types), new Filter("format", "格式", formats)));
+                }
+            }
+        } else {
+            List<String> keywords = List.of("电影", "电视剧", "动漫", "综艺", "纪录片", "音乐", "英语", "科技", "新闻", "游戏", "风景", "旅游", "美食", "健身", "运动", "体育", "搞笑", "短剧");
+            for (var name : keywords) {
+                Category category = new Category();
+                category.setType_id(name);
+                category.setType_name(name);
+                category.setType_flag(0);
+                category.setLand(1);
+                category.setRatio(1.33);
+                result.getCategories().add(category);
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types), new Filter("format", "格式", formats)));
+            }
+        }
+
+        result.setTotal(result.getCategories().size());
+        result.setLimit(result.getCategories().size());
+        return result;
+    }
+
+    public MovieList list(String text, String sort, String time, String type, String format, int page) {
+        if (text.startsWith("channel@")) {
+            return buildListResult(playlists.get(channelUrl(text.substring(8))), text);
+        }
+        if (text.startsWith("@")) {
+            return getHandleVideo(text.substring(1));
+        }
+        if (text.startsWith("playlist@")) {
+            return getPlaylistVideo(text.substring(9));
+        }
+        return search(text, sort, time, type, format, page);
+    }
+
+    /** channel@ 后可能是 UC id 也可能是 @handle(搜索结果/自定义分类两种来源)。 */
+    private static String channelUrl(String key) {
+        if (key.startsWith("UC")) {
+            return "https://www.youtube.com/channel/" + key + "/videos";
+        }
+        return "https://www.youtube.com/@" + key + "/videos";
+    }
+
+    private JsonNode getPlaylistInfo(String url) {
+        return runtime.execJson(List.of("-J", "--flat-playlist", "--playlist-end", String.valueOf(BROWSE_LIMIT), url),
+                Duration.ofSeconds(60));
+    }
+
+    /** key = url + "@@" + page;翻页按 playlist-end 扩窗取够当前页。 */
+    private JsonNode getSearchInfo(String key) {
+        int page = Integer.parseInt(key.substring(key.lastIndexOf('@') + 1));
+        int end = Math.max(PAGE_SIZE * 2, page * PAGE_SIZE);
+        String url = key.substring(0, key.lastIndexOf('@'));
+        return runtime.execJson(List.of("-J", "--flat-playlist", "--playlist-end", String.valueOf(end), url),
+                Duration.ofSeconds(60));
+    }
+
+    private JsonNode getVideoInfo(String id) {
+        return runtime.execJson(List.of("-J", "--no-playlist", "https://www.youtube.com/watch?v=" + id),
+                Duration.ofSeconds(45));
+    }
+
+    public MovieList getChannelVideo(String id) {
+        return buildListResult(playlists.get(channelUrl(id)), "channel@" + id);
+    }
+
+    public MovieList getHandleVideo(String handle) {
+        return buildListResult(playlists.get("https://www.youtube.com/@" + handle + "/videos"), "channel@" + handle);
+    }
+
+    public MovieList getPlaylistVideo(String id) {
+        return buildListResult(playlists.get("https://www.youtube.com/playlist?list=" + id), "playlist@" + id);
+    }
+
+    private MovieList buildListResult(JsonNode info, String fallbackId) {
+        var entries = info.path("entries");
+        List<MovieDetail> list = new ArrayList<>();
+        MovieDetail video = new MovieDetail();
+        video.setVod_id(fallbackId);
+        video.setVod_name("合集");
+        video.setVod_pic(getListPic());
+        int size = info.path("playlist_count").asInt(entries.size());
+        video.setVod_remarks(size + "个视频");
+        list.add(video);
+        for (var item : entries) {
+            if (item.has("id")) {
+                list.add(buildMovieDetail(item));
+            }
+        }
+
+        MovieList result = new MovieList();
+        result.setList(list);
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
+        log.debug("channel result: {}", result);
+
+        return result;
+    }
+
+    private MovieDetail buildMovieDetail(JsonNode item) {
+        MovieDetail video = new MovieDetail();
+        video.setVod_id(item.path("id").asText());
+        video.setVod_name(item.path("title").asText());
+        JsonNode thumbnails = item.path("thumbnails");
+        if (thumbnails.isArray() && !thumbnails.isEmpty()) {
+            video.setVod_pic(fixCover(thumbnails.get(0).path("url").asText()));
+        }
+        if ("is_live".equals(item.path("live_status").asText())) {
+            video.setVod_remarks("直播");
+        } else {
+            video.setVod_remarks(Utils.secondsToDuration(item.path("duration").asLong()));
+        }
+        return video;
+    }
+
+    private String getListPic() {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/list.png")
+                .replaceQuery(null)
+                .build()
+                .toUriString();
+    }
+
+    public MovieList search(String text, String sort, String time, String type, String format, int page) {
+        String sp = buildSp(sort, time, type, format);
+        String url = "https://www.youtube.com/results?search_query=" + URLEncoder.encode(text, StandardCharsets.UTF_8);
+        if (!sp.isEmpty()) {
+            url += "&sp=" + sp;
+        }
+        // 缓存键含页码,同页命中 900s;跨页由 playlist-end 扩窗重拉
+        JsonNode info = searches.get(url + "@@" + page);
+        var entries = info.path("entries");
+        int from = (page - 1) * PAGE_SIZE;
+        int end = from + PAGE_SIZE;
+
+        List<MovieDetail> list = new ArrayList<>();
+        for (int i = from; i < end && i < entries.size(); i++) {
+            MovieDetail movie = buildSearchEntry(entries.get(i));
+            if (movie != null) {
+                list.add(movie);
+            }
+        }
+
+        MovieList result = new MovieList();
+        result.setList(list);
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
+        result.setPagecount(entries.size() >= end ? page + 1 : page);
+
+        log.debug("search result: {}", result);
+        return result;
+    }
+
+    private MovieDetail buildSearchEntry(JsonNode item) {
+        String channel = channelOrHandleOf(item);
+        if (channel != null) {
+            MovieDetail movie = new MovieDetail();
+            movie.setVod_id("channel@" + channel);
+            movie.setVod_name(item.path("title").asText());
+            JsonNode thumbnails = item.path("thumbnails");
+            if (thumbnails.isArray() && !thumbnails.isEmpty()) {
+                movie.setVod_pic(fixCover(thumbnails.get(0).path("url").asText()));
+            }
+            movie.setVod_remarks("频道");
+            return movie;
+        }
+        String playlist = playlistIdOf(item);
+        if (playlist != null) {
+            MovieDetail movie = new MovieDetail();
+            movie.setVod_id("playlist@" + playlist);
+            movie.setVod_name(item.path("title").asText());
+            JsonNode thumbnails = item.path("thumbnails");
+            if (thumbnails.isArray() && !thumbnails.isEmpty()) {
+                movie.setVod_pic(fixCover(thumbnails.get(0).path("url").asText()));
+            }
+            JsonNode count = item.path("video_count");
+            movie.setVod_remarks(count.isNumber() ? count.asInt() + "个视频" : "播放列表");
+            return movie;
+        }
+        String id = item.path("id").asText("");
+        if (id.isEmpty() || !item.has("title")) {
+            return null;
+        }
+        return buildMovieDetail(item);
+    }
+
+    private String fixCover(String url) {
+        if (url.startsWith("//")) {
+            url = "https:" + url;
+        }
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/images")
+                .replaceQuery("url=" + URLEncoder.encode(url, StandardCharsets.UTF_8))
+                .build()
+                .toUriString();
+    }
+
+    /**
+     * 构造 YouTube 搜索 sp 参数(protobuf base64url)。
+     *
+     * <p>字段布局经真机实证+官方筛选面板抓取对齐:外层 field1=排序(rating=1/upload_date=2/view_count=3),
+     * field2=Filters{1:上载日期 hour=1..year=5, 2:类型 video=1..movie=4,
+     * 特征 HD=field4:1, 4K=field14:1, HDR=field25:1}。网上流传的标签表时间位错位,勿参考。</p>
+     */
+    static String buildSp(String sort, String time, String type, String format) {
+        ByteArrayOutputStreamHolder filters = new ByteArrayOutputStreamHolder();
+        if (StringUtils.isNotBlank(time)) {
+            filters.varint(1, switch (time) {
+                case "HOUR" -> 1;
+                case "DAY" -> 2;
+                case "WEEK" -> 3;
+                case "MONTH" -> 4;
+                case "YEAR" -> 5;
+                default -> 0;
+            });
+        }
+        if (StringUtils.isNotBlank(type)) {
+            filters.varint(2, switch (type) {
+                case "VIDEO" -> 1;
+                case "CHANNEL" -> 2;
+                case "PLAYLIST" -> 3;
+                case "MOVIE" -> 4;
+                default -> 0;
+            });
+        }
+        if (StringUtils.isNotBlank(format)) {
+            switch (format) {
+                case "HD" -> filters.bytes(0x20, 0x01);
+                case "_4K" -> filters.bytes(0x70, 0x01);
+                case "HDR" -> filters.bytes(0xC8, 0x01, 0x01);
+                default -> {
+                }
+            }
+        }
+
+        ByteArrayOutputStreamHolder out = new ByteArrayOutputStreamHolder();
+        if (StringUtils.isNotBlank(sort)) {
+            out.varint(1, switch (sort) {
+                case "RATING" -> 1;
+                case "UPLOAD_DATE" -> 2;
+                case "VIEW_COUNT" -> 3;
+                default -> 0;
+            });
+        }
+        if (filters.length() > 0) {
+            out.bytes(0x12, filters.length());
+            out.append(filters);
+        }
+        if (out.length() == 0) {
+            return "";
+        }
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(out.toByteArray());
+    }
+
+    private static final class ByteArrayOutputStreamHolder {
+        private final java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+
+        void varint(int field, int value) {
+            if (value <= 0) {
+                return;
+            }
+            bytes(field << 3, value);
+        }
+
+        void bytes(int... values) {
+            for (int value : values) {
+                buf.write(value);
+            }
+        }
+
+        void append(ByteArrayOutputStreamHolder other) {
+            try {
+                other.buf.writeTo(buf);
+            } catch (IOException ignored) {
+            }
+        }
+
+        int length() {
+            return buf.size();
+        }
+
+        byte[] toByteArray() {
+            return buf.toByteArray();
+        }
+    }
+
+    public MovieList detail(String id) {
+        if (id.startsWith("channel@") || id.startsWith("playlist@") || id.startsWith("@")) {
+            JsonNode info;
+            String prefix = "";
+            if (id.startsWith("channel@")) {
+                info = playlists.get(channelUrl(id.substring(8)));
+                prefix = "频道";
+            } else if (id.startsWith("playlist@")) {
+                info = playlists.get("https://www.youtube.com/playlist?list=" + id.substring(9));
+                prefix = "播放列表";
+            } else {
+                info = playlists.get("https://www.youtube.com/" + id + "/videos");
+                prefix = "频道";
+            }
+            MovieList result = new MovieList();
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(id);
+            movieDetail.setVod_name(info.path("title").asText(info.path("channel").asText("合集")));
+            movieDetail.setVod_director(info.path("channel").asText(""));
+            movieDetail.setVod_play_from(prefix);
+            List<String> list = new ArrayList<>();
+            for (var item : info.path("entries")) {
+                if (item.has("id")) {
+                    list.add(item.path("title").asText().replace("#", "").replace("$", "") + "$" + item.path("id").asText());
+                }
+            }
+            String common = Utils.getCommonPrefix(list);
+            if (common.length() > 1) {
+                log.debug("Sort: {}", common);
+                list.sort(Comparator.comparing(FileNameInfo::new));
+            }
+            movieDetail.setVod_play_url(String.join("#", list));
+            result.getList().add(movieDetail);
+
+            result.setTotal(result.getList().size());
+            result.setLimit(result.getList().size());
+            log.debug("detail: {}", result);
+            return result;
+        }
+
+        JsonNode video = this.videos.get(id);
+
+        MovieList result = new MovieList();
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id(id);
+        movieDetail.setVod_name(video.path("title").asText());
+        movieDetail.setVod_content(video.path("description").asText(""));
+        movieDetail.setVod_director(video.path("channel").asText(""));
+        JsonNode thumbnails = video.path("thumbnails");
+        if (thumbnails.isArray() && !thumbnails.isEmpty()) {
+            movieDetail.setVod_pic(fixCover(thumbnails.get(thumbnails.size() - 1).path("url").asText()));
+        }
+        boolean live = "is_live".equals(video.path("live_status").asText()) || video.path("is_live").asBoolean();
+        movieDetail.setVod_remarks(live ? "" : Utils.secondsToDuration(video.path("duration").asLong()));
+        movieDetail.setVod_play_from(live ? "直播" : "视频");
+        movieDetail.setVod_play_url(id);
+        result.getList().add(movieDetail);
+
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
+        log.debug("detail: {}", result);
+        return result;
+    }
+
+    public Object play(String token, String id, String client) {
+        JsonNode info = videos.get(id);
+        boolean live = "is_live".equals(info.path("live_status").asText()) || info.path("is_live").asBoolean();
+        String masterManifest = findMasterManifest(info);
+        List<JsonNode> muxed = muxedFormats(info);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("parse", "0");
+        if (live) {
+            result.put("url", buildProxyUrl(token, masterManifest));
+        } else if ("node".equals(client)) {
+            List<String> urls = new ArrayList<>();
+            videoOnlyFormats(info, 1080).forEach(format -> {
+                urls.add(format.path("format_id").asText() + " " + format.path("ext").asText());
+                urls.add(buildProxyUrl(token, format.path("url").asText()));
+            });
+            result.put("url", urls);
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (var audio : audioFormats(info)) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("bit", audio.path("abr").asInt(audio.path("tbr").asInt()));
+                map.put("title", (int) audio.path("abr").asInt(audio.path("tbr").asInt()) + "Kbps");
+                map.put("url", buildProxyUrl(token, audio.path("url").asText()));
+                list.add(map);
+            }
+            result.put("extra", Map.of("audio", list));
+        } else if (DashUtils.isClientSupport(client) && masterManifest != null) {
+            // HLS master 自带全清晰度+音轨自适应,EXO 原生播放,不再手搓 MPD
+            result.put("url", buildProxyUrl(token, masterManifest));
+        } else if (!muxed.isEmpty()) {
+            result.put("url", buildProxyUrl(token, muxed.get(0).path("url").asText()));
+        } else if (masterManifest != null) {
+            result.put("url", buildProxyUrl(token, masterManifest));
+        } else {
+            throw new BadRequestException("无法获取播放地址: " + id);
+        }
+
+        log.debug("play result: {}", result);
+        return result;
+    }
+
+    static String findMasterManifest(JsonNode info) {
+        for (var format : info.path("formats")) {
+            String manifest = format.path("manifest_url").asText("");
+            if (!manifest.isEmpty()) {
+                return manifest;
+            }
+        }
+        return null;
+    }
+
+    static List<JsonNode> muxedFormats(JsonNode info) {
+        List<JsonNode> list = new ArrayList<>();
+        for (var format : info.path("formats")) {
+            if (format.path("has_drm").asBoolean(false)) {
+                continue;
+            }
+            if (!"https".equals(format.path("protocol").asText())) {
+                continue;
+            }
+            String vcodec = format.path("vcodec").asText("none");
+            String acodec = format.path("acodec").asText("none");
+            if (!"none".equals(vcodec) && !"none".equals(acodec)) {
+                list.add(format);
+            }
+        }
+        list.sort(Comparator.comparingInt((JsonNode f) -> f.path("height").asInt(0)).reversed());
+        return list;
+    }
+
+    static List<JsonNode> videoOnlyFormats(JsonNode info, int minHeight) {
+        Map<Integer, JsonNode> best = new LinkedHashMap<>();
+        for (var format : info.path("formats")) {
+            if (format.path("has_drm").asBoolean(false)) {
+                continue;
+            }
+            if (!"https".equals(format.path("protocol").asText())) {
+                continue;
+            }
+            String vcodec = format.path("vcodec").asText("none");
+            String acodec = format.path("acodec").asText("none");
+            int height = format.path("height").asInt(0);
+            if ("none".equals(acodec) && !"none".equals(vcodec) && height >= minHeight && height > 0) {
+                best.putIfAbsent(height, format);
+            }
+        }
+        return best.values().stream()
+                .sorted(Comparator.comparingInt((JsonNode f) -> f.path("height").asInt(0)).reversed())
+                .collect(Collectors.toList());
+    }
+
+    static List<JsonNode> audioFormats(JsonNode info) {
+        Map<Integer, JsonNode> best = new LinkedHashMap<>();
+        for (var format : info.path("formats")) {
+            if (format.path("has_drm").asBoolean(false)) {
+                continue;
+            }
+            if (!"https".equals(format.path("protocol").asText())) {
+                continue;
+            }
+            String vcodec = format.path("vcodec").asText("none");
+            String acodec = format.path("acodec").asText("none");
+            int abr = (int) format.path("abr").asDouble(format.path("tbr").asDouble(0));
+            if ("none".equals(vcodec) && !"none".equals(acodec) && abr > 0) {
+                best.putIfAbsent(abr, format);
+            }
+        }
+        return best.values().stream()
+                .sorted(Comparator.comparingInt((JsonNode f) -> (int) f.path("abr").asDouble(f.path("tbr").asDouble(0))).reversed())
+                .collect(Collectors.toList());
+    }
+
+    public void proxy(String token, String u, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        String url = decodeProxyUrl(u);
+        if (!isAllowedUpstream(url)) {
+            throw new BadRequestException("Invalid proxy URL");
+        }
+        // 分片 URL 路径中段也含 "/playlist/index.m3u8" 再接 /file/seg.ts,必须按后缀判定
+        boolean manifest = url.endsWith(".m3u8") || url.contains("/api/manifest/");
+        if (manifest) {
+            relayManifest(token, url, request, response);
+        } else {
+            relayStream(url, request, response);
+        }
+    }
+
+    private void relayManifest(String token, String url, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        HttpURLConnection conn = openUpstream(url, null);
+        int code = conn.getResponseCode();
+        if (code != 200) {
+            response.sendError(code == 403 || code == 404 ? HttpServletResponse.SC_NOT_FOUND : HttpServletResponse.SC_BAD_GATEWAY);
+            return;
+        }
+        String body;
+        try (InputStream in = conn.getInputStream()) {
+            body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        String prefix = ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http")
+                .replacePath("/youtube-proxy" + (StringUtils.isBlank(token) ? "" : "/" + token))
+                .replaceQuery(null)
+                .build()
+                .toUriString();
+        Matcher matcher = PLAYLIST_LINE_URL.matcher(body);
+        StringBuilder out = new StringBuilder(body.length() * 2);
+        int last = 0;
+        while (matcher.find()) {
+            String original = matcher.group();
+            out.append(body, last, matcher.start());
+            if (isAllowedUpstream(original)) {
+                out.append(prefix).append("?u=").append(encodeProxyUrl(original));
+            } else {
+                out.append(original);
+            }
+            last = matcher.end();
+        }
+        out.append(body.substring(last));
+        response.setContentType("application/vnd.apple.mpegurl");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentLength(out.toString().getBytes(StandardCharsets.UTF_8).length);
+        response.getWriter().write(out.toString());
+    }
+
+    private void relayStream(String url, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        String range = request.getHeader(HttpHeaders.RANGE);
+        HttpURLConnection conn = openUpstream(url, range);
+        int code = conn.getResponseCode();
+        response.setStatus(code);
+        for (String header : List.of(HttpHeaders.CONTENT_TYPE, HttpHeaders.CONTENT_LENGTH, HttpHeaders.CONTENT_RANGE, HttpHeaders.ACCEPT_RANGES)) {
+            String value = conn.getHeaderField(header);
+            if (value != null) {
+                response.setHeader(header, value);
+            }
+        }
+        if (code >= 400) {
+            response.setHeader(HttpHeaders.CONTENT_LENGTH, "0");
+            return;
+        }
+        try (InputStream in = conn.getInputStream(); OutputStream out = response.getOutputStream()) {
+            in.transferTo(out);
+        }
+    }
+
+    private HttpURLConnection openUpstream(String url, String range) throws IOException {
+        HttpURLConnection conn;
+        String proxyUrl = proxyForUpstream();
+        if (proxyUrl != null) {
+            URI uri = URI.create(proxyUrl);
+            conn = (HttpURLConnection) new URL(url).openConnection(new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                    new java.net.InetSocketAddress(uri.getHost(), uri.getPort())));
+        } else {
+            conn = (HttpURLConnection) new URL(url).openConnection();
+        }
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(60000);
+        if (range != null) {
+            conn.setRequestProperty(HttpHeaders.RANGE, range);
+        }
+        return conn;
+    }
+
+    private String proxyForUpstream() {
+        try {
+            Path path = Utils.getDataPath("proxy.txt");
+            if (Files.exists(path)) {
+                String line = Files.readString(path).trim();
+                URI uri = URI.create(line);
+                if (uri.getHost() != null && uri.getPort() > 0) {
+                    return line;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("read proxy.txt failed", e);
+        }
+        return null;
+    }
+
+    private static boolean isAllowedUpstream(String url) {
+        if (!Utils.isSafeExternalUrl(url)) {
+            return false;
+        }
+        String host = URI.create(url).getHost();
+        if (host == null) {
+            return false;
+        }
+        host = host.toLowerCase();
+        return host.equals("manifest.googlevideo.com") || host.endsWith(".googlevideo.com")
+                || host.equals("www.youtube.com") || host.equals("youtube.com");
+    }
+
+    static String encodeProxyUrl(String url) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(url.getBytes(StandardCharsets.UTF_8));
+    }
+
+    static String decodeProxyUrl(String u) {
+        try {
+            return new String(Base64.getUrlDecoder().decode(u), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid proxy URL");
+        }
+    }
+
+    private String buildProxyUrl(String token, String upstream) {
+        String path = "/youtube-proxy";
+        if (StringUtils.isNotBlank(token)) {
+            path = path + "/" + token;
+        }
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath(path)
+                .replaceQuery("u=" + encodeProxyUrl(upstream))
+                .build()
+                .toUriString();
+    }
+
+    static String channelOrHandleOf(JsonNode item) {
+        String url = item.path("url").asText("");
+        Matcher matcher = CHANNEL_URL.matcher(url + "/");
+        if (matcher.find()) {
+            return matcher.group(2) != null ? matcher.group(2) : matcher.group(3);
+        }
+        return null;
+    }
+
+    static String playlistIdOf(JsonNode item) {
+        Matcher matcher = PLAYLIST_URL.matcher(item.path("url").asText(""));
+        return matcher.find() ? matcher.group(1) : null;
+    }
+}
