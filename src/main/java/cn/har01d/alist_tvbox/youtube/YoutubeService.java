@@ -568,6 +568,12 @@ public class YoutubeService {
 
         Map<String, Object> result = new HashMap<>();
         result.put("parse", "0");
+        if (!live) {
+            List<Map<String, Object>> subs = buildSubtitles(token, info);
+            if (!subs.isEmpty()) {
+                result.put("subs", subs);
+            }
+        }
         if (live) {
             result.put("url", buildProxyUrl(token, masterManifest));
         } else if ("node".equals(client)) {
@@ -609,6 +615,82 @@ public class YoutubeService {
             }
         }
         return null;
+    }
+
+    /** 字幕语言优先级:人工中文简/繁 → 人工英文;无人工中文时补自动翻译简/繁(YouTube auto 翻译有上百语言组合,只挑中文)。 */
+    private static final List<String> MANUAL_SUB_LANGS = List.of("zh-Hans", "zh-CN", "zh", "zh-Hant", "zh-TW", "en");
+    private static final List<String> AUTO_SUB_LANGS = List.of("zh-CN", "zh-Hans", "zh", "zh-TW", "zh-Hant");
+    private static final int MAX_SUBS = 8;
+
+    /**
+     * 字幕轨(契约同 B站 subs:{name,lang,format,url,flag},FongMi 对 format 直用)。
+     * timedtext 直链在 www.youtube.com 域,经 /youtube-proxy 中继;vtt → text/vtt
+     * (ExoPlayer WebVTT 解析器,口径同 TvBoxService 字幕 mime 分支)。
+     * 自动翻译轨 flag=4(同 B站 AI 字幕「默认不选中」标记)。
+     */
+    List<Map<String, Object>> buildSubtitles(String token, JsonNode info) {
+        List<Map<String, Object>> subs = new ArrayList<>();
+        for (SubPick pick : pickSubtitlePicks(info)) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("name", subtitleName(pick.lang()) + (pick.auto() ? "(自动翻译)" : ""));
+            map.put("lang", pick.lang());
+            map.put("format", "text/vtt");
+            map.put("flag", pick.auto() ? 4 : 0);
+            map.put("url", buildProxyUrl(token, pick.url()));
+            subs.add(map);
+        }
+        return subs;
+    }
+
+    record SubPick(String lang, boolean auto, String url) {
+    }
+
+    /** 选轨纯逻辑:人工中文简/繁 → 人工英文;无人工中文补一条自动翻译简中(YouTube 自动翻译上百语言组合,只挑中文)。 */
+    static List<SubPick> pickSubtitlePicks(JsonNode info) {
+        List<SubPick> picks = new ArrayList<>();
+        boolean manualChinese = false;
+        for (String lang : MANUAL_SUB_LANGS) {
+            String url = pickSubtitleUrl(info.path("subtitles"), lang);
+            if (url == null) {
+                continue;
+            }
+            if (lang.startsWith("zh")) {
+                manualChinese = true;
+            }
+            picks.add(new SubPick(lang, false, url));
+            if (picks.size() >= MAX_SUBS) {
+                return picks;
+            }
+        }
+        if (!manualChinese) {
+            for (String lang : AUTO_SUB_LANGS) {
+                String url = pickSubtitleUrl(info.path("automatic_captions"), lang);
+                if (url != null) {
+                    picks.add(new SubPick(lang, true, url));
+                    break;
+                }
+            }
+        }
+        return picks;
+    }
+
+    static String pickSubtitleUrl(JsonNode pool, String lang) {
+        for (var entry : pool.path(lang)) {
+            if ("vtt".equals(entry.path("ext").asText()) && !entry.path("url").asText("").isEmpty()) {
+                return entry.path("url").asText();
+            }
+        }
+        return null;
+    }
+
+    static String subtitleName(String lang) {
+        return switch (lang) {
+            case "zh-Hans", "zh-CN" -> "简体中文";
+            case "zh-Hant", "zh-TW" -> "繁体中文";
+            case "zh" -> "中文";
+            case "en" -> "English";
+            default -> lang;
+        };
     }
 
     static List<JsonNode> muxedFormats(JsonNode info) {

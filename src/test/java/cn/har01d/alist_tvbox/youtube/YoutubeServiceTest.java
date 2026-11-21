@@ -124,6 +124,29 @@ class YoutubeServiceTest {
     }
 
     @Test
+    void subtitlePicksPreferManualChineseThenAutoTranslation() throws Exception {
+        // TED fixture:人工仅 en;自动翻译 zh-CN/zh-TW → English(人工) + 简体中文(自动翻译)
+        JsonNode info = fixture("subtitles.json");
+        var picks = YoutubeService.pickSubtitlePicks(info);
+        assertThat(picks).extracting(YoutubeService.SubPick::lang, YoutubeService.SubPick::auto)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("en", false),
+                        org.assertj.core.groups.Tuple.tuple("zh-CN", true));
+        assertThat(YoutubeService.subtitleName("zh-CN")).isEqualTo("简体中文");
+        // 人工字幕 URL 是 timedtext 域(白名单内)
+        assertThat(picks.get(0).url()).startsWith("https://www.youtube.com/api/timedtext");
+    }
+
+    @Test
+    void subtitlePicksSkipAutoWhenManualChineseExists() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode info = mapper.readTree("{\"subtitles\":{\"zh-Hans\":[{\"ext\":\"vtt\",\"url\":\"https://www.youtube.com/api/timedtext?a=1\"}]},\"automatic_captions\":{\"zh-CN\":[{\"ext\":\"vtt\",\"url\":\"https://www.youtube.com/api/timedtext?b=2\"}]}}");
+        var picks = YoutubeService.pickSubtitlePicks(info);
+        assertThat(picks).extracting(YoutubeService.SubPick::lang, YoutubeService.SubPick::auto)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("zh-Hans", false));
+    }
+
+    @Test
     void resolveDownloadUrlsWithGitHubProxies() {
         AppProperties properties = new AppProperties();
         YoutubeDlpRuntime runtime = new YoutubeDlpRuntime(properties, new cn.har01d.alist_tvbox.service.GitHubProxyService(), objectMapper);

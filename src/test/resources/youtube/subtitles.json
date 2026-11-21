@@ -1,0 +1,35 @@
+{
+ "id": "iG9CE55wbtY",
+ "title": "Do schools kill creativity? | Sir Ken Robinson | TED",
+ "subtitles": {
+  "zh-Hans": [],
+  "zh-Hant": [],
+  "en": [
+   {
+    "ext": "vtt",
+    "url": "https://www.youtube.com/api/timedtext?v=iG9CE55wbtY&ei=sIsBa7CrAZOu2roP-KjvmQc&caps=asr&opi=112496729&xoaf=5&xowf=1&hl=en&ip=0.0.0.0&ipbits=0&expire=1795288608&sparams=ip%2Cipbits%2Cexpire%2Cv%2Cei%2Ccaps%2Copi%2Cxoaf&signature=5175B2B0CD868EED0D21BB137151AD0C83047172.0FFAF9259348678B32F4E675069392C65B6FF91F&key=yt8&lang=en&fmt=vtt",
+    "name": "English",
+    "impersonate": true,
+    "__yt_dlp_client": "tv_samsung"
+   }
+  ]
+ },
+ "automatic_captions": {
+  "zh-CN": [
+   {
+    "url": "https://manifest.googlevideo.com/api/manifest/hls_timedtext_playlist/expire/1795285008/ei/sIsBa8bXEPux2roP9ImfmA4/ip/2a0e:aa00:12f:a241:e1ba:a9b8:1b67:e30b/id/886f42139e706ed6/source/youtube/requiressl/yes/dur/1203.399/tts_params/caps%3Dasr%26v%3DiG9CE55wbtY%26lang%3Dzh-CN%26ip%3D2a0e:aa00:12f:a241:e1ba:a9b8:1b67:e30b%26ipbits%3D0%26expire%3D1795285008%26sparams%3Dip,ipbits,expire,caps,v%26signature%3D3C3148D7A5CD92B79AA1119FBCAD9AAE72ECED2E.824B6E7C4FB521E6EDCE7256F60ACC365306EA45%26key%3Ddg_yt0/rqh/4/hls_chunk_host/rr5---sn-oji3bc-5m.googlevideo.com/xpc/EgVo2aDSNQ%3D%3D/cps/299/met/1795263408,/mh/ea/mm/18,29/mn/sn-oji3bc-5m,sn-oji3b5-5u/ms/aub,rdu/mv/m/mvi/5/pl/44/rms/aub,aub/pcm2/no/initcwndbps/7697125/bui/AZFAFb_7qC4WOu-l-GMzwPk8eqoCnGXuvUvWIAPb_0GJ7dzJsT5R_B6tE5Jssrr1_f6sZDZZF4UD4QJ6/spc/nfZ8ZpmxCb9dHp42CixeOrf4E2MBEI_r1FKEIaCZW7LcHXkN7giKgKUfD5ZZppY/vprv/1/playlist_type/DVR/epbp/1/mt/1795262737/fvip/5/short_key/1/keepalive/yes/fexp/51565115,52338435/sparams/expire,ei,ip,id,source,requiressl,dur,tts_params,rqh,xpc,pcm2,bui,spc,vprv,playlist_type/sig/AE0s2JYwRAIgIeqZRBHO3Esig54BNQGsQ4upRUZQi2TTnR88sP5RMqACIHSPMQy1YsItm9Mp9Xe8E-S8oyuREKJThXwWI7NQZrPO/lsparams/hls_chunk_host,cps,met,mh,mm,mn,ms,mv,mvi,pl,rms,initcwndbps/lsig/APaTxxMwRgIhANjzOLAPyCRO3u8laEdQ_Lmf4KbBCq1E2enni-ScIrxPAiEA2EnWhj6TF2VqA4RHiU4NWdaeGkJiGZ-CIIs4EoLavL8%3D/playlist/index.m3u8",
+    "ext": "vtt",
+    "protocol": "m3u8_native",
+    "__yt_dlp_client": "visionos"
+   }
+  ],
+  "zh-TW": [
+   {
+    "url": "https://manifest.googlevideo.com/api/manifest/hls_timedtext_playlist/expire/1795285008/ei/sIsBa8bXEPux2roP9ImfmA4/ip/2a0e:aa00:12f:a241:e1ba:a9b8:1b67:e30b/id/886f42139e706ed6/source/youtube/requiressl/yes/dur/1203.399/tts_params/caps%3Dasr%26v%3DiG9CE55wbtY%26lang%3Dzh-TW%26ip%3D2a0e:aa00:12f:a241:e1ba:a9b8:1b67:e30b%26ipbits%3D0%26expire%3D1795285008%26sparams%3Dip,ipbits,expire,caps,v%26signature%3D721441100EE3CC1CBFE6064818B0A0A4C82D04BB.18C88E5EAD33DB2263BB25AF0328B35931734EE9%26key%3Ddg_yt0/rqh/4/hls_chunk_host/rr5---sn-oji3bc-5m.googlevideo.com/xpc/EgVo2aDSNQ%3D%3D/cps/299/met/1795263408,/mh/ea/mm/18,29/mn/sn-oji3bc-5m,sn-oji3b5-5u/ms/aub,rdu/mv/m/mvi/5/pl/44/rms/aub,aub/pcm2/no/initcwndbps/7697125/bui/AZFAFb_7qC4WOu-l-GMzwPk8eqoCnGXuvUvWIAPb_0GJ7dzJsT5R_B6tE5Jssrr1_f6sZDZZF4UD4QJ6/spc/nfZ8ZpmxCb9dHp42CixeOrf4E2MBEI_r1FKEIaCZW7LcHXkN7giKgKUfD5ZZppY/vprv/1/playlist_type/DVR/epbp/1/mt/1795262737/fvip/5/short_key/1/keepalive/yes/fexp/51565115,52338435/sparams/expire,ei,ip,id,source,requiressl,dur,tts_params,rqh,xpc,pcm2,bui,spc,vprv,playlist_type/sig/AE0s2JYwRAIgKFSj_qQO5WNRuNilLI6bOD06kndBcHOlP14TO2v0WP8CIDComN3BF-WGc0zWYRgI_OZcnZygYWvkX0Ti7i3GxrzN/lsparams/hls_chunk_host,cps,met,mh,mm,mn,ms,mv,mvi,pl,rms,initcwndbps/lsig/APaTxxMwRQIhAI9tlzKZTPVy220QurALv6jY8fN-zrNfZus1WGMmzI-nAiB3b3LR05JTXu5iEvni-0PxCAX6s0KAFiRZozoroq2n-g%3D%3D/playlist/index.m3u8",
+    "ext": "vtt",
+    "protocol": "m3u8_native",
+    "__yt_dlp_client": "visionos"
+   }
+  ]
+ }
+}
