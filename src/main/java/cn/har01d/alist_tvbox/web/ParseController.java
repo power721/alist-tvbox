@@ -34,6 +34,6 @@ public class ParseController {
         log.debug("parse: {} {} {}", token, request, ac);
         subscriptionService.checkToken(token);
 
-        return parseService.parse(request, ac);
+        return parseService.parse(token, request, ac);
     }
 }

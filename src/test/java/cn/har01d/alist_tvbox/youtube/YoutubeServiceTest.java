@@ -147,6 +147,53 @@ class YoutubeServiceTest {
     }
 
     @Test
+    void extractCuesKeepsBlocksAndDedupeIsByAdjacent() throws Exception {
+        // 真实形态:YouTube timedtext 导出每 cue 原样两遍(q6fgVVmdpgY 实录)
+        String vtt = """
+                WEBVTT
+                Kind: captions
+                Language: zh-Hans
+
+                00:00:06.834 --> 00:00:08.033
+                <c.color000000>​​</c><c.colorF913BF><b>​ ​我们上​ ​</b></c><c.color000000>​</c>
+
+                00:00:06.834 --> 00:00:08.033
+                <c.color000000>​​</c><c.colorF913BF><b>​ ​我们上​ ​</b></c><c.color000000>​</c>
+
+                00:00:08.100 --> 00:00:09.300
+                <c.color000000>​​</c><c.color13F4F9><b>​ ​好耶​ ​</b></c><c.color000000>​</c>
+                """;
+        List<String> cues = YoutubeService.extractCues(vtt);
+        assertThat(cues).hasSize(3);
+        // 相邻去重后 cue0 == cue1 → 输出只剩 2 条
+        StringBuilder out = new StringBuilder();
+        String previous = null;
+        int kept = 0;
+        for (String cue : cues) {
+            if (cue.equals(previous)) continue;
+            kept++;
+            previous = cue;
+        }
+        assertThat(kept).isEqualTo(2);
+        // 样式/头部块(无 -->)不进 cue
+        assertThat(cues.get(0)).startsWith("00:00:06.834");
+    }
+
+    @Test
+    void proxyHostAllowlistMatchesRegisteredAndSubDomains() {
+        ProxyHostAllowlist allowlist = new ProxyHostAllowlist();
+        allowlist.register("v16-webapp-prime.tiktok.com");
+        assertThat(allowlist.allows("v16-webapp-prime.tiktok.com")).isTrue();
+        // CDN 子域分片:登记域的后缀匹配
+        assertThat(allowlist.allows("v19-webapp-prime.tiktok.com")).isFalse();
+        assertThat(allowlist.allows("chunk-v16-webapp-prime.tiktok.com.edge.tiktokcdn.com")).isFalse();
+        allowlist.register("tiktokcdn.com");
+        assertThat(allowlist.allows("chunk.any.tiktokcdn.com")).isTrue();
+        assertThat(allowlist.allows(null)).isFalse();
+        assertThat(allowlist.allows("evil.com")).isFalse();
+    }
+
+    @Test
     void resolveDownloadUrlsWithGitHubProxies() {
         AppProperties properties = new AppProperties();
         YoutubeDlpRuntime runtime = new YoutubeDlpRuntime(properties, new cn.har01d.alist_tvbox.service.GitHubProxyService(), objectMapper);

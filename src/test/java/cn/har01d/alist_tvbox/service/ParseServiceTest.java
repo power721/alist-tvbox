@@ -20,7 +20,7 @@ class ParseServiceTest {
         when(shareService.resolveShareTitle("https://pan.quark.cn/s/demo", "测试剧名"))
                 .thenReturn("测试剧名");
 
-        ParseService service = new ParseService(tvBoxService, offlineDownloadService, shareService);
+        ParseService service = new ParseService(tvBoxService, offlineDownloadService, shareService, mock(cn.har01d.alist_tvbox.youtube.YtdlpParseService.class));
         service.parse(new ParseRequest("https://pan.quark.cn/s/demo", "测试剧名"), "play");
 
         verify(tvBoxService).getDetail("play", "1$/temp/quark@demo@/~playlist", "测试剧名", null, 0);
@@ -34,7 +34,7 @@ class ParseServiceTest {
         when(shareService.add(argThat(share -> "https://pan.quark.cn/s/demo".equals(share.getLink()))))
                 .thenReturn("/temp/quark@demo@");
 
-        ParseService service = new ParseService(tvBoxService, offlineDownloadService, shareService);
+        ParseService service = new ParseService(tvBoxService, offlineDownloadService, shareService, mock(cn.har01d.alist_tvbox.youtube.YtdlpParseService.class));
         service.parse(new ParseRequest("https://pan.quark.cn/s/demo"), "play");
 
         verify(tvBoxService).getDetail("play", "1$/temp/quark@demo@/~playlist", null, null, 0);

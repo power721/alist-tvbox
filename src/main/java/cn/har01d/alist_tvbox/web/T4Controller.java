@@ -87,6 +87,7 @@ public class T4Controller {
     private final MediaLibraryController mediaLibraryController;
     private final BiliBiliController biliBiliController;
     private final YoutubeController youtubeController;
+    private final cn.har01d.alist_tvbox.youtube.YtdlpParseService ytdlpParseService;
     private final EmbyController embyController;
     private final JellyfinController jellyfinController;
     private final FeiniuController feiniuController;
@@ -624,6 +625,12 @@ public class T4Controller {
             } catch (Exception e) {
                 log.warn("t4 push parse failed: {}", url, e);
             }
+        }
+        // 通用 URL 解析(yt-dlp 1800+ 站点):TikTok/X/Twitch 等非网盘视频站,
+        // 详情即播放(代理直链内嵌);失败回落直链三线路
+        Map<String, Object> ytdlp = ytdlpParseService.detail(url, token);
+        if (ytdlp != null && !ytdlp.isEmpty()) {
+            return ytdlp;
         }
         return pushDirectDetail(url);
     }
