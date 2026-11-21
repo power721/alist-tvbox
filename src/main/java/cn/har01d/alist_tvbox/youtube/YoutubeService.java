@@ -60,6 +60,8 @@ public class YoutubeService {
     private static final Pattern PLAYLIST_LINE_URL = Pattern.compile("https?://[^\\s\"'<>]+");
     private static final int PAGE_SIZE = 20;
     private static final int BROWSE_LIMIT = 200;
+    /** 直播栏目候选拉取量:live 特征位纯度低,须多拉再按 is_live 过滤凑页。 */
+    private static final int LIVE_CANDIDATES = 120;
 
     private final List<FilterValue> sorts = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -192,9 +194,36 @@ public class YoutubeService {
             return getPlaylistVideo(text.substring(9));
         }
         if (text.startsWith("live@")) {
-            return search(text.substring(5), null, null, null, null, page, true);
+            return liveList(text.substring(5), page);
         }
         return search(text, sort, time, type, format, page);
+    }
+
+    /**
+     * 直播栏目:按关键词拉足候选后按 is_live 二次过滤。
+     * YouTube 的 live 特征位(sp)实测纯度低——不过滤时 20 条里仅 1~6 条在播,大量重播混入。
+     */
+    private MovieList liveList(String keyword, int page) {
+        String url = "https://www.youtube.com/results?search_query=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)
+                + "&sp=" + buildSp(null, null, "VIDEO", null, true);
+        JsonNode info = searches.get(url + "@live");
+
+        List<MovieDetail> lives = new ArrayList<>();
+        for (var item : info.path("entries")) {
+            if ("is_live".equals(item.path("live_status").asText()) && item.hasNonNull("id")) {
+                lives.add(buildMovieDetail(item));
+            }
+        }
+        int from = (page - 1) * PAGE_SIZE;
+        int end = from + PAGE_SIZE;
+
+        MovieList result = new MovieList();
+        result.setList(lives.subList(Math.min(from, lives.size()), Math.min(end, lives.size())));
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
+        result.setPagecount(lives.size() > end ? page + 1 : page);
+        log.debug("live result: {}/{} raw", result.getList().size(), info.path("entries").size());
+        return result;
     }
 
     /** channel@ 后可能是 UC id 也可能是 @handle(搜索结果/自定义分类两种来源)。 */
@@ -210,10 +239,15 @@ public class YoutubeService {
                 Duration.ofSeconds(60));
     }
 
-    /** key = url + "@@" + page;翻页按 playlist-end 扩窗取够当前页。 */
+    /** key = url + "@@" + page(数字翻页)或 "@live"(直播栏目拉足候选供 is_live 过滤)。 */
     private JsonNode getSearchInfo(String key) {
-        int page = Integer.parseInt(key.substring(key.lastIndexOf('@') + 1));
-        int end = Math.max(PAGE_SIZE * 2, page * PAGE_SIZE);
+        String suffix = key.substring(key.lastIndexOf('@') + 1);
+        int end;
+        if (suffix.chars().allMatch(Character::isDigit)) {
+            end = Math.max(PAGE_SIZE * 2, Integer.parseInt(suffix) * PAGE_SIZE);
+        } else {
+            end = LIVE_CANDIDATES;
+        }
         String url = key.substring(0, key.lastIndexOf('@'));
         return runtime.execJson(List.of("-J", "--flat-playlist", "--playlist-end", String.valueOf(end), url),
                 Duration.ofSeconds(60));
