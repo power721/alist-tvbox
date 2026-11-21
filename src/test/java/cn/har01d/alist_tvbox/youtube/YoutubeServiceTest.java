@@ -58,6 +58,12 @@ class YoutubeServiceTest {
     }
 
     @Test
+    void buildSpLive() {
+        // 官方筛选面板「直播」= EgJAAQ==(Filters field18:1)
+        assertThat(YoutubeService.buildSp(null, null, null, null, true)).isEqualTo("EgJAAQ");
+    }
+
+    @Test
     void pickMasterManifest() throws Exception {
         JsonNode info = fixture("video.json");
         assertThat(YoutubeService.findMasterManifest(info))

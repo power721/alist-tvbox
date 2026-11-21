@@ -146,6 +146,10 @@ public class YoutubeService {
                     result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types), new Filter("format", "格式", formats)));
                 }
             }
+            // 自定义栏目不剥夺直播入口;已自定义 live@ 栏目则不重复追加
+            if (result.getCategories().stream().noneMatch(c -> c.getType_id().startsWith("live@"))) {
+                addLiveCategory(result);
+            }
         } else {
             List<String> keywords = List.of("电影", "电视剧", "动漫", "综艺", "纪录片", "音乐", "英语", "科技", "新闻", "游戏", "风景", "旅游", "美食", "健身", "运动", "体育", "搞笑", "短剧");
             for (var name : keywords) {
@@ -158,11 +162,23 @@ public class YoutubeService {
                 result.getCategories().add(category);
                 result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types), new Filter("format", "格式", formats)));
             }
+            addLiveCategory(result);
         }
 
         result.setTotal(result.getCategories().size());
         result.setLimit(result.getCategories().size());
         return result;
+    }
+
+    /** 直播分类:id 形如 live@关键词,浏览=按关键词搜直播中(live 特征位)。 */
+    private void addLiveCategory(CategoryList result) {
+        Category category = new Category();
+        category.setType_id("live@直播");
+        category.setType_name("直播");
+        category.setType_flag(0);
+        category.setLand(1);
+        category.setRatio(1.33);
+        result.getCategories().add(category);
     }
 
     public MovieList list(String text, String sort, String time, String type, String format, int page) {
@@ -174,6 +190,9 @@ public class YoutubeService {
         }
         if (text.startsWith("playlist@")) {
             return getPlaylistVideo(text.substring(9));
+        }
+        if (text.startsWith("live@")) {
+            return search(text.substring(5), null, null, null, null, page, true);
         }
         return search(text, sort, time, type, format, page);
     }
@@ -268,7 +287,11 @@ public class YoutubeService {
     }
 
     public MovieList search(String text, String sort, String time, String type, String format, int page) {
-        String sp = buildSp(sort, time, type, format);
+        return search(text, sort, time, type, format, page, false);
+    }
+
+    MovieList search(String text, String sort, String time, String type, String format, int page, boolean live) {
+        String sp = buildSp(sort, time, type, format, live);
         String url = "https://www.youtube.com/results?search_query=" + URLEncoder.encode(text, StandardCharsets.UTF_8);
         if (!sp.isEmpty()) {
             url += "&sp=" + sp;
@@ -347,9 +370,13 @@ public class YoutubeService {
      *
      * <p>字段布局经真机实证+官方筛选面板抓取对齐:外层 field1=排序(rating=1/upload_date=2/view_count=3),
      * field2=Filters{1:上载日期 hour=1..year=5, 2:类型 video=1..movie=4,
-     * 特征 HD=field4:1, 4K=field14:1, HDR=field25:1}。网上流传的标签表时间位错位,勿参考。</p>
+     * 特征 HD=field4:1, 4K=field14:1, HDR=field25:1, 直播=field8:1}。网上流传的标签表时间位错位,勿参考。</p>
      */
     static String buildSp(String sort, String time, String type, String format) {
+        return buildSp(sort, time, type, format, false);
+    }
+
+    static String buildSp(String sort, String time, String type, String format, boolean live) {
         ByteArrayOutputStreamHolder filters = new ByteArrayOutputStreamHolder();
         if (StringUtils.isNotBlank(time)) {
             filters.varint(1, switch (time) {
@@ -378,6 +405,10 @@ public class YoutubeService {
                 default -> {
                 }
             }
+        }
+        if (live) {
+            // 官方筛选面板「直播」= EgJAAQ==(Filters field8:1)
+            filters.bytes(0x40, 0x01);
         }
 
         ByteArrayOutputStreamHolder out = new ByteArrayOutputStreamHolder();
