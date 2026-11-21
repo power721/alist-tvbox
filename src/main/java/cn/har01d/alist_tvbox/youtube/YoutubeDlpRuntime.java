@@ -115,7 +115,7 @@ public class YoutubeDlpRuntime {
             addCandidate(candidates, System.getProperty("youtube.python"));
             addCandidate(candidates, System.getenv("YOUTUBE_PYTHON"));
             candidates.addAll(List.of("python3", "python3.13", "python3.12", "python3.11",
-                    "/usr/bin/python3", "/usr/local/bin/python3"));
+                    "/usr/bin/python3", "/usr/local/bin/python3", "python", "/usr/bin/python"));
             String foundVersion = null;
             String tooOld = null;
             for (String candidate : candidates) {
