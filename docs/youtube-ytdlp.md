@@ -5,7 +5,7 @@
 ## 运行时
 
 - 交付形态：GitHub Releases 的 `yt-dlp.tar.gz` 源码包（纯 Python，Alpine musl 可跑；standalone 二进制是 glibc 专享勿用），解压到 `<data>/yt-dlp/yt-dlp/`，`PYTHONPATH` + `python3 -m yt_dlp` 调起，不依赖 pip。
-- **Python 版本门控：yt-dlp 要求 3.11+**。探测按序尝试 `-Dyoutube.python`、`YOUTUBE_PYTHON`、`python3`、`python3.13/3.12/3.11`、`/usr/bin/python3`、`/usr/local/bin/python3`，逐个做版本检查（老 Alpine 基座/Ubuntu 22.04 的系统 python3 是 3.10 会被跳过）。全部过旧时站点隐藏，配置页「YouTube 数据源」卡片给出原因（可 `-Dyoutube.python=/path/to/python3.11+` 指定）。
+- **Python 版本门控：yt-dlp 要求 3.11+**。探测按序尝试 `-Dyoutube.python`、`YOUTUBE_PYTHON`、`python3`、`python3.13/3.12/3.11`、`/usr/bin/python3`、`/usr/local/bin/python3`，逐个做版本检查（老 Alpine 基座/Ubuntu 22.04 的系统 python3 是 3.10 会被跳过）。全部过旧时站点隐藏，配置页「YouTube 运行时」卡片给出原因（可 `-Dyoutube.python=/path/to/python3.11+` 指定）。
 - 首次启动后台自动下载；每日 06:47 比对 GitHub 最新 release 自动更新（`app.youtube-dlp-auto-update=false` 关闭，`app.youtube-dlp-url` 可换下载源）。
 - 出站代理沿用 `<data>/proxy.txt`（GitHub 下载与 YouTube 请求都走它）。
 - 未装 python3（JVM jar 裸机）时站点不可用，返回 502——与 T4 插件运行时同一降级模式。
@@ -31,7 +31,7 @@
 
 - `GET /api/youtube/ytdlp[?refresh=1]`：当前/最新版本（latest 缓存 5 分钟防 GitHub API 限流）。
 - `POST /api/youtube/ytdlp/update`：手动更新（强制重下，与自动更新共用闸门）。
-- 两者随 `/api/**` 规则要求 ADMIN/CLIENT。配置页「豆瓣电影数据」卡片下方有「YouTube 数据源」卡片展示版本并提供按钮。
+- 两者随 `/api/**` 规则要求 ADMIN/CLIENT。配置页「豆瓣电影数据」卡片下方有「YouTube 运行时」卡片展示版本并提供按钮。
 
 ## GitHub 代理（复用全局 `GitHubProxyService`）
 
