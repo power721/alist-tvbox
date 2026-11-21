@@ -1,4 +1,5 @@
-FROM haroldli/alist-base:latest
+ARG BASE_TAG=latest
+FROM haroldli/alist-base:${BASE_TAG}
 
 LABEL MAINTAINER="Har01d"
 
