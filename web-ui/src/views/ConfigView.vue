@@ -229,7 +229,8 @@
         <el-card class="box-card" v-if="!store.standalone">
           <template #header>
             <div class="card-header">
-              <span>YouTube 运行时</span>
+              <span>YouTube 运行时 <a href="https://github.com/yt-dlp/yt-dlp" target="_blank"
+                                     rel="noopener">yt-dlp →</a></span>
               <div>
                 <el-button type="primary" plain size="small" :loading="checking"
                            @click="loadYtdlp(true)">检查最新版本
