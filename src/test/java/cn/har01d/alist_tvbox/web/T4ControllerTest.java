@@ -73,6 +73,8 @@ class T4ControllerTest {
     @Mock
     private PlayController playController;
     @Mock
+    private cn.har01d.alist_tvbox.service.ParseService parseService;
+    @Mock
     private cn.har01d.alist_tvbox.service.PluginWorkerService pluginWorkerService;
     @Mock
     private cn.har01d.alist_tvbox.entity.PluginRepository pluginRepository;
@@ -90,7 +92,7 @@ class T4ControllerTest {
         controller = new T4Controller(subscriptionService, appProperties, tvBoxController, pianDanController,
                 mediaLibraryController, biliBiliController, youtubeController, embyController, jellyfinController,
                 feiniuController, liveController, telegramController, remoteSearchController,
-                playController, pluginWorkerService, pluginRepository, new ObjectMapper(), t4DetailEnhancer);
+                playController, parseService, pluginWorkerService, pluginRepository, new ObjectMapper(), t4DetailEnhancer);
         // vod/cenc 入口的 T4 专用 token 换算:默认回显(未命中),个别用例按需覆写
         lenient().when(subscriptionService.resolveT4Token(anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -105,7 +107,7 @@ class T4ControllerTest {
                 isNull(), isNull(), eq(2), eq(100), eq(1), eq(0), same(request)))
                 .thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "csp_AList", "1", null, null, null, null, ext, 2, request, response);
+        controller.vod(TOKEN, "csp_AList", "1", null, null, null, null, ext, 2, null, request, response);
 
         verify(tvBoxController).api(eq(TOKEN), eq("1"), eq("{\"year\":\"2024\"}"), isNull(), isNull(),
                 isNull(), isNull(), eq(2), eq(100), eq(1), eq(0), same(request));
@@ -116,7 +118,7 @@ class T4ControllerTest {
         when(mediaLibraryController.browse(eq(TOKEN), eq("db:123"), isNull(), isNull(), isNull(),
                 isNull(), eq(1), eq(Map.of()), same(request))).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "csp_Media", null, "db:123", null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_Media", null, "db:123", null, null, null, null, null, null, request, response);
 
         verify(mediaLibraryController).browse(eq(TOKEN), eq("db:123"), isNull(), isNull(), isNull(),
                 isNull(), eq(1), eq(Map.of()), same(request));
@@ -130,7 +132,7 @@ class T4ControllerTest {
         when(playController.play(eq(TOKEN), isNull(), isNull(), isNull(), eq("BV1xx411c7mD"),
                 isNull(), eq(false), org.mockito.ArgumentMatchers.argThat(t4Client))).thenReturn(Map.of());
 
-        controller.vod(TOKEN, "csp_BiliBili", null, null, null, null, "BV1xx411c7mD", null, null, request, response);
+        controller.vod(TOKEN, "csp_BiliBili", null, null, null, null, "BV1xx411c7mD", null, null, null, request, response);
 
         verify(playController).play(eq(TOKEN), isNull(), isNull(), isNull(), eq("BV1xx411c7mD"),
                 isNull(), eq(false), org.mockito.ArgumentMatchers.argThat(t4Client));
@@ -144,7 +146,7 @@ class T4ControllerTest {
         when(playController.play(eq(TOKEN), isNull(), isNull(), eq("msubep-3-248"), isNull(),
                 eq("t4"), eq(false), same(request))).thenReturn(Map.of());
 
-        controller.vod(TOKEN, "csp_Media", null, null, null, null, "msubep-3-248", null, null, request, response);
+        controller.vod(TOKEN, "csp_Media", null, null, null, null, "msubep-3-248", null, null, null, request, response);
 
         verify(playController).play(eq(TOKEN), isNull(), isNull(), eq("msubep-3-248"), isNull(),
                 eq("t4"), eq(false), same(request));
@@ -158,7 +160,7 @@ class T4ControllerTest {
         when(playController.play(eq(TOKEN), isNull(), isNull(), eq("/吞噬星空/248.mp4"), isNull(),
                 eq("t4-direct"), eq(false), same(request))).thenReturn(Map.of());
 
-        controller.vod(TOKEN, "csp_AList", null, null, null, null, "/吞噬星空/248.mp4", null, null, request, response);
+        controller.vod(TOKEN, "csp_AList", null, null, null, null, "/吞噬星空/248.mp4", null, null, null, request, response);
 
         verify(playController).play(eq(TOKEN), isNull(), isNull(), eq("/吞噬星空/248.mp4"), isNull(),
                 eq("t4-direct"), eq(false), same(request));
@@ -172,7 +174,7 @@ class T4ControllerTest {
         when(playController.play(eq(TOKEN), isNull(), isNull(), eq("msubep-75-8"), isNull(),
                 eq("t4"), eq(false), same(request))).thenReturn(Map.of());
 
-        controller.vod(TOKEN, "csp_Media", null, null, null, null, "msubep-75-8", null, null, request, response);
+        controller.vod(TOKEN, "csp_Media", null, null, null, null, "msubep-75-8", null, null, null, request, response);
 
         verify(playController).play(eq(TOKEN), isNull(), isNull(), eq("msubep-75-8"), isNull(),
                 eq("t4"), eq(false), same(request));
@@ -186,7 +188,7 @@ class T4ControllerTest {
         when(playController.play(eq(TOKEN), isNull(), isNull(), eq("1@248217"), isNull(),
                 eq("t4-direct"), eq(false), same(request))).thenReturn(Map.of());
 
-        controller.vod(TOKEN, "csp_Media", null, null, null, null, "1@248217", null, null, request, response);
+        controller.vod(TOKEN, "csp_Media", null, null, null, null, "1@248217", null, null, null, request, response);
 
         verify(playController).play(eq(TOKEN), isNull(), isNull(), eq("1@248217"), isNull(),
                 eq("t4-direct"), eq(false), same(request));
@@ -199,7 +201,7 @@ class T4ControllerTest {
         when(playController.play(eq(TOKEN), isNull(), isNull(), eq("msubadd-db:123"), isNull(),
                 eq("t4"), eq(false), same(request))).thenReturn(Map.of("msg", "已加入追剧"));
 
-        controller.vod(TOKEN, "csp_PianDan", null, null, null, null, "msubadd-db:123", null, null, request, response);
+        controller.vod(TOKEN, "csp_PianDan", null, null, null, null, "msubadd-db:123", null, null, null, request, response);
 
         verify(playController).play(eq(TOKEN), isNull(), isNull(), eq("msubadd-db:123"), isNull(),
                 eq("t4"), eq(false), same(request));
@@ -211,7 +213,7 @@ class T4ControllerTest {
                 .thenReturn(Map.of("success", true));
 
         Object result = controller.vod(TOKEN, "csp_Live", null, null, null, null, "follow$huya$12345",
-                null, null, request, response);
+                null, null, null, request, response);
 
         ArgumentCaptor<LiveFollowDto> captor = ArgumentCaptor.forClass(LiveFollowDto.class);
         verify(liveController).follow(eq(TOKEN), captor.capture());
@@ -227,7 +229,7 @@ class T4ControllerTest {
         when(liveController.browse(eq(TOKEN), eq("huya$52647"), isNull(), isNull(), isNull(),
                 eq("web"), isNull(), eq(1))).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "csp_Live", null, "huya$52647", null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_Live", null, "huya$52647", null, null, null, null, null, null, request, response);
 
         verify(liveController).browse(eq(TOKEN), eq("huya$52647"), isNull(), isNull(), isNull(),
                 eq("web"), isNull(), eq(1));
@@ -240,7 +242,7 @@ class T4ControllerTest {
         String direct = "http://192.168.50.60:4567/p/Harold/0@245568";
 
         Object result = controller.vod(TOKEN, "csp_Live", null, null, null, null, direct,
-                null, null, request, response);
+                null, null, null, request, response);
 
         Map<?, ?> map = (Map<?, ?>) result;
         assertEquals(direct, map.get("url"));
@@ -261,8 +263,8 @@ class T4ControllerTest {
         when(telegramController.db(eq(TOKEN), eq("36675942"), isNull(), isNull(), isNull(),
                 eq("醒来"), isNull(), isNull(), isNull(), isNull(), eq(1), eq(30))).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "csp_TgDouBan", null, null, "醒来吧", null, null, null, null, request, response);
-        controller.vod(TOKEN, "csp_TgDouBan", null, "36675942", null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_TgDouBan", null, null, "醒来吧", null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_TgDouBan", null, "36675942", null, null, null, null, null, null, request, response);
 
         verify(telegramController).db(eq(TOKEN), eq("36675942"), isNull(), isNull(), isNull(),
                 eq("醒来"), isNull(), isNull(), isNull(), isNull(), eq(1), eq(30));
@@ -285,8 +287,8 @@ class T4ControllerTest {
         when(telegramController.browseTgSearch(eq(TOKEN), eq(decoded), isNull(), isNull(),
                 isNull(), eq("小城良方"), eq(1), eq(30))).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "csp_TgChannel", "channel1", null, null, null, null, null, null, request, response);
-        controller.vod(TOKEN, "csp_TgChannel", null, decoded, null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_TgChannel", "channel1", null, null, null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_TgChannel", null, decoded, null, null, null, null, null, null, request, response);
 
         verify(telegramController).browseTgSearch(eq(TOKEN), eq(decoded), isNull(), isNull(),
                 isNull(), eq("小城良方"), eq(1), eq(30));
@@ -310,8 +312,8 @@ class T4ControllerTest {
         when(telegramController.browseTgSearch(eq(TOKEN), eq(decoded), isNull(), isNull(),
                 isNull(), eq("尚公主"), eq(1), eq(30))).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "csp_TgChannel", null, null, null, null, null, null, null, request, response);
-        controller.vod(TOKEN, "csp_TgChannel", null, decoded, null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_TgChannel", null, null, null, null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_TgChannel", null, decoded, null, null, null, null, null, null, request, response);
 
         verify(telegramController).browseTgSearch(eq(TOKEN), eq(decoded), isNull(), isNull(),
                 isNull(), eq("尚公主"), eq(1), eq(30));
@@ -329,7 +331,7 @@ class T4ControllerTest {
         when(tvBoxController.api(eq(TOKEN), isNull(), isNull(), eq("recommend"), isNull(), isNull(), isNull(),
                 eq(1), eq(100), eq(1), eq(0), same(request))).thenReturn(recommend);
 
-        Object result = controller.vod(TOKEN, "csp_AList", null, null, null, null, null, null, null, request, response);
+        Object result = controller.vod(TOKEN, "csp_AList", null, null, null, null, null, null, null, null, request, response);
 
         assertInstanceOf(Map.class, result);
         Map<?, ?> merged = (Map<?, ?>) result;
@@ -344,7 +346,7 @@ class T4ControllerTest {
         when(tvBoxController.api(eq(TOKEN), isNull(), isNull(), eq("movie/1"), isNull(), isNull(), isNull(),
                 eq(1), eq(100), eq(1), eq(0), same(request))).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "AList", null, "movie/1", null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "AList", null, "movie/1", null, null, null, null, null, null, request, response);
 
         verify(tvBoxController).api(eq(TOKEN), isNull(), isNull(), eq("movie/1"), isNull(), isNull(), isNull(),
                 eq(1), eq(100), eq(1), eq(0), same(request));
@@ -357,7 +359,7 @@ class T4ControllerTest {
         when(mediaLibraryController.browse(eq(TOKEN), eq("db:36675942"), isNull(), isNull(), isNull(),
                 isNull(), eq(1), eq(Map.of()), org.mockito.ArgumentMatchers.any())).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "csp_PianDan", null, "db:36675942", null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_PianDan", null, "db:36675942", null, null, null, null, null, null, request, response);
 
         verify(mediaLibraryController).browse(eq(TOKEN), eq("db:36675942"), isNull(), isNull(), isNull(),
                 isNull(), eq(1), eq(Map.of()), org.mockito.ArgumentMatchers.any());
@@ -365,7 +367,7 @@ class T4ControllerTest {
 
     @Test
     void pianDanNonNavIdStaysEmpty() throws Exception {
-        Object result = controller.vod(TOKEN, "csp_PianDan", null, "other-form", null, null, null, null, null, request, response);
+        Object result = controller.vod(TOKEN, "csp_PianDan", null, "other-form", null, null, null, null, null, null, request, response);
 
         assertEquals(Map.of(), result);
         verify(mediaLibraryController, org.mockito.Mockito.never()).browse(org.mockito.ArgumentMatchers.anyString(),
@@ -384,7 +386,7 @@ class T4ControllerTest {
         when(mediaLibraryController.browse(eq(TOKEN), eq("db:1"), isNull(), isNull(), isNull(),
                 isNull(), eq(1), eq(Map.of()), org.mockito.ArgumentMatchers.any())).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "Media", null, "db:1", null, null, null, null, null, formRequest, response);
+        controller.vod(TOKEN, "Media", null, "db:1", null, null, null, null, null, null, formRequest, response);
 
         org.springframework.mock.web.MockHttpServletRequest jsonRequest =
                 new org.springframework.mock.web.MockHttpServletRequest("POST", "/t4/tok/v/AList");
@@ -393,7 +395,7 @@ class T4ControllerTest {
         when(tvBoxController.api(eq(TOKEN), eq("1"), isNull(), isNull(), isNull(), isNull(), isNull(),
                 eq(2), eq(100), eq(1), eq(0), org.mockito.ArgumentMatchers.any())).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "AList", null, null, null, null, null, null, null, jsonRequest, response);
+        controller.vod(TOKEN, "AList", null, null, null, null, null, null, null, null, jsonRequest, response);
 
         verify(mediaLibraryController).browse(eq(TOKEN), eq("db:1"), isNull(), isNull(), isNull(),
                 isNull(), eq(1), eq(Map.of()), org.mockito.ArgumentMatchers.any());
@@ -414,7 +416,7 @@ class T4ControllerTest {
                 eq("home"), org.mockito.ArgumentMatchers.anyMap()))
                 .thenReturn(new ObjectMapper().readTree("{\"class\":[]}"));
 
-        Object result = controller.vod(TOKEN, "plugin-9", null, null, null, null, null, null, null, request, response);
+        Object result = controller.vod(TOKEN, "plugin-9", null, null, null, null, null, null, null, null, request, response);
 
         assertTrue(result.toString().contains("class"));
     }
@@ -430,7 +432,7 @@ class T4ControllerTest {
         when(pluginWorkerService.isAvailable()).thenReturn(false);
 
         assertThrows(NotFoundException.class,
-                () -> controller.vod(TOKEN, "plugin-9", null, null, null, null, null, null, null, request, response));
+                () -> controller.vod(TOKEN, "plugin-9", null, null, null, null, null, null, null, null, request, response));
     }
 
     @Test
@@ -444,13 +446,13 @@ class T4ControllerTest {
         when(pluginRepository.findById(9)).thenReturn(java.util.Optional.of(plugin));
 
         assertThrows(NotFoundException.class,
-                () -> controller.vod(TOKEN, "plugin-9", null, null, null, null, null, null, null, request, response));
+                () -> controller.vod(TOKEN, "plugin-9", null, null, null, null, null, null, null, null, request, response));
     }
 
     @Test
     void unknownSiteRejected() {
         assertThrows(NotFoundException.class,
-                () -> controller.vod(TOKEN, "csp_Unknown", null, null, null, null, null, null, null, request, response));
+                () -> controller.vod(TOKEN, "csp_Unknown", null, null, null, null, null, null, null, null, request, response));
     }
 
     @Test
@@ -488,7 +490,7 @@ class T4ControllerTest {
         when(mediaLibraryController.browse(eq(TOKEN), eq("db:1"), isNull(), isNull(), isNull(),
                 isNull(), eq(1), eq(Map.of()), same(request))).thenReturn(new MovieList());
 
-        controller.vod("t4tok", "csp_Media", null, "db:1", null, null, null, null, null, request, response);
+        controller.vod("t4tok", "csp_Media", null, "db:1", null, null, null, null, null, null, request, response);
 
         verify(subscriptionService).checkToken(TOKEN);
         verify(mediaLibraryController).browse(eq(TOKEN), eq("db:1"), isNull(), isNull(), isNull(),
@@ -516,7 +518,7 @@ class T4ControllerTest {
         assertThrows(NotFoundException.class, () -> controller.config("t4tok"));
         assertThrows(NotFoundException.class, () -> controller.config(TOKEN, "0"));
         assertThrows(NotFoundException.class,
-                () -> controller.vod(TOKEN, "csp_AList", null, null, null, null, null, null, null, request, response));
+                () -> controller.vod(TOKEN, "csp_AList", null, null, null, null, null, null, null, null, request, response));
         assertThrows(NotFoundException.class,
                 () -> controller.cenc(TOKEN, "plugin-9",
                         new MockHttpServletRequest("GET", "/t4cenc/tok/plugin-9/cenc/abc.mp4"), response));
@@ -532,7 +534,7 @@ class T4ControllerTest {
         assertThrows(NotFoundException.class, () -> controller.config("0"));
         assertThrows(NotFoundException.class, () -> controller.config(TOKEN, "0"));
         assertThrows(NotFoundException.class,
-                () -> controller.vod(TOKEN, "csp_AList", null, null, null, null, null, null, null, request, response));
+                () -> controller.vod(TOKEN, "csp_AList", null, null, null, null, null, null, null, null, request, response));
         assertThrows(NotFoundException.class,
                 () -> controller.cenc(TOKEN, "plugin-9",
                         new MockHttpServletRequest("GET", "/t4cenc/tok/plugin-9/cenc/abc.mp4"), response));
@@ -555,7 +557,7 @@ class T4ControllerTest {
 
         when(mediaLibraryController.browse(eq(TOKEN), eq("db:1"), isNull(), isNull(), isNull(),
                 isNull(), eq(1), eq(Map.of()), same(request))).thenReturn(new MovieList());
-        controller.vod("t4tok", "csp_Media", null, "db:1", null, null, null, null, null, request, response);
+        controller.vod("t4tok", "csp_Media", null, "db:1", null, null, null, null, null, null, request, response);
 
         MockHttpServletRequest bridgeRequest =
                 new MockHttpServletRequest("GET", "/t4cenc/t4tok/plugin-9/cenc/abc.mp4");
@@ -573,7 +575,7 @@ class T4ControllerTest {
         when(playController.play(eq(TOKEN), isNull(), isNull(), isNull(), eq("BV1xx411c7mD"),
                 isNull(), eq(false), org.mockito.ArgumentMatchers.argThat(t4dClient))).thenReturn(Map.of());
 
-        controller.vod(TOKEN, "csp_BiliBili", null, null, null, null, "BV1xx411c7mD", null, null, request, response);
+        controller.vod(TOKEN, "csp_BiliBili", null, null, null, null, "BV1xx411c7mD", null, null, null, request, response);
 
         verify(playController).play(eq(TOKEN), isNull(), isNull(), isNull(), eq("BV1xx411c7mD"),
                 isNull(), eq(false), org.mockito.ArgumentMatchers.argThat(t4dClient));
@@ -586,9 +588,89 @@ class T4ControllerTest {
         when(liveController.browse(eq(TOKEN), eq("huya$1"), isNull(), isNull(), isNull(),
                 isNull(), isNull(), eq(1))).thenReturn(new MovieList());
 
-        controller.vod(TOKEN, "csp_Live", null, "huya$1", null, null, null, null, null, request, response);
+        controller.vod(TOKEN, "csp_Live", null, "huya$1", null, null, null, null, null, null, request, response);
 
         verify(liveController).browse(eq(TOKEN), eq("huya$1"), isNull(), isNull(), isNull(),
                 isNull(), isNull(), eq(1));
+    }
+
+    // ── 推送站(csp_Push/push_agent):任意 URL 详情/播放,逐类对齐 spring.jar Push spider ──
+
+    @Test
+    void pushDetailNetPanLinkGoesThroughParseService() throws Exception {
+        // 推送网盘链接:T3 Push POST /parse 同链路(挂载分享出可播详情,播放 id 复用网盘族口径)
+        org.mockito.ArgumentMatcher<cn.har01d.alist_tvbox.dto.ParseRequest> quarkLink =
+                req -> req != null && "https://pan.quark.cn/s/abc123".equals(req.url());
+        when(parseService.parse(org.mockito.ArgumentMatchers.argThat(quarkLink), eq("")))
+                .thenReturn(new MovieList());
+
+        controller.vod(TOKEN, "csp_Push", null, "https://pan.quark.cn/s/abc123",
+                null, null, null, null, null, null, request, response);
+
+        verify(parseService).parse(org.mockito.ArgumentMatchers.argThat(quarkLink), eq(""));
+    }
+
+    @Test
+    void pushDetailDirectLinkFallsBackToThreeLines() throws Exception {
+        // 非网盘/非 YouTube 直链:三线路(直連/嗅探/解析)直链详情,与 spring.jar buildDirectDetail 同构
+        Object result = controller.vod(TOKEN, "csp_Push", null,
+                "https://example.com/video/movie.mp4", null, null, null, null, null, null, request, response);
+
+        assertInstanceOf(Map.class, result);
+        List<?> list = (List<?>) ((Map<?, ?>) result).get("list");
+        Map<?, ?> vod = (Map<?, ?>) list.get(0);
+        assertEquals("直連$$$嗅探$$$解析", vod.get("vod_play_from"));
+        assertEquals("movie.mp4", vod.get("vod_name"));
+        assertTrue(String.valueOf(vod.get("vod_play_url")).split("\\$\\$\\$").length == 3);
+    }
+
+    @Test
+    void pushDetailYouTubeUrlRoutesToYoutubeEndpoint() throws Exception {
+        // 推送 YouTube 链接:提取 videoId 走 csp_YouTube 同源详情(播放走 /youtube-proxy 中继)
+        when(youtubeController.browse(eq(TOKEN), eq("dQw4w9WgXcQ"), isNull(), isNull(), isNull(),
+                isNull(), isNull(), isNull(), eq(1))).thenReturn(new MovieList());
+
+        controller.vod(TOKEN, "csp_Push", null, "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                null, null, null, null, null, null, request, response);
+
+        verify(youtubeController).browse(eq(TOKEN), eq("dQw4w9WgXcQ"), isNull(), isNull(), isNull(),
+                isNull(), isNull(), isNull(), eq(1));
+    }
+
+    @Test
+    void pushPlaySniffAndParseFlagsReturnParseOne() throws Exception {
+        // 嗅探/解析线路:交壳子嗅探/配置解析器(spring.jar Push.playerContent 同构)
+        Object sniff = controller.vod(TOKEN, "csp_Push", null, null, null, null,
+                "https://example.com/v.html", null, null, "嗅探", request, response);
+        assertEquals(1, ((Map<?, ?>) sniff).get("parse"));
+        assertEquals("https://example.com/v.html", ((Map<?, ?>) sniff).get("url"));
+
+        Object parse = controller.vod(TOKEN, "csp_Push", null, null, null, null,
+                "https://example.com/v.html", null, null, "解析", request, response);
+        assertEquals(1, ((Map<?, ?>) parse).get("parse"));
+        assertEquals(1, ((Map<?, ?>) parse).get("jx"));
+    }
+
+    @Test
+    void pushPlayDrivePlayIdCarriesT4Type() throws Exception {
+        // /parse 详情产出的播放 id 走网盘族口径(含 T4 播放身份,默认 all=t4)
+        when(playController.play(eq(TOKEN), isNull(), isNull(), eq("1@248217"), isNull(),
+                eq("t4"), eq(false), same(request))).thenReturn(Map.of());
+
+        controller.vod(TOKEN, "csp_Push", null, null, null, null, "1@248217",
+                null, null, null, request, response);
+
+        verify(playController).play(eq(TOKEN), isNull(), isNull(), eq("1@248217"), isNull(),
+                eq("t4"), eq(false), same(request));
+    }
+
+    @Test
+    void pushPlayDirectLinkOutputsRawUrl() throws Exception {
+        // 直連线路:直链直出(无凭证不套 /p),parse=0
+        Object result = controller.vod(TOKEN, "csp_Push", null, null, null, null,
+                "https://example.com/video/movie.mp4", null, null, "直連", request, response);
+
+        assertEquals(0, ((Map<?, ?>) result).get("parse"));
+        assertEquals("https://example.com/video/movie.mp4", ((Map<?, ?>) result).get("url"));
     }
 }

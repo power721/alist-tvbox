@@ -760,7 +760,7 @@ public class SubscriptionService {
      * T4 模式订阅配置(/t4/{token}/{id}):与 /sub 同一份配置多做一次站点变换 ——
      * 内置 csp_* 站点改为 type 4 + api 指回本服务 /t4 适配层(T4Controller 逐参数复刻
      * spring.jar 各 spider 的回源调用),客户端零设备端代码,跨平台壳子可直接接。
-     * type 3 站点(插件源/WebHome/push/上游 spider)整体移除:无 jar 能力的壳子用不了,
+     * type 3 站点(插件源/WebHome/上游 spider)整体移除:无 jar 能力的壳子用不了,
      * 留着是死重;type 0/1/2 的普通 HTTP 站点保留。全局 spider 字段(spring.jar)一并移除,
      * T4 壳子完全不下载 jar。归属隔离与 /sub 同口径。
      */
@@ -863,7 +863,8 @@ public class SubscriptionService {
     public static final Set<String> T4_SITE_KEYS = Set.of(
             "csp_AList", "csp_XiaoYa", "csp_PianDan", "csp_Media", "csp_BiliBili", "csp_YouTube",
             "csp_Emby", "csp_Jellyfin", "csp_FeiNiu", "csp_Live", "csp_TgDouBan",
-            "csp_TgChannel", "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup");
+            "csp_TgChannel", "csp_TgWeb", "csp_FishPanSou", "csp_FishPanSouGroup",
+            "csp_Push");
 
     private void applyT4(String token, Map<String, Object> config, boolean pluginRuntime) {
         if (!(config.get("sites") instanceof List<?> sites)) {

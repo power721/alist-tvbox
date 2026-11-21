@@ -3,11 +3,13 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.FilterDto;
 import cn.har01d.alist_tvbox.dto.LiveFollowDto;
+import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.entity.Plugin;
 import cn.har01d.alist_tvbox.entity.PluginRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.live.web.LiveController;
+import cn.har01d.alist_tvbox.service.ParseService;
 import cn.har01d.alist_tvbox.service.PluginWorkerService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.T4DetailEnhancer;
@@ -31,13 +33,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * T4(type 4)适配层:TVBox 客户端不下 jar,home/category/detail/search/player 五动作全部
@@ -58,7 +66,7 @@ import java.util.Set;
  *  分类   GET api?ac=detail&t={tid}&pg={页}&ext={base64UrlSafe(JSON筛选值)}
  *  详情   GET api?ac=detail&ids={id}
  *  搜索   GET api?wd={词}&quick={bool}&pg={页}(pg&gt;1 才带)
- *  播放   GET api?play={id}&flag={线路}(flag 忽略,线路由 id 自描述)
+ *  播放   GET api?play={id}&flag={线路}(多数站 flag 忽略、线路由 id 自描述;推送站按线路分流)
  * 响应为 spider Result JSON(与 type 3 spider 返回同构)。
  *
  * TG/盘搜族详情依赖条目标题兜底(spring.jar 端为爬虫 titleCache):本层以响应旁路捕获
@@ -86,6 +94,7 @@ public class T4Controller {
     private final TelegramController telegramController;
     private final RemoteSearchController remoteSearchController;
     private final PlayController playController;
+    private final ParseService parseService;
     private final PluginWorkerService pluginWorkerService;
     private final PluginRepository pluginRepository;
     private final ObjectMapper objectMapper;
@@ -167,7 +176,7 @@ public class T4Controller {
     // 表单 POST(Spring 表单参数自动并入绑定);JSON POST 形态见下方 body 兜底
     @RequestMapping("/t4/{token}/v/{site}")
     public Object vod(@PathVariable String token, @PathVariable String site,
-                      String t, String ids, String wd, String quick, String play, String ext, Integer pg,
+                      String t, String ids, String wd, String quick, String play, String ext, Integer pg, String flag,
                       HttpServletRequest request, HttpServletResponse response) throws IOException {
         guardT4Enabled();
         String pathToken = token;
@@ -198,16 +207,18 @@ public class T4Controller {
                 wd = body.get("wd");
                 quick = body.get("quick");
                 play = body.get("play");
+                flag = body.get("flag");
                 ext = body.get("ext");
                 String page = body.get("pg");
                 pg = page == null ? null : parseInt(page);
             }
         }
-        log.info("t4 site: {}  t: {}  ids: {}  wd: {}  play: {}  page: {}", siteKey, t, ids, wd, play, pg);
+        log.info("t4 site: {}  t: {}  ids: {}  wd: {}  play: {}  flag: {}  page: {}",
+                siteKey, t, ids, wd, play, flag, pg);
         boolean quickSearch = Boolean.parseBoolean(quick);
         Object result;
         if (StringUtils.isNotBlank(play)) {
-            result = player(token, siteKey, play, request);
+            result = player(token, siteKey, play, flag, request);
         } else if (StringUtils.isNotBlank(ids)) {
             result = detail(token, siteKey, ids, request, response);
         } else if (StringUtils.isNotBlank(wd)) {
@@ -372,6 +383,8 @@ public class T4Controller {
             case "csp_TgWeb" -> telegramController.browse(token, null, null, null, null, null, true, 1);
             case "csp_FishPanSou" -> remoteSearchController.pansou(token, null, null, null, null, 1);
             case "csp_FishPanSouGroup" -> remoteSearchController.pansouGroup(token, null, null, null, null, 1);
+            // 推送站无首页内容(Spider 基类空响应同构):入口在壳子推送动作,不在站点浏览
+            case "csp_Push" -> Map.of();
             default -> throw new NotFoundException();
         };
     }
@@ -420,6 +433,7 @@ public class T4Controller {
             case "csp_TgWeb" -> telegramController.browse(token, null, t, null, null, null, true, page);
             case "csp_FishPanSou" -> remoteSearchController.pansou(token, null, t, null, null, page);
             case "csp_FishPanSouGroup" -> remoteSearchController.pansouGroup(token, null, t, null, null, page);
+            case "csp_Push" -> Map.of();
             default -> throw new NotFoundException();
         };
     }
@@ -446,6 +460,8 @@ public class T4Controller {
         return switch (site) {
             case "csp_AList" -> tvBoxController.api(token, null, null, ids, null, null, null, 1, 100, 1, 0, request);
             case "csp_XiaoYa" -> tvBoxController.api(token, null, null, ids, null, null, null, 1, 100, 0, 0, request);
+            // 推送站:ids 是任意 URL(壳子推送动作/扫码推送直达),按 URL 形态路由到既有服务端能力
+            case "csp_Push" -> pushDetail(token, ids);
             // 片单导航:条目 vod_id(db:/tmdb:/s:/douban:)与 /media 片单 id 同族,委托其片单详情
             // = 服务端代搜(豆瓣元数据+按片名搜电报资源网格+msubadd 动作)。T3 靠客户端 indexs=1
             // 全局搜片,但 indexs 仅 FongMi 遵守(docs/t4-sidecar-borrow-assessment.md A3),
@@ -494,11 +510,13 @@ public class T4Controller {
             case "csp_TgWeb" -> telegramController.browse(token, null, null, null, wd, null, true, 1);
             case "csp_FishPanSou" -> remoteSearchController.pansou(token, null, null, wd, null, 1);
             case "csp_FishPanSouGroup" -> remoteSearchController.pansouGroup(token, null, null, wd, null, 1);
+            // 推送站 searchable=0,搜索不可达;杂牌壳子误调给空结果不报错
+            case "csp_Push" -> Map.of();
             default -> throw new NotFoundException();
         };
     }
 
-    private Object player(String token, String site, String play, HttpServletRequest request) throws IOException {
+    private Object player(String token, String site, String play, String flag, HttpServletRequest request) throws IOException {
         return switch (site) {
             // 网盘族(含追剧 msubep-/片单动作条目)须带 T4 播放身份(type 参,同插件源 t4_play_type 口径):
             // 此前漏传 type,T4 独立 token(共享口径 uid=0)下 local proxy 未启用的盘会把夸克/UC Cookie
@@ -519,6 +537,8 @@ public class T4Controller {
             case "csp_Jellyfin" -> jellyfinController.play(token, play, 0L, request);
             case "csp_FeiNiu" -> feiniuController.play(token, play, 0L, request);
             case "csp_Live" -> livePlay(token, play, request);
+            // 推送站:flag=直連/嗅探/解析 三线路分流,其余形态(播放 id/videoId)按 id 自描述路由
+            case "csp_Push" -> pushPlay(token, play, flag, request);
             default -> throw new NotFoundException();
         };
     }
@@ -573,6 +593,163 @@ public class T4Controller {
             return result;
         }
         return liveController.play(token, play, request);
+    }
+
+    // ── 推送站(csp_Push,站点 key=push_agent):spring.jar Push spider 的服务端等价 ──
+    // FongMi 推送动作(扫码/分享/推送页)把任意 URL 作为 ids 打到推送站,type4 走本适配层;
+    // 配置无此站时壳子只会本地直链播放(SiteApi directDetail),网盘/YouTube 推送无人解析。
+
+    /** spring.jar Push.DRIVE_DOMAINS 同源:命中域名的链接走 /parse 挂载分享出可播详情。 */
+    private static final List<String> PUSH_DRIVE_DOMAINS = List.of(
+            "alipan.com", "aliyundrive.com", "mypikpak.com", "xunlei.com",
+            "123pan.com", "123pan.cn", "123684.com", "123865.com", "123912.com", "123592.com",
+            "quark.cn", "139.com", "uc.cn",
+            "115.com", "115cdn.com", "anxia.com",
+            "189.cn", "baidu.com");
+
+    /**
+     * 推送站详情:按 spring.jar Push.detailContent 同序分类——YouTube → csp_YouTube 同源
+     * 详情(播放走 /youtube-proxy 中继);网盘/磁力/ed2k → ParseService(T3 Push POST /parse
+     * 同链路:挂载分享/离线下载目标),失败回落直链;其余(直链/thunder/file) → 三线路直链详情。
+     */
+    private Object pushDetail(String token, String ids) throws IOException {
+        String url = ids.split("\\R", 2)[0].trim();
+        String videoId = matchYouTubeId(url);
+        if (videoId != null) {
+            return youtubeController.browse(token, videoId, null, null, null, null, null, null, 1);
+        }
+        if (isNetPanLink(url) || url.startsWith("magnet:?") || url.startsWith("ed2k://")) {
+            try {
+                return parseService.parse(new ParseRequest(url), "");
+            } catch (Exception e) {
+                log.warn("t4 push parse failed: {}", url, e);
+            }
+        }
+        return pushDirectDetail(url);
+    }
+
+    /** 直链回落详情:三线路(直連/嗅探/解析)与 spring.jar Push.buildDirectDetail 同构。 */
+    private Object pushDirectDetail(String url) {
+        Map<String, Object> vod = new LinkedHashMap<>();
+        vod.put("vod_id", url);
+        vod.put("vod_name", extractFileName(url));
+        vod.put("vod_pic", "");
+        vod.put("vod_play_from", "直連$$$嗅探$$$解析");
+        String episode = "播放$" + url;
+        vod.put("vod_play_url", episode + "$$$" + episode + "$$$" + episode);
+        return Map.of("list", List.of(vod));
+    }
+
+    /**
+     * 推送站播放:spring.jar Push.playerContent 同构——嗅探/解析线路交壳子处理(parse=1),
+     * YouTube(videoId/整链)走中继,/parse 详情产出的播放 id(1@/msubep-/路径形态)走网盘族
+     * 口径(含 T4 播放身份与 t4_proxy_mode 代理策略),直連直链直出(无凭证不套 /p)。
+     */
+    private Object pushPlay(String token, String play, String flag, HttpServletRequest request) throws IOException {
+        if ("嗅探".equals(flag)) {
+            return Map.of("parse", 1, "url", play);
+        }
+        if ("解析".equals(flag)) {
+            return Map.of("parse", 1, "jx", 1, "url", play);
+        }
+        String videoId = matchYouTubeId(play);
+        if (videoId != null) {
+            return youtubeController.play(token, videoId, request);
+        }
+        if (!play.startsWith("http") && !play.startsWith("data:")) {
+            return playController.play(token, null, null, play, null, drivePlayType(play), false, request);
+        }
+        return Map.of("parse", 0, "url", play);
+    }
+
+    /** spring.jar Push.matchYouTubeId 服务端版:裸 11 字符 id/youtu.be/watch?v=/shorts|embed|live 路径;URL 编码形态解码一层再试。 */
+    static String matchYouTubeId(String url) {
+        if (StringUtils.isBlank(url)) {
+            return null;
+        }
+        String candidate = url.trim();
+        if (candidate.matches("[a-zA-Z0-9_-]{11}")) {
+            return candidate;
+        }
+        String id = extractYouTubeId(candidate);
+        return id != null ? id : extractYouTubeId(decodeOnce(candidate));
+    }
+
+    private static String extractYouTubeId(String url) {
+        try {
+            URI uri = new URI(url);
+            String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
+            if ("youtu.be".equals(host) || host.endsWith(".youtu.be")) {
+                return sanitizeYouTubeId(firstPathSegment(uri.getPath()));
+            }
+            if ("youtube.com".equals(host) || host.endsWith(".youtube.com")) {
+                String path = uri.getPath() == null ? "" : uri.getPath();
+                if (path.startsWith("/shorts/") || path.startsWith("/embed/") || path.startsWith("/live/")) {
+                    return sanitizeYouTubeId(firstPathSegment(path));
+                }
+                if ("/watch".equals(path)) {
+                    return sanitizeYouTubeId(queryParam(uri.getRawQuery(), "v"));
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static String sanitizeYouTubeId(String id) {
+        return id != null && id.matches("[a-zA-Z0-9_-]{11}") ? id : null;
+    }
+
+    private static String firstPathSegment(String path) {
+        if (path == null || path.isEmpty()) {
+            return null;
+        }
+        String normalized = path.startsWith("/") ? path.substring(1) : path;
+        int slash = normalized.indexOf('/');
+        String segment = slash >= 0 ? normalized.substring(0, slash) : normalized;
+        return segment.isEmpty() ? null : segment;
+    }
+
+    private static String queryParam(String query, String name) {
+        if (query == null || query.isEmpty()) {
+            return null;
+        }
+        for (String part : query.split("&")) {
+            int idx = part.indexOf('=');
+            if (idx > 0 && name.equals(part.substring(0, idx))) {
+                return decodeOnce(part.substring(idx + 1));
+            }
+        }
+        return null;
+    }
+
+    private static String decodeOnce(String value) {
+        if (value == null || !value.contains("%")) {
+            return value;
+        }
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return value;
+        }
+    }
+
+    private static boolean isNetPanLink(String url) {
+        if (url == null) {
+            return false;
+        }
+        String lower = url.toLowerCase(Locale.ROOT);
+        for (String domain : PUSH_DRIVE_DOMAINS) {
+            if (lower.contains(domain)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String extractFileName(String url) {
+        Matcher matcher = Pattern.compile(".*/([^/?]+)").matcher(url);
+        return matcher.find() ? matcher.group(1) : "video";
     }
 
     /** TG/盘搜族响应旁路捕获 vod_id→vod_name(spring.jar 端 titleCache 的服务端等价)。 */

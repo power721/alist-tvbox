@@ -246,6 +246,38 @@ class SubscriptionServiceT4Test {
     }
 
     @Test
+    void pushSiteBecomesType4WithPushAgentKey() {
+        // 推送站(csp_Push)T4 化:站点 key 保留 push_agent(FongMi 推送动作固定寻址该 key,
+        // T3/T4 同 key 观看历史对齐),api 指回 /t4/{token}/v/Push,type4 壳子零 jar 可推送
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_Push", true, "csp_Push", "AT推送", null));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class));
+
+        Map<String, Object> config = service.subscriptionT4("", "0");
+
+        Map<String, Object> push = findSite(config, "push_agent");
+        assertEquals(4, push.get("type"));
+        assertEquals("http://atv.example/t4/-/v/Push", push.get("api"));
+        assertFalse(push.containsKey("jar"));
+        assertFalse(push.containsKey("ext"));
+    }
+
+    @Test
+    void t4HiddenPushSiteRemovedFromT4Config() {
+        // 订阅源管理「T4」开关对推送站同样生效(内置源按 api=csp_Push 对照直接删除)
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_Push", true, "csp_Push", "AT推送", null),
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "网盘", null));
+        SubscriptionService service = newService("{}", sources, mock(UserService.class));
+        when(subscriptionSourceService.t4HiddenSiteKeys()).thenReturn(java.util.Set.of("csp_Push"));
+
+        Map<String, Object> config = service.subscriptionT4("", "0", true);
+
+        assertTrue(findSiteKeys(config).stream().noneMatch("push_agent"::equals));
+        assertEquals(4, findSite(config, "csp_AList").get("type"));
+    }
+
+    @Test
     void plainHttpUpstreamSitesKept() {
         // type 0/1/2 的普通 HTTP 站点不依赖 jar,保留
         String upstream = "{\"sites\":[{\"key\":\"cms\",\"name\":\"CMS采集\",\"type\":1,\"api\":\"https://cj.example/api.php/provide/vod\"}]}";

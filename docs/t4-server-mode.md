@@ -28,7 +28,7 @@ T4 = **控制面中转**:壳永远只跟本服务器说话——元数据、鉴�
 | `/t4cenc/{token}/{site}/**` | 插件密文流解密桥(token 段三形态通吃) | 不变 |
 
 **为什么独立地址**:T4 配置与订阅零相关——上游订阅站点全部 type 3,`applyT4` 一律删除,
-任何订阅号取出的 T4 配置等价(14 个内置站 + 就绪时的插件源),订阅号是死参数。
+任何订阅号取出的 T4 配置等价(15 个内置站 + 推送站 + 就绪时的插件源),订阅号是死参数。
 
 **T4 专用 token**(`t4_token`,Setting 键):实例级随机串,启动自动生成;设置页可**自定义**
 (4-64 位字母/数字/中划线/下划线,字母或数字开头——纯数字拒绝,避免遮蔽旧 `/t4/{订阅号}`
@@ -122,7 +122,7 @@ T3 本地包形态(爬虫被转译成 nodejs 在端上跑),在线猫源接口(�
 | 分类 | `?ac=detail&t={tid}&pg={页}&ext={base64UrlSafe(JSON筛选)}` | ext 解码:网盘族→`f` JSON;B站→FilterDto;直播→platform;豆瓣→sort/year/genre/region;片单/追剧→flattened Map |
 | 详情 | `?ac=detail&ids={id}` | ids→id 参位(TG/盘搜/追剧族);TG 族自动补 `title`(标题缓存);片单导航(db:/tmdb:/s:/douban: 条目)委托 /media 片单详情=服务端代搜(indexs=1 仅 FongMi 遵守,通用壳子由服务端代劳搜片) |
 | 搜索 | `?wd={词}&quick={bool}&pg={页}` | 透传;TG 族记录最近搜索词 |
-| 播放 | `?play={id}&flag={线路}` | 网盘/TG/盘搜/追剧→`/play?id`;B站→`bvid=`(动作前缀由 /play 兜底归位,**X-CLIENT: t4/t4d** 身份触发代理/直连形态);Emby/Jellyfin/飞牛→`-play?id&t=0`;直播→follow$/unfollow$/offline 服务端等价复刻,直链透传(`jx/parse=0`+移动端头) |
+| 播放 | `?play={id}&flag={线路}` | 网盘/TG/盘搜/追剧→`/play?id`;B站→`bvid=`(动作前缀由 /play 兜底归位,**X-CLIENT: t4/t4d** 身份触发代理/直连形态);Emby/Jellyfin/飞牛→`-play?id&t=0`;直播→follow$/unfollow$/offline 服务端等价复刻,直链透传(`jx/parse=0`+移动端头);推送站按 flag 分流(见下节) |
 
 **B站智能代理形态**(t4):playerContent 顶部短路直出 `/proxy/{token}/{playId}` 短地址,
 回源解析延后到拉流(`client="t4p"`,每次拉流取新鲜 durl,url 时效+PCDN 回避),
@@ -143,6 +143,24 @@ T3 本地包形态(爬虫被转译成 nodejs 在端上跑),在线猫源接口(�
 
 逐参数对齐 spring.jar 各 spider(CatVodTVSpider)的回源调用;msg 动作(msubadd-/msubcheck-/
 巡检/B站点赞投币收藏等)本就由 `/play/{token}` 服务端拦截,T4 天然全量可用。
+
+## 推送站(csp_Push/push_agent)
+
+推送爬虫源 T4 化:站点 key 保留 `push_agent`(FongMi 推送动作固定寻址该 key,T3/T4
+观看历史同 key 对齐),api 指回 `/t4/{token}/v/Push`。壳子(扫码/分享/推送页)把任意 URL
+作为 ids 打过来,服务端按 spring.jar `Push` spider 同序分类:
+
+- **YouTube 链接** → 提取 videoId 走 csp_YouTube 同源详情/播放(`/youtube-proxy` 中继);
+- **网盘链接**(阿里/PikPak/迅雷/123/夸克/移动/UC/115/天翼/百度 域清单)与**磁力/ed2k** →
+  `ParseService.parse`(= T3 Push POST `/parse` 同链路:挂载分享/离线下载目标),失败回落直链;
+- **直链/其他**(thunder/file) → 三线路直链详情(直連/嗅探/解析,`buildDirectDetail` 同构)。
+
+播放按 flag 分流:嗅探→`parse=1`;解析→`parse=1+jx=1`;YouTube→中继;/parse 产出的
+播放 id(`1@`/`msubep-` 形态)→网盘族口径(含 T4 播放身份与 t4_proxy_mode 策略);
+直連→直链直出(无凭证不套 `/p`)。订阅源管理「T4」开关对推送站同样生效(按 api=csp_Push 对照)。
+
+配置里没有 push_agent 站点时,FongMi 只会本地直链播放(SiteApi `directDetail` 内置兜底),
+网盘/YouTube 推送无人解析——这正是 T4 此前缺推送站的用户可感知差异。
 
 ## 服务端 Python 插件运行时
 
