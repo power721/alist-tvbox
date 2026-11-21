@@ -124,23 +124,24 @@ class YoutubeServiceTest {
     }
 
     @Test
-    void resolveDownloadUrlWithMirror() {
+    void resolveDownloadUrlsWithGitHubProxies() {
         AppProperties properties = new AppProperties();
-        YoutubeDlpRuntime runtime = new YoutubeDlpRuntime(properties, objectMapper);
+        YoutubeDlpRuntime runtime = new YoutubeDlpRuntime(properties, new cn.har01d.alist_tvbox.service.GitHubProxyService(), objectMapper);
 
-        // 无镜像:默认地址原样
-        assertThat(runtime.resolveDownloadUrl(null))
-                .isEqualTo("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz");
+        // 未配置代理(github_proxy.txt 不存在):仅直连
+        assertThat(runtime.resolveDownloadUrls(null))
+                .containsExactly("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz");
 
-        // 镜像:latest/download 与静态 tag 资产都拼前缀
-        properties.setYoutubeDlpMirror("https://gh-proxy.com/");
-        assertThat(runtime.resolveDownloadUrl(null))
-                .isEqualTo("https://gh-proxy.com/https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz");
-        assertThat(runtime.resolveDownloadUrl("2026.10.21"))
-                .isEqualTo("https://gh-proxy.com/https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.21/yt-dlp.tar.gz");
-
-        // 用户显式配置 youtubeDlpUrl 时下载不走镜像(版本探测仍可用镜像)
+        // 用户显式配置 youtubeDlpUrl:直接用之,代理不介入
         properties.setYoutubeDlpUrl("https://example.com/yt-dlp.tar.gz");
-        assertThat(runtime.resolveDownloadUrl(null)).isEqualTo("https://example.com/yt-dlp.tar.gz");
+        assertThat(runtime.resolveDownloadUrls(null)).containsExactly("https://example.com/yt-dlp.tar.gz");
+
+        // 代理列表:逐个拼前缀(自动补尾斜杠/去空行),末尾直连兜底
+        assertThat(YoutubeDlpRuntime.applyProxies("https://github.com/a/b.tar.gz",
+                        List.of("https://gh-proxy.com", "", "https://ghproxy.net/")))
+                .containsExactly(
+                        "https://gh-proxy.com/https://github.com/a/b.tar.gz",
+                        "https://ghproxy.net/https://github.com/a/b.tar.gz",
+                        "https://github.com/a/b.tar.gz");
     }
 }

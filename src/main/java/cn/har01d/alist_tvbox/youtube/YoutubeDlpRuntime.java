@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.youtube;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.exception.BadGatewayException;
+import cn.har01d.alist_tvbox.service.GitHubProxyService;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -60,6 +61,7 @@ public class YoutubeDlpRuntime {
     private static final Pattern TAG_PATTERN = Pattern.compile("releases/tag/((?:\\d{4}\\.\\d+\\.\\d+))");
 
     private final AppProperties appProperties;
+    private final GitHubProxyService gitHubProxyService;
     private final ObjectMapper objectMapper;
 
     private final AtomicBoolean downloading = new AtomicBoolean();
@@ -77,8 +79,9 @@ public class YoutubeDlpRuntime {
     private volatile String latestVersion;
     private volatile long latestVersionAt;
 
-    public YoutubeDlpRuntime(AppProperties appProperties, ObjectMapper objectMapper) {
+    public YoutubeDlpRuntime(AppProperties appProperties, GitHubProxyService gitHubProxyService, ObjectMapper objectMapper) {
         this.appProperties = appProperties;
+        this.gitHubProxyService = gitHubProxyService;
         this.objectMapper = objectMapper;
         try {
             Path path = Utils.getDataPath("proxy.txt");
@@ -186,7 +189,7 @@ public class YoutubeDlpRuntime {
             return;
         }
         try {
-            log.info("yt-dlp missing, downloading from {}", StringUtils.abbreviate(resolveDownloadUrl(null), 90));
+            log.info("yt-dlp missing, downloading from {}", StringUtils.abbreviate(resolveDownloadUrls(null).get(0), 90));
             downloadAndExtract();
             log.info("yt-dlp installed: {}", getVersion());
         } catch (Exception e) {
@@ -307,29 +310,36 @@ public class YoutubeDlpRuntime {
         } else {
             log.debug("github latest release api: {}", code);
         }
-        // GitHub 直连不通:前缀型镜像兜底(ghproxy.net 型 302 落地 URL 含 tag;gh-proxy.com 型 200 页面内含 tag 链接)
-        String mirror = mirror();
-        if (StringUtils.isNotBlank(mirror)) {
-            return fetchLatestVersionFromMirror(mirror);
+        // GitHub 直连不通:走已配置的 GitHub 代理(github_proxy.txt)解析 latest 页面
+        // (302 落地 URL 含 tag,或页面内 og/canonical 链接含 releases/tag/{tag})
+        for (String url : applyProxies("https://github.com/yt-dlp/yt-dlp/releases/latest", gitHubProxyService.readProxyListFromFile())) {
+            String tag = fetchLatestVersionFromProxy(url);
+            if (tag != null) {
+                return tag;
+            }
         }
         return null;
     }
 
-    private String fetchLatestVersionFromMirror(String mirror) throws IOException {
-        HttpURLConnection conn = openConnection(mirror + "/" + "https://github.com/yt-dlp/yt-dlp/releases/latest", "text/html");
-        if (conn.getResponseCode() != 200) {
-            log.debug("mirror latest page: {}", conn.getResponseCode());
+    private String fetchLatestVersionFromProxy(String url) {
+        try {
+            HttpURLConnection conn = openConnection(url, "text/html");
+            if (conn.getResponseCode() != 200) {
+                log.debug("github proxy latest page: {} {}", conn.getResponseCode(), StringUtils.abbreviate(url, 60));
+                return null;
+            }
+            String tag = parseTag(conn.getURL().toString());
+            if (tag != null) {
+                return tag;
+            }
+            try (InputStream in = conn.getInputStream()) {
+                String body = new String(in.readNBytes(512 * 1024), StandardCharsets.UTF_8);
+                java.util.regex.Matcher matcher = TAG_PATTERN.matcher(body);
+                return matcher.find() ? matcher.group(1) : null;
+            }
+        } catch (Exception e) {
+            log.debug("github proxy latest page failed: {} {}", StringUtils.abbreviate(url, 60), e.getMessage());
             return null;
-        }
-        String tag = parseTag(conn.getURL().toString());
-        if (tag != null) {
-            return tag;
-        }
-        // 页面正文限长读取(og/canonical 链接含 releases/tag/{tag})
-        try (InputStream in = conn.getInputStream()) {
-            String body = new String(in.readNBytes(512 * 1024), StandardCharsets.UTF_8);
-            java.util.regex.Matcher matcher = TAG_PATTERN.matcher(body);
-            return matcher.find() ? matcher.group(1) : null;
         }
     }
 
@@ -338,31 +348,35 @@ public class YoutubeDlpRuntime {
         return matcher.find() ? matcher.group(1) : null;
     }
 
-    private String mirror() {
-        String mirror = appProperties.getYoutubeDlpMirror();
-        if (StringUtils.isBlank(mirror)) {
-            return null;
-        }
-        return mirror.trim().replaceAll("/+$", "");
-    }
-
     /**
-     * 下载地址解析:
-     * 1. 指定 tag → 镜像/直连的静态资产 releases/download/{tag}/yt-dlp.tar.gz(镜像兼容性最好)
-     * 2. 未指定 tag → 用户显式配置过 youtubeDlpUrl(非默认值)时直接用之(镜像不介入);
-     *    否则有镜像走镜像 latest/download,无镜像走默认地址
+     * 下载候选地址解析:
+     * 1. 用户显式配置过 youtubeDlpUrl(非默认值)→ 直接用之(GitHub 代理不介入)
+     * 2. 指定 tag → 静态资产 releases/download/{tag}/yt-dlp.tar.gz(代理兼容性最好)
+     * 3. 未指定 tag → latest/download 动态资产
+     * 每种按 github_proxy.txt 代理列表逐个拼前缀(空行=直连),末尾补直连兜底(FileDownloader 同惯例)
      */
-    String resolveDownloadUrl(String tag) {
-        String m = mirror();
-        if (tag != null && !tag.isBlank()) {
-            String url = "https://github.com/yt-dlp/yt-dlp/releases/download/" + tag + "/yt-dlp.tar.gz";
-            return m != null ? m + "/" + url : url;
-        }
+    List<String> resolveDownloadUrls(String tag) {
         String configured = appProperties.getYoutubeDlpUrl();
         if (!DEFAULT_DOWNLOAD_URL.equals(configured)) {
-            return configured;
+            return List.of(configured);
         }
-        return m != null ? m + "/" + DEFAULT_DOWNLOAD_URL : DEFAULT_DOWNLOAD_URL;
+        String base = tag != null && !tag.isBlank()
+                ? "https://github.com/yt-dlp/yt-dlp/releases/download/" + tag + "/yt-dlp.tar.gz"
+                : DEFAULT_DOWNLOAD_URL;
+        return applyProxies(base, gitHubProxyService.readProxyListFromFile());
+    }
+
+    static List<String> applyProxies(String url, List<String> proxies) {
+        List<String> urls = new ArrayList<>();
+        for (String proxy : proxies) {
+            if (proxy == null || proxy.trim().isEmpty()) {
+                continue; // 空行=直连,由末尾兜底统一补
+            }
+            String prefix = proxy.trim();
+            urls.add((prefix.endsWith("/") ? prefix : prefix + "/") + url);
+        }
+        urls.add(url);
+        return urls;
     }
 
     private void downloadAndExtract() throws IOException {
@@ -400,18 +414,31 @@ public class YoutubeDlpRuntime {
         }
     }
 
-    /** 下载 tar.gz 到目标文件;latest/download 动态资产被镜像拦截时按已知 tag 重试静态资产。 */
+    /** 下载 tar.gz 到目标文件:依次尝试候选地址;latest/download 全军覆没时按已知 tag 再试静态资产。 */
     private void downloadTo(Path tarball, String tag) throws IOException {
-        try {
-            downloadTo0(tarball, resolveDownloadUrl(tag));
-        } catch (IOException e) {
-            if (tag == null && StringUtils.isNotBlank(latestVersion)) {
-                log.debug("latest/download failed ({}), retry with static tag asset {}", e.getMessage(), latestVersion);
-                downloadTo0(tarball, resolveDownloadUrl(latestVersion));
+        List<String> urls = resolveDownloadUrls(tag);
+        IOException last = null;
+        for (String url : urls) {
+            try {
+                downloadTo0(tarball, url);
                 return;
+            } catch (IOException e) {
+                log.debug("download failed: {} {}", StringUtils.abbreviate(url, 70), e.getMessage());
+                last = e;
             }
-            throw e;
         }
+        if (tag == null && StringUtils.isNotBlank(latestVersion)) {
+            for (String url : resolveDownloadUrls(latestVersion)) {
+                try {
+                    downloadTo0(tarball, url);
+                    return;
+                } catch (IOException e) {
+                    log.debug("download failed: {} {}", StringUtils.abbreviate(url, 70), e.getMessage());
+                    last = e;
+                }
+            }
+        }
+        throw last != null ? last : new IOException("no download url");
     }
 
     private void downloadTo0(Path tarball, String url) throws IOException {
@@ -422,10 +449,10 @@ public class YoutubeDlpRuntime {
         try (InputStream in = conn.getInputStream()) {
             Files.copy(in, tarball, StandardCopyOption.REPLACE_EXISTING);
         }
-        // 部分镜像把反爬验证页当 200 返回(几 KB 的 HTML):按 gzip 魔数校验拦下
+        // 部分代理把反爬验证页当 200 返回(几 KB 的 HTML):按 gzip 魔数校验拦下
         try (InputStream in = Files.newInputStream(tarball)) {
             if ((in.read() & 0xFF) != 0x1F || (in.read() & 0xFF) != 0x8B) {
-                throw new IOException("download is not a gzip payload (mirror challenge page?): " + StringUtils.abbreviate(url, 80));
+                throw new IOException("download is not a gzip payload (proxy challenge page?): " + StringUtils.abbreviate(url, 80));
             }
         }
     }
