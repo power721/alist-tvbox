@@ -4,19 +4,23 @@ import cn.har01d.alist_tvbox.service.SubscriptionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.Map;
 
 @Slf4j
 @RestController
 public class YoutubeController {
     private final YoutubeService youtubeService;
+    private final YoutubeDlpRuntime youtubeDlpRuntime;
     private final SubscriptionService subscriptionService;
 
-    public YoutubeController(YoutubeService youtubeService, SubscriptionService subscriptionService) {
+    public YoutubeController(YoutubeService youtubeService, YoutubeDlpRuntime youtubeDlpRuntime, SubscriptionService subscriptionService) {
         this.youtubeService = youtubeService;
+        this.youtubeDlpRuntime = youtubeDlpRuntime;
         this.subscriptionService = subscriptionService;
     }
 
@@ -65,5 +69,16 @@ public class YoutubeController {
     public void proxy(@PathVariable String token, String u, jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);
         youtubeService.proxy(token, u, request, response);
+    }
+
+    /** yt-dlp 运行时状态:当前/最新版本(网页展示)。受 /api/** 规则保护(ADMIN/CLIENT)。 */
+    @GetMapping("/api/youtube/ytdlp")
+    public Map<String, Object> ytdlpStatus(@RequestParam(required = false) boolean refresh) {
+        return youtubeDlpRuntime.status(refresh);
+    }
+
+    @PostMapping("/api/youtube/ytdlp/update")
+    public Map<String, Object> ytdlpUpdate() {
+        return youtubeDlpRuntime.update();
     }
 }

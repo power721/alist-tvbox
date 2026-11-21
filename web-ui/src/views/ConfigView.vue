@@ -226,6 +226,28 @@
             }}，后台更新中。
           </div>
         </el-card>
+        <el-card class="box-card" v-if="!store.standalone">
+          <template #header>
+            <div class="card-header">
+              <span>YouTube 数据源</span>
+              <div>
+                <el-button type="primary" plain size="small" :loading="checking"
+                           @click="loadYtdlp(true)">检查最新版本
+                </el-button>
+                <el-button type="primary" size="small" :loading="updating" :disabled="!ytdlp.available"
+                           @click="updateYtdlp">手动更新
+                </el-button>
+              </div>
+            </div>
+          </template>
+          <div>当前版本：{{ ytdlp.version || '未安装' }}</div>
+          <div v-if="ytdlp.latest">最新版本：{{ ytdlp.latest }}<template
+              v-if="ytdlp.version && ytdlp.version !== ytdlp.latest">，可手动更新。
+          </template><template v-else>，已是最新。</template>
+          </div>
+          <div v-else>最新版本：获取失败，可稍后重试。</div>
+          <div v-if="!ytdlp.available">运行时不可用：未安装 python3 或下载未完成。</div>
+        </el-card>
         <el-card class="box-card" v-if="!store.xiaoya">
           <template #header>
             <div class="card-header">海报墙</div>
@@ -469,6 +491,35 @@ const remoteSyncDialogRef = ref()
 
 const openRemoteSync = () => {
   remoteSyncDialogRef.value.open()
+}
+
+const ytdlp = ref<any>({available: false, version: '', latest: '', python: ''})
+const checking = ref(false)
+const updating = ref(false)
+
+const loadYtdlp = function (refresh = false) {
+  checking.value = true
+  axios.get("/api/youtube/ytdlp", {params: refresh ? {refresh: 1} : {}}).then(({data}) => {
+    ytdlp.value = data
+  }).finally(() => {
+    checking.value = false
+  })
+}
+
+const updateYtdlp = function () {
+  updating.value = true
+  axios.post("/api/youtube/ytdlp/update").then(({data}) => {
+    if (data.updated) {
+      ElMessage.success('已更新到 ' + data.version)
+    } else {
+      ElMessage.info(data.message || '无更新')
+    }
+    loadYtdlp(true)
+  }).catch(() => {
+    ElMessage.error('更新失败')
+  }).finally(() => {
+    updating.value = false
+  })
 }
 
 let intervalId = 0
@@ -935,6 +986,9 @@ const forceUpdateIndex115 = () => {
 }
 
 onMounted(() => {
+  if (!store.standalone) {
+    loadYtdlp()
+  }
   axios.get('/api/basic-auth-credentials').then(({data}) => {
     basicAuthUser.value = data.username
     basicAuthPass.value = data.password

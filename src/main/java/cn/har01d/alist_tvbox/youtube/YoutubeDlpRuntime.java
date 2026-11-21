@@ -26,7 +26,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -66,6 +68,8 @@ public class YoutubeDlpRuntime {
     private volatile boolean pythonProbed;
     private volatile String version;
     private volatile String proxy;
+    private volatile String latestVersion;
+    private volatile long latestVersionAt;
 
     public YoutubeDlpRuntime(AppProperties appProperties, ObjectMapper objectMapper) {
         this.appProperties = appProperties;
@@ -183,16 +187,72 @@ public class YoutubeDlpRuntime {
             return;
         }
         try {
-            String latest = fetchLatestVersion();
+            String latestVersion = fetchLatestVersion();
             String current = getVersion();
-            if (latest != null && current != null && !latest.equals(current)) {
-                log.info("yt-dlp update: {} -> {}", current, latest);
+            if (latestVersion != null && current != null && !latestVersion.equals(current)) {
+                log.info("yt-dlp update: {} -> {}", current, latestVersion);
                 downloadAndExtract();
                 version = null;
                 log.info("yt-dlp updated: {}", getVersion());
             }
         } catch (Exception e) {
             log.debug("yt-dlp auto update skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 运行时状态(网页展示):当前版本 + 最新版本。
+     * latest 缓存 5 分钟避免 GitHub API 限流,refresh=true 强制刷新。
+     */
+    public Map<String, Object> status(boolean refresh) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (!detectPython()) {
+            map.put("available", false);
+            map.put("python", "");
+            map.put("version", "");
+            map.put("latest", "");
+            return map;
+        }
+        if (refresh || latestVersion == null
+                || System.currentTimeMillis() - latestVersionAt > Duration.ofMinutes(5).toMillis()) {
+            try {
+                String value = fetchLatestVersion();
+                if (value != null) {
+                    latestVersion = value;
+                    latestVersionAt = System.currentTimeMillis();
+                }
+            } catch (Exception e) {
+                log.debug("fetch latest version failed: {}", e.getMessage());
+            }
+        }
+        String current = getVersion();
+        map.put("available", current != null && Files.isDirectory(packageRoot()));
+        map.put("python", pythonBin);
+        map.put("version", current == null ? "" : current);
+        map.put("latest", latestVersion == null ? "" : latestVersion);
+        return map;
+    }
+
+    /** 手动更新:强制重下(版本相同也重装),与自动更新共用下载闸门。 */
+    public Map<String, Object> update() {
+        if (!detectPython()) {
+            throw new BadGatewayException("服务端插件运行时不可用(未安装 python3)");
+        }
+        if (downloading.get()) {
+            return Map.of("updated", false, "version", StringUtils.defaultString(getVersion()), "message", "更新进行中");
+        }
+        downloading.set(true);
+        try {
+            log.info("yt-dlp manual update");
+            downloadAndExtract();
+            String current = getVersion();
+            latestVersionAt = 0;
+            return Map.of("updated", true, "version", StringUtils.defaultString(current));
+        } catch (Exception e) {
+            log.warn("yt-dlp manual update failed", e);
+            throw new BadGatewayException("yt-dlp 更新失败: " + e.getMessage());
+        } finally {
+            downloading.set(false);
         }
     }
 

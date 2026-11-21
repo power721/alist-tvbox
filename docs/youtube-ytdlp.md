@@ -19,6 +19,12 @@
   - 直播 → 一律 master HLS 清单。
 - `GET /youtube-proxy[/{token}]?u=<base64url>`：中继。m3u8 内容做嵌套 URL 重写（master→variant→segment 全部代理化）；其余 Range 透传流式转发。上游白名单 `*.googlevideo.com`/`manifest.googlevideo.com`/`youtube.com`，防 SSRF。
 
+## 运行时管理（网页）
+
+- `GET /api/youtube/ytdlp[?refresh=1]`：当前/最新版本（latest 缓存 5 分钟防 GitHub API 限流）。
+- `POST /api/youtube/ytdlp/update`：手动更新（强制重下，与自动更新共用闸门）。
+- 两者随 `/api/**` 规则要求 ADMIN/CLIENT。配置页「豆瓣电影数据」卡片下方有「YouTube 数据源」卡片展示版本并提供按钮。
+
 ## 搜索筛选 sp 编码
 
 YouTube `sp` 参数为 protobuf base64url，本仓构造逻辑经官方筛选面板抓取+真机实证对齐（**网上流传的标签表时间位是错位的，勿参考**）：
