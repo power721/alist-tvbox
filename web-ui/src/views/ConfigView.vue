@@ -229,8 +229,7 @@
         <el-card class="box-card" v-if="!store.standalone">
           <template #header>
             <div class="card-header">
-              <span>YouTube 运行时 <a href="https://github.com/yt-dlp/yt-dlp" target="_blank"
-                                     rel="noopener">yt-dlp →</a></span>
+              <span>YouTube 运行时</span>
               <div>
                 <el-button type="primary" plain size="small" :loading="checking"
                            @click="loadYtdlp(true)">检查最新版本
@@ -242,11 +241,13 @@
             </div>
           </template>
           <div>当前版本：{{ ytdlp.version || '未安装' }}</div>
-          <div v-if="ytdlp.latest">最新版本：{{ ytdlp.latest }}<template
+          <div v-if="ytdlp.latest">最新版本：<a href="https://github.com/yt-dlp/yt-dlp/releases/latest"
+                                                target="_blank" rel="noopener">{{ ytdlp.latest }}</a><template
               v-if="ytdlp.version && ytdlp.version !== ytdlp.latest">，可手动更新。
           </template><template v-else>，已是最新。</template>
           </div>
-          <div v-else>最新版本：获取失败，可稍后重试。</div>
+          <div v-else>最新版本：<a href="https://github.com/yt-dlp/yt-dlp/releases/latest" target="_blank"
+                                   rel="noopener">获取失败</a>，可稍后重试。</div>
           <div v-if="!ytdlp.available">{{ ytdlp.message || '运行时不可用：未安装 python3 或下载未完成。' }}</div>
         </el-card>
         <el-card class="box-card" v-if="!store.xiaoya">
