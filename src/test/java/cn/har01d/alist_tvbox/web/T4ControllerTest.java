@@ -59,6 +59,8 @@ class T4ControllerTest {
     @Mock
     private cn.har01d.alist_tvbox.youtube.YoutubeController youtubeController;
     @Mock
+    private cn.har01d.alist_tvbox.youtube.YtdlpParseService ytdlpParseService;
+    @Mock
     private EmbyController embyController;
     @Mock
     private JellyfinController jellyfinController;
@@ -90,7 +92,7 @@ class T4ControllerTest {
     void setUp() {
         appProperties = new AppProperties();
         controller = new T4Controller(subscriptionService, appProperties, tvBoxController, pianDanController,
-                mediaLibraryController, biliBiliController, youtubeController, embyController, jellyfinController,
+                mediaLibraryController, biliBiliController, youtubeController, ytdlpParseService, embyController, jellyfinController,
                 feiniuController, liveController, telegramController, remoteSearchController,
                 playController, parseService, pluginWorkerService, pluginRepository, new ObjectMapper(), t4DetailEnhancer);
         // vod/cenc 入口的 T4 专用 token 换算:默认回显(未命中),个别用例按需覆写
@@ -613,6 +615,7 @@ class T4ControllerTest {
     @Test
     void pushDetailDirectLinkFallsBackToThreeLines() throws Exception {
         // 非网盘/非 YouTube 直链:三线路(直連/嗅探/解析)直链详情,与 spring.jar buildDirectDetail 同构
+        when(ytdlpParseService.detail(anyString(), eq(TOKEN))).thenReturn(null);
         Object result = controller.vod(TOKEN, "csp_Push", null,
                 "https://example.com/video/movie.mp4", null, null, null, null, null, null, request, response);
 

@@ -87,6 +87,7 @@ public class T4Controller {
     private final MediaLibraryController mediaLibraryController;
     private final BiliBiliController biliBiliController;
     private final YoutubeController youtubeController;
+    private final cn.har01d.alist_tvbox.youtube.YtdlpParseService ytdlpParseService;
     private final EmbyController embyController;
     private final JellyfinController jellyfinController;
     private final FeiniuController feiniuController;
@@ -188,16 +189,16 @@ public class T4Controller {
         subscriptionService.checkToken(token);
         // URL 路径段不带 csp_ 前缀(applyT4 生成口径);带前缀的旧形态兼容
         String siteKey = site.startsWith("csp_") ? site : "csp_" + site;
+        Plugin plugin = null;
         if (!SubscriptionService.T4_SITE_KEYS.contains(siteKey)) {
             // 插件源(服务端 Python 运行时,PluginWorkerService);运行时不可用则 404。
             // T4 不可见插件(订阅源管理「T4」开关)同样 404:配置不出现,直连五动作也不可达
-            Plugin plugin = findPluginBySiteKey(site);
+            plugin = findPluginBySiteKey(site);
             if (plugin == null || !plugin.isT4Visible() || !pluginWorkerService.isAvailable()) {
                 throw new NotFoundException();
             }
-            return pluginVod(token, pathToken, plugin, site, t, ids, wd, quick, play, ext, pg);
         }
-        // JSON POST 形态(部分壳子):查询/表单参数全缺位时从 JSON body 取参
+        // JSON POST 形态(部分壳子):查询/表单参数全缺位时从 JSON body 取参(插件源同享)
         if (StringUtils.isAllBlank(t, ids, wd, play, ext) && pg == null) {
             String contentType = request.getContentType();
             if (contentType != null && contentType.contains("json")) {
@@ -212,6 +213,9 @@ public class T4Controller {
                 String page = body.get("pg");
                 pg = page == null ? null : parseInt(page);
             }
+        }
+        if (plugin != null) {
+            return pluginVod(token, pathToken, plugin, site, t, ids, wd, quick, play, flag, ext, pg);
         }
         log.info("t4 site: {}  t: {}  ids: {}  wd: {}  play: {}  flag: {}  page: {}",
                 siteKey, t, ids, wd, play, flag, pg);
@@ -251,7 +255,7 @@ public class T4Controller {
 
     /** 插件源(服务端 Python 运行时)五动作:extend 服务端自建,worker 返回原样透传。 */
     private Object pluginVod(String token, String pathToken, Plugin plugin, String site,
-                             String t, String ids, String wd, String quick, String play, String ext, Integer pg)
+                             String t, String ids, String wd, String quick, String play, String flag, String ext, Integer pg)
             throws IOException {
         String extend = t4PluginExtend(token, plugin);
         Map<String, Object> params = new HashMap<>();
@@ -259,6 +263,8 @@ public class T4Controller {
         if (StringUtils.isNotBlank(play)) {
             method = "play";
             params.put("play", play);
+            // 线路 flag 透传:worker playerContent(flag,id,[]) 按线路分发,不传则恒空串
+            params.put("flag", StringUtils.defaultString(flag));
             // 红果密文流等需服务端解密的场景:worker 把 #hg-cenc= URL 改写为此桥下地址;
             // 自定义 raw 插件自起的 127.0.0.1 流代理(hgtv.py 类)由 worker 改写为 /lp/{port}/ 桥地址
             // (嵌 pathToken:T4 专用 token 形态下桥地址仍是 T4 面,不泄漏 vod token)
@@ -270,6 +276,8 @@ public class T4Controller {
             method = "search";
             params.put("wd", wd);
             params.put("quick", Boolean.parseBoolean(quick));
+            // 搜索页码透传:worker searchContent(key,quick,pg) 本就消费,不传则恒第 1 页
+            params.put("pg", String.valueOf(pg == null ? 1 : pg));
         } else if (StringUtils.isNotBlank(t)) {
             method = "category";
             params.put("t", t);
@@ -281,7 +289,8 @@ public class T4Controller {
         } else {
             method = "home";
         }
-        log.info("t4 plugin: {}  method: {}  t: {}  ids: {}  wd: {}  play: {}", site, method, t, ids, wd, play);
+        log.info("t4 plugin: {}  method: {}  t: {}  ids: {}  wd: {}  play: {}  flag: {}  page: {}",
+                site, method, t, ids, wd, play, flag, pg);
         JsonNode result = pluginWorkerService.call(site, extend, method, params);
         // 详情增强(Setting 键 t4_detail_enhance,默认关):豆瓣/TMDB 双源元数据 + 选集名清洗,
         // 源级短剧/音乐自动跳过;任何异常/超时在增强器内部兜底原样返回
@@ -624,6 +633,12 @@ public class T4Controller {
             } catch (Exception e) {
                 log.warn("t4 push parse failed: {}", url, e);
             }
+        }
+        // 通用 URL 解析(yt-dlp 1800+ 站点):TikTok/X/Twitch 等非网盘视频站,
+        // 详情即播放(代理直链内嵌);失败回落直链三线路
+        Map<String, Object> ytdlp = ytdlpParseService.detail(url, token);
+        if (ytdlp != null && !ytdlp.isEmpty()) {
+            return ytdlp;
         }
         return pushDirectDetail(url);
     }
