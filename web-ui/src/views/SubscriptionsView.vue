@@ -461,6 +461,33 @@
             </el-table-column>
           </el-table>
         </el-collapse-item>
+
+        <!-- 订阅上游拉取出站代理(区别于上方 GitHub 加速站的 URL 前缀替换) -->
+        <el-collapse-item name="subscription-proxy">
+          <template #title>
+            <div style="display: flex; align-items: center; width: 100%;">
+              <el-icon style="margin-right: 8px; transition: transform 0.3s;" :style="{ transform: githubProxyCollapseActive.includes('subscription-proxy') ? 'rotate(90deg)' : 'rotate(0deg)' }">
+                <ArrowRight />
+              </el-icon>
+              <span style="font-weight: 500">订阅下载代理（网络代理）</span>
+            </div>
+          </template>
+
+          <el-form label-width="140px" style="max-width: 680px; margin-bottom: 10px">
+            <el-form-item label="代理地址">
+              <el-input v-model="subscriptionProxy" placeholder="http://192.168.1.2:7890 或 socks5://192.168.1.2:7891，留空直连" clearable />
+            </el-form-item>
+          </el-form>
+          <div style="margin-bottom: 10px">
+            <el-tooltip content="保存后服务器下一请求即生效，无需重启" placement="top">
+              <el-button type="primary" @click="saveSubscriptionProxy">保存</el-button>
+            </el-tooltip>
+          </div>
+          <div style="color: #909399; font-size: 12px; line-height: 1.8; margin-bottom: 10px">
+            服务器拉取订阅上游配置（订阅地址指向的外部配置文件，含 GitHub 托管地址）时走此出站代理；<br />
+            与上方「GitHub 代理配置」（加速站 URL 前缀替换，仅作用于插件/数据包下载）互不影响；不支持用户名密码认证。
+          </div>
+        </el-collapse-item>
       </el-collapse>
 
       <!-- 智能选择对话框 -->
@@ -1374,6 +1401,8 @@ const pluginSettingsForm = ref({
 const githubProxyNodes = ref<any[]>([])
 const githubProxyList = ref<string[]>([])
 const githubProxyCollapseActive = ref<string[]>([]) // 默认折叠
+// 订阅上游拉取出站代理(http/socks5 真 proxy,Setting subscription_proxy),与 GitHub 加速站互不影响
+const subscriptionProxy = ref('')
 const benchmarking = ref(false)
 const smartSelectDialogVisible = ref(false)
 const selectedProxies = ref<string[]>([])
@@ -2255,6 +2284,9 @@ const loadPluginSettings = () => {
       pluginImportForm.value.url = data.value
     }
   })
+  axios.get('/api/settings/subscription_proxy').then(({data}) => {
+    subscriptionProxy.value = data?.value || ''
+  })
   loadGitHubProxyNodes()
   loadGitHubProxyList()
 }
@@ -2548,6 +2580,22 @@ const saveGitHubProxyList = () => {
   axios.post('/api/settings/github-proxy/list', githubProxyList.value)
     .then(({data}) => {
       ElMessage.success(`已保存 ${data.count} 个代理节点到 /data/github_proxy.txt`)
+    })
+    .catch(() => {
+      ElMessage.error('保存失败')
+    })
+}
+
+const saveSubscriptionProxy = () => {
+  const value = subscriptionProxy.value.trim()
+  // 与后端 MetadataHttp.parseProxy 对齐:scheme 前缀可省(默认 http),@ 用户名密码不支持
+  if (value && !/^((https?|socks5h?):\/\/)?[^/@\s]+:\d+$/.test(value)) {
+    ElMessage.warning('代理地址格式应为 http://host:port 或 socks5://host:port')
+    return
+  }
+  axios.post('/api/settings', {name: 'subscription_proxy', value})
+    .then(() => {
+      ElMessage.success('订阅下载代理已保存，下一请求生效')
     })
     .catch(() => {
       ElMessage.error('保存失败')

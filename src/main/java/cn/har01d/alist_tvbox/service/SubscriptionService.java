@@ -28,6 +28,7 @@ import cn.har01d.alist_tvbox.entity.Subscription;
 import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.service.metadata.MetadataHttp;
 import cn.har01d.alist_tvbox.util.ConfigPayloadExtractor;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
@@ -80,6 +81,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -102,6 +104,8 @@ public class SubscriptionService {
     private static final String AUTO_UPDATE_PG = "auto_update_pg";
     private static final String AUTO_UPDATE_ZX = "auto_update_zx";
     private static final String AUTO_UPDATE_XS = "auto_update_xs";
+    // 订阅上游拉取出站代理(区别于 GitHub 加速站的 URL 前缀替换):http/socks5 真 proxy,留空直连
+    private static final String SUBSCRIPTION_PROXY_KEY = "subscription_proxy";
     private static final String SYSTEM_PLAYBACK_TOKEN_NAME = "系统订阅同步";
     /** WebHome 网页首页站点 key(内置源之一,订阅源管理可禁用/调序/改名)。 */
     private static final String WEB_HOME_KEY = "atv_home";
@@ -156,6 +160,10 @@ public class SubscriptionService {
     private final HistoryRepository historyRepository;
 
     private final OkHttpClient okHttpClient = new OkHttpClient();
+    // 订阅上游拉取出站代理(全局 Setting subscription_proxy)的客户端缓存与热切换快照,
+    // 结构同 TelegramHttp:配置变化清缓存整组换新实例,设置源抖动按上次快照兜底
+    private final Map<String, OkHttpClient> subscriptionProxyClients = new ConcurrentHashMap<>();
+    private volatile String subscriptionProxySnapshot;
     private final ThreadLocal<String> currentToken = new ThreadLocal<>();
     // 本请求的用户 token 已通过密钥验真(u-{username}-{secret} 形态,checkToken 归一化后记录裸形态)
     private final ThreadLocal<String> verifiedUserToken = new ThreadLocal<>();
@@ -2171,6 +2179,42 @@ public class SubscriptionService {
         return list;
     }
 
+    /**
+     * 订阅上游拉取的出站代理:全局 Setting {@code subscription_proxy}
+     * ({@code http://host:port} / {@code socks5://host:port},留空直连)。
+     * 与「GitHub 代理配置」(加速站 URL 前缀替换,仅作用于插件/包下载)互补 —— 订阅上游
+     * (饭太硬/GitHub 托管配置等)此前始终直连,GitHub 加速从不覆盖此链路;墙内部署拉不动时须真代理。
+     * JVM 不读 HTTP_PROXY 环境变量,须显式挂 {@code java.net.Proxy};保存后下一请求即生效,免重启。
+     * 非法代理值经 {@link MetadataHttp#parseProxy} 抛 IllegalArgumentException,由 loadConfigJson
+     * 记日志可见,不静默回落直连(同 TelegramHttp 原则)。
+     */
+    private OkHttpClient subscriptionOkHttpClient() {
+        String proxy;
+        try {
+            proxy = settingRepository.findById(SUBSCRIPTION_PROXY_KEY)
+                    .map(Setting::getValue)
+                    .map(StringUtils::trimToNull)
+                    .orElse(null);
+        } catch (Exception e) {
+            log.warn("read subscription proxy setting failed: {}", e.getMessage());
+            proxy = subscriptionProxySnapshot;
+        }
+        if (!Objects.equals(proxy, subscriptionProxySnapshot)) {
+            synchronized (subscriptionProxyClients) {
+                if (!Objects.equals(proxy, subscriptionProxySnapshot)) {
+                    log.info("subscription outbound proxy changed: {}", proxy == null ? "direct" : proxy);
+                    subscriptionProxyClients.clear();
+                    subscriptionProxySnapshot = proxy;
+                }
+            }
+        }
+        if (proxy == null) {
+            return okHttpClient;
+        }
+        return subscriptionProxyClients.computeIfAbsent(proxy,
+                key -> okHttpClient.newBuilder().proxy(MetadataHttp.parseProxy(key)).build());
+    }
+
     private String loadConfigJson(String url) {
         if (url == null || url.isEmpty()) {
             return loadLocalConfigJson("my.json");
@@ -2187,7 +2231,7 @@ public class SubscriptionService {
                     .addHeader("User-Agent", Constants.OK_USER_AGENT)
                     .build();
 
-            Call call = okHttpClient.newCall(request);
+            Call call = subscriptionOkHttpClient().newCall(request);
             Response response = call.execute();
             String html = response.body().string();
             response.close();
