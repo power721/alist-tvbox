@@ -77,6 +77,54 @@ class PluginWorkerServiceTest {
     }
 
     @Test
+    void homeMergesHomeVideoContentList() throws Exception {
+        // 回归(PR #1095 吸收):第二屏推荐 homeVideoContent 此前在 T4 链路无调用方,
+        // 只把推荐列表放它的爬虫首页是空的;homeContent 返回 JSON 字符串也须先反序列化再合并
+        PluginWorkerService service = new PluginWorkerService(objectMapper);
+        assumeTrue(service.isAvailable(), "python3 not available, skip");
+        Path spider = Files.createTempFile("t4-home-video-spider", ".py");
+        spider.toFile().deleteOnExit();
+        Files.writeString(spider, """
+                # -*- coding: utf-8 -*-
+                import json
+
+                class Spider:
+                    def init(self, extend):
+                        return ""
+
+                    def getName(self):
+                        return "homevideo"
+
+                    def homeContent(self, filter):
+                        return json.dumps({"class": [{"type_id": "1", "type_name": "分类"}]}, ensure_ascii=False)
+
+                    def homeVideoContent(self):
+                        return {"list": [{"vod_id": "r1", "vod_name": "推荐"}]}
+
+                    def categoryContent(self, tid, pg, filter, extend):
+                        return {"list": []}
+
+                    def detailContent(self, ids):
+                        return {"list": []}
+
+                    def searchContent(self, key, quick, pg="1"):
+                        return {"list": []}
+
+                    def playerContent(self, flag, id, vipFlags):
+                        return {"parse": 0, "url": ""}
+                """);
+        String extend = Base64.getEncoder().encodeToString(objectMapper.writeValueAsBytes(Map.of(
+                "source", spider.toString(), "raw", true, "api", "http://localhost:4567", "token", "tok")));
+
+        JsonNode home = service.call("homevideo", extend, "home", Map.of());
+        assertTrue(home.toString().contains("分类"), "homeContent 的分类应保留");
+        assertTrue(home.path("list").isArray(), "homeVideoContent 的推荐列表应并入");
+        assertEquals("推荐", home.path("list").get(0).path("vod_name").asText());
+
+        service.shutdown();
+    }
+
+    @Test
     void backgroundThreadPrintsDoNotBreakProtocol() throws Exception {
         // 线上回归:Atvp 预热守护等后台线程的裸 print 会混进 stdout——协议输出必须与
         // fd1 物理隔离,且 Java 侧跳过杂行继续等本请求响应

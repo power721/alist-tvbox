@@ -444,7 +444,33 @@ def handle(method, params):
 
     if method == "home":
         with _quiet_stdout():
-            return _invoke("homeContent", bool(params.get("filter", True)))
+            home = _invoke("homeContent", bool(params.get("filter", True)))
+            if isinstance(home, str):
+                # 老 style 爬虫返回 JSON 字符串:合并前须先反序列化(与 _normalize_result 同语义)
+                try:
+                    home = json.loads(home)
+                except ValueError:
+                    return home
+            if home is None:
+                home = {}
+            if not isinstance(home, dict):
+                return home
+            result = dict(home)
+            # 第二屏推荐:inner 定义了 homeVideoContent 才调用(T4 此前只调 homeContent,
+            # 只把推荐列表放 homeVideoContent 的爬虫首页是空的);其 list 覆盖 homeContent 的
+            inner = _spider._require_inner()
+            if getattr(inner, "homeVideoContent", None) is not None:
+                video = _invoke("homeVideoContent")
+                if isinstance(video, str):
+                    try:
+                        video = json.loads(video)
+                    except ValueError:
+                        video = None
+                if isinstance(video, dict) and video.get("list") is not None:
+                    result["list"] = video["list"]
+            if result.get("list") is None:
+                result["list"] = []
+            return result
     if method == "category":
         with _quiet_stdout():
             return _invoke("categoryContent", str(params.get("t") or ""), str(params.get("pg") or "1"),
