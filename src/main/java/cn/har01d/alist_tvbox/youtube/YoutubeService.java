@@ -821,6 +821,8 @@ public class YoutubeService {
         byte[] cached = subtitleCache.getIfPresent(url);
         if (cached == null) {
             List<String> cues = new ArrayList<>();
+            int segments = 0;
+            int failed = 0;
             String body;
             try (okhttp3.Response upstream = fetchUpstream(url, null)) {
                 if (!upstream.isSuccessful()) {
@@ -832,9 +834,12 @@ public class YoutubeService {
             if (body.startsWith("#EXTM3U")) {
                 Matcher segment = TIMEDTEXT_URL.matcher(body);
                 while (segment.find()) {
+                    segments++;
                     try (okhttp3.Response seg = fetchUpstream(segment.group(), null)) {
                         if (seg.isSuccessful()) {
                             cues.addAll(extractCues(seg.body().string()));
+                        } else {
+                            failed++;
                         }
                     }
                 }
@@ -851,7 +856,13 @@ public class YoutubeService {
                 previous = cue;
             }
             cached = out.toString().getBytes(StandardCharsets.UTF_8);
-            subtitleCache.put(url, cached);
+            if (cues.isEmpty()) {
+                // 空结果不入缓存:分段未匹配/上游暂态失败会把空字幕钉死 10 分钟
+                log.warn("timedtext relay empty cues, skip caching: url={}, segments={}, failed={}",
+                        url, segments, failed);
+            } else {
+                subtitleCache.put(url, cached);
+            }
         }
         response.setContentType("text/vtt");
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
