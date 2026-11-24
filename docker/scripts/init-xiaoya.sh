@@ -30,7 +30,8 @@ xiaoya_first_init() {
   ensure_dir /var/lib/pxg /www/cgi-bin
 
   cd /var/lib/pxg
-  unzip -q /var/lib/data.zip
+  # -o: 初始化中断后重启会再次进入首装流程,残留文件触发交互式覆盖询问,EOF 被当作 None 导致状态混乱
+  unzip -q -o /var/lib/data.zip
 
   # 移动 AList 数据库
   mv data.db /opt/alist/data/data.db
@@ -194,6 +195,7 @@ EOF
 log_info "Starting database operations"
 upgrade_h2
 restore_database
+check_sqlite_writable
 
 mkdir -p /var/cache/nginx/image
 

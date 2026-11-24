@@ -59,6 +59,25 @@ upgrade_h2() {
   fi
 }
 
+# sqlite 写入预检:基座 Alpine 3.24 起 sqlite 3.53 的写路径改用 pwritev2,
+# 老版 Docker(<20.10)默认 seccomp 对白名单外系统调用返回 EPERM 而非 ENOSYS,
+# sqlite 的回退不认 EPERM → 每条写语句报 disk I/O error(#1099)。
+# seccomp 拦的是系统调用本身,与文件位置无关,/tmp 探测即可等价复现。
+check_sqlite_writable() {
+  local probe=/tmp/.sqlite-probe.db
+  rm -f "$probe" "$probe-journal"
+  if ! sqlite3 "$probe" "CREATE TABLE probe(x); INSERT INTO probe VALUES(1);" >/dev/null 2>&1; then
+    rm -f "$probe" "$probe-journal"
+    log_error "sqlite cannot write files on this host"
+    log_error "Likely cause: Docker < 20.10 seccomp blocks the pwritev2 syscall with EPERM"
+    log_error "Fix: upgrade Docker to 20.10+, or run with --security-opt seccomp=unconfined"
+    log_error "See https://github.com/power721/alist-tvbox/issues/1099"
+    return 1
+  fi
+  rm -f "$probe" "$probe-journal"
+  return 0
+}
+
 # 从备份恢复数据库
 # ①先用 unzip 解出 SQL 再以纯文本导入:H2 RunScript 的 COMPRESSION ZIP 模式硬编码只认
 #   zip 内名为 script.sql 的条目,旧版备份的条目名是临时文件名(atv-backup-*.sql),直接喂
