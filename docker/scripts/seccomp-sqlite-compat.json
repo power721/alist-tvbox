@@ -1,0 +1,12 @@
+{
+  "defaultAction": "SCMP_ACT_ALLOW",
+  "architectures": ["SCMP_ARCH_X86_64", "SCMP_ARCH_X86", "SCMP_ARCH_X32"],
+  "syscalls": [
+    {
+      "names": ["pwritev2", "preadv2"],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 38,
+      "comment": "ENOSYS: 老内核/老 seccomp 对 pwritev2 返回 EPERM/EINVAL 时 sqlite 3.53 不回退报 disk I/O error(#1099);强制 ENOSYS 让其回退 pwrite64/pread64"
+    }
+  ]
+}
