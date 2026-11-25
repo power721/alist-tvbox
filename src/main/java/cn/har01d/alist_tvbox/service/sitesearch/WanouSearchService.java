@@ -66,6 +66,10 @@ import java.util.stream.Collectors;
  * DNS 已亡的 xxooo.cf 域名、www.wogg.net 提首位;蜡笔 tvpanpan.site 复活提回首位;花卷/快映
  * 补挂 monitorKey(monitor 的「小斑」键即 :12512 快映池);二小 monitor 虽删键、2xiaopan.one
  * 实测仍存活,种子不动。
+ * <p>2026-11-25 与 py 对齐(atv-spiders 54cd407,wex config_site 域名表维护轮):虎斑补
+ * 103.40.14.172:16968(16969 入口的 302 落点,实测活 DYXS2)、快映补 103.205.254.65:15153
+ * (12521 入口的另一 302 落点,实测活探速最快)、玩偶补 woggpan.333232.xyz(插在 888484 后,
+ * 沙箱 CF 挑战视角用户端待验——探测按非挑战页判定,若真被挑战会自动沉底)。
  *
  * <p>站点域名池 = 静态种子 ∪ 监控服务(pan-site-monitor)下发的候选(含其标记失败的域名,
  * 可能复活);本服务定时主动探测各域名可达性与延迟(判定参考自建 domain-monitor:200 且
@@ -145,14 +149,18 @@ public class WanouSearchService {
                     List.of("https://tv.214521.xyz", "https://yydsys.de5.net", "https://tv.yydsys.cc",
                             "https://tv.yydsys.top", "https://pan.yydsys.de"),
                     null, 10, null, null),
+            // 玩偶:2026-11-25 随 py 补 woggpan.333232.xyz(插在 888484 后;沙箱 CF 挑战视角用户端待验)
             new Site("wanou", "玩偶", "玩偶",
-                    List.of("https://www.wogg.net", "https://woggpan.888484.xyz", "https://www.wogg.live"),
+                    List.of("https://www.wogg.net", "https://woggpan.888484.xyz",
+                            "https://woggpan.333232.xyz", "https://www.wogg.live"),
                     "/vodsearch/-------------.html?wd={keyword}&page={page}", 10, null, null),
             // 快映:与虎斑同款裸 IP 轮换(38.76.197.172:12521 实测 302 到 43.248.128.118:12512),直连终点居首省一跳;
-            // monitor 的「小斑」键跟踪的就是这个 :12512 池(站名两个叫法),裸 IP 轮换入口靠监控下发新地址
+            // monitor 的「小斑」键跟踪的就是这个 :12512 池(站名两个叫法),裸 IP 轮换入口靠监控下发新地址;
+            // 2026-11-25 随 py 补 12521 的另一 302 落点 103.205.254.65:15153(实测活,探速最快)
             new Site("kuaiying", "快映", "小斑",
                     List.of("http://43.248.128.118:12512", "http://38.76.197.172:12521",
-                            "http://xsayang.fun:12512", "http://103.45.162.207:12512"),
+                            "http://103.205.254.65:15153", "http://xsayang.fun:12512",
+                            "http://103.45.162.207:12512"),
                     null, 10, null, null),
             new Site("shandian", "闪电", "闪电",
                     List.of("http://shandian.blog", "http://sd.sduc.site", "http://sduc.cloud"),
@@ -168,10 +176,11 @@ public class WanouSearchService {
                     List.of("https://woog.nxog.eu.org", "https://woog.430520.xyz", "https://woog.nxog.fun",
                             "https://ogkk.nxog.eu.org"),
                     null, 10, null, ".module-row-info"),
-            // 虎斑只挂裸 IP 且入口轮流换(38.76.197.172/xhban.xyz 均 302 到 43.248.128.118),探测按可达性自动跟随现行入口
+            // 虎斑只挂裸 IP 且入口轮流换(38.76.197.172/xhban.xyz 均 302 到 103.40.14.172:16968),
+            // 探测按可达性自动跟随现行入口;2026-11-25 随 py 补直连落点 103.40.14.172:16968(实测活 DYXS2)
             new Site("hban", "虎斑", "虎斑",
                     List.of("http://43.248.128.118:16969", "http://38.76.197.172:16969",
-                            "http://xhban.xyz:20720", "http://xhban.xyz"),
+                            "http://103.40.14.172:16968", "http://xhban.xyz:20720", "http://xhban.xyz"),
                     null, 10, null, ".module-row-info"),
             // 二小:2026-09-26 随玩偶配置 v2 复活回归(新入口 2xiaopan.one 实测 200);蜡笔/至臻同期实测仍死未接
             new Site("erxiao", "二小", "二小",
